@@ -50,6 +50,7 @@ import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player.BedSleepingProblem;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -471,12 +472,26 @@ public final class MineLinkEndpointBootstrap {
         double dy = clamp(vector.get(1).getAsDouble(), -2.0, 2.0);
         double dz = clamp(vector.get(2).getAsDouble(), -4.0, 4.0);
         Vec3 current = agent.position();
-        agent.entity.moveTo(current.x + dx, current.y + dy, current.z + dz, agent.entity.getYRot(), agent.entity.getXRot());
+        Vec3 requested = new Vec3(dx, dy, dz);
+        agent.entity.move(MoverType.SELF, requested);
+        Vec3 actual = agent.position().subtract(current);
+        double requestedDistance = requested.length();
+        double movedDistance = actual.length();
+        boolean collision = movedDistance + 0.001D < requestedDistance;
 
         JsonObject response = baseResponse(request, "tool.execute_result");
         response.addProperty("status", "completed");
-        response.addProperty("moved", true);
+        response.addProperty("moved", movedDistance > 0.001D);
+        response.addProperty("moved_distance", movedDistance);
+        response.addProperty("requested_distance", requestedDistance);
+        response.addProperty("collision", collision);
         response.add("position", vector(agent.position()));
+        JsonObject result = new JsonObject();
+        result.addProperty("moved_distance", movedDistance);
+        result.addProperty("requested_distance", requestedDistance);
+        result.addProperty("collision", collision);
+        result.add("position", vector(agent.position()));
+        response.add("result", result);
         return response;
     }
 

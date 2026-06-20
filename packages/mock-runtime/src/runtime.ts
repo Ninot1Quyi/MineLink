@@ -443,14 +443,60 @@ export class MockRuntimeServer {
     const maxDistance = Math.min(Number(action.durationMs ?? 250) / 250, 4);
     const length = Math.hypot(vector[0], vector[1], vector[2]) || 1;
     const scale = Math.min(length, maxDistance) / length;
-    const moved: Vec3 = [vector[0] * scale, vector[1] * scale, vector[2] * scale];
+    const requested: Vec3 = [vector[0] * scale, vector[1] * scale, vector[2] * scale];
+    const movement = this.resolveMove(agent.position, requested);
+    const moved = movement.moved;
     agent.position = [
       round(agent.position[0] + moved[0]),
       round(agent.position[1] + moved[1]),
       round(agent.position[2] + moved[2])
     ];
-    this.trace({ event: "agent.action", action: "move", agent_id: agent.agentId, moved, position: agent.position });
-    return { ok: true, status: "completed", result: { moved_distance: round(Math.hypot(...moved)), collision: false } };
+    const movedDistance = round(Math.hypot(...moved));
+    const requestedDistance = round(Math.hypot(...requested));
+    this.trace({
+      event: "agent.action",
+      action: "move",
+      agent_id: agent.agentId,
+      moved,
+      position: agent.position,
+      collision: movement.collision
+    });
+    return {
+      ok: true,
+      status: "completed",
+      result: {
+        moved_distance: movedDistance,
+        requested_distance: requestedDistance,
+        collision: movement.collision,
+        position: agent.position
+      }
+    };
+  }
+
+  private resolveMove(origin: Vec3, requested: Vec3): { moved: Vec3; collision: boolean } {
+    if (this.fixture !== "guard_boundaries") {
+      return { moved: requested, collision: false };
+    }
+    const steps = Math.max(1, Math.ceil(Math.hypot(...requested) / 0.05));
+    let safe: Vec3 = [0, 0, 0];
+    for (let step = 1; step <= steps; step++) {
+      const factor = step / steps;
+      const candidateMove: Vec3 = [requested[0] * factor, requested[1] * factor, requested[2] * factor];
+      const candidatePosition: Vec3 = [
+        origin[0] + candidateMove[0],
+        origin[1] + candidateMove[1],
+        origin[2] + candidateMove[2]
+      ];
+      if (this.intersectsBlockingBlock(candidatePosition)) {
+        return { moved: safe, collision: true };
+      }
+      safe = candidateMove;
+    }
+    return { moved: requested, collision: false };
+  }
+
+  private intersectsBlockingBlock(position: Vec3): boolean {
+    return this.blocks.some((block) => !block.mined && playerIntersectsBlock(position, block.pos));
   }
 
   private lookAt(agent: AgentState, action: JsonObject): RuntimeResponse {
@@ -1289,6 +1335,24 @@ function distance3(a: Vec3, b: Vec3): number {
 
 function samePos(a: Vec3, b: Vec3): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
+function playerIntersectsBlock(position: Vec3, block: Vec3): boolean {
+  const halfWidth = 0.3;
+  const minX = position[0] - halfWidth;
+  const maxX = position[0] + halfWidth;
+  const minY = position[1];
+  const maxY = position[1] + 1.8;
+  const minZ = position[2] - halfWidth;
+  const maxZ = position[2] + halfWidth;
+  return (
+    maxX > block[0] &&
+    minX < block[0] + 1 &&
+    maxY > block[1] &&
+    minY < block[1] + 1 &&
+    maxZ > block[2] &&
+    minZ < block[2] + 1
+  );
 }
 
 function round(value: number): number {

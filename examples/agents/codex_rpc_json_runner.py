@@ -201,7 +201,7 @@ def scenario_objective(scenario: str) -> str:
         "create_smoke": "Use MineLink MCP tools to take Create materials from a chest, place one Create component, use a wrench, press an iron ingot into an iron sheet through a powered Create depot and mechanical press, and pick the sheet up with an empty hand.",
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
-        "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, and sleep-limited actions.",
+        "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, movement-collision, and sleep-limited actions.",
         "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to exchange a local social event, withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
     }
     return objectives.get(scenario, f"Complete MineLink scenario {scenario}.")
@@ -601,6 +601,34 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "matching_calls": len(matches),
             "observed_reasons": observed_reasons,
         }
+    if kind == "move_collided":
+        name = str(assertion.get("tool_name", "action.move"))
+        observed = []
+        matches = []
+        for record in tool_records(state, global_state):
+            if record.get("name") != name or is_tool_failure(record.get("result", {})):
+                continue
+            payload = tool_result_payload(record.get("result", {}))
+            moved_distance = numeric_value(payload.get("moved_distance"))
+            requested_distance = numeric_value(payload.get("requested_distance"))
+            collision = payload.get("collision") is True
+            observed.append(
+                {
+                    "collision": payload.get("collision"),
+                    "moved_distance": moved_distance,
+                    "requested_distance": requested_distance,
+                }
+            )
+            if collision and moved_distance is not None and requested_distance is not None and moved_distance < requested_distance:
+                matches.append(record)
+        return {
+            "name": assertion.get("name", "move_collided"),
+            "kind": kind,
+            "passed": bool(matches),
+            "tool_name": name,
+            "matching_calls": len(matches),
+            "observed_moves": observed,
+        }
     if kind == "agent_count":
         expected = int(assertion.get("count", 0))
         actual = len((global_state or {}).get("agents", {}))
@@ -831,6 +859,21 @@ def normalize_pos(value: Any) -> Optional[Tuple[int, int, int]]:
 
 def is_tool_failure(result: Any) -> bool:
     return isinstance(result, dict) and result.get("ok") is False
+
+
+def tool_result_payload(result: Any) -> JsonDict:
+    if not isinstance(result, dict):
+        return {}
+    nested = result.get("result")
+    if isinstance(nested, dict):
+        merged = dict(result)
+        merged.update(nested)
+        return merged
+    return result
+
+
+def numeric_value(value: Any) -> Optional[float]:
+    return float(value) if isinstance(value, (int, float)) else None
 
 
 def has_nested_key(value: Any, path: Tuple[str, ...]) -> bool:

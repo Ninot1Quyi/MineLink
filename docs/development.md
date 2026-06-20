@@ -65,8 +65,9 @@ inventory assertion path. The `craft_negative` scenario validates structured
 boundary failures for missing station, missing material, invalid recipe, empty
 output, and stale slot refs. The `guard_boundaries` scenario validates that a
 real server_agent cannot act on unobserved refs, too-far refs, expired refs,
-missing materials, or daytime sleep, and that a fixture-hidden diamond ore is
-not returned by `observe.scene` while the opaque wall remains visible. The
+missing materials, or daytime sleep, that `action.move` reports collision and
+clips movement against a blocking fixture, and that a fixture-hidden diamond ore
+is not returned by `observe.scene` while the opaque wall remains visible. The
 `create_smoke` scenario uses the opt-in Create adapter profile, loads Create in
 the real NeoForge dev server, moves `create:shaft`, `create:wrench`, and
 `minecraft:iron_ingot` from a visible chest into the agent inventory, places the

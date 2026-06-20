@@ -133,6 +133,10 @@ Current status:
   only public MCP dynamic tools to assert `unknown_or_unobserved_target`,
   `target_too_far`, `missing_material`, `blocked` for vanilla daytime sleep,
   and `expired_ref`.
+- `action.move` now uses native entity movement in the NeoForge runtime and the
+  guard replay asserts movement collision feedback; the latest real guard run
+  reported `collision=true` with `moved_distance` lower than
+  `requested_distance`.
 - The real NeoForge guard fixture also proves that a fixture-hidden
   `minecraft:diamond_ore` is absent from `observe.scene` while the intervening
   `minecraft:stone` wall and reachable `minecraft:white_bed` are visible.

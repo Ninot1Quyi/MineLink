@@ -88,6 +88,39 @@ describe("MockRuntimeServer", () => {
     client.close();
   });
 
+  it("clips movement against visible guard-boundary blocks", async () => {
+    const server = new MockRuntimeServer({ port: 25684, fixture: "guard_boundaries" });
+    servers.push(server);
+    await server.start();
+
+    const client = await connect(server.endpoint());
+    await request(client, { type: "connect", server_address: "dev.local", owner: { name: "test" } });
+    const birth = await request(client, { type: "agent.birth", seed_prompt: "test", body_type: "server_agent" });
+    const agentId = String(birth.agent_id);
+
+    const move = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.move",
+      arguments: { vector: [4, 0, 0], durationMs: 1000 }
+    });
+    expect(move).toMatchObject({
+      ok: true,
+      result: {
+        collision: true,
+        requested_distance: 4
+      }
+    });
+    const moveResult = move.result as { moved_distance: number; position: [number, number, number] };
+    expect(moveResult.moved_distance).toBeLessThan(4);
+    expect(moveResult.position[0]).toBeLessThan(2);
+
+    const observe = await request(client, { type: "tool.execute", agent_id: agentId, name: "observe.scene", arguments: {} });
+    const visibleScene = observe.visible_scene as { visible_blocks: Array<{ id: string }> };
+    expect(visibleScene.visible_blocks.some((block) => block.id === "minecraft:diamond_ore")).toBe(false);
+    client.close();
+  });
+
   it("applies backpressure to concurrent submit-mode actions", async () => {
     const server = new MockRuntimeServer({ port: 25678 });
     servers.push(server);
