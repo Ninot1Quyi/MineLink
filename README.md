@@ -25,7 +25,8 @@ bash scripts/dev/e2e.sh mine_tree
 bash scripts/dev/e2e.sh create_smoke
 bash scripts/dev/e2e.sh craft_smoke
 bash scripts/dev/e2e.sh craft_negative
-bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative
+bash scripts/dev/e2e.sh portal_coop
+bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,portal_coop
 ```
 
 The e2e harness writes evidence under `.minelink-dev/<scenario>/`:
@@ -92,6 +93,7 @@ Run the real game smoke scenarios with:
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_negative
+MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh portal_coop
 ```
 
 This starts the NeoForge dedicated dev server, waits for the Mod's loopback HTTP
@@ -99,7 +101,9 @@ MineLink Protocol endpoint, runs the MCP Host, and drives the scenario through
 the Codex JSON-RPC replay harness. The current real smoke validates connection,
 birth, observation, movement, looking, mining one visible block in the real
 world, chest slot movement, crafting-table recipe lookup, oak-plank crafting,
-inventory assertions, and structured negative crafting failures. Full
-FakePlayer bodies, complete server menu coverage, Create adapter behavior,
-multi-agent social runtime, and long soak tests remain separate acceptance gates
-in `docs/minelink-acceptance.md`.
+inventory assertions, structured negative crafting failures, and a three-agent
+portal cooperation path. The portal path uses FakePlayer-backed vanilla
+`useItemOn`/`useItem` for block placement and ignition after MineLink ref,
+reach, visibility, and inventory checks. Complete server menu coverage, Create
+adapter behavior, multi-agent social runtime, and long soak tests remain
+separate acceptance gates in `docs/minelink-acceptance.md`.

@@ -55,8 +55,21 @@ export class BodyApi {
     return this.execute("action.mine_visible_block", { block_ref: blockRef, tool_policy: "best_available" });
   }
 
-  use(targetRef?: string): Promise<ToolResult> {
-    return this.execute("action.use", targetRef ? { target_ref: targetRef } : {});
+  use(targetRef?: string, item?: string, face?: string): Promise<ToolResult> {
+    return this.execute("action.use", {
+      ...(targetRef ? { target_ref: targetRef } : {}),
+      ...(item ? { item } : {}),
+      ...(face ? { face } : {})
+    });
+  }
+
+  place(targetRef: string, face: string, item: string, placementLabel?: string): Promise<ToolResult> {
+    return this.execute("block.place", {
+      target_ref: targetRef,
+      face,
+      item,
+      ...(placementLabel ? { placement_label: placementLabel } : {})
+    });
   }
 }
 

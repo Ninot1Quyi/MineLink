@@ -32,8 +32,8 @@ Required:
 
 - `npm install` from a clean clone sets up Host, SDK, mock runtime, tests, and scripts.
 - `npm run build`, `npm run typecheck`, `npm test`, and `npm run ci` pass.
-- CI runs build, tests, `mine_tree`, `create_smoke`, `craft_smoke`, and
-  `craft_negative`, and uploads `.minelink-dev/` evidence.
+- CI runs build, tests, `mine_tree`, `create_smoke`, `craft_smoke`,
+  `craft_negative`, and `portal_coop`, and uploads `.minelink-dev/` evidence.
 - `scripts/dev/build.sh` records Java/NeoForge readiness as valid JSON.
 - No GitHub token, admission token, Microsoft credential, EULA acceptance, or server secret is committed.
 
@@ -50,9 +50,10 @@ Current status:
 - Real NeoForge startup now uses the committed Gradle wrapper and selects Java 21
   when available.
 - GitHub Actions now has a dedicated real NeoForge smoke workflow for
-  `mine_tree`, `craft_smoke`, and `craft_negative` on push, pull request,
+  `mine_tree`, `craft_smoke`, `craft_negative`, and `portal_coop` on push, pull request,
   manual dispatch, and daily schedule; full release acceptance still requires
-  the later FakePlayer, Create, multi-agent, install, security, and soak gates.
+  the later Create, social runtime, install, security, and release-length soak
+  gates.
 
 ### Gate 1: Real NeoForge Mod Runtime
 
@@ -66,9 +67,12 @@ Required:
 - The second real smoke path adds chest/crafting-table coverage for
   `container.open`, `container.observe`, `container.move_stack`,
   `container.take_output`, `craft.list_available`, and `craft.quick_craft`.
-- `create.*`, persistence, social runtime, complete server menu coverage, and a
-  real FakePlayer body remain later gates; they must not be claimed by the
-  smoke implementation.
+- The portal cooperation smoke path adds `block.place` and `action.use` backed
+  by NeoForge `FakePlayer` and vanilla `ServerPlayerGameMode.useItemOn/useItem`
+  after MineLink observed-ref, reach, visibility, and inventory checks.
+- `create.*`, persistence, social runtime, complete server menu coverage, and
+  full inventory/menu parity remain later gates; they must not be claimed by
+  the smoke implementation.
 - `online-mode=true` returns `unsupported_online_auth` and does not create an agent.
 - `online-mode=false` supports open admission plus server-side rate and agent-count limits.
 - Server logs and action trace survive clean server stop/restart.
@@ -80,6 +84,7 @@ Evidence:
 - Real protocol trace.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke`.
+- `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh portal_coop`.
 - GitHub Actions artifact from `.github/workflows/minecraft-neoforge.yml`.
 
 Blocking rule:
@@ -167,6 +172,7 @@ Evidence:
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
 - `bash scripts/dev/e2e.sh craft_negative`
+- `bash scripts/dev/e2e.sh portal_coop`
 - `examples/codex-rpc/*.replay.jsonl`
 - `.minelink-dev/reports/mine_tree-result.json`
 
@@ -230,8 +236,21 @@ Required:
 Evidence:
 
 - Two-agent fixture.
+- Three-agent portal cooperation fixture.
 - Human + agent coexistence demo.
 - Event timeline and replay.
+
+Current status:
+
+- Mock runtime and real NeoForge runtime cover `portal_coop`, which births
+  three `server_agent` sessions, opens one shared chest, moves obsidian and
+  flint-and-steel through public MCP container tools, places a 14-block
+  obsidian frame with `block.place`, ignites it with `action.use`, and asserts
+  that one agent observes `minecraft:nether_portal`.
+- This is not full Gate 8 acceptance yet. Human chat interaction, persisted A2A
+  social events, notice boards, distance-limited social discovery, and rate
+  limited agent-to-agent messaging still require separate implementation and
+  evidence.
 
 ### Gate 9: Frontier Society and Director
 
@@ -287,9 +306,10 @@ Current status:
 
 - `scripts/dev/soak.sh` repeats selected e2e scenarios and writes
   `soak-report.json`, `process-cleanup.json`, and `queue-metrics.json`.
-- Fast CI runs a short mock soak for `mine_tree` and `craft_negative`.
+- Fast CI runs a short mock soak for `mine_tree`, `craft_negative`, and
+  `portal_coop`.
 - The NeoForge workflow starts a real dedicated Minecraft server and runs a
-  short real NeoForge soak for `craft_negative`.
+  short real NeoForge soak for `craft_negative` and `portal_coop`.
 - These reports are stability evidence, not full release acceptance. Gate 11
   still requires a longer real Minecraft soak profile before release.
 
@@ -310,7 +330,9 @@ Before a release tag, these must pass against mock and real runtime where applic
 
 ## 4. Current Baseline Evidence
 
-The repository currently has an executable baseline for Gates 0, 4 partial, 5 partial, 6 mock partial, 7 mock partial, and 11 dependency audit:
+The repository currently has an executable baseline for Gates 0, 4 partial,
+5 partial, 6 mock/NeoForge partial, 7 mock partial, 8 portal-cooperation
+partial, and 11 dependency audit:
 
 - `npm run build`
 - `npm run typecheck`
@@ -320,13 +342,15 @@ The repository currently has an executable baseline for Gates 0, 4 partial, 5 pa
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
 - `bash scripts/dev/e2e.sh craft_negative`
-- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative`
+- `bash scripts/dev/e2e.sh portal_coop`
+- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,portal_coop`
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
 - `./gradlew --no-daemon build` in `mod/neoforge`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative`
-- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh portal_coop`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,portal_coop`
 - `.minelink-dev/soak/<runtime>/soak-report.json`
 - `.minelink-dev/soak/<runtime>/process-cleanup.json`
 - `.minelink-dev/soak/<runtime>/queue-metrics.json`
@@ -334,7 +358,7 @@ The repository currently has an executable baseline for Gates 0, 4 partial, 5 pa
 
 Not yet accepted as full product:
 
-- Real Minecraft server_agent body.
+- Persistent/restorable server_agent lifecycle and human-player coexistence.
 - Real Create adapter against Create.
 - Production Gateway admission/rate-limit/auth hardening.
 - Complete FakePlayer-backed container/crafting semantics on real server menus.

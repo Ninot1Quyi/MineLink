@@ -1,5 +1,6 @@
 package net.minelink.neoforge.server;
 
+import com.mojang.authlib.GameProfile;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -23,18 +24,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.Container;
-import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -45,8 +49,12 @@ import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minelink.neoforge.MineLinkMod;
+import net.neoforged.neoforge.common.util.FakePlayer;
+import net.neoforged.neoforge.common.util.FakePlayerFactory;
 
 public final class MineLinkEndpointBootstrap {
     private static final Gson GSON = new Gson();
@@ -177,6 +185,8 @@ public final class MineLinkEndpointBootstrap {
         capabilities.addProperty("inventory", true);
         capabilities.addProperty("container_basic", true);
         capabilities.addProperty("crafting_basic", true);
+        capabilities.addProperty("block_place", true);
+        capabilities.addProperty("item_use", true);
         capabilities.addProperty("create_adapter", false);
         response.add("capabilities", capabilities);
         return response;
@@ -219,6 +229,8 @@ public final class MineLinkEndpointBootstrap {
             "action.move",
             "action.look_at",
             "action.mine_visible_block",
+            "action.use",
+            "block.place",
             "container.open",
             "container.observe",
             "container.move_stack",
@@ -239,6 +251,7 @@ public final class MineLinkEndpointBootstrap {
         addTool(tools, "action.look_at", "Turn toward a visible block ref.", "action", "look");
         addTool(tools, "action.mine_visible_block", "Mine a currently visible block ref.", "action", "mine");
         addTool(tools, "action.use", "Use a visible target when supported.", "action", "use");
+        addTool(tools, "block.place", "Place a block from inventory against a visible target.", "action", "build");
         addTool(tools, "container.open", "Open a reachable smoke fixture container.", "container");
         addTool(tools, "container.observe", "Observe the currently open smoke fixture container.", "container", "observe");
         addTool(tools, "container.move_stack", "Move a stack between smoke fixture container and agent inventory.", "container");
@@ -265,7 +278,8 @@ public final class MineLinkEndpointBootstrap {
             case "action.move" -> move(request, agent, arguments);
             case "action.look_at" -> lookAt(request, agent, arguments);
             case "action.mine_visible_block" -> mineVisibleBlock(request, agent, arguments);
-            case "action.use" -> unsupported(request, "action.use");
+            case "action.use" -> use(request, agent, arguments);
+            case "block.place" -> placeBlock(request, agent, arguments);
             case "container.open" -> openContainer(request, agent, arguments);
             case "container.observe" -> observeContainer(request, agent);
             case "container.move_stack" -> moveStack(request, agent, arguments);
@@ -346,7 +360,11 @@ public final class MineLinkEndpointBootstrap {
         block.addProperty("id", id);
         block.add("position", blockPosition(pos));
         block.addProperty("distance", Math.sqrt(pos.distSqr(origin)));
-        block.add("tags", tags(state));
+        JsonArray tagArray = tags(state);
+        for (String tag : agent.extraTags(pos, state)) {
+            tagArray.add(tag);
+        }
+        block.add("tags", tagArray);
         blocks.add(block);
     }
 
@@ -435,6 +453,126 @@ public final class MineLinkEndpointBootstrap {
         drop.addProperty("item", itemId);
         drop.addProperty("count", 1);
         response.add("drop", drop);
+        return response;
+    }
+
+    private JsonObject placeBlock(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String ref = stringValue(arguments, "target_ref", "");
+        Direction face = Direction.byName(stringValue(arguments, "face", ""));
+        String itemId = stringValue(arguments, "item", "");
+        String label = stringValue(arguments, "placement_label", "");
+        if (face == null || itemId.isBlank()) {
+            return failure(request, "invalid_arguments", "block.place requires target_ref, face, and item.");
+        }
+
+        InteractionTarget target = validateInteractionRef(request, agent, ref);
+        if (target.failure != null) {
+            return target.failure;
+        }
+        BlockRef blockRef = target.ref;
+
+        Item item = itemById(itemId);
+        if (item == Items.AIR || !(item instanceof BlockItem)) {
+            return failure(request, "unsupported_capability", "block.place requires a placeable block item.");
+        }
+        if (agent.inventory.getOrDefault(itemId, 0) <= 0) {
+            return failure(request, "missing_material", "Agent inventory does not contain " + itemId + ".");
+        }
+
+        ServerLevel level = server.overworld();
+        BlockPos placementPos = blockRef.pos.relative(face);
+        if (placementPos.getY() < level.getMinBuildHeight() || placementPos.getY() >= level.getMaxBuildHeight()) {
+            return failure(request, "blocked", "The placement target is outside the build height.");
+        }
+        if (!level.getBlockState(placementPos).canBeReplaced()) {
+            return failure(request, "blocked", "The placement target is already occupied.");
+        }
+
+        ItemStack beforeStack = prepareMainHand(agent, itemId);
+        int beforeCount = beforeStack.getCount();
+        BlockHitResult hit = hitResult(blockRef.pos, face);
+        InteractionResult interactionResult = agent.entity.gameMode.useItemOn(agent.entity, level, beforeStack, InteractionHand.MAIN_HAND, hit);
+        if (interactionResult.shouldSwing()) {
+            agent.entity.swing(InteractionHand.MAIN_HAND, true);
+        }
+        syncInventoryFromHand(agent, itemId, beforeCount);
+
+        BlockState placedState = level.getBlockState(placementPos);
+        if (!interactionResult.consumesAction() || placedState.isAir()) {
+            return failure(request, "blocked", "Vanilla placement did not consume the action or place a block.");
+        }
+
+        JsonObject placed = new JsonObject();
+        placed.addProperty("item", itemId);
+        placed.addProperty("id", blockId(placedState));
+        placed.add("position", blockPosition(placementPos));
+        placed.add("pos", blockPosition(placementPos));
+        placed.addProperty("placement_label", label.isBlank() ? null : label);
+
+        JsonObject result = new JsonObject();
+        result.add("placed", placed);
+        result.addProperty("interaction_result", interactionResult.name().toLowerCase());
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
+        return response;
+    }
+
+    private JsonObject use(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String ref = stringValue(arguments, "target_ref", stringValue(arguments, "block_ref", ""));
+        String itemId = stringValue(arguments, "item", "");
+        Direction face = Direction.byName(stringValue(arguments, "face", "up"));
+        if (face == null) {
+            return failure(request, "invalid_arguments", "action.use face must be one of up, down, north, south, east, west.");
+        }
+        if (itemId.isBlank()) {
+            return failure(request, "invalid_arguments", "action.use requires item for the NeoForge native use path.");
+        }
+        if (agent.inventory.getOrDefault(itemId, 0) <= 0) {
+            return failure(request, "missing_material", "Agent inventory does not contain " + itemId + ".");
+        }
+
+        Item item = itemById(itemId);
+        if (item == Items.AIR) {
+            return failure(request, "unsupported_capability", "Unknown item: " + itemId + ".");
+        }
+
+        ServerLevel level = server.overworld();
+        BlockRef blockRef = null;
+        if (!ref.isBlank()) {
+            InteractionTarget target = validateInteractionRef(request, agent, ref);
+            if (target.failure != null) {
+                return target.failure;
+            }
+            blockRef = target.ref;
+        }
+        ItemStack beforeStack = prepareMainHand(agent, itemId);
+        int beforeCount = beforeStack.getCount();
+        InteractionResult interactionResult;
+        if (ref.isBlank()) {
+            interactionResult = agent.entity.gameMode.useItem(agent.entity, level, beforeStack, InteractionHand.MAIN_HAND);
+        } else {
+            interactionResult = agent.entity.gameMode.useItemOn(agent.entity, level, beforeStack, InteractionHand.MAIN_HAND, hitResult(blockRef.pos, face));
+        }
+        if (interactionResult.shouldSwing()) {
+            agent.entity.swing(InteractionHand.MAIN_HAND, true);
+        }
+        syncInventoryFromHand(agent, itemId, beforeCount);
+
+        if (!interactionResult.consumesAction()) {
+            return failure(request, "blocked", "Vanilla use did not consume the action.");
+        }
+
+        JsonObject result = new JsonObject();
+        result.addProperty("used", true);
+        result.addProperty("item", itemId);
+        result.addProperty("interaction_result", interactionResult.name().toLowerCase());
+        if (portalActivatedNear(level, agent.fixtureBase)) {
+            result.addProperty("activated", "minecraft:nether_portal");
+        }
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
         return response;
     }
 
@@ -641,6 +779,70 @@ public final class MineLinkEndpointBootstrap {
         JsonObject response = baseResponse(request, "tool.execute_result");
         response.addProperty("status", "completed");
         return response;
+    }
+
+    private InteractionTarget validateInteractionRef(JsonObject request, AgentBody agent, String ref) {
+        BlockRef blockRef = agent.ref(ref);
+        if (blockRef == null) {
+            return new InteractionTarget(null, failure(request, "unknown_or_unobserved_target", "Block ref is not from the latest observation."));
+        }
+        if (blockRef.expired()) {
+            return new InteractionTarget(null, failure(request, "expired_ref", "Block ref has expired."));
+        }
+        ServerLevel level = server.overworld();
+        if (!agent.entity.canInteractWithBlock(blockRef.pos, 1.0)) {
+            return new InteractionTarget(null, failure(request, "target_too_far", "The block is outside the vanilla interaction range."));
+        }
+        BlockState state = level.getBlockState(blockRef.pos);
+        if (state.isAir() || !blockId(state).equals(blockRef.blockId)) {
+            return new InteractionTarget(null, failure(request, "target_not_visible", "The observed block is no longer present."));
+        }
+        if (blockRef.pos.getY() >= level.getMaxBuildHeight() || !level.mayInteract(agent.entity, blockRef.pos)) {
+            return new InteractionTarget(null, failure(request, "blocked", "The server rejected interaction with the target block."));
+        }
+        agent.entity.moveTo(agent.position().x, agent.position().y, agent.position().z, faceYaw(blockRef.pos, agent.position()), agent.entity.getXRot());
+        return new InteractionTarget(blockRef, null);
+    }
+
+    private ItemStack prepareMainHand(AgentBody agent, String itemId) {
+        int count = Math.max(1, agent.inventory.getOrDefault(itemId, 0));
+        ItemStack stack = new ItemStack(itemById(itemId), count);
+        agent.entity.getInventory().selected = 0;
+        agent.entity.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        return stack;
+    }
+
+    private void syncInventoryFromHand(AgentBody agent, String itemId, int beforeCount) {
+        ItemStack after = agent.entity.getItemInHand(InteractionHand.MAIN_HAND);
+        int afterCount = after.getItem() == itemById(itemId) ? after.getCount() : 0;
+        if (afterCount <= 0) {
+            agent.inventory.remove(itemId);
+            return;
+        }
+        if (afterCount <= beforeCount) {
+            agent.inventory.put(itemId, afterCount);
+        }
+    }
+
+    private static BlockHitResult hitResult(BlockPos pos, Direction face) {
+        Vec3 center = Vec3.atCenterOf(pos);
+        Vec3 hit = center.add(face.getStepX() * 0.5D, face.getStepY() * 0.5D, face.getStepZ() * 0.5D);
+        return new BlockHitResult(hit, face, pos, false);
+    }
+
+    private static float faceYaw(BlockPos pos, Vec3 from) {
+        double dx = pos.getX() + 0.5D - from.x;
+        double dz = pos.getZ() + 0.5D - from.z;
+        return (float)(Math.toDegrees(Math.atan2(dz, dx)) - 90.0D);
+    }
+
+    private static boolean portalActivatedNear(ServerLevel level, BlockPos anchor) {
+        for (BlockPos pos : portalInteriorPositions(anchor)) {
+            if (level.getBlockState(pos).is(Blocks.NETHER_PORTAL)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean hasReachableCraftingStation(AgentBody agent) {
@@ -1050,26 +1252,78 @@ public final class MineLinkEndpointBootstrap {
         return tags;
     }
 
+    private static BlockPos portalChestPos(BlockPos anchor) {
+        return anchor.west(2).above();
+    }
+
+    private static BlockPos[] portalFramePositions(BlockPos anchor) {
+        return new BlockPos[] {
+            anchor.offset(0, 1, 0),
+            anchor.offset(0, 2, 0),
+            anchor.offset(0, 3, 0),
+            anchor.offset(0, 4, 0),
+            anchor.offset(0, 5, 0),
+            anchor.offset(1, 1, 0),
+            anchor.offset(2, 1, 0),
+            anchor.offset(3, 1, 0),
+            anchor.offset(3, 2, 0),
+            anchor.offset(3, 3, 0),
+            anchor.offset(3, 4, 0),
+            anchor.offset(3, 5, 0),
+            anchor.offset(1, 5, 0),
+            anchor.offset(2, 5, 0)
+        };
+    }
+
+    private static BlockPos[] portalInteriorPositions(BlockPos anchor) {
+        return new BlockPos[] {
+            anchor.offset(1, 2, 0),
+            anchor.offset(2, 2, 0),
+            anchor.offset(1, 3, 0),
+            anchor.offset(2, 3, 0),
+            anchor.offset(1, 4, 0),
+            anchor.offset(2, 4, 0)
+        };
+    }
+
     private static final class RuntimeState {
         private final Map<String, AgentBody> agents = new LinkedHashMap<>();
         private String ownerId = "";
         private int agentSeq = 0;
+        private BlockPos portalBase;
 
         private AgentBody birth(ServerLevel level, String ownerId, String seedPrompt) {
             agentSeq++;
             String agentId = "agent_" + agentSeq;
             String displayName = "MineLink-" + agentSeq;
-            BlockPos base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2);
-            seedFixture(level, base);
+            String fixtureName = setting("MINELINK_FIXTURE", "minelink.fixture", "vanilla_tree");
+            BlockPos base;
+            Vec3 spawn;
+            if (fixtureName.equals("portal_coop")) {
+                if (portalBase == null) {
+                    portalBase = level.getSharedSpawnPos().offset(4, 2, 4).immutable();
+                    seedPortalFixture(level, portalBase);
+                }
+                base = portalBase;
+                spawn = new Vec3(base.getX() + 1.5D, base.getY() + 3.0D, base.getZ() - 2.0D);
+            } else {
+                base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
+                seedFixture(level, base);
+                spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
+            }
 
-            ArmorStand entity = new ArmorStand(level, base.getX() + 0.5, base.getY(), base.getZ() + 0.5);
-            entity.setCustomName(Component.literal(displayName));
-            entity.setCustomNameVisible(true);
+            GameProfile profile = new GameProfile(
+                UUID.nameUUIDFromBytes((ownerId + ":" + agentId).getBytes(StandardCharsets.UTF_8)),
+                displayName
+            );
+            FakePlayer entity = FakePlayerFactory.get(level, profile);
+            entity.getInventory().clearContent();
+            entity.moveTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
             entity.setNoGravity(true);
             entity.setInvulnerable(true);
-            level.addFreshEntity(entity);
+            entity.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
 
-            AgentBody body = new AgentBody(agentId, displayName, ownerId, seedPrompt, entity, base.immutable());
+            AgentBody body = new AgentBody(agentId, displayName, ownerId, seedPrompt, entity, base.immutable(), fixtureName);
             agents.put(agentId, body);
             return body;
         }
@@ -1103,6 +1357,25 @@ public final class MineLinkEndpointBootstrap {
             level.setBlockAndUpdate(base.south(4), Blocks.CRAFTING_TABLE.defaultBlockState());
             level.setBlockAndUpdate(base.east(2).south(3), Blocks.COPPER_BLOCK.defaultBlockState());
         }
+
+        private static void seedPortalFixture(ServerLevel level, BlockPos anchor) {
+            for (BlockPos pos : BlockPos.betweenClosed(anchor.offset(-4, 0, -4), anchor.offset(6, 7, 4))) {
+                if (pos.getY() >= anchor.getY()) {
+                    level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
+                }
+            }
+            level.setBlockAndUpdate(anchor.below(), Blocks.GRASS_BLOCK.defaultBlockState());
+            level.setBlockAndUpdate(anchor, Blocks.NETHERRACK.defaultBlockState());
+            BlockPos chestPos = portalChestPos(anchor);
+            level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
+            if (level.getBlockEntity(chestPos) instanceof Container container) {
+                container.setItem(0, new ItemStack(Items.OBSIDIAN, 5));
+                container.setItem(1, new ItemStack(Items.OBSIDIAN, 5));
+                container.setItem(2, new ItemStack(Items.OBSIDIAN, 4));
+                container.setItem(3, new ItemStack(Items.FLINT_AND_STEEL, 1));
+                container.setChanged();
+            }
+        }
     }
 
     private static final class AgentBody {
@@ -1112,8 +1385,9 @@ public final class MineLinkEndpointBootstrap {
         private final String displayName;
         private final String ownerId;
         private final String seedPrompt;
-        private final ArmorStand entity;
+        private final FakePlayer entity;
         private final BlockPos fixtureBase;
+        private final String fixtureName;
         private final Map<String, Integer> inventory = new LinkedHashMap<>();
         private final Map<String, BlockRef> refs = new LinkedHashMap<>();
         private OpenContainer openContainer;
@@ -1121,13 +1395,14 @@ public final class MineLinkEndpointBootstrap {
         private int slotSeq = 0;
         private int containerSeq = 0;
 
-        private AgentBody(String agentId, String displayName, String ownerId, String seedPrompt, ArmorStand entity, BlockPos fixtureBase) {
+        private AgentBody(String agentId, String displayName, String ownerId, String seedPrompt, FakePlayer entity, BlockPos fixtureBase, String fixtureName) {
             this.agentId = agentId;
             this.displayName = displayName;
             this.ownerId = ownerId;
             this.seedPrompt = seedPrompt;
             this.entity = entity;
             this.fixtureBase = fixtureBase;
+            this.fixtureName = fixtureName;
         }
 
         private Vec3 position() {
@@ -1160,6 +1435,18 @@ public final class MineLinkEndpointBootstrap {
         }
 
         private BlockPos[] smokeFixturePositions() {
+            if (fixtureName.equals("portal_coop")) {
+                List<BlockPos> positions = new ArrayList<>();
+                positions.add(fixtureBase);
+                positions.add(portalChestPos(fixtureBase));
+                for (BlockPos pos : portalFramePositions(fixtureBase)) {
+                    positions.add(pos);
+                }
+                for (BlockPos pos : portalInteriorPositions(fixtureBase)) {
+                    positions.add(pos);
+                }
+                return positions.toArray(new BlockPos[0]);
+            }
             return new BlockPos[] {
                 fixtureBase.east(3),
                 fixtureBase.east(3).above(),
@@ -1168,12 +1455,27 @@ public final class MineLinkEndpointBootstrap {
                 fixtureBase.east(2).south(3)
             };
         }
+
+        private List<String> extraTags(BlockPos pos, BlockState state) {
+            List<String> extra = new ArrayList<>();
+            String id = blockId(state);
+            if (id.equals("minecraft:chest") || id.equals("minecraft:crafting_table")) {
+                extra.add("minelink:container");
+            }
+            if (fixtureName.equals("portal_coop") && pos.equals(fixtureBase) && id.equals("minecraft:netherrack")) {
+                extra.add("minelink:portal_anchor");
+            }
+            return extra;
+        }
     }
 
     private record BlockRef(BlockPos pos, String blockId, long expiresAtMs) {
         private boolean expired() {
             return System.currentTimeMillis() > expiresAtMs;
         }
+    }
+
+    private record InteractionTarget(BlockRef ref, JsonObject failure) {
     }
 
     private static final class OpenContainer {

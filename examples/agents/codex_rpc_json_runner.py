@@ -5,8 +5,9 @@ import os
 import shlex
 import subprocess
 import sys
+from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from minelink_sdk import MineLinkMcpClient, log, write_json
 
@@ -69,6 +70,10 @@ def main() -> None:
     log_dir = os.environ.get("MINELINK_LOG_DIR", ".minelink-dev/logs")
     trace_path = os.environ.get("MINELINK_TRACE", ".minelink-dev/replays/latest-action-trace.jsonl")
     rpc_source = build_rpc_source(args, repo_root, scenario)
+
+    if scenario == "portal_coop":
+        run_portal_coop(args, scenario, endpoint, report_path, log_dir, trace_path, rpc_source)
+        return
 
     state: JsonDict = {
         "scenario": scenario,
@@ -185,8 +190,170 @@ def scenario_objective(scenario: str) -> str:
         "create_smoke": "Use MineLink MCP tools to inspect and interact with one reachable Create component.",
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
+        "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
     }
     return objectives.get(scenario, f"Complete MineLink scenario {scenario}.")
+
+
+def run_portal_coop(
+    args: argparse.Namespace,
+    scenario: str,
+    endpoint: str,
+    report_path: Path,
+    log_dir: str,
+    trace_path: str,
+    rpc_source: RpcSource,
+) -> None:
+    agent_names = ["builder_a", "builder_b", "builder_c"]
+    state: JsonDict = {
+        "scenario": scenario,
+        "objective": scenario_objective(scenario),
+        "turn": 0,
+        "agents": {
+            name: {
+                "name": name,
+                "last_scene": None,
+                "last_container": None,
+                "last_inventory": None,
+                "tool_results": [],
+            }
+            for name in agent_names
+        },
+        "placements": {},
+        "tool_results": [],
+    }
+    rpc_messages: List[JsonDict] = []
+    final_assertions: List[JsonDict] = []
+    connect_results: JsonDict = {}
+    birth_results: JsonDict = {}
+    clients: Dict[str, MineLinkMcpClient] = {}
+    tools: JsonDict = {}
+
+    with ExitStack() as stack:
+        for name in agent_names:
+            client = stack.enter_context(MineLinkMcpClient())
+            clients[name] = client
+            connect_results[name] = client.connect_server(endpoint=endpoint, owner_name=f"codex_{name}")
+            birth_results[name] = client.birth(f"{scenario}:{name}: {scenario_objective(scenario)}")
+            state["agents"][name]["agent_id"] = birth_results[name].get("agent_id")
+            state["agents"][name]["display_name"] = birth_results[name].get("display_name")
+            if not tools:
+                tools = client.tool_list({"limit": 50})
+
+        log(
+            "codex_rpc_team_session_started",
+            scenario=scenario,
+            endpoint=endpoint,
+            agents={name: state["agents"][name].get("agent_id") for name in agent_names},
+        )
+
+        for turn in range(1, args.max_turns + 1):
+            state["turn"] = turn
+            request = {
+                "jsonrpc": "2.0",
+                "id": f"minelink-agent-team-turn-{turn}",
+                "method": "minelink/next_tool_calls",
+                "params": {
+                    "scenario": scenario,
+                    "objective": state["objective"],
+                    "available_tools": tools.get("tools", []),
+                    "agents": {
+                        name: {
+                            "agent_id": state["agents"][name].get("agent_id"),
+                            "display_name": state["agents"][name].get("display_name"),
+                            "state": public_state(state["agents"][name]),
+                        }
+                        for name in agent_names
+                    },
+                    "shared_state": {
+                        "placements": state["placements"],
+                        "recent_tool_results": state["tool_results"][-8:],
+                    },
+                },
+            }
+            rpc_message = rpc_source.next_message(request)
+            validate_rpc_message(rpc_message, expected_id=request["id"])
+            rpc_messages.append(redact_rpc_message(rpc_message))
+            decision = extract_decision(rpc_message)
+            agent_name = str(decision.get("agent", ""))
+            if agent_name not in clients:
+                raise RuntimeError(f"portal_coop decision must name one of {agent_names}, got {agent_name!r}")
+            agent_state = state["agents"][agent_name]
+            client = clients[agent_name]
+
+            for tool_call in decision.get("tool_calls", []):
+                name = str(tool_call.get("name", ""))
+                arguments = resolve_templates(tool_call.get("arguments", {}) or {}, agent_state, state)
+                mode = str(tool_call.get("mode", "await_completion"))
+                result = client.tool_execute(name, arguments, mode)
+                record = {
+                    "turn": turn,
+                    "agent": agent_name,
+                    "name": name,
+                    "arguments": arguments,
+                    "result": result,
+                }
+                agent_state["tool_results"].append(record)
+                state["tool_results"].append(record)
+                update_state_from_tool_result(agent_state, name, result)
+                update_shared_state_from_tool_result(state, name, result)
+                log(
+                    "codex_rpc_team_tool_result",
+                    turn=turn,
+                    agent=agent_name,
+                    name=name,
+                    result=compact_result(result),
+                )
+
+            if decision.get("done") is True:
+                final_assertions = run_assertions(decision.get("final_assertions", []), agent_state, state)
+                break
+        else:
+            final_assertions = [{"name": "max_turns_not_exceeded", "passed": False, "max_turns": args.max_turns}]
+
+    passed = bool(final_assertions) and all(assertion.get("passed") is True for assertion in final_assertions)
+    report: JsonDict = {
+        "scenario": scenario,
+        "passed": passed,
+        "endpoint": endpoint,
+        "agents": {
+            name: {
+                "agent_id": state["agents"][name].get("agent_id"),
+                "display_name": state["agents"][name].get("display_name"),
+            }
+            for name in agent_names
+        },
+        "rpc_source": rpc_source_name(args, scenario),
+        "rpc_contract": {
+            "transport": "json-rpc-2.0-envelope",
+            "decision_path": "result.mineLinkDecision",
+            "decision_agent_field": "result.mineLinkDecision.agent",
+            "real_command_env": "MINELINK_CODEX_RPC_COMMAND",
+            "replay_env": "MINELINK_CODEX_RPC_REPLAY",
+        },
+        "connect": connect_results,
+        "birth": birth_results,
+        "placements": state["placements"],
+        "final_assertions": final_assertions,
+        "tool_results": state["tool_results"],
+        "rpc_messages": rpc_messages,
+        "final_inventory": {
+            name: state["agents"][name].get("last_inventory")
+            for name in agent_names
+        },
+        "evidence_paths": {
+            "server_log": f"{log_dir}/server.log",
+            "server_stdout_log": f"{log_dir}/server.stdout.log",
+            "server_stderr_log": f"{log_dir}/server.stderr.log",
+            "host_log": f"{log_dir}/host.log",
+            "agent_log": f"{log_dir}/agent.log",
+            "action_trace": trace_path,
+        },
+    }
+    write_json(report_path, report)
+    log("codex_rpc_team_result", scenario=scenario, passed=passed, report=str(report_path))
+    if not passed:
+        raise SystemExit(1)
 
 
 def parse_json_stdout(stdout: str) -> JsonDict:
@@ -231,11 +398,11 @@ def extract_decision(message: JsonDict) -> JsonDict:
     return decision
 
 
-def resolve_templates(value: Any, state: JsonDict) -> Any:
+def resolve_templates(value: Any, state: JsonDict, global_state: Optional[JsonDict] = None) -> Any:
     if isinstance(value, dict):
-        return {key: resolve_templates(item, state) for key, item in value.items()}
+        return {key: resolve_templates(item, state, global_state) for key, item in value.items()}
     if isinstance(value, list):
-        return [resolve_templates(item, state) for item in value]
+        return [resolve_templates(item, state, global_state) for item in value]
     if not isinstance(value, str):
         return value
     if value == "${inventory_empty_slot}":
@@ -246,6 +413,8 @@ def resolve_templates(value: Any, state: JsonDict) -> Any:
         return find_visible_block_ref(state, value.removeprefix("${visible_block:").removesuffix("}"))
     if value.startswith("${visible_block_tag:") and value.endswith("}"):
         return find_visible_block_ref_by_tag(state, value.removeprefix("${visible_block_tag:").removesuffix("}"))
+    if value.startswith("${placed_block:") and value.endswith("}"):
+        return find_placed_block_ref(state, global_state, value.removeprefix("${placed_block:").removesuffix("}"))
     if value.startswith("${container_slot:") and value.endswith("}"):
         return find_container_slot_ref(state, value.removeprefix("${container_slot:").removesuffix("}"))
     return value
@@ -271,6 +440,21 @@ def find_container_slot_ref(state: JsonDict, item_id: str) -> str:
         if slot.get("item") == item_id and int(slot.get("count", 0)) > 0:
             return str(slot["slot_ref"])
     raise RuntimeError(f"No open container slot contains {item_id}")
+
+
+def find_placed_block_ref(state: JsonDict, global_state: Optional[JsonDict], label: str) -> str:
+    if not global_state:
+        raise RuntimeError("${placed_block:*} requires shared placement state")
+    placement = (global_state.get("placements") or {}).get(label)
+    if not isinstance(placement, dict):
+        raise RuntimeError(f"No placement label has been recorded: {label}")
+    expected_pos = normalize_pos(placement.get("pos"))
+    if expected_pos is None:
+        raise RuntimeError(f"Placement label {label} has no usable position")
+    for block in visible_blocks(state):
+        if normalize_pos(block.get("position")) == expected_pos or normalize_pos(block.get("pos_hint")) == expected_pos:
+            return str(block["block_ref"])
+    raise RuntimeError(f"No visible block ref matches placement label {label} at {expected_pos}")
 
 
 def find_inventory_empty_slot(state: JsonDict) -> str:
@@ -312,18 +496,39 @@ def update_state_from_tool_result(state: JsonDict, name: str, result: JsonDict) 
         state["last_inventory"] = result
 
 
-def run_assertions(assertions: Any, state: JsonDict) -> List[JsonDict]:
+def update_shared_state_from_tool_result(global_state: JsonDict, name: str, result: JsonDict) -> None:
+    if name != "block.place" or not isinstance(result, dict):
+        return
+    placed = result.get("placed")
+    if not isinstance(placed, dict):
+        return
+    label = placed.get("placement_label")
+    if not isinstance(label, str) or not label:
+        return
+    pos = normalize_pos(placed.get("pos") or placed.get("position"))
+    if pos is None:
+        return
+    placements = global_state.setdefault("placements", {})
+    placements[label] = {
+        "item": placed.get("item"),
+        "id": placed.get("id"),
+        "pos": list(pos),
+    }
+
+
+def run_assertions(assertions: Any, state: JsonDict, global_state: Optional[JsonDict] = None) -> List[JsonDict]:
     if not isinstance(assertions, list):
         raise RuntimeError("mineLinkDecision.final_assertions must be an array")
-    return [run_assertion(assertion, state) for assertion in assertions]
+    return [run_assertion(assertion, state, global_state) for assertion in assertions]
 
 
-def run_assertion(assertion: JsonDict, state: JsonDict) -> JsonDict:
+def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[JsonDict] = None) -> JsonDict:
     kind = assertion.get("kind")
     if kind == "inventory_contains":
         item = str(assertion.get("item", ""))
         min_count = int(assertion.get("min_count", 1))
-        actual = inventory_count(state.get("last_inventory") or {}, item)
+        assertion_state = assertion_agent_state(assertion, state, global_state)
+        actual = inventory_count(assertion_state.get("last_inventory") or {}, item)
         return {
             "name": assertion.get("name", f"inventory_contains_{item}"),
             "kind": kind,
@@ -334,16 +539,18 @@ def run_assertion(assertion: JsonDict, state: JsonDict) -> JsonDict:
         }
     if kind == "tool_call_succeeded":
         name = str(assertion.get("tool_name", ""))
+        min_count = int(assertion.get("min_count", 1))
         matches = [
             record
-            for record in state.get("tool_results", [])
+            for record in tool_records(state, global_state)
             if record.get("name") == name and not is_tool_failure(record.get("result", {}))
         ]
         return {
             "name": assertion.get("name", f"tool_call_succeeded_{name}"),
             "kind": kind,
-            "passed": bool(matches),
+            "passed": len(matches) >= min_count,
             "tool_name": name,
+            "expected_min_count": min_count,
             "matching_calls": len(matches),
         }
     if kind == "tool_call_failed":
@@ -351,7 +558,7 @@ def run_assertion(assertion: JsonDict, state: JsonDict) -> JsonDict:
         expected_reason = assertion.get("reason")
         matches = []
         observed_reasons = []
-        for record in state.get("tool_results", []):
+        for record in tool_records(state, global_state):
             if name and record.get("name") != name:
                 continue
             result = record.get("result", {})
@@ -371,11 +578,35 @@ def run_assertion(assertion: JsonDict, state: JsonDict) -> JsonDict:
             "matching_calls": len(matches),
             "observed_reasons": observed_reasons,
         }
+    if kind == "agent_count":
+        expected = int(assertion.get("count", 0))
+        actual = len((global_state or {}).get("agents", {}))
+        return {
+            "name": assertion.get("name", f"agent_count_{expected}"),
+            "kind": kind,
+            "passed": actual == expected,
+            "expected": expected,
+            "actual": actual,
+        }
+    if kind == "visible_block_exists":
+        item = str(assertion.get("id", ""))
+        min_count = int(assertion.get("min_count", 1))
+        assertion_state = assertion_agent_state(assertion, state, global_state)
+        count = sum(1 for block in visible_blocks(assertion_state) if block.get("id") == item)
+        return {
+            "name": assertion.get("name", f"visible_block_exists_{item}"),
+            "kind": kind,
+            "passed": count >= min_count,
+            "id": item,
+            "expected_min_count": min_count,
+            "actual_count": count,
+            "agent": assertion.get("agent"),
+        }
     if kind == "recipe_available":
         recipe_id = str(assertion.get("recipe_id", ""))
         expected_craftable = assertion.get("craftable")
         matches = []
-        for record in state.get("tool_results", []):
+        for record in tool_records(state, global_state):
             if record.get("name") != "craft.list_available":
                 continue
             result = record.get("result", {})
@@ -401,6 +632,29 @@ def run_assertion(assertion: JsonDict, state: JsonDict) -> JsonDict:
 def inventory_count(inventory: JsonDict, item_id: str) -> int:
     slots = inventory.get("inventory", {}).get("main", [])
     return sum(int(slot.get("count", 0)) for slot in slots if slot.get("item") == item_id)
+
+
+def tool_records(state: JsonDict, global_state: Optional[JsonDict] = None) -> List[JsonDict]:
+    if global_state and isinstance(global_state.get("tool_results"), list):
+        return global_state["tool_results"]
+    return state.get("tool_results", [])
+
+
+def assertion_agent_state(assertion: JsonDict, state: JsonDict, global_state: Optional[JsonDict]) -> JsonDict:
+    agent = assertion.get("agent")
+    if agent and global_state:
+        agents = global_state.get("agents", {})
+        if isinstance(agents, dict) and isinstance(agents.get(agent), dict):
+            return agents[agent]
+    return state
+
+
+def normalize_pos(value: Any) -> Optional[Tuple[int, int, int]]:
+    if isinstance(value, list) and len(value) == 3:
+        return (int(value[0]), int(value[1]), int(value[2]))
+    if isinstance(value, dict) and {"x", "y", "z"}.issubset(value.keys()):
+        return (int(value["x"]), int(value["y"]), int(value["z"]))
+    return None
 
 
 def is_tool_failure(result: Any) -> bool:

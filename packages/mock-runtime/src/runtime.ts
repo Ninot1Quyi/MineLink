@@ -12,7 +12,7 @@ import {
 } from "@minelink/protocol";
 
 type Vec3 = [number, number, number];
-type FixtureName = "vanilla_tree" | "create_smoke" | "craft_smoke";
+type FixtureName = "vanilla_tree" | "create_smoke" | "craft_smoke" | "portal_coop";
 type RuntimeResponse = Record<string, unknown>;
 type RuntimeRequest = RuntimeResponse & { id?: string; type?: string };
 type RefValidation = { ok: true; ref: VisibleRef } | ({ ok: false } & RuntimeResponse);
@@ -246,7 +246,7 @@ export class MockRuntimeServer {
       agentId,
       displayName,
       bodyId,
-      position: [0, 64, 0],
+      position: this.fixture === "portal_coop" ? [1.5, 66, -2] : [0, 64, 0],
       yaw: 0,
       pitch: 0,
       inventory: {},
@@ -329,6 +329,15 @@ export class MockRuntimeServer {
     if (name === "observe.self") return this.observe(agentId, ["self"]);
     if (name === "observe.scene") return this.observe(agentId, ["self", "visible_scene"]);
     if (name === "observe.inventory") return this.observe(agentId, ["inventory"]);
+    if (name === "block.place") {
+      return this.placeBlock(
+        agentId,
+        String(args.target_ref ?? ""),
+        String(args.face ?? ""),
+        String(args.item ?? ""),
+        typeof args.placement_label === "string" ? args.placement_label : undefined
+      );
+    }
     if (name.startsWith("action.")) {
       return this.executeAction(agentId, { kind: name.replace("action.", ""), ...args }, mode);
     }
@@ -461,12 +470,24 @@ export class MockRuntimeServer {
 
   private use(agent: AgentState, action: JsonObject): RuntimeResponse {
     const targetRef = String(action.target_ref ?? action.block_ref ?? "");
+    const item = String(action.item ?? "");
     if (targetRef) {
       const refState = this.validateRef(agent, targetRef);
       if (!refState.ok) return refState;
       if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside use range.");
+      if (item === "minecraft:flint_and_steel") {
+        if ((agent.inventory[item] ?? 0) <= 0) {
+          return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
+        }
+        if (!this.hasCompletePortalFrame()) {
+          return runtimeFail("blocked", "A complete obsidian frame is required before ignition.");
+        }
+        this.addPortalBlocks();
+        this.trace({ event: "agent.action", action: "use", agent_id: agent.agentId, item, activated: "nether_portal" });
+        return { ok: true, status: "completed", result: { used: true, item, activated: "minecraft:nether_portal" } };
+      }
     }
-    this.trace({ event: "agent.action", action: "use", agent_id: agent.agentId, target_ref: targetRef });
+    this.trace({ event: "agent.action", action: "use", agent_id: agent.agentId, target_ref: targetRef, item });
     return { ok: true, status: "completed", result: { used: true } };
   }
 
@@ -762,6 +783,52 @@ export class MockRuntimeServer {
     };
   }
 
+  private placeBlock(agentId: string, targetRef: string, faceName: string, item: string, label?: string): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    const refState = this.validateRef(agent, targetRef);
+    if (!refState.ok) return refState;
+    if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside placement range.");
+    if ((agent.inventory[item] ?? 0) <= 0) {
+      return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
+    }
+
+    const offset = faceOffset(faceName);
+    if (!offset) return runtimeFail("invalid_arguments", `Unsupported placement face ${faceName}.`);
+    const pos: Vec3 = [
+      refState.ref.pos[0] + offset[0],
+      refState.ref.pos[1] + offset[1],
+      refState.ref.pos[2] + offset[2]
+    ];
+    if (this.blocks.some((block) => !block.mined && samePos(block.pos, pos))) {
+      return runtimeFail("blocked", "The placement target is already occupied.");
+    }
+
+    const block = {
+      id: item,
+      pos,
+      tags: item === "minecraft:obsidian" ? ["minecraft:obsidian"] : [],
+      visibleFaces: ["north", "south", "east", "west", "up"]
+    };
+    this.blocks.push(block);
+    agent.inventory[item] -= 1;
+    if (agent.inventory[item] <= 0) delete agent.inventory[item];
+    this.trace({
+      event: "block.place",
+      agent_id: agent.agentId,
+      item,
+      target_ref: targetRef,
+      face: faceName,
+      pos,
+      placement_label: label
+    });
+    return {
+      ok: true,
+      status: "completed",
+      result: { placed: { item, id: item, pos, placement_label: label ?? null } }
+    };
+  }
+
   private visibleBlocks(agent: AgentState, observationId: string, expiresAt: number): RuntimeResponse[] {
     const visible: RuntimeResponse[] = [];
     for (const block of this.blocks) {
@@ -803,6 +870,24 @@ export class MockRuntimeServer {
     return { ok: true, ref: existing };
   }
 
+  private hasCompletePortalFrame(): boolean {
+    return portalFramePositions().every((pos) =>
+      this.blocks.some((block) => !block.mined && block.id === "minecraft:obsidian" && samePos(block.pos, pos))
+    );
+  }
+
+  private addPortalBlocks(): void {
+    for (const pos of portalInteriorPositions()) {
+      if (this.blocks.some((block) => !block.mined && samePos(block.pos, pos))) continue;
+      this.blocks.push({
+        id: "minecraft:nether_portal",
+        pos,
+        tags: ["minecraft:nether_portal"],
+        visibleFaces: ["north", "south"]
+      });
+    }
+  }
+
   private send(socket: WebSocket, payload: RuntimeResponse): void {
     socket.send(JSON.stringify(payload));
   }
@@ -823,6 +908,32 @@ export class MockRuntimeServer {
 }
 
 function createFixtureBlocks(fixture: FixtureName): BlockState[] {
+  if (fixture === "portal_coop") {
+    return [
+      {
+        id: "minecraft:netherrack",
+        pos: [0, 63, 0],
+        tags: ["minecraft:netherrack", "minelink:portal_anchor"],
+        visibleFaces: ["up", "north"]
+      },
+      {
+        id: "minecraft:chest",
+        pos: [-2, 64, 0],
+        tags: ["minecraft:chest", "minelink:container"],
+        visibleFaces: ["north", "up"],
+        container: {
+          kind: "chest",
+          slots: [
+            { item: "minecraft:obsidian", count: 5 },
+            { item: "minecraft:obsidian", count: 5 },
+            { item: "minecraft:obsidian", count: 4 },
+            { item: "minecraft:flint_and_steel", count: 1 }
+          ]
+        }
+      }
+    ];
+  }
+
   if (fixture === "craft_smoke") {
     return [
       {
@@ -911,9 +1022,59 @@ function round(value: number): number {
 }
 
 export function parseFixture(value: string | undefined): FixtureName {
+  if (value === "portal_coop") return "portal_coop";
   if (value === "create_smoke") return "create_smoke";
   if (value === "craft_smoke") return "craft_smoke";
   return "vanilla_tree";
+}
+
+function faceOffset(faceName: string): Vec3 | null {
+  switch (faceName) {
+    case "up":
+      return [0, 1, 0];
+    case "down":
+      return [0, -1, 0];
+    case "north":
+      return [0, 0, -1];
+    case "south":
+      return [0, 0, 1];
+    case "east":
+      return [1, 0, 0];
+    case "west":
+      return [-1, 0, 0];
+    default:
+      return null;
+  }
+}
+
+function portalFramePositions(): Vec3[] {
+  return [
+    [0, 64, 0],
+    [0, 65, 0],
+    [0, 66, 0],
+    [0, 67, 0],
+    [0, 68, 0],
+    [1, 64, 0],
+    [2, 64, 0],
+    [3, 64, 0],
+    [3, 65, 0],
+    [3, 66, 0],
+    [3, 67, 0],
+    [3, 68, 0],
+    [1, 68, 0],
+    [2, 68, 0]
+  ];
+}
+
+function portalInteriorPositions(): Vec3[] {
+  return [
+    [1, 65, 0],
+    [2, 65, 0],
+    [1, 66, 0],
+    [2, 66, 0],
+    [1, 67, 0],
+    [2, 67, 0]
+  ];
 }
 
 function runtimeFail(reason: FailureReason, message?: string, extra: RuntimeResponse = {}): RuntimeResponse & { ok: false } {

@@ -5,8 +5,11 @@ cd "$(dirname "$0")/../.."
 
 scenario="${1:-mine_tree}"
 case "$scenario" in
-  mine_tree | create_smoke | craft_smoke | craft_negative)
+  mine_tree | create_smoke | craft_smoke | craft_negative | portal_coop)
     export MINELINK_SCENARIO="$scenario"
+    if [ "$scenario" = "portal_coop" ]; then
+      export MINELINK_AGENT_MAX_TURNS="${MINELINK_AGENT_MAX_TURNS:-64}"
+    fi
     exec python3 examples/agents/codex_rpc_json_runner.py --scenario "$scenario"
     ;;
   *)

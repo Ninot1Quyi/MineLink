@@ -187,8 +187,41 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
     summary: "Use the selected item or a visible target.",
     description: "Runs a server-side use/interact action when allowed.",
     tags: ["action", "use"],
-    input_schema: { type: "object", properties: { target_ref: { type: "string" } } },
-    failure_reasons: ["unsupported_capability", "target_too_far", "target_not_visible"]
+    input_schema: {
+      type: "object",
+      properties: {
+        target_ref: { type: "string" },
+        item: { type: "string" },
+        face: { type: "string", enum: ["up", "down", "north", "south", "east", "west"] }
+      }
+    },
+    failure_reasons: ["unsupported_capability", "target_too_far", "target_not_visible", "missing_material", "blocked"]
+  },
+  {
+    name: "block.place",
+    summary: "Place a block from inventory against a visible target.",
+    description: "Places only through server-side reach, visibility, inventory, and occupancy checks.",
+    tags: ["action", "build", "survival"],
+    input_schema: {
+      type: "object",
+      required: ["target_ref", "face", "item"],
+      properties: {
+        target_ref: { type: "string" },
+        face: { type: "string", enum: ["up", "down", "north", "south", "east", "west"] },
+        item: { type: "string" },
+        placement_label: { type: "string" }
+      }
+    },
+    failure_reasons: [
+      "unknown_or_unobserved_target",
+      "expired_ref",
+      "target_too_far",
+      "target_not_visible",
+      "missing_material",
+      "blocked",
+      "unsupported_capability",
+      "invalid_arguments"
+    ]
   },
   {
     name: "chat.say_local",

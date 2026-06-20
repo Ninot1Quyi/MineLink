@@ -11,4 +11,5 @@ MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
-MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative
+MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
+MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,portal_coop

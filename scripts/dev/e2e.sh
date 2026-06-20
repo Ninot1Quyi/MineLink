@@ -29,6 +29,11 @@ case "$scenario" in
     report="$work_dir/reports/craft_negative-result.json"
     default_port="25578"
     ;;
+  portal_coop)
+    fixture="portal_coop"
+    report="$work_dir/reports/portal_coop-result.json"
+    default_port="25579"
+    ;;
   *)
     echo "Unknown e2e scenario: $scenario" >&2
     exit 2

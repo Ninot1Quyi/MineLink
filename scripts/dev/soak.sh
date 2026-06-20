@@ -80,7 +80,7 @@ fi
 
 for scenario in "${scenario_list[@]}"; do
   case "$scenario" in
-    mine_tree|create_smoke|craft_smoke|craft_negative) ;;
+    mine_tree|create_smoke|craft_smoke|craft_negative|portal_coop) ;;
     *)
       echo "Unsupported soak scenario: $scenario" >&2
       exit 2
@@ -105,6 +105,7 @@ ports_for_scenario() {
     create_smoke) endpoint_port=25576 ;;
     craft_smoke) endpoint_port=25577 ;;
     craft_negative) endpoint_port=25578 ;;
+    portal_coop) endpoint_port=25579 ;;
     *) endpoint_port=25575 ;;
   esac
   if [ "$runtime" = "neoforge" ]; then

@@ -20,7 +20,8 @@
     "ci": "bash scripts/dev/verify.sh",
     "e2e": "bash scripts/dev/e2e.sh mine_tree",
     "e2e:create": "bash scripts/dev/e2e.sh create_smoke",
-    "e2e:craft": "bash scripts/dev/e2e.sh craft_smoke"
+    "e2e:craft": "bash scripts/dev/e2e.sh craft_smoke",
+    "e2e:portal": "bash scripts/dev/e2e.sh portal_coop"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
