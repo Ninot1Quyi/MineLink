@@ -198,6 +198,28 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
     failure_reasons: ["unsupported_capability", "target_too_far", "target_not_visible", "missing_material", "blocked"]
   },
   {
+    name: "action.sleep",
+    summary: "Try to sleep in a visible reachable bed.",
+    description: "Uses the native server sleep path and returns vanilla sleep rejection as a structured failure.",
+    tags: ["action", "sleep", "survival"],
+    input_schema: {
+      type: "object",
+      required: ["target_ref"],
+      properties: {
+        target_ref: { type: "string" }
+      }
+    },
+    preconditions: ["target_ref comes from a recent observe.scene result", "target is a visible reachable bed"],
+    failure_reasons: [
+      "unknown_or_unobserved_target",
+      "expired_ref",
+      "target_too_far",
+      "target_not_visible",
+      "unsupported_capability",
+      "blocked"
+    ]
+  },
+  {
     name: "block.place",
     summary: "Place a block from inventory against a visible target.",
     description: "Places only through server-side reach, visibility, inventory, and occupancy checks.",

@@ -12,6 +12,7 @@ describe("Agent SDK", () => {
     await agent.body.move([1, 0, 0], 200);
     await agent.body.mine("blk_obs_1");
     await agent.body.use("blk_portal_frame", "minecraft:flint_and_steel", "east");
+    await agent.body.sleep("blk_bed");
     await agent.body.place("blk_anchor", "up", "minecraft:obsidian");
     await agent.container.open("blk_chest");
     await agent.container.moveStack("slot_from", "slot_to", 3);
@@ -27,6 +28,7 @@ describe("Agent SDK", () => {
         name: "action.use",
         args: { target_ref: "blk_portal_frame", item: "minecraft:flint_and_steel", face: "east" }
       },
+      { name: "action.sleep", args: { target_ref: "blk_bed" } },
       {
         name: "block.place",
         args: { target_ref: "blk_anchor", face: "up", item: "minecraft:obsidian" }

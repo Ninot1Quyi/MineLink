@@ -34,6 +34,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -46,9 +47,12 @@ import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.entity.player.Player.BedSleepingProblem;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -251,6 +255,7 @@ public final class MineLinkEndpointBootstrap {
         addTool(tools, "action.look_at", "Turn toward a visible block ref.", "action", "look");
         addTool(tools, "action.mine_visible_block", "Mine a currently visible block ref.", "action", "mine");
         addTool(tools, "action.use", "Use a visible target when supported.", "action", "use");
+        addTool(tools, "action.sleep", "Try to sleep in a visible reachable bed.", "action", "sleep");
         addTool(tools, "block.place", "Place a block from inventory against a visible target.", "action", "build");
         addTool(tools, "container.open", "Open a reachable smoke fixture container.", "container");
         addTool(tools, "container.observe", "Observe the currently open smoke fixture container.", "container", "observe");
@@ -279,6 +284,7 @@ public final class MineLinkEndpointBootstrap {
             case "action.look_at" -> lookAt(request, agent, arguments);
             case "action.mine_visible_block" -> mineVisibleBlock(request, agent, arguments);
             case "action.use" -> use(request, agent, arguments);
+            case "action.sleep" -> sleep(request, agent, arguments);
             case "block.place" -> placeBlock(request, agent, arguments);
             case "container.open" -> openContainer(request, agent, arguments);
             case "container.observe" -> observeContainer(request, agent);
@@ -313,6 +319,9 @@ public final class MineLinkEndpointBootstrap {
         for (BlockPos fixturePos : agent.smokeFixturePositions()) {
             BlockState state = level.getBlockState(fixturePos);
             if (!state.isAir()) {
+                if (!agent.canSee(fixturePos, state, origin)) {
+                    continue;
+                }
                 addVisibleBlock(blocks, agent, fixturePos, state, origin);
                 included.add(fixturePos);
             }
@@ -332,6 +341,9 @@ public final class MineLinkEndpointBootstrap {
             if (id.equals("minecraft:grass_block") || id.equals("minecraft:dirt") || id.equals("minecraft:stone")) {
                 continue;
             }
+            if (!agent.canSee(immutablePos, state, origin)) {
+                continue;
+            }
             addVisibleBlock(blocks, agent, immutablePos, state, origin);
             included.add(immutablePos);
             scanned++;
@@ -348,7 +360,7 @@ public final class MineLinkEndpointBootstrap {
         response.addProperty("status", "completed");
         response.add("visible_scene", visibleScene);
         response.add("self", vector(agent.position()));
-        response.addProperty("ref_ttl_ms", AgentBody.REF_TTL_MS);
+        response.addProperty("ref_ttl_ms", agent.refTtlMs());
         return response;
     }
 
@@ -574,6 +586,37 @@ public final class MineLinkEndpointBootstrap {
         JsonObject response = toolCompleted(request);
         response.add("result", result);
         return response;
+    }
+
+    private JsonObject sleep(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String ref = stringValue(arguments, "target_ref", stringValue(arguments, "block_ref", ""));
+        InteractionTarget target = validateInteractionRef(request, agent, ref);
+        if (target.failure != null) {
+            return target.failure;
+        }
+
+        ServerLevel level = server.overworld();
+        BlockState state = level.getBlockState(target.ref.pos);
+        if (!state.is(BlockTags.BEDS)) {
+            return failure(request, "unsupported_capability", "The referenced block is not a supported bed.");
+        }
+
+        var sleepResult = agent.entity.startSleepInBed(target.ref.pos);
+        if (sleepResult.right().isPresent()) {
+            agent.entity.stopSleepInBed(false, true);
+            JsonObject result = new JsonObject();
+            result.addProperty("slept", true);
+            result.add("position", blockPosition(target.ref.pos));
+            JsonObject response = toolCompleted(request);
+            response.add("result", result);
+            return response;
+        }
+
+        BedSleepingProblem problem = sleepResult.left().orElse(BedSleepingProblem.OTHER_PROBLEM);
+        if (problem == BedSleepingProblem.TOO_FAR_AWAY) {
+            return failure(request, "target_too_far", "Vanilla sleep rules reported the bed is too far away.");
+        }
+        return failure(request, "blocked", "Vanilla sleep rules rejected sleeping: " + problem.name().toLowerCase());
     }
 
     private JsonObject openContainer(JsonObject request, AgentBody agent, JsonObject arguments) {
@@ -1306,6 +1349,10 @@ public final class MineLinkEndpointBootstrap {
                 }
                 base = portalBase;
                 spawn = new Vec3(base.getX() + 1.5D, base.getY() + 3.0D, base.getZ() - 2.0D);
+            } else if (fixtureName.equals("guard_boundaries")) {
+                base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
+                seedGuardFixture(level, base);
+                spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
             } else {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedFixture(level, base);
@@ -1358,6 +1405,33 @@ public final class MineLinkEndpointBootstrap {
             level.setBlockAndUpdate(base.east(2).south(3), Blocks.COPPER_BLOCK.defaultBlockState());
         }
 
+        private static void seedGuardFixture(ServerLevel level, BlockPos base) {
+            for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -2), base.offset(10, 4, 4))) {
+                if (pos.getY() >= base.getY()) {
+                    level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
+                }
+            }
+            level.setBlockAndUpdate(base.below(), Blocks.GRASS_BLOCK.defaultBlockState());
+            level.setBlockAndUpdate(base.east(2), Blocks.OAK_LOG.defaultBlockState());
+            level.setBlockAndUpdate(base.east(8), Blocks.OAK_LOG.defaultBlockState());
+            level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(base.east(4), Blocks.DIAMOND_ORE.defaultBlockState());
+
+            BlockPos bedFoot = base.south(2);
+            level.setBlockAndUpdate(
+                bedFoot,
+                Blocks.WHITE_BED.defaultBlockState()
+                    .setValue(BedBlock.FACING, Direction.NORTH)
+                    .setValue(BedBlock.PART, BedPart.FOOT)
+            );
+            level.setBlockAndUpdate(
+                bedFoot.north(),
+                Blocks.WHITE_BED.defaultBlockState()
+                    .setValue(BedBlock.FACING, Direction.NORTH)
+                    .setValue(BedBlock.PART, BedPart.HEAD)
+            );
+        }
+
         private static void seedPortalFixture(ServerLevel level, BlockPos anchor) {
             for (BlockPos pos : BlockPos.betweenClosed(anchor.offset(-4, 0, -4), anchor.offset(6, 7, 4))) {
                 if (pos.getY() >= anchor.getY()) {
@@ -1379,7 +1453,7 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private static final class AgentBody {
-        private static final long REF_TTL_MS = 30_000;
+        private static final long DEFAULT_REF_TTL_MS = 30_000;
 
         private final String agentId;
         private final String displayName;
@@ -1415,8 +1489,17 @@ public final class MineLinkEndpointBootstrap {
 
         private String addRef(BlockPos pos, String blockId) {
             String ref = "block:" + agentId + ":" + (++refSeq);
-            refs.put(ref, new BlockRef(pos, blockId, Instant.now().plusMillis(REF_TTL_MS).toEpochMilli()));
+            refs.put(ref, new BlockRef(pos, blockId, Instant.now().plusMillis(refTtlMs()).toEpochMilli()));
             return ref;
+        }
+
+        private long refTtlMs() {
+            String value = setting("MINELINK_REF_TTL_MS", "minelink.ref.ttl.ms", String.valueOf(DEFAULT_REF_TTL_MS));
+            try {
+                return Math.max(1L, Math.min(Long.parseLong(value), DEFAULT_REF_TTL_MS));
+            } catch (NumberFormatException error) {
+                return DEFAULT_REF_TTL_MS;
+            }
         }
 
         private BlockRef ref(String ref) {
@@ -1447,6 +1530,16 @@ public final class MineLinkEndpointBootstrap {
                 }
                 return positions.toArray(new BlockPos[0]);
             }
+            if (fixtureName.equals("guard_boundaries")) {
+                return new BlockPos[] {
+                    fixtureBase.east(2),
+                    fixtureBase.east(8),
+                    fixtureBase.east(3),
+                    fixtureBase.east(4),
+                    fixtureBase.south(2),
+                    fixtureBase.south(1)
+                };
+            }
             return new BlockPos[] {
                 fixtureBase.east(3),
                 fixtureBase.east(3).above(),
@@ -1462,10 +1555,31 @@ public final class MineLinkEndpointBootstrap {
             if (id.equals("minecraft:chest") || id.equals("minecraft:crafting_table")) {
                 extra.add("minelink:container");
             }
+            if (state.is(BlockTags.BEDS)) {
+                extra.add("minelink:bed");
+            }
+            if (fixtureName.equals("guard_boundaries")) {
+                if (pos.equals(fixtureBase.east(8)) && id.equals("minecraft:oak_log")) {
+                    extra.add("minelink:far_fixture");
+                }
+                if (pos.equals(fixtureBase.east(3)) && id.equals("minecraft:stone")) {
+                    extra.add("minelink:opaque_fixture");
+                }
+                if (pos.equals(fixtureBase.east(4)) && id.equals("minecraft:diamond_ore")) {
+                    extra.add("minelink:hidden_fixture");
+                }
+            }
             if (fixtureName.equals("portal_coop") && pos.equals(fixtureBase) && id.equals("minecraft:netherrack")) {
                 extra.add("minelink:portal_anchor");
             }
             return extra;
+        }
+
+        private boolean canSee(BlockPos pos, BlockState state, BlockPos origin) {
+            if (!fixtureName.equals("guard_boundaries")) {
+                return true;
+            }
+            return !blockId(state).equals("minecraft:diamond_ore") || origin.getX() > fixtureBase.east(3).getX();
         }
     }
 

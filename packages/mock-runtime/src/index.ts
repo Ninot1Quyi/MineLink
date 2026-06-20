@@ -23,7 +23,8 @@ async function main(): Promise<void> {
     host: args.get("host") ?? "127.0.0.1",
     logDir: args.get("log-dir") ?? ".minelink-dev/logs",
     tracePath: args.get("trace") ?? ".minelink-dev/replays/latest-action-trace.jsonl",
-    onlineMode: args.get("online-mode") === "true"
+    onlineMode: args.get("online-mode") === "true",
+    refTtlMs: args.has("ref-ttl-ms") ? Number(args.get("ref-ttl-ms")) : undefined
   });
 
   await server.start();

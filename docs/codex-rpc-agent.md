@@ -47,6 +47,8 @@ tool calls:
 
 Final responses set `done: true` and include assertions. The runner writes the
 assertion results and evidence paths into `.minelink-dev/<scenario>/reports/`.
+Replay responses may include `wait_ms` to let short-lived refs expire during a
+boundary test. This delay is a harness feature, not a MineLink runtime tool.
 
 ## Running
 
@@ -74,3 +76,7 @@ Replay fixtures may use deterministic placeholders such as
 `${inventory_empty_slot}`, and `${output_slot}`. These placeholders exist only
 to keep CI replay stable when runtime refs are short-lived. A live agent should
 return concrete refs from the previous observation state.
+
+The `guard_boundaries` replay also uses assertions such as
+`visible_block_absent` to prove that hidden fixture blocks were not returned by
+`observe.scene`.

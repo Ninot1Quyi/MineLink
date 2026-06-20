@@ -12,7 +12,7 @@ import {
 } from "@minelink/protocol";
 
 type Vec3 = [number, number, number];
-type FixtureName = "vanilla_tree" | "create_smoke" | "craft_smoke" | "portal_coop";
+type FixtureName = "vanilla_tree" | "create_smoke" | "craft_smoke" | "portal_coop" | "guard_boundaries";
 type RuntimeResponse = Record<string, unknown>;
 type RuntimeRequest = RuntimeResponse & { id?: string; type?: string };
 type RefValidation = { ok: true; ref: VisibleRef } | ({ ok: false } & RuntimeResponse);
@@ -27,6 +27,7 @@ interface MockRuntimeOptions {
   logDir?: string;
   tracePath?: string;
   onlineMode?: boolean;
+  refTtlMs?: number;
 }
 
 interface VisibleRef {
@@ -101,6 +102,7 @@ export class MockRuntimeServer {
   private readonly logDir: string;
   private readonly tracePath: string;
   private readonly onlineMode: boolean;
+  private readonly refTtlMs: number;
   private readonly agents = new Map<string, AgentState>();
   private readonly blocks: BlockState[];
   private server?: WebSocketServer;
@@ -113,6 +115,7 @@ export class MockRuntimeServer {
     this.logDir = options.logDir ?? ".minelink-dev/logs";
     this.tracePath = options.tracePath ?? ".minelink-dev/replays/latest-action-trace.jsonl";
     this.onlineMode = options.onlineMode ?? false;
+    this.refTtlMs = Math.max(1, options.refTtlMs ?? 5000);
     this.blocks = createFixtureBlocks(this.fixture);
     mkdirSync(this.logDir, { recursive: true });
     mkdirSync(dirname(this.tracePath), { recursive: true });
@@ -191,6 +194,7 @@ export class MockRuntimeServer {
             inventory: true,
             container_basic: this.fixture === "craft_smoke",
             crafting_basic: this.fixture === "craft_smoke",
+            sleep_basic: this.fixture === "guard_boundaries",
             complex_gui: false,
             create_adapter: this.fixture === "create_smoke" ? "mock-partial" : false
           }
@@ -277,7 +281,7 @@ export class MockRuntimeServer {
     if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
 
     const observationId = `obs_${++this.seq}`;
-    const expiresAt = Date.now() + 5000;
+    const expiresAt = Date.now() + this.refTtlMs;
     const visibleBlocks = this.visibleBlocks(agent, observationId, expiresAt);
     const result: RuntimeResponse = {
       ok: true,
@@ -396,6 +400,7 @@ export class MockRuntimeServer {
       if (kind === "look_at") return this.lookAt(agent, action);
       if (kind === "mine_visible_block") return this.mineVisibleBlock(agent, action);
       if (kind === "use") return this.use(agent, action);
+      if (kind === "sleep") return this.sleep(agent, action);
       if (kind === "chat") return this.chat(agent, action);
       return runtimeFail("unsupported_capability", `Unsupported action kind ${kind}`);
     } finally {
@@ -497,6 +502,26 @@ export class MockRuntimeServer {
     agent.chat.push(`${agent.displayName}: ${message}`);
     this.trace({ event: "agent.action", action: "chat", agent_id: agent.agentId, message });
     return { ok: true, status: "completed", result: { delivered: true, message } };
+  }
+
+  private sleep(agent: AgentState, action: JsonObject): RuntimeResponse {
+    const targetRef = String(action.target_ref ?? action.block_ref ?? "");
+    const refState = this.validateRef(agent, targetRef);
+    if (!refState.ok) return refState;
+    if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Bed is outside sleep interaction range.");
+    if (!refState.ref.tags.includes("minelink:bed")) {
+      return runtimeFail("unsupported_capability", "The referenced block is not a bed.");
+    }
+    this.trace({
+      event: "agent.action",
+      action: "sleep",
+      agent_id: agent.agentId,
+      target_ref: targetRef,
+      sleep_problem: "not_possible_now"
+    });
+    return runtimeFail("blocked", "Vanilla sleep rules rejected sleeping at this time.", {
+      sleep_problem: "not_possible_now"
+    });
   }
 
   private openContainer(agentId: string, blockRef: string): RuntimeResponse {
@@ -835,6 +860,7 @@ export class MockRuntimeServer {
       if (block.mined) continue;
       const distance = round(distance3(agent.position, block.pos));
       if (distance > 16) continue;
+      if (!this.isVisibleFromAgent(agent, block)) continue;
       const ref = `blk_${observationId}_${visible.length + 1}`;
       const visibleRef: VisibleRef = {
         ref,
@@ -859,6 +885,23 @@ export class MockRuntimeServer {
       });
     }
     return visible;
+  }
+
+  private isVisibleFromAgent(agent: AgentState, block: BlockState): boolean {
+    if (this.fixture !== "guard_boundaries") {
+      return true;
+    }
+    if (block.id !== "minecraft:diamond_ore") {
+      return true;
+    }
+    return !this.blocks.some((candidate) =>
+      !candidate.mined &&
+      candidate.id === "minecraft:stone" &&
+      candidate.pos[0] > Math.min(agent.position[0], block.pos[0]) &&
+      candidate.pos[0] < Math.max(agent.position[0], block.pos[0]) &&
+      candidate.pos[1] === block.pos[1] &&
+      candidate.pos[2] === block.pos[2]
+    );
   }
 
   private validateRef(agent: AgentState, ref: string): RefValidation {
@@ -908,6 +951,41 @@ export class MockRuntimeServer {
 }
 
 function createFixtureBlocks(fixture: FixtureName): BlockState[] {
+  if (fixture === "guard_boundaries") {
+    return [
+      {
+        id: "minecraft:oak_log",
+        pos: [2, 64, 0],
+        tags: ["minecraft:logs", "minecraft:mineable/axe"],
+        visibleFaces: ["west", "north", "up"]
+      },
+      {
+        id: "minecraft:oak_log",
+        pos: [8, 64, 0],
+        tags: ["minecraft:logs", "minecraft:mineable/axe", "minelink:far_fixture"],
+        visibleFaces: ["west", "north", "up"]
+      },
+      {
+        id: "minecraft:white_bed",
+        pos: [1, 64, 2],
+        tags: ["minecraft:beds", "minelink:bed"],
+        visibleFaces: ["north", "up"]
+      },
+      {
+        id: "minecraft:stone",
+        pos: [3, 64, 0],
+        tags: ["minecraft:stone", "minelink:opaque_fixture"],
+        visibleFaces: ["west", "north", "up"]
+      },
+      {
+        id: "minecraft:diamond_ore",
+        pos: [4, 64, 0],
+        tags: ["minecraft:diamond_ore", "minelink:hidden_fixture"],
+        visibleFaces: ["west", "north", "up"]
+      }
+    ];
+  }
+
   if (fixture === "portal_coop") {
     return [
       {
@@ -1022,6 +1100,7 @@ function round(value: number): number {
 }
 
 export function parseFixture(value: string | undefined): FixtureName {
+  if (value === "guard_boundaries") return "guard_boundaries";
   if (value === "portal_coop") return "portal_coop";
   if (value === "create_smoke") return "create_smoke";
   if (value === "craft_smoke") return "craft_smoke";

@@ -12,6 +12,7 @@ require_eula="${MINELINK_REQUIRE_EULA:-0}"
 accept_eula="${MINELINK_ACCEPT_EULA:-1}"
 online_mode="${MINELINK_ONLINE_MODE:-false}"
 minecraft_port="${MINELINK_MINECRAFT_PORT:-}"
+ref_ttl_ms="${MINELINK_REF_TTL_MS:-}"
 
 upsert_server_property() {
   key="$1"
@@ -31,6 +32,14 @@ upsert_server_property() {
 mkdir -p "$log_dir" "$(dirname "$trace")"
 
 if [ "$runtime" = "mock" ]; then
+  if [ -n "$ref_ttl_ms" ]; then
+    exec node packages/mock-runtime/dist/index.js \
+      --fixture "$fixture" \
+      --port "$port" \
+      --log-dir "$log_dir" \
+      --trace "$trace" \
+      --ref-ttl-ms "$ref_ttl_ms"
+  fi
   exec node packages/mock-runtime/dist/index.js \
     --fixture "$fixture" \
     --port "$port" \

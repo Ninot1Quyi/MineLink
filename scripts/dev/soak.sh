@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 
 runtime="mock"
 iterations="2"
-scenarios="mine_tree,craft_negative"
+scenarios="mine_tree,craft_negative,guard_boundaries"
 work_dir=""
 
 usage() {
@@ -80,7 +80,7 @@ fi
 
 for scenario in "${scenario_list[@]}"; do
   case "$scenario" in
-    mine_tree|create_smoke|craft_smoke|craft_negative|portal_coop) ;;
+    mine_tree|create_smoke|craft_smoke|craft_negative|guard_boundaries|portal_coop) ;;
     *)
       echo "Unsupported soak scenario: $scenario" >&2
       exit 2
@@ -105,6 +105,7 @@ ports_for_scenario() {
     create_smoke) endpoint_port=25576 ;;
     craft_smoke) endpoint_port=25577 ;;
     craft_negative) endpoint_port=25578 ;;
+    guard_boundaries) endpoint_port=25580 ;;
     portal_coop) endpoint_port=25579 ;;
     *) endpoint_port=25575 ;;
   esac

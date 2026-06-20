@@ -33,7 +33,8 @@ Required:
 - `npm install` from a clean clone sets up Host, SDK, mock runtime, tests, and scripts.
 - `npm run build`, `npm run typecheck`, `npm test`, and `npm run ci` pass.
 - CI runs build, tests, `mine_tree`, `create_smoke`, `craft_smoke`,
-  `craft_negative`, and `portal_coop`, and uploads `.minelink-dev/` evidence.
+  `craft_negative`, `guard_boundaries`, and `portal_coop`, and uploads
+  `.minelink-dev/` evidence.
 - `scripts/dev/build.sh` records Java/NeoForge readiness as valid JSON.
 - No GitHub token, admission token, Microsoft credential, EULA acceptance, or server secret is committed.
 
@@ -50,10 +51,10 @@ Current status:
 - Real NeoForge startup now uses the committed Gradle wrapper and selects Java 21
   when available.
 - GitHub Actions now has a dedicated real NeoForge smoke workflow for
-  `mine_tree`, `craft_smoke`, `craft_negative`, and `portal_coop` on push, pull request,
-  manual dispatch, and daily schedule; full release acceptance still requires
-  the later Create, social runtime, install, security, and release-length soak
-  gates.
+  `mine_tree`, `craft_smoke`, `craft_negative`, `guard_boundaries`, and
+  `portal_coop` on push, pull request, manual dispatch, and daily schedule;
+  full release acceptance still requires the later Create, social runtime,
+  install, security, and release-length soak gates.
 
 ### Gate 1: Real NeoForge Mod Runtime
 
@@ -70,6 +71,10 @@ Required:
 - The portal cooperation smoke path adds `block.place` and `action.use` backed
   by NeoForge `FakePlayer` and vanilla `ServerPlayerGameMode.useItemOn/useItem`
   after MineLink observed-ref, reach, visibility, and inventory checks.
+- The guard-boundaries smoke path adds `action.sleep` and deliberate negative
+  actions that prove unobserved refs, too-far refs, expired refs, missing
+  materials, hidden fixture blocks, and vanilla sleep rejections produce
+  structured server-side outcomes.
 - `create.*`, persistence, social runtime, complete server menu coverage, and
   full inventory/menu parity remain later gates; they must not be claimed by
   the smoke implementation.
@@ -84,6 +89,7 @@ Evidence:
 - Real protocol trace.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke`.
+- `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh guard_boundaries`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh portal_coop`.
 - GitHub Actions artifact from `.github/workflows/minecraft-neoforge.yml`.
 
@@ -111,6 +117,20 @@ Evidence:
 - Real server action trace proving guard order.
 - E2E with deliberate negative actions.
 
+Current status:
+
+- Mock runtime and real NeoForge runtime cover `guard_boundaries`, which uses
+  only public MCP dynamic tools to assert `unknown_or_unobserved_target`,
+  `target_too_far`, `missing_material`, `blocked` for vanilla daytime sleep,
+  and `expired_ref`.
+- The real NeoForge guard fixture also proves that a fixture-hidden
+  `minecraft:diamond_ore` is absent from `observe.scene` while the intervening
+  `minecraft:stone` wall and reachable `minecraft:white_bed` are visible.
+- This is not the full Gate 2 release surface yet. The remaining body lifecycle
+  manager, persistent restore/freeze/remove, full queued action state machine,
+  and complete native mining/movement/body-state parity still require separate
+  implementation and evidence.
+
 ### Gate 3: Limited Perception
 
 Required:
@@ -125,6 +145,15 @@ Evidence:
 
 - Fixture worlds for opaque wall, glass, leaves, grass, chain/fence, water, and tree.
 - Assertion reports prove hidden blocks are not returned.
+
+Current status:
+
+- `guard_boundaries` provides the first real NeoForge hidden-block negative:
+  the opaque-wall fixture observes the wall and bed but does not return the
+  diamond ore behind the wall.
+- This is not the full Gate 3 release surface yet. General raycast/shape-based
+  occlusion for transparent, decorative, partial, fluid, and complex modded
+  blocks remains to be implemented.
 
 ### Gate 4: MCP Host and Gateway
 
@@ -172,6 +201,7 @@ Evidence:
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
 - `bash scripts/dev/e2e.sh craft_negative`
+- `bash scripts/dev/e2e.sh guard_boundaries`
 - `bash scripts/dev/e2e.sh portal_coop`
 - `examples/codex-rpc/*.replay.jsonl`
 - `.minelink-dev/reports/mine_tree-result.json`
@@ -306,10 +336,11 @@ Current status:
 
 - `scripts/dev/soak.sh` repeats selected e2e scenarios and writes
   `soak-report.json`, `process-cleanup.json`, and `queue-metrics.json`.
-- Fast CI runs a short mock soak for `mine_tree`, `craft_negative`, and
-  `portal_coop`.
+- Fast CI runs a short mock soak for `mine_tree`, `craft_negative`,
+  `guard_boundaries`, and `portal_coop`.
 - The NeoForge workflow starts a real dedicated Minecraft server and runs a
-  short real NeoForge soak for `craft_negative` and `portal_coop`.
+  short real NeoForge soak for `craft_negative`, `guard_boundaries`, and
+  `portal_coop`.
 - These reports are stability evidence, not full release acceptance. Gate 11
   still requires a longer real Minecraft soak profile before release.
 
@@ -322,6 +353,11 @@ Before a release tag, these must pass against mock and real runtime where applic
 - Mining without a current observation returns `unknown_or_unobserved_target`.
 - Mining an expired ref returns `expired_ref`.
 - Mining a visible but distant block returns `target_too_far`.
+- Placing without inventory material returns `missing_material`.
+- Daytime bed sleep through the native server path returns a structured
+  rejection.
+- An opaque-wall fixture does not return the hidden diamond ore in
+  `observe.scene`.
 - Submitting too many concurrent actions returns `backpressure_queue_full`.
 - Connected `tool_list` runtime failure is surfaced, not hidden by local fallback.
 - Reconnecting to endpoint B stops using endpoint A.
@@ -342,15 +378,17 @@ partial, and 11 dependency audit:
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
 - `bash scripts/dev/e2e.sh craft_negative`
+- `bash scripts/dev/e2e.sh guard_boundaries`
 - `bash scripts/dev/e2e.sh portal_coop`
-- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,portal_coop`
+- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,portal_coop`
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
 - `./gradlew --no-daemon build` in `mod/neoforge`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh guard_boundaries`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh portal_coop`
-- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,portal_coop`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,guard_boundaries,portal_coop`
 - `.minelink-dev/soak/<runtime>/soak-report.json`
 - `.minelink-dev/soak/<runtime>/process-cleanup.json`
 - `.minelink-dev/soak/<runtime>/queue-metrics.json`

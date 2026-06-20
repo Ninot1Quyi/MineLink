@@ -63,6 +63,10 @@ export class BodyApi {
     });
   }
 
+  sleep(targetRef: string): Promise<ToolResult> {
+    return this.execute("action.sleep", { target_ref: targetRef });
+  }
+
   place(targetRef: string, face: string, item: string, placementLabel?: string): Promise<ToolResult> {
     return this.execute("block.place", {
       target_ref: targetRef,

@@ -10,8 +10,9 @@ bash scripts/dev/e2e.sh mine_tree
 bash scripts/dev/e2e.sh create_smoke
 bash scripts/dev/e2e.sh craft_smoke
 bash scripts/dev/e2e.sh craft_negative
+bash scripts/dev/e2e.sh guard_boundaries
 bash scripts/dev/e2e.sh portal_coop
-bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,portal_coop
+bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,portal_coop
 node packages/host/dist/index.js http --port 8765
 ```
 
@@ -50,6 +51,7 @@ Real NeoForge e2e uses the Mod's loopback HTTP MineLink Protocol endpoint:
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_negative
+MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh guard_boundaries
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh portal_coop
 ```
 
@@ -60,8 +62,12 @@ the first body/perception/action loop. The `craft_smoke` scenario validates the
 first real chest, slot movement, server recipe lookup, crafting output, and
 inventory assertion path. The `craft_negative` scenario validates structured
 boundary failures for missing station, missing material, invalid recipe, empty
-output, and stale slot refs. The `portal_coop` scenario validates three
-server_agent bodies using public MCP tools to take shared materials, place a
+output, and stale slot refs. The `guard_boundaries` scenario validates that a
+real server_agent cannot act on unobserved refs, too-far refs, expired refs,
+missing materials, or daytime sleep, and that a fixture-hidden diamond ore is
+not returned by `observe.scene` while the opaque wall remains visible. The
+`portal_coop` scenario validates three server_agent bodies using public MCP
+tools to take shared materials, place a
 14-block obsidian frame through vanilla FakePlayer interaction, ignite it with
 flint and steel, and observe `minecraft:nether_portal`. Each NeoForge e2e run
 derives a distinct Minecraft `server-port` from the MineLink endpoint port
@@ -75,8 +81,8 @@ Minecraft/NeoForge dependency resolution and server startup are much slower.
 Short stability soak runs repeat e2e scenarios and writes structured evidence:
 
 ```bash
-bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,portal_coop
-MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,portal_coop
+bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,portal_coop
+MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,guard_boundaries,portal_coop
 ```
 
 Use `MINELINK_SKIP_BUILD=1` after a successful `npm run build` to avoid
@@ -118,6 +124,10 @@ The Gateway exposes `GET /healthz` and MCP Streamable HTTP at `POST /mcp`.
     logs/
     replays/
     reports/
+  guard_boundaries/
+    logs/
+    replays/
+    reports/
   portal_coop/
     logs/
     replays/
@@ -147,7 +157,8 @@ CI is split into two layers:
 - `.github/workflows/ci.yml` runs fast contract, TypeScript, mock runtime, and
   JSON-RPC replay gates plus a short mock stability soak on every push/PR.
 - `.github/workflows/minecraft-neoforge.yml` runs a real NeoForge dedicated
-  server smoke for `mine_tree`, `craft_smoke`, `craft_negative`, and
+  server smoke for `mine_tree`, `craft_smoke`, `craft_negative`,
+  `guard_boundaries`, and
   `portal_coop`, then runs a short real NeoForge stability soak on push, pull
   request, `workflow_dispatch`, and a daily schedule. Keep long Create worlds
   and release-length soak tests on a future self-hosted runner profile.

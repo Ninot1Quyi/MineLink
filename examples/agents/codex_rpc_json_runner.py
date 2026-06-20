@@ -5,6 +5,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -91,6 +92,8 @@ def main() -> None:
         connect = client.connect_server(endpoint=endpoint)
         birth = client.birth(scenario_objective(scenario))
         agent_id = birth.get("agent_id")
+        if connect.get("ok") is False or not agent_id:
+            raise RuntimeError(f"MineLink session setup failed: connect={connect}, birth={birth}")
         tools = client.tool_list({"limit": 50})
         log("codex_rpc_session_started", scenario=scenario, endpoint=endpoint, agent_id=agent_id)
 
@@ -122,6 +125,10 @@ def main() -> None:
                 state["tool_results"].append(record)
                 update_state_from_tool_result(state, name, result)
                 log("codex_rpc_tool_result", turn=turn, name=name, result=compact_result(result))
+
+            wait_ms = int(decision.get("wait_ms", 0) or 0)
+            if wait_ms > 0:
+                time.sleep(min(wait_ms, 30_000) / 1000)
 
             if decision.get("done") is True:
                 final_assertions = run_assertions(decision.get("final_assertions", []), state)
@@ -190,6 +197,7 @@ def scenario_objective(scenario: str) -> str:
         "create_smoke": "Use MineLink MCP tools to inspect and interact with one reachable Create component.",
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
+        "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, and sleep-limited actions.",
         "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
     }
     return objectives.get(scenario, f"Complete MineLink scenario {scenario}.")
@@ -237,6 +245,11 @@ def run_portal_coop(
             birth_results[name] = client.birth(f"{scenario}:{name}: {scenario_objective(scenario)}")
             state["agents"][name]["agent_id"] = birth_results[name].get("agent_id")
             state["agents"][name]["display_name"] = birth_results[name].get("display_name")
+            if connect_results[name].get("ok") is False or not state["agents"][name]["agent_id"]:
+                raise RuntimeError(
+                    f"MineLink team session setup failed for {name}: "
+                    f"connect={connect_results[name]}, birth={birth_results[name]}"
+                )
             if not tools:
                 tools = client.tool_list({"limit": 50})
 
@@ -304,6 +317,10 @@ def run_portal_coop(
                     name=name,
                     result=compact_result(result),
                 )
+
+            wait_ms = int(decision.get("wait_ms", 0) or 0)
+            if wait_ms > 0:
+                time.sleep(min(wait_ms, 30_000) / 1000)
 
             if decision.get("done") is True:
                 final_assertions = run_assertions(decision.get("final_assertions", []), agent_state, state)
@@ -599,6 +616,18 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "passed": count >= min_count,
             "id": item,
             "expected_min_count": min_count,
+            "actual_count": count,
+            "agent": assertion.get("agent"),
+        }
+    if kind == "visible_block_absent":
+        item = str(assertion.get("id", ""))
+        assertion_state = assertion_agent_state(assertion, state, global_state)
+        count = sum(1 for block in visible_blocks(assertion_state) if block.get("id") == item)
+        return {
+            "name": assertion.get("name", f"visible_block_absent_{item}"),
+            "kind": kind,
+            "passed": count == 0,
+            "id": item,
             "actual_count": count,
             "agent": assertion.get("agent"),
         }

@@ -14,6 +14,9 @@ describe("protocol catalog", () => {
   it("keeps dynamic tool definitions queryable", () => {
     const tool = findDynamicTool("observe.scene");
     expect(tool?.input_schema).toMatchObject({ type: "object" });
+    expect(findDynamicTool("action.sleep")?.preconditions).toContain(
+      "target_ref comes from a recent observe.scene result"
+    );
   });
 
   it("normalizes tool_execute mode", () => {

@@ -29,6 +29,11 @@ case "$scenario" in
     report="$work_dir/reports/craft_negative-result.json"
     default_port="25578"
     ;;
+  guard_boundaries)
+    fixture="guard_boundaries"
+    report="$work_dir/reports/guard_boundaries-result.json"
+    default_port="25580"
+    ;;
   portal_coop)
     fixture="portal_coop"
     report="$work_dir/reports/portal_coop-result.json"
@@ -64,6 +69,9 @@ fi
 
 export MINELINK_FIXTURE="$fixture"
 export MINELINK_PORT="$port"
+if [ "$scenario" = "guard_boundaries" ]; then
+  export MINELINK_REF_TTL_MS="${MINELINK_REF_TTL_MS:-100}"
+fi
 if [ "$runtime" = "neoforge" ]; then
   export MINELINK_ENDPOINT="http://127.0.0.1:$port/minelink"
 else
