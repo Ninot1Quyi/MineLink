@@ -15,7 +15,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -27,13 +29,21 @@ import java.util.concurrent.TimeUnit;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minelink.neoforge.MineLinkMod;
@@ -165,8 +175,8 @@ public final class MineLinkEndpointBootstrap {
         capabilities.addProperty("birth", true);
         capabilities.addProperty("visible_surface_scan", true);
         capabilities.addProperty("inventory", true);
-        capabilities.addProperty("container_basic", false);
-        capabilities.addProperty("crafting_basic", false);
+        capabilities.addProperty("container_basic", true);
+        capabilities.addProperty("crafting_basic", true);
         capabilities.addProperty("create_adapter", false);
         response.add("capabilities", capabilities);
         return response;
@@ -202,7 +212,20 @@ public final class MineLinkEndpointBootstrap {
         response.addProperty("body_type", "server_agent.command_body");
         response.add("position", vector(agent.position()));
         response.add("initial_needs", stringArray("food", "shelter", "tools"));
-        response.add("capabilities", stringArray("observe.self", "observe.scene", "observe.inventory", "action.move", "action.look_at", "action.mine_visible_block"));
+        response.add("capabilities", stringArray(
+            "observe.self",
+            "observe.scene",
+            "observe.inventory",
+            "action.move",
+            "action.look_at",
+            "action.mine_visible_block",
+            "container.open",
+            "container.observe",
+            "container.move_stack",
+            "container.take_output",
+            "craft.list_available",
+            "craft.quick_craft"
+        ));
         return response;
     }
 
@@ -216,6 +239,12 @@ public final class MineLinkEndpointBootstrap {
         addTool(tools, "action.look_at", "Turn toward a visible block ref.", "action", "look");
         addTool(tools, "action.mine_visible_block", "Mine a currently visible block ref.", "action", "mine");
         addTool(tools, "action.use", "Use a visible target when supported.", "action", "use");
+        addTool(tools, "container.open", "Open a reachable smoke fixture container.", "container");
+        addTool(tools, "container.observe", "Observe the currently open smoke fixture container.", "container", "observe");
+        addTool(tools, "container.move_stack", "Move a stack between smoke fixture container and agent inventory.", "container");
+        addTool(tools, "container.take_output", "Take crafting output into agent inventory.", "container", "craft");
+        addTool(tools, "craft.list_available", "List smoke fixture recipes available through the server recipe registry.", "craft", "recipe");
+        addTool(tools, "craft.quick_craft", "Craft through the server recipe registry for the smoke fixture.", "craft", "recipe");
         response.add("tools", tools);
         response.add("next_cursor", null);
         return response;
@@ -237,8 +266,13 @@ public final class MineLinkEndpointBootstrap {
             case "action.look_at" -> lookAt(request, agent, arguments);
             case "action.mine_visible_block" -> mineVisibleBlock(request, agent, arguments);
             case "action.use" -> unsupported(request, "action.use");
-            case "container.open", "container.observe", "container.move_stack", "container.take_output",
-                "craft.list_available", "craft.quick_craft", "create.inspect_component" -> unsupported(request, name);
+            case "container.open" -> openContainer(request, agent, arguments);
+            case "container.observe" -> observeContainer(request, agent);
+            case "container.move_stack" -> moveStack(request, agent, arguments);
+            case "container.take_output" -> takeOutput(request, agent, arguments);
+            case "craft.list_available" -> listCraftable(request, agent, arguments);
+            case "craft.quick_craft" -> quickCraft(request, agent, arguments);
+            case "create.inspect_component" -> unsupported(request, name);
             default -> failure(request, "unknown_tool", "Unknown dynamic tool: " + name);
         };
     }
@@ -402,6 +436,430 @@ public final class MineLinkEndpointBootstrap {
         drop.addProperty("count", 1);
         response.add("drop", drop);
         return response;
+    }
+
+    private JsonObject openContainer(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String ref = stringValue(arguments, "block_ref", "");
+        BlockRef blockRef = agent.ref(ref);
+        if (blockRef == null) {
+            return failure(request, "unknown_or_unobserved_target", "Block ref is not from the latest observation.");
+        }
+        if (blockRef.expired()) {
+            return failure(request, "expired_ref", "Block ref has expired.");
+        }
+        if (Math.sqrt(blockRef.pos.distSqr(agent.blockPosition())) > 6.0) {
+            return failure(request, "target_too_far", "The container is outside the current server_agent reach.");
+        }
+
+        ServerLevel level = server.overworld();
+        BlockState state = level.getBlockState(blockRef.pos);
+        String blockId = blockId(state);
+        Container container = null;
+        String kind;
+        if (blockId.equals("minecraft:chest")) {
+            BlockEntity blockEntity = level.getBlockEntity(blockRef.pos);
+            if (!(blockEntity instanceof Container blockContainer)) {
+                return failure(request, "unsupported_capability", "The referenced chest does not expose a server container.");
+            }
+            container = blockContainer;
+            kind = "chest";
+        } else if (blockId.equals("minecraft:crafting_table")) {
+            kind = "crafting_table";
+        } else {
+            return failure(request, "unsupported_capability", "The referenced block is not a supported smoke fixture container.");
+        }
+
+        agent.openContainer = new OpenContainer("container:" + agent.agentId + ":" + (++agent.containerSeq), kind, ref, blockRef.pos, container);
+        JsonObject response = toolCompleted(request);
+        response.add("result", containerSnapshot(agent));
+        return response;
+    }
+
+    private JsonObject observeContainer(JsonObject request, AgentBody agent) {
+        if (agent.openContainer == null) {
+            return failure(request, "container_not_open", "No server-side container is currently open.");
+        }
+        JsonObject response = toolCompleted(request);
+        response.add("result", containerSnapshot(agent));
+        return response;
+    }
+
+    private JsonObject moveStack(JsonObject request, AgentBody agent, JsonObject arguments) {
+        if (agent.openContainer == null) {
+            return failure(request, "container_not_open", "No server-side container is currently open.");
+        }
+        SlotRef from = slotRef(agent, stringValue(arguments, "from_slot_ref", ""));
+        if (from == null) {
+            return failure(request, "stale_slot_ref", "from_slot_ref is not valid for the current container snapshot.");
+        }
+        SlotRef to = slotRef(agent, stringValue(arguments, "to_slot_ref", ""));
+        if (to == null) {
+            return failure(request, "stale_slot_ref", "to_slot_ref is not valid for the current container snapshot.");
+        }
+        if (from.area.equals("output") || to.area.equals("output")) {
+            return failure(request, "invalid_arguments", "Use container.take_output for output slots.");
+        }
+
+        ItemStack source = readSlot(agent, from);
+        if (source.isEmpty()) {
+            return failure(request, "missing_material", "Source slot is empty.");
+        }
+        int requestedCount = Math.max(1, intValue(arguments, "count", source.getCount()));
+        int count = Math.min(requestedCount, source.getCount());
+        ItemStack destination = readSlot(agent, to);
+        if (!destination.isEmpty() && !ItemStack.isSameItemSameComponents(destination, source)) {
+            return failure(request, "inventory_full", "Destination slot already contains a different item.");
+        }
+
+        ItemStack moved = source.copyWithCount(count);
+        ItemStack remaining = source.copy();
+        remaining.shrink(count);
+        writeSlot(agent, from, remaining.isEmpty() ? ItemStack.EMPTY : remaining);
+        ItemStack merged = destination.isEmpty() ? moved.copy() : destination.copyWithCount(destination.getCount() + count);
+        writeSlot(agent, to, merged);
+
+        JsonObject result = new JsonObject();
+        JsonObject movedPayload = stackPayload(moved);
+        result.add("moved", movedPayload);
+        result.add("container", containerSnapshot(agent));
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
+        return response;
+    }
+
+    private JsonObject takeOutput(JsonObject request, AgentBody agent, JsonObject arguments) {
+        if (agent.openContainer == null) {
+            return failure(request, "container_not_open", "No server-side container is currently open.");
+        }
+        String slotRef = stringValue(arguments, "slot_ref", "");
+        if (!slotRef.isBlank()) {
+            SlotRef slot = slotRef(agent, slotRef);
+            if (slot == null) {
+                return failure(request, "stale_slot_ref", "slot_ref is not valid for the current container snapshot.");
+            }
+            if (!slot.area.equals("output")) {
+                return failure(request, "invalid_arguments", "slot_ref does not point at an output slot.");
+            }
+        }
+
+        ItemStack output = agent.openContainer.output;
+        if (output.isEmpty()) {
+            return failure(request, "missing_material", "No output is available.");
+        }
+        agent.addInventory(stackItemId(output), output.getCount());
+        JsonObject taken = stackPayload(output);
+        agent.openContainer.output = ItemStack.EMPTY;
+
+        JsonObject result = new JsonObject();
+        result.add("taken", taken);
+        result.add("inventory", inventoryPayload(agent));
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
+        return response;
+    }
+
+    private JsonObject listCraftable(JsonObject request, AgentBody agent, JsonObject arguments) {
+        if (!hasReachableCraftingStation(agent)) {
+            return failure(request, "station_too_far", "Open a reachable crafting table before listing craftable recipes.");
+        }
+        String query = stringValue(arguments, "query", "").toLowerCase();
+        int limit = Math.min(Math.max(intValue(arguments, "limit", 20), 1), 50);
+        JsonArray recipes = new JsonArray();
+        for (RecipeHolder<CraftingRecipe> recipe : server.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING)) {
+            ItemStack result = recipe.value().getResultItem(server.registryAccess());
+            if (result.isEmpty()) {
+                continue;
+            }
+            String recipeId = recipe.id().toString();
+            String outputId = stackItemId(result);
+            if (!query.isBlank() && !recipeId.toLowerCase().contains(query) && !outputId.toLowerCase().contains(query)) {
+                continue;
+            }
+            JsonObject entry = new JsonObject();
+            entry.addProperty("recipe_id", recipeId);
+            entry.add("output", stackPayload(result));
+            entry.addProperty("craftable", craftPlan(recipe, 1, agent).isPresent());
+            recipes.add(entry);
+            if (recipes.size() >= limit) {
+                break;
+            }
+        }
+
+        JsonObject response = baseResponse(request, "tool.execute_result");
+        response.addProperty("status", "completed");
+        response.add("recipes", recipes);
+        return response;
+    }
+
+    private JsonObject quickCraft(JsonObject request, AgentBody agent, JsonObject arguments) {
+        if (!hasReachableCraftingStation(agent)) {
+            return failure(request, "station_too_far", "Open a reachable crafting table before quick crafting.");
+        }
+        if (!agent.openContainer.output.isEmpty()) {
+            return failure(request, "inventory_full", "Take the current crafting output before crafting again.");
+        }
+        String recipeId = stringValue(arguments, "recipe_id", "");
+        int count = Math.min(Math.max(intValue(arguments, "count", 1), 1), 64);
+        ResourceLocation recipeLocation;
+        try {
+            recipeLocation = ResourceLocation.parse(recipeId);
+        } catch (RuntimeException error) {
+            return failure(request, "invalid_recipe", "recipe_id must be a valid resource location.");
+        }
+
+        Optional<RecipeHolder<?>> maybeRecipe = server.getRecipeManager().byKey(recipeLocation);
+        if (maybeRecipe.isEmpty() || !(maybeRecipe.get().value() instanceof CraftingRecipe craftingRecipe)) {
+            return failure(request, "invalid_recipe", "Unknown or unavailable crafting recipe: " + recipeId);
+        }
+        RecipeHolder<CraftingRecipe> recipe = new RecipeHolder<>(maybeRecipe.get().id(), craftingRecipe);
+        Optional<CraftPlan> plan = craftPlan(recipe, count, agent);
+        if (plan.isEmpty()) {
+            return failure(request, "missing_material", "Current agent inventory cannot satisfy the requested recipe.");
+        }
+
+        for (Map.Entry<String, Integer> entry : plan.get().consumed.entrySet()) {
+            agent.removeInventory(entry.getKey(), entry.getValue());
+        }
+        agent.openContainer.output = plan.get().output;
+
+        JsonObject result = new JsonObject();
+        result.addProperty("recipe_id", recipeId);
+        result.add("output", stackPayload(plan.get().output));
+        result.add("container", containerSnapshot(agent));
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
+        return response;
+    }
+
+    private JsonObject toolCompleted(JsonObject request) {
+        JsonObject response = baseResponse(request, "tool.execute_result");
+        response.addProperty("status", "completed");
+        return response;
+    }
+
+    private boolean hasReachableCraftingStation(AgentBody agent) {
+        OpenContainer open = agent.openContainer;
+        return open != null
+            && open.kind.equals("crafting_table")
+            && Math.sqrt(open.blockPos.distSqr(agent.blockPosition())) <= 6.0;
+    }
+
+    private JsonObject containerSnapshot(AgentBody agent) {
+        OpenContainer open = agent.openContainer;
+        if (open == null) {
+            return failure(null, "container_not_open", "No server-side container is currently open.");
+        }
+        open.slotRefs.clear();
+
+        JsonObject snapshot = new JsonObject();
+        snapshot.addProperty("container_id", open.containerId);
+        snapshot.addProperty("kind", open.kind);
+        snapshot.addProperty("block_ref", open.blockRef);
+        snapshot.add("block_pos", blockPosition(open.blockPos));
+
+        JsonArray slots = new JsonArray();
+        if (open.container != null) {
+            for (int index = 0; index < open.container.getContainerSize(); index++) {
+                slots.add(slotPayload(agent, "container", index, open.container.getItem(index)));
+            }
+        }
+        snapshot.add("slots", slots);
+
+        List<ItemStack> inventory = inventoryEntries(agent);
+        JsonArray inventorySlots = new JsonArray();
+        for (int index = 0; index < 8; index++) {
+            ItemStack stack = index < inventory.size() ? inventory.get(index) : ItemStack.EMPTY;
+            inventorySlots.add(slotPayload(agent, "inventory", index, stack));
+        }
+        snapshot.add("inventory_slots", inventorySlots);
+
+        snapshot.add("output_slot", open.output.isEmpty() ? null : slotPayload(agent, "output", 0, open.output));
+        return snapshot;
+    }
+
+    private JsonObject slotPayload(AgentBody agent, String area, int index, ItemStack stack) {
+        OpenContainer open = agent.openContainer;
+        String ref = "slot:" + open.containerId + ":" + area + ":" + index + ":" + (++agent.slotSeq);
+        open.slotRefs.put(ref, new SlotRef(open.containerId, area, index));
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("slot_ref", ref);
+        payload.addProperty("area", area);
+        payload.addProperty("index", index);
+        if (stack.isEmpty()) {
+            payload.add("item", null);
+            payload.addProperty("count", 0);
+        } else {
+            payload.addProperty("item", stackItemId(stack));
+            payload.addProperty("count", stack.getCount());
+        }
+        return payload;
+    }
+
+    private SlotRef slotRef(AgentBody agent, String ref) {
+        OpenContainer open = agent.openContainer;
+        if (open == null) {
+            return null;
+        }
+        SlotRef slot = open.slotRefs.get(ref);
+        return slot != null && slot.containerId.equals(open.containerId) ? slot : null;
+    }
+
+    private ItemStack readSlot(AgentBody agent, SlotRef slot) {
+        OpenContainer open = agent.openContainer;
+        if (open == null || !open.containerId.equals(slot.containerId)) {
+            return ItemStack.EMPTY;
+        }
+        if (slot.area.equals("container") && open.container != null && slot.index >= 0 && slot.index < open.container.getContainerSize()) {
+            return open.container.getItem(slot.index).copy();
+        }
+        if (slot.area.equals("inventory")) {
+            List<ItemStack> inventory = inventoryEntries(agent);
+            return slot.index >= 0 && slot.index < inventory.size() ? inventory.get(slot.index).copy() : ItemStack.EMPTY;
+        }
+        if (slot.area.equals("output")) {
+            return open.output.copy();
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private void writeSlot(AgentBody agent, SlotRef slot, ItemStack stack) {
+        OpenContainer open = agent.openContainer;
+        if (open == null || !open.containerId.equals(slot.containerId)) {
+            return;
+        }
+        if (slot.area.equals("container") && open.container != null && slot.index >= 0 && slot.index < open.container.getContainerSize()) {
+            open.container.setItem(slot.index, stack);
+            open.container.setChanged();
+            return;
+        }
+        if (slot.area.equals("inventory")) {
+            List<ItemStack> inventory = inventoryEntries(agent);
+            if (slot.index >= 0 && slot.index < inventory.size()) {
+                ItemStack existing = inventory.get(slot.index);
+                agent.removeInventory(stackItemId(existing), existing.getCount());
+            }
+            if (!stack.isEmpty()) {
+                agent.addInventory(stackItemId(stack), stack.getCount());
+            }
+            return;
+        }
+        if (slot.area.equals("output")) {
+            open.output = stack;
+        }
+    }
+
+    private List<ItemStack> inventoryEntries(AgentBody agent) {
+        List<ItemStack> entries = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : agent.inventory.entrySet()) {
+            if (entry.getValue() <= 0) {
+                continue;
+            }
+            Item item = itemById(entry.getKey());
+            if (item != Items.AIR) {
+                entries.add(new ItemStack(item, entry.getValue()));
+            }
+        }
+        return entries;
+    }
+
+    private JsonObject inventoryPayload(AgentBody agent) {
+        JsonObject inventory = new JsonObject();
+        JsonArray main = new JsonArray();
+        int slot = 0;
+        for (ItemStack stack : inventoryEntries(agent)) {
+            JsonObject item = stackPayload(stack);
+            item.addProperty("slot", slot++);
+            main.add(item);
+        }
+        inventory.add("main", main);
+        inventory.add("hotbar", new JsonArray());
+        return inventory;
+    }
+
+    private Optional<CraftPlan> craftPlan(RecipeHolder<CraftingRecipe> recipe, int count, AgentBody agent) {
+        if (!recipe.value().canCraftInDimensions(3, 3)) {
+            return Optional.empty();
+        }
+        Map<String, Integer> available = new LinkedHashMap<>(agent.inventory);
+        Map<String, Integer> consumed = new LinkedHashMap<>();
+        ItemStack output = ItemStack.EMPTY;
+
+        for (int craftIndex = 0; craftIndex < count; craftIndex++) {
+            List<ItemStack> grid = new ArrayList<>();
+            for (int slot = 0; slot < 9; slot++) {
+                grid.add(ItemStack.EMPTY);
+            }
+            int gridIndex = 0;
+            for (var ingredient : recipe.value().getIngredients()) {
+                if (ingredient.isEmpty()) {
+                    continue;
+                }
+                Optional<ItemStack> selected = selectIngredient(ingredient, available);
+                if (selected.isEmpty()) {
+                    return Optional.empty();
+                }
+                ItemStack stack = selected.get();
+                available.merge(stackItemId(stack), -1, Integer::sum);
+                consumed.merge(stackItemId(stack), 1, Integer::sum);
+                if (gridIndex >= grid.size()) {
+                    return Optional.empty();
+                }
+                grid.set(gridIndex++, stack.copyWithCount(1));
+            }
+
+            CraftingInput input = CraftingInput.of(3, 3, grid);
+            if (!recipe.value().matches(input, server.overworld())) {
+                return Optional.empty();
+            }
+            ItemStack crafted = recipe.value().assemble(input, server.registryAccess());
+            if (crafted.isEmpty()) {
+                return Optional.empty();
+            }
+            if (output.isEmpty()) {
+                output = crafted.copy();
+            } else if (ItemStack.isSameItemSameComponents(output, crafted)) {
+                output.grow(crafted.getCount());
+            } else {
+                return Optional.empty();
+            }
+        }
+        return Optional.of(new CraftPlan(consumed, output));
+    }
+
+    private Optional<ItemStack> selectIngredient(net.minecraft.world.item.crafting.Ingredient ingredient, Map<String, Integer> available) {
+        for (Map.Entry<String, Integer> entry : available.entrySet()) {
+            if (entry.getValue() <= 0) {
+                continue;
+            }
+            ItemStack stack = new ItemStack(itemById(entry.getKey()), 1);
+            if (!stack.isEmpty() && ingredient.test(stack)) {
+                return Optional.of(stack);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static JsonObject stackPayload(ItemStack stack) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("item", stackItemId(stack));
+        payload.addProperty("count", stack.getCount());
+        return payload;
+    }
+
+    private static String stackItemId(ItemStack stack) {
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+    }
+
+    private static Item itemById(String itemId) {
+        try {
+            return BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+        } catch (RuntimeException error) {
+            return Items.AIR;
+        }
     }
 
     private JsonObject unsupported(JsonObject request, String toolName) {
@@ -622,7 +1080,12 @@ public final class MineLinkEndpointBootstrap {
             level.setBlockAndUpdate(base.below(), Blocks.GRASS_BLOCK.defaultBlockState());
             level.setBlockAndUpdate(base.east(3), Blocks.OAK_LOG.defaultBlockState());
             level.setBlockAndUpdate(base.east(3).above(), Blocks.OAK_LEAVES.defaultBlockState());
-            level.setBlockAndUpdate(base.south(3), Blocks.CHEST.defaultBlockState());
+            BlockPos chestPos = base.south(3);
+            level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
+            if (level.getBlockEntity(chestPos) instanceof Container container) {
+                container.setItem(0, new ItemStack(Items.OAK_LOG, 1));
+                container.setChanged();
+            }
             level.setBlockAndUpdate(base.south(4), Blocks.CRAFTING_TABLE.defaultBlockState());
             level.setBlockAndUpdate(base.east(2).south(3), Blocks.COPPER_BLOCK.defaultBlockState());
         }
@@ -639,7 +1102,10 @@ public final class MineLinkEndpointBootstrap {
         private final BlockPos fixtureBase;
         private final Map<String, Integer> inventory = new LinkedHashMap<>();
         private final Map<String, BlockRef> refs = new LinkedHashMap<>();
+        private OpenContainer openContainer;
         private int refSeq = 0;
+        private int slotSeq = 0;
+        private int containerSeq = 0;
 
         private AgentBody(String agentId, String displayName, String ownerId, String seedPrompt, ArmorStand entity, BlockPos fixtureBase) {
             this.agentId = agentId;
@@ -672,6 +1138,13 @@ public final class MineLinkEndpointBootstrap {
             inventory.merge(itemId, count, Integer::sum);
         }
 
+        private void removeInventory(String itemId, int count) {
+            inventory.merge(itemId, -count, Integer::sum);
+            if (inventory.getOrDefault(itemId, 0) <= 0) {
+                inventory.remove(itemId);
+            }
+        }
+
         private BlockPos[] smokeFixturePositions() {
             return new BlockPos[] {
                 fixtureBase.east(3),
@@ -687,5 +1160,29 @@ public final class MineLinkEndpointBootstrap {
         private boolean expired() {
             return System.currentTimeMillis() > expiresAtMs;
         }
+    }
+
+    private static final class OpenContainer {
+        private final String containerId;
+        private final String kind;
+        private final String blockRef;
+        private final BlockPos blockPos;
+        private final Container container;
+        private final Map<String, SlotRef> slotRefs = new LinkedHashMap<>();
+        private ItemStack output = ItemStack.EMPTY;
+
+        private OpenContainer(String containerId, String kind, String blockRef, BlockPos blockPos, Container container) {
+            this.containerId = containerId;
+            this.kind = kind;
+            this.blockRef = blockRef;
+            this.blockPos = blockPos;
+            this.container = container;
+        }
+    }
+
+    private record SlotRef(String containerId, String area, int index) {
+    }
+
+    private record CraftPlan(Map<String, Integer> consumed, ItemStack output) {
     }
 }

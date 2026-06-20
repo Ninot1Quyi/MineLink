@@ -16,6 +16,7 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npm run build
+      - run: npm run typecheck
       - run: npm test
       - run: npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate
       - run: bash scripts/dev/e2e.sh mine_tree

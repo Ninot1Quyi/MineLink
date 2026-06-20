@@ -345,6 +345,30 @@ def run_assertion(assertion: JsonDict, state: JsonDict) -> JsonDict:
             "tool_name": name,
             "matching_calls": len(matches),
         }
+    if kind == "recipe_available":
+        recipe_id = str(assertion.get("recipe_id", ""))
+        expected_craftable = assertion.get("craftable")
+        matches = []
+        for record in state.get("tool_results", []):
+            if record.get("name") != "craft.list_available":
+                continue
+            result = record.get("result", {})
+            if not isinstance(result, dict):
+                continue
+            for recipe in result.get("recipes", []):
+                if recipe.get("recipe_id") != recipe_id:
+                    continue
+                if expected_craftable is not None and recipe.get("craftable") != expected_craftable:
+                    continue
+                matches.append(recipe)
+        return {
+            "name": assertion.get("name", f"recipe_available_{recipe_id}"),
+            "kind": kind,
+            "passed": bool(matches),
+            "recipe_id": recipe_id,
+            "expected_craftable": expected_craftable,
+            "matching_recipes": len(matches),
+        }
     return {"name": assertion.get("name", "unknown_assertion"), "kind": kind, "passed": False}
 
 

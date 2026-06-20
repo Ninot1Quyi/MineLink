@@ -47,8 +47,11 @@ Current status:
 
 - Implemented for the TypeScript/mock baseline.
 - Real NeoForge startup now uses the committed Gradle wrapper and selects Java 21
-  when available; the remaining acceptance requirement is a passing real
-  `MINELINK_RUNTIME=neoforge` e2e report.
+  when available.
+- GitHub Actions now has a dedicated real NeoForge smoke workflow for
+  `mine_tree` and `craft_smoke` on push, pull request, manual dispatch, and
+  daily schedule; full release acceptance still requires the later FakePlayer,
+  Create, multi-agent, install, security, and soak gates.
 
 ### Gate 1: Real NeoForge Mod Runtime
 
@@ -59,7 +62,12 @@ Required:
 - The Mod opens a configurable loopback MineLink Protocol endpoint.
 - Endpoint supports `hello`, `connect`, `agent.birth`, `tool.list`, and `tool.execute` for the first real smoke tools.
 - The first real smoke tools are `observe.self`, `observe.scene`, `observe.inventory`, `action.move`, `action.look_at`, and `action.mine_visible_block`.
-- `container.*`, `craft.*`, `create.*`, persistence, social runtime, and a real FakePlayer body remain later gates; they must not be claimed by the first smoke.
+- The second real smoke path adds chest/crafting-table coverage for
+  `container.open`, `container.observe`, `container.move_stack`,
+  `container.take_output`, `craft.list_available`, and `craft.quick_craft`.
+- `create.*`, persistence, social runtime, complete server menu coverage, and a
+  real FakePlayer body remain later gates; they must not be claimed by the
+  smoke implementation.
 - `online-mode=true` returns `unsupported_online_auth` and does not create an agent.
 - `online-mode=false` supports open admission plus server-side rate and agent-count limits.
 - Server logs and action trace survive clean server stop/restart.
@@ -70,6 +78,7 @@ Evidence:
 - Dedicated server log.
 - Real protocol trace.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree`.
+- `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke`.
 - GitHub Actions artifact from `.github/workflows/minecraft-neoforge.yml`.
 
 Blocking rule:
@@ -174,6 +183,18 @@ Evidence:
 - Chest/furnace fixture.
 - Negative tests for missing material, station too far, inventory full, invalid recipe, and stale slot ref.
 - `bash scripts/dev/e2e.sh craft_smoke`
+
+Current status:
+
+- Mock runtime covers `craft_smoke` on CI.
+- Real NeoForge runtime now covers the first chest + crafting-table smoke:
+  an oak log is seeded in a real chest block entity, moved through MineLink slot
+  refs into the agent inventory, crafted through the server recipe registry into
+  oak planks, taken from the output slot, and asserted by
+  `observe.inventory`.
+- This is not the full Gate 6 release surface yet. Furnace coverage, negative
+  cases, complete server menu/slot rule parity, and FakePlayer-backed inventory
+  semantics still need separate implementation and evidence.
 
 ### Gate 7: Create Adapter
 

@@ -45,13 +45,18 @@ Real NeoForge e2e uses the Mod's loopback HTTP MineLink Protocol endpoint:
 
 ```bash
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree
+MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke
 ```
 
 The real smoke path starts a Minecraft dedicated dev server, waits for the Mod
 endpoint, runs the same MCP Host and Codex JSON-RPC replay harness, and stores
-evidence under `.minelink-dev/mine_tree/`. This path is intentionally separate
-from the fast mock CI path because first-run Minecraft/NeoForge dependency
-resolution and server startup are much slower.
+evidence under `.minelink-dev/<scenario>/`. The `mine_tree` scenario validates
+the first body/perception/action loop. The `craft_smoke` scenario validates the
+first real chest, slot movement, server recipe lookup, crafting output, and
+inventory assertion path. These are still smoke gates; complete FakePlayer,
+server menu, Create, and soak coverage remain separate product gates. This path
+is intentionally separate from the fast mock CI path because first-run
+Minecraft/NeoForge dependency resolution and server startup are much slower.
 
 ## MCP Transports
 
@@ -101,6 +106,7 @@ CI is split into two layers:
 - `.github/workflows/ci.yml` runs fast contract, TypeScript, mock runtime, and
   JSON-RPC replay gates on every push/PR.
 - `.github/workflows/minecraft-neoforge.yml` runs a real NeoForge dedicated
-  server smoke on `workflow_dispatch` and a daily schedule, then uploads server
-  and MineLink evidence artifacts. Keep long Create worlds and soak tests on a
-  future self-hosted runner profile.
+  server smoke for `mine_tree` and `craft_smoke` on push, pull request,
+  `workflow_dispatch`, and a daily schedule, then uploads server and MineLink
+  evidence artifacts. Keep long Create worlds and soak tests on a future
+  self-hosted runner profile.
