@@ -114,11 +114,10 @@ inventory assertions, structured negative crafting failures, a guard-boundary
 path that rejects unobserved refs, too-far targets, expired refs, missing
 materials, movement through blocking fixtures, and daytime sleep through
 server-side rules, plus submit-mode action queue backpressure, and a three-agent
-portal cooperation path. The portal path
-uses FakePlayer-backed vanilla
-`useItemOn`/`useItem` for block placement and ignition after MineLink ref,
-reach, visibility, and inventory checks, then proves a local A2A social event
-with `chat.say_local` and `observe.events`. The Create smoke opt-in profile loads
+portal cooperation path. Mining, block placement, and ignition use
+FakePlayer-backed vanilla/NeoForge player actions after MineLink ref, reach,
+visibility, and inventory checks, then the portal path proves a local A2A social
+event with `chat.say_local` and `observe.events`. The Create smoke opt-in profile loads
 Create and verifies normal material flows: withdraw `create:shaft`,
 `create:wrench`, and `minecraft:iron_ingot` from a visible chest, place the
 shaft through vanilla `useItemOn`, inspect the placed shaft plus visible fixture

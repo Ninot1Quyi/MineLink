@@ -184,7 +184,7 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
   {
     name: "action.mine_visible_block",
     summary: "Mine a currently visible block ref.",
-    description: "Mines through server-side guard checks. It never accepts hidden ore coordinates as authority.",
+    description: "Mines through server-side guard checks and native runtime harvest rules. It never accepts hidden ore coordinates as authority.",
     tags: ["action", "mine", "survival"],
     input_schema: {
       type: "object",

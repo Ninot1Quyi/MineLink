@@ -33,6 +33,11 @@ const PLACEABLE_BLOCK_ITEMS = new Set([
   "minecraft:stone"
 ]);
 const CREATE_COMPONENT_KINDS = new Set(["shaft", "cogwheel", "large_cogwheel", "depot", "belt", "mechanical_press"]);
+const PICKAXE_HARVEST_BLOCKS = new Set([
+  "minecraft:stone",
+  "minecraft:copper_block",
+  "minecraft:diamond_ore"
+]);
 
 interface MockRuntimeOptions {
   fixture?: FixtureName;
@@ -530,6 +535,9 @@ export class MockRuntimeServer {
     const block = this.blocks.find((candidate) => samePos(candidate.pos, ref.pos) && candidate.id === ref.id);
     if (!block || block.mined) {
       return runtimeFail("target_not_visible", "Block is no longer present.");
+    }
+    if (PICKAXE_HARVEST_BLOCKS.has(block.id) && !hasPickaxe(agent)) {
+      return runtimeFail("wrong_tool", "A pickaxe is required to harvest this block.");
     }
     block.mined = true;
     const drop = block.id === "minecraft:oak_log" ? "minecraft:oak_log" : block.id;
@@ -1335,6 +1343,10 @@ function distance3(a: Vec3, b: Vec3): number {
 
 function samePos(a: Vec3, b: Vec3): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
+function hasPickaxe(agent: AgentState): boolean {
+  return Object.keys(agent.inventory).some((item) => item.endsWith("_pickaxe") && (agent.inventory[item] ?? 0) > 0);
 }
 
 function playerIntersectsBlock(position: Vec3, block: Vec3): boolean {

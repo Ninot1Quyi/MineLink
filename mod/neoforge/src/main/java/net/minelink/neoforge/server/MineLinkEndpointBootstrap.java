@@ -42,6 +42,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -61,6 +62,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minelink.neoforge.MineLinkMod;
@@ -76,6 +78,7 @@ public final class MineLinkEndpointBootstrap {
     private static final int MAX_SOCIAL_EVENTS = 200;
     private static final int MAX_ACTION_QUEUE_DEPTH = 4;
     private static final long SUBMITTED_ACTION_HOLD_MS = 1_000L;
+    private static final int MAX_SYNC_MINING_TICKS = 600;
 
     private final MinecraftServer server;
     private final RuntimeState runtimeState = new RuntimeState();
@@ -560,6 +563,7 @@ public final class MineLinkEndpointBootstrap {
 
     private JsonObject mineVisibleBlock(JsonObject request, AgentBody agent, JsonObject arguments) {
         String ref = stringValue(arguments, "block_ref", "");
+        String toolPolicy = stringValue(arguments, "tool_policy", "best_available");
         BlockRef blockRef = agent.ref(ref);
         if (blockRef == null) {
             return failure(request, "unknown_or_unobserved_target", "Block ref is not from the latest observation.");
@@ -576,19 +580,56 @@ public final class MineLinkEndpointBootstrap {
         if (state.isAir() || !blockId(state).equals(blockRef.blockId)) {
             return failure(request, "target_not_visible", "The observed block is no longer present.");
         }
+        if (!level.mayInteract(agent.entity, blockRef.pos)) {
+            return failure(request, "blocked", "The server rejected interaction with this block.");
+        }
+        if (!agent.entity.canInteractWithBlock(blockRef.pos, 1.0D)) {
+            return failure(request, "target_too_far", "The block is outside vanilla interaction range.");
+        }
 
-        Item item = state.getBlock().asItem();
-        String itemId = item == Items.AIR ? blockRef.blockId : BuiltInRegistries.ITEM.getKey(item).toString();
-        level.destroyBlock(blockRef.pos, false);
-        agent.addInventory(itemId, 1);
+        String selectedItemId = selectMiningItem(agent, state, toolPolicy);
+        syncPlayerInventoryFromAgent(agent, selectedItemId);
+        if (state.getDestroySpeed(level, blockRef.pos) < 0.0F) {
+            return failure(request, "blocked", "The observed block is unbreakable.");
+        }
+        if (!state.canHarvestBlock(level, blockRef.pos, agent.entity)) {
+            return failure(request, "wrong_tool", "The active server_agent does not have a tool that can harvest this block.");
+        }
+        float progressPerTick = state.getDestroyProgress(agent.entity, level, blockRef.pos);
+        if (progressPerTick <= 0.0F) {
+            return failure(request, "blocked", "The observed block cannot be broken by the active server_agent.");
+        }
+        int estimatedTicks = Math.max(1, (int)Math.ceil(1.0F / progressPerTick));
+        if (estimatedTicks > MAX_SYNC_MINING_TICKS) {
+            return failure(request, "wrong_tool", "No available tool can mine this block within the synchronous action budget.");
+        }
+
+        Map<String, Integer> beforeInventory = inventoryCounts(agent);
+        AABB pickupArea = new AABB(blockRef.pos).inflate(1.5D);
+        Set<Integer> existingDropIds = itemEntityIds(level, pickupArea);
+        boolean destroyed = agent.entity.gameMode.destroyBlock(blockRef.pos);
+        collectNewNearbyDrops(level, agent, pickupArea, existingDropIds);
+        syncInventoryFromPlayer(agent);
+
+        BlockState afterState = level.getBlockState(blockRef.pos);
+        if (!destroyed || !afterState.isAir()) {
+            return failure(request, "blocked", "Vanilla mining did not remove the observed block.");
+        }
+        JsonArray pickedUp = positiveInventoryDelta(beforeInventory, inventoryCounts(agent));
 
         JsonObject response = baseResponse(request, "tool.execute_result");
         response.addProperty("status", "completed");
         response.addProperty("mined", blockRef.blockId);
-        JsonObject drop = new JsonObject();
-        drop.addProperty("item", itemId);
-        drop.addProperty("count", 1);
-        response.add("drop", drop);
+        response.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
+        response.addProperty("estimated_mining_ticks", estimatedTicks);
+        response.add("drops", pickedUp);
+        response.add("drop", pickedUp.size() == 0 ? JsonNull.INSTANCE : pickedUp.get(0).getAsJsonObject());
+        JsonObject result = new JsonObject();
+        result.addProperty("mined", blockRef.blockId);
+        result.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
+        result.addProperty("estimated_mining_ticks", estimatedTicks);
+        result.add("drops", pickedUp.deepCopy());
+        response.add("result", result);
         return response;
     }
 
@@ -1254,6 +1295,77 @@ public final class MineLinkEndpointBootstrap {
             }
             agent.addInventory(stackItemId(stack), stack.getCount());
         }
+    }
+
+    private String selectMiningItem(AgentBody agent, BlockState state, String toolPolicy) {
+        if (toolPolicy.equals("empty_hand")) {
+            return "";
+        }
+        if (!toolPolicy.isBlank() && !toolPolicy.equals("best_available")) {
+            return agent.inventory.getOrDefault(toolPolicy, 0) > 0 ? toolPolicy : "";
+        }
+
+        String selected = "";
+        float bestSpeed = 1.0F;
+        boolean bestHarvests = false;
+        for (Map.Entry<String, Integer> entry : agent.inventory.entrySet()) {
+            if (entry.getValue() <= 0) {
+                continue;
+            }
+            Item item = itemById(entry.getKey());
+            if (item == Items.AIR) {
+                continue;
+            }
+            ItemStack stack = new ItemStack(item, 1);
+            float speed = stack.getDestroySpeed(state);
+            boolean harvests = stack.isCorrectToolForDrops(state);
+            if ((harvests && !bestHarvests) || (harvests == bestHarvests && speed > bestSpeed)) {
+                selected = entry.getKey();
+                bestSpeed = speed;
+                bestHarvests = harvests;
+            }
+        }
+        return selected;
+    }
+
+    private Set<Integer> itemEntityIds(ServerLevel level, AABB area) {
+        Set<Integer> ids = new HashSet<>();
+        for (ItemEntity itemEntity : level.getEntitiesOfClass(ItemEntity.class, area, entity -> entity.isAlive())) {
+            ids.add(itemEntity.getId());
+        }
+        return ids;
+    }
+
+    private void collectNewNearbyDrops(ServerLevel level, AgentBody agent, AABB area, Set<Integer> existingDropIds) {
+        for (ItemEntity itemEntity : level.getEntitiesOfClass(ItemEntity.class, area, entity ->
+            entity.isAlive() && !entity.getItem().isEmpty() && !existingDropIds.contains(entity.getId())
+        )) {
+            itemEntity.setNoPickUpDelay();
+            itemEntity.playerTouch(agent.entity);
+        }
+    }
+
+    private static Map<String, Integer> inventoryCounts(AgentBody agent) {
+        return new LinkedHashMap<>(agent.inventory);
+    }
+
+    private static JsonArray positiveInventoryDelta(Map<String, Integer> before, Map<String, Integer> after) {
+        Set<String> itemIds = new HashSet<>();
+        itemIds.addAll(before.keySet());
+        itemIds.addAll(after.keySet());
+
+        JsonArray delta = new JsonArray();
+        for (String itemId : itemIds) {
+            int count = after.getOrDefault(itemId, 0) - before.getOrDefault(itemId, 0);
+            if (count <= 0) {
+                continue;
+            }
+            JsonObject payload = new JsonObject();
+            payload.addProperty("item", itemId);
+            payload.addProperty("count", count);
+            delta.add(payload);
+        }
+        return delta;
     }
 
     private static BlockHitResult hitResult(BlockPos pos, Direction face) {

@@ -116,8 +116,22 @@ describe("MockRuntimeServer", () => {
     expect(moveResult.position[0]).toBeLessThan(2);
 
     const observe = await request(client, { type: "tool.execute", agent_id: agentId, name: "observe.scene", arguments: {} });
-    const visibleScene = observe.visible_scene as { visible_blocks: Array<{ id: string }> };
+    const visibleScene = observe.visible_scene as { visible_blocks: Array<{ block_ref: string; id: string }> };
     expect(visibleScene.visible_blocks.some((block) => block.id === "minecraft:diamond_ore")).toBe(false);
+    const stone = visibleScene.visible_blocks.find((block) => block.id === "minecraft:stone")!;
+    await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.look_at",
+      arguments: { block_ref: stone.block_ref }
+    });
+    const mineStone = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.mine_visible_block",
+      arguments: { block_ref: stone.block_ref }
+    });
+    expect(mineStone).toMatchObject({ ok: false, reason: "wrong_tool" });
     client.close();
   });
 

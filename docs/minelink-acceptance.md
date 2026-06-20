@@ -137,6 +137,12 @@ Current status:
   guard replay asserts movement collision feedback; the latest real guard run
   reported `collision=true` with `moved_distance` lower than
   `requested_distance`.
+- `action.mine_visible_block` in the real NeoForge runtime now keeps the
+  existing observed-ref, TTL, reach, and block-id guards, then mines through the
+  FakePlayer `ServerPlayerGameMode.destroyBlock` path. Drops are collected only
+  from newly spawned nearby item entities through vanilla/NeoForge pickup hooks,
+  and unbreakable or unharvestable targets return structured `blocked` or
+  `wrong_tool` failures instead of synthetic inventory credit.
 - The guard replay also exercises `mode=submit` for real NeoForge actions:
   accepted action handles return `status=accepted`, `lifecycle_status=queued`,
   and an `action_id`, while excess submissions return
@@ -147,8 +153,8 @@ Current status:
   `minecraft:stone` wall and reachable `minecraft:white_bed` are visible.
 - This is not the full Gate 2 release surface yet. The remaining body lifecycle
   manager, persistent restore/freeze/remove, cancellation/expiry state
-  transitions, and complete native mining/movement/body-state parity still
-  require separate implementation and evidence.
+  transitions, timed mining start/stop/cancel state, and complete body-state
+  parity still require separate implementation and evidence.
 
 ### Gate 3: Limited Perception
 
