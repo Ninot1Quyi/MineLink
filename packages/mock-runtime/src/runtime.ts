@@ -253,7 +253,7 @@ export class MockRuntimeServer {
       position: this.fixture === "portal_coop" ? [1.5, 66, -2] : [0, 64, 0],
       yaw: 0,
       pitch: 0,
-      inventory: {},
+      inventory: this.fixture === "create_smoke" ? { "create:wrench": 1 } : {},
       refs: new Map(),
       queueDepth: 0,
       nextActionId: 0,
@@ -480,10 +480,10 @@ export class MockRuntimeServer {
       const refState = this.validateRef(agent, targetRef);
       if (!refState.ok) return refState;
       if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside use range.");
+      if (item && (agent.inventory[item] ?? 0) <= 0) {
+        return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
+      }
       if (item === "minecraft:flint_and_steel") {
-        if ((agent.inventory[item] ?? 0) <= 0) {
-          return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
-        }
         if (!this.hasCompletePortalFrame()) {
           return runtimeFail("blocked", "A complete obsidian frame is required before ignition.");
         }
@@ -1057,10 +1057,24 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
       },
       {
         id: "create:belt",
-        pos: [4, 64, 0],
+        pos: [5, 64, 0],
         tags: ["create:component", "create:belt"],
         visibleFaces: ["north", "up"],
         metadata: { create: { kind: "belt", speed: 0, direction: "east" } }
+      },
+      {
+        id: "create:shaft",
+        pos: [4, 64, 0],
+        tags: ["create:component", "create:shaft"],
+        visibleFaces: ["north", "up"],
+        metadata: { create: { kind: "shaft", speed: 0, stress: "unknown" } }
+      },
+      {
+        id: "create:cogwheel",
+        pos: [6, 64, 0],
+        tags: ["create:component", "create:cogwheel"],
+        visibleFaces: ["north", "up"],
+        metadata: { create: { kind: "cogwheel", speed: 0, stress: "unknown" } }
       },
       {
         id: "minecraft:oak_log",

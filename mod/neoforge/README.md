@@ -10,7 +10,8 @@ Target:
 This directory is a real NeoForge project with a MineLink loopback protocol
 endpoint used by local and GitHub smoke tests. The fast TypeScript mock runtime
 still runs first in CI, but product acceptance also exercises the real NeoForge
-dedicated server for `mine_tree`, `craft_smoke`, and `craft_negative`.
+dedicated server for `mine_tree`, `create_smoke`, `craft_smoke`,
+`craft_negative`, `guard_boundaries`, and `portal_coop`.
 
 To build on a Java 21 machine:
 
@@ -34,4 +35,13 @@ The repository dev harness automates local validation setup, including
 MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative
 ```
 
-Create adapter development should enable the commented dependencies in `build.gradle` using the official Create 1.21.1 coordinates in `gradle.properties`.
+Create adapter development is opt-in so the core Mod build does not require
+Create:
+
+```bash
+MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke
+./gradlew --no-daemon -PenableCreateAdapter=true build
+```
+
+The adapter profile uses the official Create 1.21.1 coordinates in
+`gradle.properties`.

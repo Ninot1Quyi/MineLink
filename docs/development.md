@@ -49,6 +49,7 @@ Real NeoForge e2e uses the Mod's loopback HTTP MineLink Protocol endpoint:
 
 ```bash
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree
+MINELINK_RUNTIME=neoforge MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_negative
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh guard_boundaries
@@ -66,6 +67,10 @@ output, and stale slot refs. The `guard_boundaries` scenario validates that a
 real server_agent cannot act on unobserved refs, too-far refs, expired refs,
 missing materials, or daytime sleep, and that a fixture-hidden diamond ore is
 not returned by `observe.scene` while the opaque wall remains visible. The
+`create_smoke` scenario uses the opt-in Create adapter profile, loads Create in
+the real NeoForge dev server, inspects a visible `create:depot`, then uses the
+agent's own `create:wrench` on a visible `create:shaft` through the same
+FakePlayer-backed vanilla interaction path as other item use. The
 `portal_coop` scenario validates three server_agent bodies using public MCP
 tools to take shared materials, place a
 14-block obsidian frame through vanilla FakePlayer interaction, ignite it with

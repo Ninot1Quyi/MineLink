@@ -28,6 +28,12 @@ jobs:
       - run: npm run typecheck
       - run: ./gradlew --no-daemon build
         working-directory: mod/neoforge
+      - name: NeoForge Create smoke
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
+        env:
+          MINELINK_RUNTIME: neoforge
+          MINELINK_ACCEPT_EULA: "1"
+          MINELINK_ENABLE_CREATE: "1"
       - name: NeoForge mine tree smoke
         run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
         env:

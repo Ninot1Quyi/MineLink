@@ -72,6 +72,9 @@ export MINELINK_PORT="$port"
 if [ "$scenario" = "guard_boundaries" ]; then
   export MINELINK_REF_TTL_MS="${MINELINK_REF_TTL_MS:-1000}"
 fi
+if [ "$runtime" = "neoforge" ] && [ "$scenario" = "create_smoke" ]; then
+  export MINELINK_ENABLE_CREATE="${MINELINK_ENABLE_CREATE:-1}"
+fi
 if [ "$runtime" = "neoforge" ]; then
   export MINELINK_ENDPOINT="http://127.0.0.1:$port/minelink"
 else

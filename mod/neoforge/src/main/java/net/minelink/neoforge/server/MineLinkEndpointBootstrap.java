@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
@@ -48,6 +49,7 @@ import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.entity.player.Player.BedSleepingProblem;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -191,7 +193,11 @@ public final class MineLinkEndpointBootstrap {
         capabilities.addProperty("crafting_basic", true);
         capabilities.addProperty("block_place", true);
         capabilities.addProperty("item_use", true);
-        capabilities.addProperty("create_adapter", false);
+        if (createAdapterAvailable()) {
+            capabilities.addProperty("create_adapter", "registry-partial");
+        } else {
+            capabilities.addProperty("create_adapter", false);
+        }
         response.add("capabilities", capabilities);
         return response;
     }
@@ -263,6 +269,7 @@ public final class MineLinkEndpointBootstrap {
         addTool(tools, "container.take_output", "Take crafting output into agent inventory.", "container", "craft");
         addTool(tools, "craft.list_available", "List smoke fixture recipes available through the server recipe registry.", "craft", "recipe");
         addTool(tools, "craft.quick_craft", "Craft through the server recipe registry for the smoke fixture.", "craft", "recipe");
+        addTool(tools, "create.inspect_component", "Inspect a visible Create component.", "create", "observe");
         response.add("tools", tools);
         response.add("next_cursor", null);
         return response;
@@ -292,7 +299,7 @@ public final class MineLinkEndpointBootstrap {
             case "container.take_output" -> takeOutput(request, agent, arguments);
             case "craft.list_available" -> listCraftable(request, agent, arguments);
             case "craft.quick_craft" -> quickCraft(request, agent, arguments);
-            case "create.inspect_component" -> unsupported(request, name);
+            case "create.inspect_component" -> inspectCreateComponent(request, agent, arguments);
             default -> failure(request, "unknown_tool", "Unknown dynamic tool: " + name);
         };
     }
@@ -818,6 +825,51 @@ public final class MineLinkEndpointBootstrap {
         return response;
     }
 
+    private JsonObject inspectCreateComponent(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String ref = stringValue(arguments, "block_ref", stringValue(arguments, "target_ref", ""));
+        InteractionTarget target = validateInteractionRef(request, agent, ref);
+        if (target.failure != null) {
+            return target.failure;
+        }
+
+        ServerLevel level = server.overworld();
+        BlockState state = level.getBlockState(target.ref.pos);
+        String id = blockId(state);
+        if (!isCreateComponent(id)) {
+            return failure(request, "unsupported_capability", "The referenced block is not a Create component.");
+        }
+
+        JsonObject properties = new JsonObject();
+        state.getValues().forEach((property, value) -> properties.addProperty(property.getName(), String.valueOf(value)));
+
+        JsonObject create = new JsonObject();
+        create.addProperty("kind", createKind(id));
+        create.addProperty("adapter", "registry-partial");
+        create.addProperty("stress", "unknown");
+        create.addProperty("speed", "unknown");
+        create.addProperty("blocked", false);
+        create.add("properties", properties);
+        create.add("wrench_relevant_faces", stringArray("up", "down", "north", "south", "east", "west"));
+
+        BlockEntity blockEntity = level.getBlockEntity(target.ref.pos);
+        JsonObject result = new JsonObject();
+        result.addProperty("block_ref", ref);
+        result.addProperty("id", id);
+        result.add("position", blockPosition(target.ref.pos));
+        result.add("tags", tags(state));
+        if (blockEntity == null) {
+            result.add("block_entity", JsonNull.INSTANCE);
+        } else {
+            result.addProperty("block_entity", BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType()).toString());
+        }
+        result.add("create", create);
+        result.add("failure_reasons_supported", stringArray("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "unsupported_capability"));
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
+        return response;
+    }
+
     private JsonObject toolCompleted(JsonObject request) {
         JsonObject response = baseResponse(request, "tool.execute_result");
         response.addProperty("status", "completed");
@@ -1289,10 +1341,40 @@ public final class MineLinkEndpointBootstrap {
         JsonArray tags = new JsonArray();
         state.getTags().map(TagKey::location).map(Object::toString).forEach(tags::add);
         String id = blockId(state);
-        if (id.equals("minecraft:copper_block")) {
+        if (isCreateComponent(id)) {
             tags.add("create:component");
+            tags.add("create:" + createKind(id));
         }
         return tags;
+    }
+
+    private static boolean createAdapterAvailable() {
+        return blockById("create:depot").isPresent() && itemById("create:wrench") != Items.AIR;
+    }
+
+    private static boolean isCreateComponent(String id) {
+        return id.startsWith("create:");
+    }
+
+    private static String createKind(String id) {
+        return id.startsWith("create:") ? id.substring("create:".length()) : id;
+    }
+
+    private static Optional<Block> blockById(String blockId) {
+        try {
+            return BuiltInRegistries.BLOCK.getOptional(ResourceLocation.parse(blockId));
+        } catch (RuntimeException error) {
+            return Optional.empty();
+        }
+    }
+
+    private static boolean setOptionalBlock(ServerLevel level, BlockPos pos, String blockId) {
+        Optional<Block> block = blockById(blockId);
+        if (block.isEmpty()) {
+            return false;
+        }
+        level.setBlockAndUpdate(pos, block.get().defaultBlockState());
+        return true;
     }
 
     private static BlockPos portalChestPos(BlockPos anchor) {
@@ -1353,6 +1435,10 @@ public final class MineLinkEndpointBootstrap {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedGuardFixture(level, base);
                 spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
+            } else if (fixtureName.equals("create_smoke")) {
+                base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
+                seedCreateFixture(level, base);
+                spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
             } else {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedFixture(level, base);
@@ -1371,6 +1457,9 @@ public final class MineLinkEndpointBootstrap {
             entity.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
 
             AgentBody body = new AgentBody(agentId, displayName, ownerId, seedPrompt, entity, base.immutable(), fixtureName);
+            if (fixtureName.equals("create_smoke") && itemById("create:wrench") != Items.AIR) {
+                body.addInventory("create:wrench", 1);
+            }
             agents.put(agentId, body);
             return body;
         }
@@ -1403,6 +1492,25 @@ public final class MineLinkEndpointBootstrap {
             }
             level.setBlockAndUpdate(base.south(4), Blocks.CRAFTING_TABLE.defaultBlockState());
             level.setBlockAndUpdate(base.east(2).south(3), Blocks.COPPER_BLOCK.defaultBlockState());
+        }
+
+        private static void seedCreateFixture(ServerLevel level, BlockPos base) {
+            for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -1), base.offset(7, 4, 3))) {
+                if (pos.getY() >= base.getY()) {
+                    level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
+                }
+            }
+            level.setBlockAndUpdate(base.below(), Blocks.GRASS_BLOCK.defaultBlockState());
+            if (!setOptionalBlock(level, base.east(3), "create:depot")) {
+                level.setBlockAndUpdate(base.east(3), Blocks.COPPER_BLOCK.defaultBlockState());
+            }
+            if (!setOptionalBlock(level, base.east(4), "create:shaft")) {
+                level.setBlockAndUpdate(base.east(4), Blocks.COPPER_BLOCK.defaultBlockState());
+            }
+            if (!setOptionalBlock(level, base.east(5), "create:cogwheel")) {
+                level.setBlockAndUpdate(base.east(5), Blocks.COPPER_BLOCK.defaultBlockState());
+            }
+            level.setBlockAndUpdate(base.east(6), Blocks.OAK_LOG.defaultBlockState());
         }
 
         private static void seedGuardFixture(ServerLevel level, BlockPos base) {
@@ -1540,6 +1648,14 @@ public final class MineLinkEndpointBootstrap {
                     fixtureBase.south(1)
                 };
             }
+            if (fixtureName.equals("create_smoke")) {
+                return new BlockPos[] {
+                    fixtureBase.east(3),
+                    fixtureBase.east(4),
+                    fixtureBase.east(5),
+                    fixtureBase.east(6)
+                };
+            }
             return new BlockPos[] {
                 fixtureBase.east(3),
                 fixtureBase.east(3).above(),
@@ -1571,6 +1687,9 @@ public final class MineLinkEndpointBootstrap {
             }
             if (fixtureName.equals("portal_coop") && pos.equals(fixtureBase) && id.equals("minecraft:netherrack")) {
                 extra.add("minelink:portal_anchor");
+            }
+            if (fixtureName.equals("create_smoke") && id.startsWith("create:")) {
+                extra.add("minelink:create_fixture");
             }
             return extra;
         }

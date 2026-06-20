@@ -32,9 +32,9 @@ Required:
 
 - `npm install` from a clean clone sets up Host, SDK, mock runtime, tests, and scripts.
 - `npm run build`, `npm run typecheck`, `npm test`, and `npm run ci` pass.
-- CI runs build, tests, `mine_tree`, `create_smoke`, `craft_smoke`,
-  `craft_negative`, `guard_boundaries`, and `portal_coop`, and uploads
-  `.minelink-dev/` evidence.
+- CI runs build, tests, mock `mine_tree`, `create_smoke`, `craft_smoke`,
+  `craft_negative`, `guard_boundaries`, and `portal_coop`, plus real NeoForge
+  smoke for those scenarios, and uploads `.minelink-dev/` evidence.
 - `scripts/dev/build.sh` records Java/NeoForge readiness as valid JSON.
 - No GitHub token, admission token, Microsoft credential, EULA acceptance, or server secret is committed.
 
@@ -51,10 +51,10 @@ Current status:
 - Real NeoForge startup now uses the committed Gradle wrapper and selects Java 21
   when available.
 - GitHub Actions now has a dedicated real NeoForge smoke workflow for
-  `mine_tree`, `craft_smoke`, `craft_negative`, `guard_boundaries`, and
-  `portal_coop` on push, pull request, manual dispatch, and daily schedule;
-  full release acceptance still requires the later Create, social runtime,
-  install, security, and release-length soak gates.
+  `mine_tree`, `create_smoke`, `craft_smoke`, `craft_negative`,
+  `guard_boundaries`, and `portal_coop` on push, pull request, manual dispatch,
+  and daily schedule; full release acceptance still requires the later complete
+  Create, social runtime, install, security, and release-length soak gates.
 
 ### Gate 1: Real NeoForge Mod Runtime
 
@@ -71,13 +71,16 @@ Required:
 - The portal cooperation smoke path adds `block.place` and `action.use` backed
   by NeoForge `FakePlayer` and vanilla `ServerPlayerGameMode.useItemOn/useItem`
   after MineLink observed-ref, reach, visibility, and inventory checks.
+- The Create smoke path adds optional Create dependencies and verifies
+  `create.inspect_component` plus wrench `action.use` against visible component
+  refs on a real NeoForge dev server.
 - The guard-boundaries smoke path adds `action.sleep` and deliberate negative
   actions that prove unobserved refs, too-far refs, expired refs, missing
   materials, hidden fixture blocks, and vanilla sleep rejections produce
   structured server-side outcomes.
-- `create.*`, persistence, social runtime, complete server menu coverage, and
-  full inventory/menu parity remain later gates; they must not be claimed by
-  the smoke implementation.
+- Complete Create semantics, persistence, social runtime, complete server menu
+  coverage, and full inventory/menu parity remain later gates; they must not be
+  claimed by the smoke implementation.
 - `online-mode=true` returns `unsupported_online_auth` and does not create an agent.
 - `online-mode=false` supports open admission plus server-side rate and agent-count limits.
 - Server logs and action trace survive clean server stop/restart.
@@ -250,8 +253,20 @@ Required:
 
 Evidence:
 
-- `bash scripts/dev/e2e.sh create_smoke` against mock and real Create dev server.
+- `bash scripts/dev/e2e.sh create_smoke` against mock.
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke` against a real Create dev server.
 - Fixture world with depot, belt, press, shaft, cogwheel, wrench, and material chest.
+
+Current status:
+
+- Partial real coverage exists for optional Create dependency loading, a real
+  fixture with depot/shaft/cogwheel, registry-backed component inspection, and
+  wrench use through the same FakePlayer-backed vanilla interaction path as
+  other item use.
+- This is not the full Gate 7 release surface yet. Belt/press behavior,
+  rotation network speed/stress extraction, blockage diagnosis, material chest
+  flow, Ponder/overlay limitations, and broader Create component parity still
+  need separate implementation and evidence.
 
 ### Gate 8: Multi-agent, A2A, and Social Runtime
 
@@ -384,6 +399,7 @@ partial, and 11 dependency audit:
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
 - `./gradlew --no-daemon build` in `mod/neoforge`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh guard_boundaries`
@@ -397,7 +413,7 @@ partial, and 11 dependency audit:
 Not yet accepted as full product:
 
 - Persistent/restorable server_agent lifecycle and human-player coexistence.
-- Real Create adapter against Create.
+- Complete Create adapter behavior beyond the current real smoke.
 - Production Gateway admission/rate-limit/auth hardening.
 - Complete FakePlayer-backed container/crafting semantics on real server menus.
 - Multi-agent social runtime.

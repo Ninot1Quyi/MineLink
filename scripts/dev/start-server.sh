@@ -13,6 +13,7 @@ accept_eula="${MINELINK_ACCEPT_EULA:-1}"
 online_mode="${MINELINK_ONLINE_MODE:-false}"
 minecraft_port="${MINELINK_MINECRAFT_PORT:-}"
 ref_ttl_ms="${MINELINK_REF_TTL_MS:-}"
+enable_create="${MINELINK_ENABLE_CREATE:-0}"
 
 upsert_server_property() {
   key="$1"
@@ -86,6 +87,10 @@ if [ "$runtime" = "neoforge" ]; then
   if [ ! -x mod/neoforge/gradlew ]; then
     echo "mod/neoforge/gradlew is missing. Add a Gradle wrapper before running the real NeoForge server." >&2
     exit 1
+  fi
+  if [ "$enable_create" = "1" ] || [ "$enable_create" = "true" ]; then
+    (cd mod/neoforge && exec ./gradlew --no-daemon -PenableCreateAdapter=true runServer)
+    exit $?
   fi
   (cd mod/neoforge && exec ./gradlew --no-daemon runServer)
 fi

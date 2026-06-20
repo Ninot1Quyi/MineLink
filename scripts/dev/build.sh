@@ -49,7 +49,11 @@ PY
 if [ "${MINELINK_BUILD_NEOFORGE:-false}" = "true" ]; then
   if [ "$java_status" != "${java_status#ok:}" ]; then
     if [ -x mod/neoforge/gradlew ]; then
-      (cd mod/neoforge && ./gradlew build)
+      if [ "${MINELINK_ENABLE_CREATE:-0}" = "1" ] || [ "${MINELINK_ENABLE_CREATE:-0}" = "true" ]; then
+        (cd mod/neoforge && ./gradlew --no-daemon -PenableCreateAdapter=true build)
+      else
+        (cd mod/neoforge && ./gradlew --no-daemon build)
+      fi
     else
       echo "NeoForge build requested but mod/neoforge/gradlew is not present. Install the Gradle wrapper first." >&2
       exit 1

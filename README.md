@@ -92,6 +92,7 @@ Run the real game smoke scenarios with:
 
 ```bash
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree
+MINELINK_RUNTIME=neoforge MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_negative
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh guard_boundaries
@@ -108,6 +109,9 @@ path that rejects unobserved refs, too-far targets, expired refs, missing
 materials, and daytime sleep through server-side rules, and a three-agent portal
 cooperation path. The portal path uses FakePlayer-backed vanilla
 `useItemOn`/`useItem` for block placement and ignition after MineLink ref,
-reach, visibility, and inventory checks. Complete server menu coverage, Create
-adapter behavior, multi-agent social runtime, and long soak tests remain
-separate acceptance gates in `docs/minelink-acceptance.md`.
+reach, visibility, and inventory checks. The Create smoke opt-in profile loads
+Create and verifies `create.inspect_component` plus a wrench `action.use`
+against visible component refs; it remains a partial adapter gate, not an
+automation shortcut. Complete server menu coverage, multi-agent social runtime,
+and long soak tests remain separate acceptance gates in
+`docs/minelink-acceptance.md`.
