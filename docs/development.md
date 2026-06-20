@@ -53,7 +53,10 @@ endpoint, runs the same MCP Host and Codex JSON-RPC replay harness, and stores
 evidence under `.minelink-dev/<scenario>/`. The `mine_tree` scenario validates
 the first body/perception/action loop. The `craft_smoke` scenario validates the
 first real chest, slot movement, server recipe lookup, crafting output, and
-inventory assertion path. These are still smoke gates; complete FakePlayer,
+inventory assertion path. Each NeoForge e2e run derives a distinct Minecraft
+`server-port` from the MineLink endpoint port unless `MINELINK_MINECRAFT_PORT`
+is set, so sequential CI smoke runs do not collide on the vanilla `25565` port.
+These are still smoke gates; complete FakePlayer,
 server menu, Create, and soak coverage remain separate product gates. This path
 is intentionally separate from the fast mock CI path because first-run
 Minecraft/NeoForge dependency resolution and server startup are much slower.

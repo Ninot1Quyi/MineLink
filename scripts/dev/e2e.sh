@@ -31,6 +31,20 @@ case "$scenario" in
 esac
 port="${port:-$default_port}"
 
+if [ "$runtime" = "neoforge" ]; then
+  minecraft_port="${MINELINK_MINECRAFT_PORT:-}"
+  if [ -z "$minecraft_port" ]; then
+    case "$port" in
+      ''|*[!0-9]*)
+        echo "MINELINK_PORT must be numeric when deriving a NeoForge server port: $port" >&2
+        exit 2
+        ;;
+    esac
+    minecraft_port=$((port + 1000))
+  fi
+  export MINELINK_MINECRAFT_PORT="$minecraft_port"
+fi
+
 rm -rf "$work_dir"
 mkdir -p "$work_dir/logs" "$work_dir/replays" "$work_dir/reports"
 
@@ -48,9 +62,19 @@ export MINELINK_LOG_DIR="$work_dir/logs"
 export MINELINK_TRACE="$work_dir/replays/latest-action-trace.jsonl"
 
 server_pid=""
+kill_tree() {
+  pid="$1"
+  if command -v pgrep >/dev/null 2>&1; then
+    for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+      kill_tree "$child"
+    done
+  fi
+  kill "$pid" >/dev/null 2>&1 || true
+}
+
 cleanup() {
   if [ -n "$server_pid" ] && kill -0 "$server_pid" >/dev/null 2>&1; then
-    kill "$server_pid" >/dev/null 2>&1 || true
+    kill_tree "$server_pid"
     wait "$server_pid" >/dev/null 2>&1 || true
   fi
 }
