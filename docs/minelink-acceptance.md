@@ -296,6 +296,13 @@ Current status:
   flint-and-steel through public MCP container tools, places a 14-block
   obsidian frame with `block.place`, ignites it with `action.use`, and asserts
   that one agent observes `minecraft:nether_portal`.
+- The same portal cooperation smoke now also proves one nearby local social
+  event path: `builder_a` emits `chat.say_local`, `builder_b` observes it
+  through `observe.events`, and the runtime filters event visibility by agent
+  distance rather than exposing a global timeline.
+- Public social event payloads expose coarse visibility cues only, such as
+  `visibility` and `distance_band`; exact source coordinates, event radius, and
+  observer distance remain runtime-internal.
 - This is not full Gate 8 acceptance yet. Human chat interaction, persisted A2A
   social events, notice boards, distance-limited social discovery, and rate
   limited agent-to-agent messaging still require separate implementation and

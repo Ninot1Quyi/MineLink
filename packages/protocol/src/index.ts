@@ -9,6 +9,7 @@ export const FAILURE_REASONS = [
   "agent_not_born",
   "unknown_tool",
   "invalid_arguments",
+  "invalid_cursor",
   "unknown_or_unobserved_target",
   "expired_ref",
   "target_too_far",
@@ -137,6 +138,20 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
     input_schema: { type: "object", properties: {} }
   },
   {
+    name: "observe.events",
+    summary: "Observe recent locally visible social and action events.",
+    description: "Returns bounded event summaries visible from the active server_agent body. It is not a global timeline.",
+    tags: ["observe", "events", "social"],
+    input_schema: {
+      type: "object",
+      properties: {
+        after_event_id: { type: "string" },
+        limit: { type: "number", minimum: 1, maximum: 50, default: 20 }
+      }
+    },
+    failure_reasons: ["invalid_cursor"]
+  },
+  {
     name: "action.move",
     summary: "Move the active body using legal motor primitives.",
     description: "Moves by a small vector/duration and returns collision and moved distance feedback.",
@@ -254,7 +269,8 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
       type: "object",
       required: ["message"],
       properties: { message: { type: "string", minLength: 1, maxLength: 256 } }
-    }
+    },
+    failure_reasons: ["invalid_arguments", "backpressure_queue_full"]
   },
   {
     name: "container.open",

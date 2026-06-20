@@ -114,6 +114,98 @@ describe("MockRuntimeServer", () => {
     client.close();
   });
 
+  it("shares local chat events only with nearby server agents", async () => {
+    const server = new MockRuntimeServer({ port: 25683, fixture: "portal_coop" });
+    servers.push(server);
+    await server.start();
+
+    const clientA = await connect(server.endpoint());
+    const clientB = await connect(server.endpoint());
+    const hello = await request(clientA, { type: "hello" });
+    expect(hello).toMatchObject({ ok: true, capabilities: { social_events: true } });
+    await request(clientA, { type: "connect", server_address: "dev.local", owner: { name: "a" } });
+    await request(clientB, { type: "connect", server_address: "dev.local", owner: { name: "b" } });
+    const birthA = await request(clientA, { type: "agent.birth", seed_prompt: "builder a", body_type: "server_agent" });
+    const birthB = await request(clientB, { type: "agent.birth", seed_prompt: "builder b", body_type: "server_agent" });
+    const agentA = String(birthA.agent_id);
+    const agentB = String(birthB.agent_id);
+
+    const say = await request(clientA, {
+      type: "tool.execute",
+      agent_id: agentA,
+      name: "chat.say_local",
+      arguments: { message: "Ready to share obsidian." }
+    });
+    expect(say).toMatchObject({
+      ok: true,
+      result: { event: { type: "chat.local", visibility: "self", distance_band: "self" } }
+    });
+    const sayResult = say.result as { event: Record<string, unknown>; recipient_count?: unknown; recipients?: unknown };
+    expect(sayResult).toHaveProperty("recipient_count");
+    expect(sayResult).not.toHaveProperty("recipients");
+    expect(sayResult.event).not.toHaveProperty("position");
+    expect(sayResult.event).not.toHaveProperty("radius");
+    expect(sayResult.event).not.toHaveProperty("observer_distance");
+
+    const nearbyEvents = await request(clientB, {
+      type: "tool.execute",
+      agent_id: agentB,
+      name: "observe.events",
+      arguments: { limit: 10 }
+    });
+    const seenEvent = (nearbyEvents.events as Array<Record<string, unknown>>).find(
+      (event) => event.source_agent_id === agentA && event.message === "Ready to share obsidian."
+    );
+    expect(seenEvent).toMatchObject({
+      source_agent_id: agentA,
+      message: "Ready to share obsidian.",
+      visibility: "audible_local",
+      distance_band: "nearby"
+    });
+    expect(seenEvent).not.toHaveProperty("position");
+    expect(seenEvent).not.toHaveProperty("radius");
+    expect(seenEvent).not.toHaveProperty("observer_distance");
+    expect(nearbyEvents.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source_agent_id: agentA,
+          message: "Ready to share obsidian."
+        })
+      ])
+    );
+    const invalidCursor = await request(clientB, {
+      type: "tool.execute",
+      agent_id: agentB,
+      name: "observe.events",
+      arguments: { after_event_id: "event_missing" }
+    });
+    expect(invalidCursor).toMatchObject({ ok: false, reason: "invalid_cursor" });
+
+    for (let step = 0; step < 5; step++) {
+      await request(clientB, {
+        type: "tool.execute",
+        agent_id: agentB,
+        name: "action.move",
+        arguments: { vector: [4, 0, 0], durationMs: 1000 }
+      });
+    }
+    await request(clientA, {
+      type: "tool.execute",
+      agent_id: agentA,
+      name: "chat.say_local",
+      arguments: { message: "This should be too far away." }
+    });
+    const farEvents = await request(clientB, {
+      type: "tool.execute",
+      agent_id: agentB,
+      name: "observe.events",
+      arguments: { limit: 10 }
+    });
+    expect(JSON.stringify(farEvents.events)).not.toContain("This should be too far away.");
+    clientA.close();
+    clientB.close();
+  });
+
   it("places and inspects a Create component from chest materials with valid JSONL traces", async () => {
     const temp = mkdtempSync(join(tmpdir(), "minelink-runtime-test-"));
     const tracePath = join(temp, "latest-action-trace.jsonl");

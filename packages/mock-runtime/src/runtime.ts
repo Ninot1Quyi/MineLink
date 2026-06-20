@@ -20,6 +20,8 @@ type SlotValidation = { ok: true; slot: SlotBinding } | ({ ok: false } & Runtime
 type ContainerKind = "chest" | "crafting_table";
 type SlotArea = "container" | "inventory" | "output";
 
+const LOCAL_CHAT_RADIUS = 16;
+const MAX_SOCIAL_EVENTS = 200;
 const PLACEABLE_BLOCK_ITEMS = new Set([
   "create:shaft",
   "create:cogwheel",
@@ -64,8 +66,19 @@ interface AgentState {
   lookedAtRef?: string;
   queueDepth: number;
   nextActionId: number;
-  chat: string[];
+  chatTimestamps: number[];
   openContainer?: OpenContainerState;
+}
+
+interface SocialEvent {
+  eventId: string;
+  type: "chat.local";
+  sourceAgentId: string;
+  sourceDisplayName: string;
+  message: string;
+  position: Vec3;
+  radius: number;
+  createdAt: string;
 }
 
 interface BlockState {
@@ -114,9 +127,11 @@ export class MockRuntimeServer {
   private readonly onlineMode: boolean;
   private readonly refTtlMs: number;
   private readonly agents = new Map<string, AgentState>();
+  private readonly socialEvents: SocialEvent[] = [];
   private readonly blocks: BlockState[];
   private server?: WebSocketServer;
   private seq = 0;
+  private eventSeq = 0;
 
   constructor(options: MockRuntimeOptions = {}) {
     this.fixture = options.fixture ?? "vanilla_tree";
@@ -205,6 +220,7 @@ export class MockRuntimeServer {
             container_basic: this.fixture === "craft_smoke",
             crafting_basic: this.fixture === "craft_smoke",
             sleep_basic: this.fixture === "guard_boundaries",
+            social_events: true,
             complex_gui: false,
             create_adapter: this.fixture === "create_smoke" ? "mock-partial" : false
           }
@@ -267,7 +283,7 @@ export class MockRuntimeServer {
       refs: new Map(),
       queueDepth: 0,
       nextActionId: 0,
-      chat: []
+      chatTimestamps: []
     };
     this.agents.set(agentId, agent);
     this.log("agent born", { agentId, seedPrompt });
@@ -326,8 +342,8 @@ export class MockRuntimeServer {
         entities: []
       };
     }
-    if (include.includes("chat")) {
-      result.chat = agent.chat.slice(-20);
+    if (include.includes("events") || include.includes("chat")) {
+      result.events = this.visibleEvents(agent, "", 20);
     }
     this.trace({ event: "agent.observe", agent_id: agentId, observation_id: observationId });
     return result;
@@ -343,6 +359,7 @@ export class MockRuntimeServer {
     if (name === "observe.self") return this.observe(agentId, ["self"]);
     if (name === "observe.scene") return this.observe(agentId, ["self", "visible_scene"]);
     if (name === "observe.inventory") return this.observe(agentId, ["inventory"]);
+    if (name === "observe.events") return this.observeEvents(agentId, args);
     if (name === "block.place") {
       return this.placeBlock(
         agentId,
@@ -507,11 +524,58 @@ export class MockRuntimeServer {
   }
 
   private chat(agent: AgentState, action: JsonObject): RuntimeResponse {
-    const message = String(action.message ?? "").slice(0, 256);
+    const message = String(action.message ?? "").trim().slice(0, 256);
     if (!message) return runtimeFail("invalid_arguments", "chat.say_local requires message.");
-    agent.chat.push(`${agent.displayName}: ${message}`);
-    this.trace({ event: "agent.action", action: "chat", agent_id: agent.agentId, message });
-    return { ok: true, status: "completed", result: { delivered: true, message } };
+    const now = Date.now();
+    agent.chatTimestamps = agent.chatTimestamps.filter((timestamp) => now - timestamp < 10_000);
+    if (agent.chatTimestamps.length >= 4) {
+      return runtimeFail("backpressure_queue_full", "Local chat rate limit is full for this agent.");
+    }
+    agent.chatTimestamps.push(now);
+
+    const event: SocialEvent = {
+      eventId: `event_${++this.eventSeq}`,
+      type: "chat.local",
+      sourceAgentId: agent.agentId,
+      sourceDisplayName: agent.displayName,
+      message,
+      position: [...agent.position],
+      radius: LOCAL_CHAT_RADIUS,
+      createdAt: new Date(now).toISOString()
+    };
+    this.socialEvents.push(event);
+    if (this.socialEvents.length > MAX_SOCIAL_EVENTS) this.socialEvents.shift();
+    const recipientCount = this.visibleRecipientCount(event);
+    this.trace({
+      event: "social.chat.local",
+      social_event_id: event.eventId,
+      agent_id: agent.agentId,
+      message,
+      recipient_count: recipientCount
+    });
+    return {
+      ok: true,
+      status: "completed",
+      result: { delivered: true, event: this.eventPayload(event, agent), recipient_count: recipientCount }
+    };
+  }
+
+  private observeEvents(agentId: string, args: JsonObject): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    const afterEventId = typeof args.after_event_id === "string" ? args.after_event_id : "";
+    const limit = Math.max(1, Math.min(Number(args.limit ?? 20), 50));
+    if (afterEventId && !this.visibleEventCursor(agent, afterEventId)) {
+      return runtimeFail("invalid_cursor", "after_event_id is not visible to this agent or has expired.");
+    }
+    const events = this.visibleEvents(agent, afterEventId, limit);
+    this.trace({ event: "observe.events", agent_id: agent.agentId, count: events.length, after_event_id: afterEventId });
+    return {
+      ok: true,
+      status: "completed",
+      events,
+      next_cursor: events.length ? events[events.length - 1].event_id : afterEventId || null
+    };
   }
 
   private sleep(agent: AgentState, action: JsonObject): RuntimeResponse {
@@ -937,6 +1001,43 @@ export class MockRuntimeServer {
         visibleFaces: ["north", "south"]
       });
     }
+  }
+
+  private visibleEvents(agent: AgentState, afterEventId: string, limit: number): RuntimeResponse[] {
+    const startIndex = afterEventId
+      ? this.socialEvents.findIndex((event) => event.eventId === afterEventId) + 1
+      : 0;
+    return this.socialEvents
+      .slice(Math.max(0, startIndex))
+      .filter((event) => this.canObserveEvent(agent, event))
+      .slice(-limit)
+      .map((event) => this.eventPayload(event, agent));
+  }
+
+  private visibleEventCursor(agent: AgentState, eventId: string): boolean {
+    const event = this.socialEvents.find((candidate) => candidate.eventId === eventId);
+    return Boolean(event && this.canObserveEvent(agent, event));
+  }
+
+  private visibleRecipientCount(event: SocialEvent): number {
+    return Array.from(this.agents.values()).filter((agent) => this.canObserveEvent(agent, event)).length;
+  }
+
+  private canObserveEvent(agent: AgentState, event: SocialEvent): boolean {
+    return event.sourceAgentId === agent.agentId || distance3(agent.position, event.position) <= event.radius;
+  }
+
+  private eventPayload(event: SocialEvent, observer: AgentState): RuntimeResponse {
+    return {
+      event_id: event.eventId,
+      type: event.type,
+      source_agent_id: event.sourceAgentId,
+      source_display_name: event.sourceDisplayName,
+      message: event.message,
+      visibility: event.sourceAgentId === observer.agentId ? "self" : "audible_local",
+      distance_band: event.sourceAgentId === observer.agentId ? "self" : "nearby",
+      created_at: event.createdAt
+    };
   }
 
   private send(socket: WebSocket, payload: RuntimeResponse): void {

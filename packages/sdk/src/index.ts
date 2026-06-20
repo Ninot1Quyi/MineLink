@@ -38,6 +38,10 @@ export class ObserveApi {
   inventory(): Promise<ToolResult> {
     return this.execute("observe.inventory");
   }
+
+  events(args: JsonObject = {}): Promise<ToolResult> {
+    return this.execute("observe.events", args);
+  }
 }
 
 export class BodyApi {

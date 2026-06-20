@@ -67,6 +67,8 @@ public final class MineLinkEndpointBootstrap {
     private static final String PROTOCOL_VERSION = "0.1";
     private static final int DEFAULT_PORT = 25575;
     private static final int REQUEST_TIMEOUT_SECONDS = 10;
+    private static final double LOCAL_CHAT_RADIUS = 16.0D;
+    private static final int MAX_SOCIAL_EVENTS = 200;
 
     private final MinecraftServer server;
     private final RuntimeState runtimeState = new RuntimeState();
@@ -193,6 +195,7 @@ public final class MineLinkEndpointBootstrap {
         capabilities.addProperty("crafting_basic", true);
         capabilities.addProperty("block_place", true);
         capabilities.addProperty("item_use", true);
+        capabilities.addProperty("social_events", true);
         if (createAdapterAvailable()) {
             capabilities.addProperty("create_adapter", "registry-partial");
         } else {
@@ -236,11 +239,13 @@ public final class MineLinkEndpointBootstrap {
             "observe.self",
             "observe.scene",
             "observe.inventory",
+            "observe.events",
             "action.move",
             "action.look_at",
             "action.mine_visible_block",
             "action.use",
             "block.place",
+            "chat.say_local",
             "container.open",
             "container.observe",
             "container.move_stack",
@@ -257,12 +262,14 @@ public final class MineLinkEndpointBootstrap {
         addTool(tools, "observe.self", "Observe the active server_agent body state.", "observe", "self");
         addTool(tools, "observe.scene", "Observe visible nearby surfaces from the current body.", "observe", "scene");
         addTool(tools, "observe.inventory", "Observe the active server_agent inventory.", "observe", "inventory");
+        addTool(tools, "observe.events", "Observe locally visible social and action events.", "observe", "events", "social");
         addTool(tools, "action.move", "Move the active body using a bounded vector.", "action", "movement");
         addTool(tools, "action.look_at", "Turn toward a visible block ref.", "action", "look");
         addTool(tools, "action.mine_visible_block", "Mine a currently visible block ref.", "action", "mine");
         addTool(tools, "action.use", "Use a visible target when supported.", "action", "use");
         addTool(tools, "action.sleep", "Try to sleep in a visible reachable bed.", "action", "sleep");
         addTool(tools, "block.place", "Place a block from inventory against a visible target.", "action", "build");
+        addTool(tools, "chat.say_local", "Say a bounded local message as the active server_agent.", "chat", "social");
         addTool(tools, "container.open", "Open a reachable smoke fixture container.", "container");
         addTool(tools, "container.observe", "Observe the currently open smoke fixture container.", "container", "observe");
         addTool(tools, "container.move_stack", "Move a stack between smoke fixture container and agent inventory.", "container");
@@ -287,12 +294,14 @@ public final class MineLinkEndpointBootstrap {
             case "observe.self" -> observeSelf(request, agent);
             case "observe.scene" -> observeScene(request, agent, arguments);
             case "observe.inventory" -> observeInventory(request, agent);
+            case "observe.events" -> observeEvents(request, agent, arguments);
             case "action.move" -> move(request, agent, arguments);
             case "action.look_at" -> lookAt(request, agent, arguments);
             case "action.mine_visible_block" -> mineVisibleBlock(request, agent, arguments);
             case "action.use" -> use(request, agent, arguments);
             case "action.sleep" -> sleep(request, agent, arguments);
             case "block.place" -> placeBlock(request, agent, arguments);
+            case "chat.say_local" -> sayLocal(request, agent, arguments);
             case "container.open" -> openContainer(request, agent, arguments);
             case "container.observe" -> observeContainer(request, agent);
             case "container.move_stack" -> moveStack(request, agent, arguments);
@@ -404,6 +413,47 @@ public final class MineLinkEndpointBootstrap {
         JsonObject response = baseResponse(request, "tool.execute_result");
         response.addProperty("status", "completed");
         response.add("inventory", inventory);
+        return response;
+    }
+
+    private JsonObject observeEvents(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String afterEventId = stringValue(arguments, "after_event_id", "");
+        int limit = Math.min(Math.max(intValue(arguments, "limit", 20), 1), 50);
+        if (!afterEventId.isBlank() && !runtimeState.visibleEventCursor(agent, afterEventId)) {
+            return failure(request, "invalid_cursor", "after_event_id is not visible to this agent or has expired.");
+        }
+
+        JsonObject response = toolCompleted(request);
+        JsonArray events = runtimeState.visibleEvents(agent, afterEventId, limit);
+        response.add("events", events);
+        if (events.size() == 0) {
+            response.add("next_cursor", afterEventId.isBlank() ? JsonNull.INSTANCE : GSON.toJsonTree(afterEventId));
+        } else {
+            response.addProperty("next_cursor", events.get(events.size() - 1).getAsJsonObject().get("event_id").getAsString());
+        }
+        return response;
+    }
+
+    private JsonObject sayLocal(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String message = stringValue(arguments, "message", "").trim();
+        if (message.isBlank()) {
+            return failure(request, "invalid_arguments", "chat.say_local requires message.");
+        }
+        if (message.length() > 256) {
+            message = message.substring(0, 256);
+        }
+        if (!agent.acceptChatNow()) {
+            return failure(request, "backpressure_queue_full", "Local chat rate limit is full for this agent.");
+        }
+
+        SocialEvent event = runtimeState.addLocalChat(agent, message);
+        JsonObject result = new JsonObject();
+        result.addProperty("delivered", true);
+        result.add("event", event.payloadFor(agent));
+        result.addProperty("recipient_count", runtimeState.visibleRecipientCount(event));
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
         return response;
     }
 
@@ -1404,8 +1454,10 @@ public final class MineLinkEndpointBootstrap {
 
     private static final class RuntimeState {
         private final Map<String, AgentBody> agents = new LinkedHashMap<>();
+        private final List<SocialEvent> socialEvents = new ArrayList<>();
         private String ownerId = "";
         private int agentSeq = 0;
+        private int eventSeq = 0;
         private BlockPos portalBase;
 
         private AgentBody birth(ServerLevel level, String ownerId, String seedPrompt) {
@@ -1454,6 +1506,62 @@ public final class MineLinkEndpointBootstrap {
 
         private AgentBody agent(String agentId) {
             return agents.get(agentId);
+        }
+
+        private SocialEvent addLocalChat(AgentBody agent, String message) {
+            SocialEvent event = new SocialEvent(
+                "event:" + (++eventSeq),
+                "chat.local",
+                agent.agentId,
+                agent.displayName,
+                message,
+                agent.position(),
+                LOCAL_CHAT_RADIUS,
+                Instant.now()
+            );
+            socialEvents.add(event);
+            if (socialEvents.size() > MAX_SOCIAL_EVENTS) {
+                socialEvents.remove(0);
+            }
+            return event;
+        }
+
+        private JsonArray visibleEvents(AgentBody observer, String afterEventId, int limit) {
+            JsonArray events = new JsonArray();
+            boolean afterSeen = afterEventId.isBlank();
+            for (SocialEvent event : socialEvents) {
+                if (!afterSeen) {
+                    afterSeen = event.eventId.equals(afterEventId);
+                    continue;
+                }
+                if (!event.visibleTo(observer)) {
+                    continue;
+                }
+                events.add(event.payloadFor(observer));
+                if (events.size() > limit) {
+                    events.remove(0);
+                }
+            }
+            return events;
+        }
+
+        private boolean visibleEventCursor(AgentBody observer, String eventId) {
+            for (SocialEvent event : socialEvents) {
+                if (event.eventId.equals(eventId) && event.visibleTo(observer)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private int visibleRecipientCount(SocialEvent event) {
+            int count = 0;
+            for (AgentBody agent : agents.values()) {
+                if (event.visibleTo(agent)) {
+                    count++;
+                }
+            }
+            return count;
         }
 
         private static void seedFixture(ServerLevel level, BlockPos base) {
@@ -1568,6 +1676,7 @@ public final class MineLinkEndpointBootstrap {
         private final String fixtureName;
         private final Map<String, Integer> inventory = new LinkedHashMap<>();
         private final Map<String, BlockRef> refs = new LinkedHashMap<>();
+        private final List<Long> chatTimestamps = new ArrayList<>();
         private OpenContainer openContainer;
         private int refSeq = 0;
         private int slotSeq = 0;
@@ -1619,6 +1728,16 @@ public final class MineLinkEndpointBootstrap {
             if (inventory.getOrDefault(itemId, 0) <= 0) {
                 inventory.remove(itemId);
             }
+        }
+
+        private boolean acceptChatNow() {
+            long now = System.currentTimeMillis();
+            chatTimestamps.removeIf(timestamp -> now - timestamp > 10_000L);
+            if (chatTimestamps.size() >= 4) {
+                return false;
+            }
+            chatTimestamps.add(now);
+            return true;
         }
 
         private BlockPos[] smokeFixturePositions() {
@@ -1697,6 +1816,35 @@ public final class MineLinkEndpointBootstrap {
                 return true;
             }
             return !blockId(state).equals("minecraft:diamond_ore") || origin.getX() > fixtureBase.east(3).getX();
+        }
+    }
+
+    private record SocialEvent(
+        String eventId,
+        String type,
+        String sourceAgentId,
+        String sourceDisplayName,
+        String message,
+        Vec3 position,
+        double radius,
+        Instant createdAt
+    ) {
+        private boolean visibleTo(AgentBody observer) {
+            return sourceAgentId.equals(observer.agentId) || observer.position().distanceTo(position) <= radius;
+        }
+
+        private JsonObject payloadFor(AgentBody observer) {
+            JsonObject payload = new JsonObject();
+            payload.addProperty("event_id", eventId);
+            payload.addProperty("type", type);
+            payload.addProperty("source_agent_id", sourceAgentId);
+            payload.addProperty("source_display_name", sourceDisplayName);
+            payload.addProperty("message", message);
+            boolean self = sourceAgentId.equals(observer.agentId);
+            payload.addProperty("visibility", self ? "self" : "audible_local");
+            payload.addProperty("distance_band", self ? "self" : "nearby");
+            payload.addProperty("created_at", createdAt.toString());
+            return payload;
         }
     }
 

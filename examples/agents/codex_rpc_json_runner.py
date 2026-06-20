@@ -83,6 +83,7 @@ def main() -> None:
         "last_scene": None,
         "last_container": None,
         "last_inventory": None,
+        "last_events": None,
         "tool_results": [],
     }
     rpc_messages: List[JsonDict] = []
@@ -198,7 +199,7 @@ def scenario_objective(scenario: str) -> str:
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, and sleep-limited actions.",
-        "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
+        "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to exchange a local social event, withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
     }
     return objectives.get(scenario, f"Complete MineLink scenario {scenario}.")
 
@@ -223,6 +224,7 @@ def run_portal_coop(
                 "last_scene": None,
                 "last_container": None,
                 "last_inventory": None,
+                "last_events": None,
                 "tool_results": [],
             }
             for name in agent_names
@@ -511,6 +513,8 @@ def update_state_from_tool_result(state: JsonDict, name: str, result: JsonDict) 
         state["last_container"] = result["container"]
     elif name == "observe.inventory":
         state["last_inventory"] = result
+    elif name == "observe.events":
+        state["last_events"] = result
 
 
 def update_shared_state_from_tool_result(global_state: JsonDict, name: str, result: JsonDict) -> None:
@@ -655,6 +659,34 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "expected_craftable": expected_craftable,
             "matching_recipes": len(matches),
         }
+    if kind == "event_message_seen":
+        assertion_state = assertion_agent_state(assertion, state, global_state)
+        message_contains = str(assertion.get("message_contains", ""))
+        source_agent = assertion.get("source_agent")
+        source_agent_id = None
+        if source_agent and global_state:
+            agent_info = (global_state.get("agents") or {}).get(source_agent, {})
+            if isinstance(agent_info, dict):
+                source_agent_id = agent_info.get("agent_id")
+        events_payload = assertion_state.get("last_events") or {}
+        events = events_payload.get("events", []) if isinstance(events_payload, dict) else []
+        matches = [
+            event
+            for event in events
+            if isinstance(event, dict)
+            and (not message_contains or message_contains in str(event.get("message", "")))
+            and (source_agent_id is None or event.get("source_agent_id") == source_agent_id)
+        ]
+        return {
+            "name": assertion.get("name", "event_message_seen"),
+            "kind": kind,
+            "passed": bool(matches),
+            "agent": assertion.get("agent"),
+            "source_agent": source_agent,
+            "message_contains": message_contains,
+            "matching_events": len(matches),
+            "observed_messages": [event.get("message") for event in events if isinstance(event, dict)],
+        }
     return {"name": assertion.get("name", "unknown_assertion"), "kind": kind, "passed": False}
 
 
@@ -695,6 +727,7 @@ def public_state(state: JsonDict) -> JsonDict:
         "last_scene": state.get("last_scene"),
         "last_container": state.get("last_container"),
         "last_inventory": state.get("last_inventory"),
+        "last_events": state.get("last_events"),
         "tool_results": state.get("tool_results", [])[-5:],
     }
 

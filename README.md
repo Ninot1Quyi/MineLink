@@ -109,7 +109,8 @@ path that rejects unobserved refs, too-far targets, expired refs, missing
 materials, and daytime sleep through server-side rules, and a three-agent portal
 cooperation path. The portal path uses FakePlayer-backed vanilla
 `useItemOn`/`useItem` for block placement and ignition after MineLink ref,
-reach, visibility, and inventory checks. The Create smoke opt-in profile loads
+reach, visibility, and inventory checks, then proves a local A2A social event
+with `chat.say_local` and `observe.events`. The Create smoke opt-in profile loads
 Create and verifies a normal material flow: withdraw `create:shaft` and
 `create:wrench` from a visible chest, place the shaft through vanilla
 `useItemOn`, inspect the placed component, then use the wrench against the

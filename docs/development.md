@@ -76,7 +76,9 @@ interaction path as other item use. The
 `portal_coop` scenario validates three server_agent bodies using public MCP
 tools to take shared materials, place a
 14-block obsidian frame through vanilla FakePlayer interaction, ignite it with
-flint and steel, and observe `minecraft:nether_portal`. Each NeoForge e2e run
+flint and steel, observe `minecraft:nether_portal`, and exchange one
+distance-limited local A2A social event through `chat.say_local` plus
+`observe.events`. Each NeoForge e2e run
 derives a distinct Minecraft `server-port` from the MineLink endpoint port
 unless `MINELINK_MINECRAFT_PORT` is set, so sequential CI smoke runs do not
 collide on the vanilla `25565` port.

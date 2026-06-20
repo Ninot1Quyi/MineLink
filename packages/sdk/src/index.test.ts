@@ -14,6 +14,8 @@ describe("Agent SDK", () => {
     await agent.body.use("blk_portal_frame", "minecraft:flint_and_steel", "east");
     await agent.body.sleep("blk_bed");
     await agent.body.place("blk_anchor", "up", "minecraft:obsidian");
+    await agent.chat.sayLocal("Ready for portal materials.");
+    await agent.observe.events({ limit: 10 });
     await agent.container.open("blk_chest");
     await agent.container.moveStack("slot_from", "slot_to", 3);
     await agent.craft.quickCraft("minecraft:oak_planks", 2);
@@ -32,6 +34,14 @@ describe("Agent SDK", () => {
       {
         name: "block.place",
         args: { target_ref: "blk_anchor", face: "up", item: "minecraft:obsidian" }
+      },
+      {
+        name: "chat.say_local",
+        args: { message: "Ready for portal materials." }
+      },
+      {
+        name: "observe.events",
+        args: { limit: 10 }
       },
       {
         name: "container.open",
