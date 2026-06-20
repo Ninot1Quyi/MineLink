@@ -1,0 +1,18 @@
+.DS_Store
+node_modules/
+dist/
+coverage/
+.minelink-dev/
+*.log
+*.tmp
+*.tsbuildinfo
+
+# Java / Gradle
+.gradle/
+build/
+out/
+mod/neoforge/run/
+
+# IDE
+.idea/
+.vscode/

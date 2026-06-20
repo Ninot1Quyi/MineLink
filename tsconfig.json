@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/protocol" },
+    { "path": "packages/host" },
+    { "path": "packages/mock-runtime" },
+    { "path": "packages/sdk" }
+  ]
+}

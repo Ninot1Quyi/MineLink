@@ -1,0 +1,31 @@
+{
+  "name": "minelink",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.8.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/protocol",
+    "packages/host",
+    "packages/mock-runtime",
+    "packages/sdk"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "ci": "bash scripts/dev/verify.sh",
+    "e2e": "bash scripts/dev/e2e.sh mine_tree",
+    "e2e:create": "bash scripts/dev/e2e.sh create_smoke",
+    "e2e:craft": "bash scripts/dev/e2e.sh craft_smoke"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
