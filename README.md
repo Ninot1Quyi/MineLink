@@ -62,7 +62,13 @@ node packages/host/dist/index.js http --host 127.0.0.1 --port 8765
 ```
 
 The Gateway exposes `GET /healthz` and MCP Streamable HTTP at `POST /mcp`.
-Keep it bound to localhost for development. Binding it to a public interface requires an external auth/rate-limit layer until MineLink has production admission controls.
+Keep it bound to localhost for development. Binding it to a non-loopback
+interface requires `MINELINK_GATEWAY_TOKEN`; requests must then send
+`Authorization: Bearer <token>`. The Gateway also enforces a fixed-window
+request limit and an active MCP session cap through
+`MINELINK_GATEWAY_RATE_LIMIT_MAX_REQUESTS`,
+`MINELINK_GATEWAY_RATE_LIMIT_WINDOW_MS`, and
+`MINELINK_GATEWAY_MAX_SESSIONS`.
 
 Codex/Claude-style MCP config can point at that command. The stable public tools are:
 

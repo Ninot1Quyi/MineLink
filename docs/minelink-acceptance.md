@@ -199,6 +199,10 @@ Current status:
 - MCP stdio is implemented by `node packages/host/dist/index.js mcp`.
 - Streamable HTTP Gateway is implemented by `node packages/host/dist/index.js http --host 127.0.0.1 --port 8765`.
 - Automated tests cover HTTP health, MCP initialize/session negotiation, `tools/call`, reconnect, and connected-runtime tool catalog failure.
+- The Gateway now has a basic admission and abuse-control layer: optional
+  `MINELINK_GATEWAY_TOKEN` Bearer auth, refusal to bind a non-loopback host
+  without a token unless explicitly overridden for controlled tests,
+  fixed-window request rate limiting, and an active MCP session cap.
 
 ### Gate 5: Agent RPC JSON, MCP Compatibility, and Local SDK
 
@@ -389,6 +393,8 @@ Current status:
 - The NeoForge workflow starts a real dedicated Minecraft server and runs a
   short real NeoForge soak for `craft_negative`, `guard_boundaries`, and
   `portal_coop`.
+- Host tests cover Gateway token admission, public-bind startup refusal without
+  a token, fixed-window rate limiting, and active MCP session caps.
 - These reports are stability evidence, not full release acceptance. Gate 11
   still requires a longer real Minecraft soak profile before release.
 
@@ -447,7 +453,8 @@ Not yet accepted as full product:
 
 - Persistent/restorable server_agent lifecycle and human-player coexistence.
 - Complete Create adapter behavior beyond the current real powered-press smoke.
-- Production Gateway admission/rate-limit/auth hardening.
+- Production Gateway revocation, owner quota, and full audit hardening beyond
+  the current token/rate-limit/session-cap baseline.
 - Complete FakePlayer-backed container/crafting semantics on real server menus.
 - Multi-agent social runtime.
 - Director UI/service.

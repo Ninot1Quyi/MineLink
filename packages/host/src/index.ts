@@ -22,6 +22,7 @@ async function main(): Promise<void> {
   if (command === "help" || command === "--help" || command === "-h") {
     process.stderr.write(`MineLink Host ${process.env.npm_package_version ?? "0.1.0"}\n`);
     process.stderr.write("Usage: minelink-host [mcp|stdio|dev|http|gateway] [--host 127.0.0.1] [--port 8765]\n");
+    process.stderr.write("HTTP Gateway env: MINELINK_GATEWAY_TOKEN, MINELINK_GATEWAY_RATE_LIMIT_MAX_REQUESTS, MINELINK_GATEWAY_MAX_SESSIONS\n");
     return;
   }
 

@@ -14,7 +14,12 @@ describe("Streamable HTTP MCP Gateway", () => {
 
     const health = await fetch(`http://${server.host}:${server.port}/healthz`);
     expect(health.status).toBe(200);
-    expect(await health.json()).toMatchObject({ ok: true, transport: "streamable-http" });
+    expect(await health.json()).toMatchObject({
+      ok: true,
+      transport: "streamable-http",
+      auth_required: false,
+      rate_limit: { window_ms: 60000, max_requests: 120 }
+    });
 
     const initialized = await mcpPost(server.url, {
       jsonrpc: "2.0",
@@ -114,6 +119,76 @@ describe("Streamable HTTP MCP Gateway", () => {
     expect(firstPong.status).toBe(200);
     expect(secondPong.status).toBe(200);
   });
+
+  it("requires a Bearer token when gateway admission is configured", async () => {
+    const server = await startHttpMcpServer({ port: 0, gatewayToken: "test-token" });
+    servers.push(server);
+
+    const health = await fetch(`http://${server.host}:${server.port}/healthz`);
+    expect(await health.json()).toMatchObject({ ok: true, auth_required: true });
+
+    const rejected = await mcpPost(server.url, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "missing-token", version: "0.1.0" }
+      }
+    });
+    expect(rejected.status).toBe(401);
+    expect(rejected.body.error.message).toContain("Unauthorized");
+
+    const accepted = await mcpPost(
+      server.url,
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "with-token", version: "0.1.0" }
+        }
+      },
+      undefined,
+      "test-token"
+    );
+    expect(accepted.status).toBe(200);
+    expect(accepted.headers.get("mcp-session-id")).toBeTruthy();
+  });
+
+  it("refuses non-loopback binding without an explicit gateway token", async () => {
+    await expect(
+      startHttpMcpServer({ host: "0.0.0.0", port: 0, allowUnauthenticatedPublicGateway: false })
+    ).rejects.toThrow(/refuses non-loopback binding/);
+  });
+
+  it("rate limits HTTP MCP requests before session creation", async () => {
+    const server = await startHttpMcpServer({ port: 0, rateLimitMaxRequests: 1, rateLimitWindowMs: 60_000 });
+    servers.push(server);
+
+    const first = await initialize(server.url, 1, "first-client");
+    expect(first.status).toBe(200);
+
+    const limited = await initialize(server.url, 2, "second-client");
+    expect(limited.status).toBe(429);
+    expect(limited.body.error.message).toContain("rate limit");
+  });
+
+  it("caps active HTTP MCP sessions", async () => {
+    const server = await startHttpMcpServer({ port: 0, maxSessions: 1, rateLimitMaxRequests: 10 });
+    servers.push(server);
+
+    const first = await initialize(server.url, 1, "first-client");
+    expect(first.status).toBe(200);
+    expect(first.headers.get("mcp-session-id")).toBeTruthy();
+
+    const second = await initialize(server.url, 2, "second-client");
+    expect(second.status).toBe(429);
+    expect(second.body.error.message).toContain("session limit");
+  });
 });
 
 async function initialize(url: string, id: number, name: string) {
@@ -132,7 +207,8 @@ async function initialize(url: string, id: number, name: string) {
 async function mcpPost(
   url: string,
   body: Record<string, unknown>,
-  sessionId?: string
+  sessionId?: string,
+  bearerToken?: string
 ): Promise<{ status: number; headers: Headers; body: any }> {
   const headers: Record<string, string> = {
     accept: "application/json, text/event-stream",
@@ -141,6 +217,9 @@ async function mcpPost(
   if (sessionId) {
     headers["mcp-session-id"] = sessionId;
     headers["mcp-protocol-version"] = "2025-11-25";
+  }
+  if (bearerToken) {
+    headers.authorization = `Bearer ${bearerToken}`;
   }
 
   const response = await fetch(url, {

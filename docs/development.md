@@ -118,6 +118,12 @@ node packages/host/dist/index.js http --host 127.0.0.1 --port 8765
 ```
 
 The Gateway exposes `GET /healthz` and MCP Streamable HTTP at `POST /mcp`.
+Keep development runs bound to `127.0.0.1`. If you bind the Gateway to a
+non-loopback host, set `MINELINK_GATEWAY_TOKEN` and send
+`Authorization: Bearer <token>` on MCP requests. The Gateway also enforces
+`MINELINK_GATEWAY_RATE_LIMIT_MAX_REQUESTS`,
+`MINELINK_GATEWAY_RATE_LIMIT_WINDOW_MS`, and
+`MINELINK_GATEWAY_MAX_SESSIONS`.
 
 ## Evidence Layout
 
