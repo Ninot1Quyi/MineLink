@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterDynamicTools, findDynamicTool, ToolExecuteArgsSchema } from "./index.js";
+import { DYNAMIC_TOOLS, filterDynamicTools, findDynamicTool, ToolExecuteArgsSchema } from "./index.js";
 
 describe("protocol catalog", () => {
   it("finds lazy dynamic tools by namespace and query", () => {
@@ -16,6 +16,13 @@ describe("protocol catalog", () => {
     expect(tool?.input_schema).toMatchObject({ type: "object" });
     expect(findDynamicTool("action.sleep")?.preconditions).toContain(
       "target_ref comes from a recent observe.scene result"
+    );
+  });
+
+  it("keeps Create tools bounded to visible component inspection", () => {
+    expect(DYNAMIC_TOOLS.map((tool) => tool.name)).not.toContain("create.auto_build_factory");
+    expect(findDynamicTool("create.inspect_component")?.failure_reasons).toEqual(
+      expect.arrayContaining(["unknown_or_unobserved_target", "expired_ref", "target_too_far"])
     );
   });
 

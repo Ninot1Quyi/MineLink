@@ -12,6 +12,8 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -49,12 +51,14 @@ import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.entity.player.Player.BedSleepingProblem;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -251,7 +255,8 @@ public final class MineLinkEndpointBootstrap {
             "container.move_stack",
             "container.take_output",
             "craft.list_available",
-            "craft.quick_craft"
+            "craft.quick_craft",
+            "create.inspect_component"
         ));
         return response;
     }
@@ -886,22 +891,35 @@ public final class MineLinkEndpointBootstrap {
         BlockState state = level.getBlockState(target.ref.pos);
         String id = blockId(state);
         if (!isCreateComponent(id)) {
-            return failure(request, "unsupported_capability", "The referenced block is not a Create component.");
+            return failure(request, "unsupported_capability", "The referenced block is not a supported Create component for this adapter slice.");
         }
 
         JsonObject properties = new JsonObject();
         state.getValues().forEach((property, value) -> properties.addProperty(property.getName(), String.valueOf(value)));
 
-        JsonObject create = new JsonObject();
-        create.addProperty("kind", createKind(id));
-        create.addProperty("adapter", "registry-partial");
-        create.addProperty("stress", "unknown");
-        create.addProperty("speed", "unknown");
-        create.addProperty("blocked", false);
-        create.add("properties", properties);
-        create.add("wrench_relevant_faces", stringArray("up", "down", "north", "south", "east", "west"));
-
         BlockEntity blockEntity = level.getBlockEntity(target.ref.pos);
+        String kind = createKind(id);
+        JsonObject create = new JsonObject();
+        create.addProperty("kind", kind);
+        create.addProperty("adapter", "semantics-partial");
+        create.addProperty("role", createRole(kind));
+        create.add("kinetic", createKineticDetails(state, blockEntity, kind, properties));
+        create.add("inventory", createInventoryDetails(blockEntity, kind));
+        create.add("properties", properties);
+        create.add("wrench_relevant_faces", createWrenchFaces(kind));
+        create.add("supported_interactions", createSupportedInteractions(kind));
+        create.add("common_blockage_reasons", createCommonBlockageReasons(kind));
+        create.add("unsupported_client_capabilities", stringArray(
+            "create_ponder_overlay",
+            "jei_recipe_overlay",
+            "client_goggle_overlay"
+        ));
+        if (kind.equals("belt")) {
+            create.add("belt", createBeltDetails(blockEntity));
+        } else if (kind.equals("mechanical_press")) {
+            create.add("press", createPressDetails(blockEntity));
+        }
+
         JsonObject result = new JsonObject();
         result.addProperty("block_ref", ref);
         result.addProperty("id", id);
@@ -918,6 +936,183 @@ public final class MineLinkEndpointBootstrap {
         JsonObject response = toolCompleted(request);
         response.add("result", result);
         return response;
+    }
+
+    private static JsonObject createKineticDetails(BlockState state, BlockEntity blockEntity, String kind, JsonObject properties) {
+        JsonObject kinetic = new JsonObject();
+        kinetic.addProperty("role", createRole(kind));
+        kinetic.addProperty("rotation_axis", propertyOrUnknown(properties, "axis"));
+        kinetic.add("speed", reflectedValue(blockEntity, "getSpeed"));
+        kinetic.add("theoretical_speed", reflectedValue(blockEntity, "getTheoreticalSpeed"));
+        kinetic.add("generated_speed", reflectedValue(blockEntity, "getGeneratedSpeed"));
+        kinetic.add("network_present", reflectedValue(blockEntity, "hasNetwork"));
+        kinetic.add("source_present", reflectedValue(blockEntity, "hasSource"));
+        kinetic.add("overstressed", reflectedValue(blockEntity, "isOverStressed"));
+        kinetic.add("stress_impact", reflectedStaticValue(
+            "com.simibubi.create.api.stress.BlockStressValues",
+            "getImpact",
+            new Class<?>[] { Block.class },
+            state.getBlock()
+        ));
+        kinetic.add("stress_capacity", reflectedStaticValue(
+            "com.simibubi.create.api.stress.BlockStressValues",
+            "getCapacity",
+            new Class<?>[] { Block.class },
+            state.getBlock()
+        ));
+        kinetic.addProperty("speed_hint", speedHint(kinetic.get("speed")));
+        return kinetic;
+    }
+
+    private static JsonObject createInventoryDetails(BlockEntity blockEntity, String kind) {
+        JsonObject inventory = new JsonObject();
+        inventory.addProperty("accepts_loose_items", kind.equals("depot") || kind.equals("belt"));
+        inventory.addProperty("exposes_server_container", false);
+        if (kind.equals("depot")) {
+            inventory.add("held_item", reflectedValue(blockEntity, "getHeldItem"));
+        } else {
+            inventory.add("held_item", JsonNull.INSTANCE);
+        }
+        return inventory;
+    }
+
+    private static JsonObject createBeltDetails(BlockEntity blockEntity) {
+        JsonObject belt = new JsonObject();
+        belt.add("length", reflectedFieldValue(blockEntity, "beltLength"));
+        belt.add("index", reflectedFieldValue(blockEntity, "index"));
+        belt.add("movement_speed", reflectedValue(blockEntity, "getBeltMovementSpeed"));
+        belt.add("direction_aware_movement_speed", reflectedValue(blockEntity, "getDirectionAwareBeltMovementSpeed"));
+        belt.add("movement_facing", reflectedValue(blockEntity, "getMovementFacing"));
+        belt.add("controller", reflectedValue(blockEntity, "getController"));
+        belt.add("controller_block", reflectedValue(blockEntity, "isController"));
+        belt.add("covered", reflectedFieldValue(blockEntity, "covered"));
+        return belt;
+    }
+
+    private static JsonObject createPressDetails(BlockEntity blockEntity) {
+        JsonObject press = new JsonObject();
+        press.addProperty("processing", "pressing");
+        press.add("kinetic_speed", reflectedValue(blockEntity, "getKineticSpeed"));
+        press.add("can_process_in_bulk", reflectedValue(blockEntity, "canProcessInBulk"));
+        press.add("pressing_behaviour_present", reflectedValue(blockEntity, "getPressingBehaviour").isJsonNull() ? GSON.toJsonTree(false) : GSON.toJsonTree(true));
+        return press;
+    }
+
+    private static String createRole(String kind) {
+        return switch (kind) {
+            case "shaft", "cogwheel", "large_cogwheel" -> "kinetic_relay";
+            case "depot" -> "item_buffer";
+            case "belt" -> "item_transport";
+            case "mechanical_press" -> "kinetic_processor";
+            default -> "unknown_component";
+        };
+    }
+
+    private static JsonArray createWrenchFaces(String kind) {
+        return switch (kind) {
+            case "shaft", "cogwheel", "large_cogwheel" -> stringArray("north", "south", "east", "west", "up", "down");
+            case "depot", "mechanical_press" -> stringArray("north", "south", "east", "west", "up");
+            case "belt" -> stringArray("north", "south", "east", "west");
+            default -> stringArray("north", "south", "east", "west", "up", "down");
+        };
+    }
+
+    private static JsonArray createSupportedInteractions(String kind) {
+        return switch (kind) {
+            case "shaft", "cogwheel", "large_cogwheel" -> stringArray("wrench", "place_adjacent_component");
+            case "depot" -> stringArray("wrench", "insert_or_extract_item");
+            case "belt" -> stringArray("wrench", "insert_item", "observe_transport");
+            case "mechanical_press" -> stringArray("wrench", "process_item_when_powered");
+            default -> stringArray("wrench");
+        };
+    }
+
+    private static JsonArray createCommonBlockageReasons(String kind) {
+        return switch (kind) {
+            case "shaft", "cogwheel", "large_cogwheel" -> stringArray("missing_power_source", "axis_mismatch", "overstressed_network");
+            case "depot" -> stringArray("held_item_blocks_insert", "missing_processing_machine", "target_not_reachable");
+            case "belt" -> stringArray("missing_controller", "blocked_output", "missing_power_source", "overstressed_network");
+            case "mechanical_press" -> stringArray("missing_power_source", "insufficient_rpm", "missing_recipe", "blocked_output", "overstressed_network");
+            default -> stringArray("unsupported_component_kind");
+        };
+    }
+
+    private static String propertyOrUnknown(JsonObject properties, String name) {
+        JsonElement element = properties.get(name);
+        return element == null || element.isJsonNull() ? "unknown" : element.getAsString();
+    }
+
+    private static String speedHint(JsonElement value) {
+        if (value == null || value.isJsonNull() || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            return "unknown";
+        }
+        double speed = value.getAsDouble();
+        if (speed == 0.0D) {
+            return "stopped";
+        }
+        return speed > 0.0D ? "moving_positive" : "moving_negative";
+    }
+
+    private static JsonElement reflectedValue(Object target, String methodName) {
+        if (target == null) {
+            return JsonNull.INSTANCE;
+        }
+        try {
+            Method method = target.getClass().getMethod(methodName);
+            method.setAccessible(true);
+            return toJsonElement(method.invoke(target));
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            return JsonNull.INSTANCE;
+        }
+    }
+
+    private static JsonElement reflectedStaticValue(String className, String methodName, Class<?>[] parameterTypes, Object... args) {
+        try {
+            Class<?> type = Class.forName(className);
+            Method method = type.getMethod(methodName, parameterTypes);
+            method.setAccessible(true);
+            return toJsonElement(method.invoke(null, args));
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            return JsonNull.INSTANCE;
+        }
+    }
+
+    private static JsonElement reflectedFieldValue(Object target, String fieldName) {
+        if (target == null) {
+            return JsonNull.INSTANCE;
+        }
+        try {
+            Field field = target.getClass().getField(fieldName);
+            field.setAccessible(true);
+            return toJsonElement(field.get(target));
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            return JsonNull.INSTANCE;
+        }
+    }
+
+    private static JsonElement toJsonElement(Object value) {
+        if (value == null) {
+            return JsonNull.INSTANCE;
+        }
+        if (value instanceof Number number) {
+            return GSON.toJsonTree(number);
+        }
+        if (value instanceof Boolean bool) {
+            return GSON.toJsonTree(bool);
+        }
+        if (value instanceof String text) {
+            return GSON.toJsonTree(text);
+        }
+        if (value instanceof Enum<?> enumValue) {
+            return GSON.toJsonTree(enumValue.name().toLowerCase());
+        }
+        if (value instanceof ItemStack stack) {
+            return stack.isEmpty() ? JsonNull.INSTANCE : stackPayload(stack);
+        }
+        if (value instanceof BlockPos pos) {
+            return blockPosition(pos);
+        }
+        return GSON.toJsonTree(String.valueOf(value));
     }
 
     private JsonObject toolCompleted(JsonObject request) {
@@ -1403,7 +1598,10 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private static boolean isCreateComponent(String id) {
-        return id.startsWith("create:");
+        return switch (id) {
+            case "create:shaft", "create:cogwheel", "create:large_cogwheel", "create:depot", "create:belt", "create:mechanical_press" -> true;
+            default -> false;
+        };
     }
 
     private static String createKind(String id) {
@@ -1598,6 +1796,10 @@ public final class MineLinkEndpointBootstrap {
             }
             level.setBlockAndUpdate(base.below(), Blocks.GRASS_BLOCK.defaultBlockState());
             level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());
+            setOptionalBlock(level, base.east(4).south(), "create:cogwheel");
+            setOptionalBeltChain(level, base.east(5).south());
+            setOptionalBlock(level, base.east(4).south(2), "create:depot");
+            setOptionalBlock(level, base.east(5).south(2), "create:mechanical_press");
             BlockPos chestPos = base.south(3);
             level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
             if (level.getBlockEntity(chestPos) instanceof Container container) {
@@ -1605,8 +1807,50 @@ public final class MineLinkEndpointBootstrap {
                 setOptionalItem(container, 1, "create:wrench", 1);
                 setOptionalItem(container, 2, "create:cogwheel", 1);
                 setOptionalItem(container, 3, "create:depot", 1);
+                setOptionalItem(container, 4, "create:mechanical_press", 1);
                 container.setChanged();
             }
+        }
+
+        private static void setOptionalBlock(ServerLevel level, BlockPos pos, String blockId) {
+            blockById(blockId).ifPresent(block -> level.setBlockAndUpdate(pos, block.defaultBlockState()));
+        }
+
+        private static void setOptionalBeltChain(ServerLevel level, BlockPos start) {
+            blockById("create:belt").ifPresent(block -> {
+                BlockState startState = withStateProperty(block.defaultBlockState(), "facing", "east");
+                startState = withStateProperty(startState, "slope", "horizontal");
+                startState = withStateProperty(startState, "part", "start");
+
+                BlockState endState = withStateProperty(block.defaultBlockState(), "facing", "east");
+                endState = withStateProperty(endState, "slope", "horizontal");
+                endState = withStateProperty(endState, "part", "end");
+
+                level.setBlockAndUpdate(start, startState);
+                level.setBlockAndUpdate(start.east(), endState);
+                reflectedStaticValue(
+                    "com.simibubi.create.content.kinetics.belt.BeltBlock",
+                    "initBelt",
+                    new Class<?>[] { Level.class, BlockPos.class },
+                    level,
+                    start
+                );
+            });
+        }
+
+        @SuppressWarnings({ "unchecked", "rawtypes" })
+        private static BlockState withStateProperty(BlockState state, String name, String valueName) {
+            for (Property<?> property : state.getProperties()) {
+                if (!property.getName().equals(name)) {
+                    continue;
+                }
+                Optional<?> value = property.getValue(valueName);
+                if (value.isPresent()) {
+                    return state.setValue((Property) property, (Comparable) value.get());
+                }
+                return state;
+            }
+            return state;
         }
 
         private static void setOptionalItem(Container container, int slot, String itemId, int count) {
@@ -1767,6 +2011,10 @@ public final class MineLinkEndpointBootstrap {
                 return new BlockPos[] {
                     fixtureBase.east(3),
                     fixtureBase.east(3).above(),
+                    fixtureBase.east(4).south(),
+                    fixtureBase.east(5).south(),
+                    fixtureBase.east(4).south(2),
+                    fixtureBase.east(5).south(2),
                     fixtureBase.south(3)
                 };
             }

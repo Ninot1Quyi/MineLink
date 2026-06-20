@@ -344,10 +344,10 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
   {
     name: "create.inspect_component",
     summary: "Inspect a visible Create-like component.",
-    description: "Returns structured Create adapter data when the runtime supports it, otherwise a structured unsupported reason.",
+    description: "Returns bounded Create adapter semantics for a visible component, including coarse kinetic, blockage, and unsupported client-only capability hints.",
     tags: ["create", "observe"],
     input_schema: { type: "object", required: ["block_ref"], properties: { block_ref: { type: "string" } } },
-    failure_reasons: ["unsupported_capability", "target_not_visible", "target_too_far"]
+    failure_reasons: ["unknown_or_unobserved_target", "expired_ref", "unsupported_capability", "target_not_visible", "target_too_far"]
   }
 ];
 

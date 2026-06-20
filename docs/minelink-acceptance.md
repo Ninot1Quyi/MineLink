@@ -72,9 +72,10 @@ Required:
   by NeoForge `FakePlayer` and vanilla `ServerPlayerGameMode.useItemOn/useItem`
   after MineLink observed-ref, reach, visibility, and inventory checks.
 - The Create smoke path adds optional Create dependencies and verifies
-  chest material withdrawal, Create component placement, `create.inspect_component`,
-  and wrench `action.use` against visible component refs on a real NeoForge dev
-  server.
+  chest material withdrawal, Create component placement, structured
+  `create.inspect_component` semantics for the placed shaft plus visible
+  cogwheel, depot, mechanical press, and belt fixtures, and wrench `action.use`
+  against visible component refs on a real NeoForge dev server.
 - The guard-boundaries smoke path adds `action.sleep` and deliberate negative
   actions that prove unobserved refs, too-far refs, expired refs, missing
   materials, hidden fixture blocks, and vanilla sleep rejections produce
@@ -257,20 +258,20 @@ Evidence:
 - `bash scripts/dev/e2e.sh create_smoke` against mock.
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke` against a real Create dev server.
 - Fixture world with a visible material chest, a visible build anchor, Create
-  shaft/cogwheel/depot/wrench materials, and a placed Create component produced
-  through public MCP tools.
+  shaft/wrench materials, visible cogwheel/depot/mechanical press/belt fixtures,
+  and a placed Create component produced through public MCP tools.
 
 Current status:
 
 - Partial real coverage exists for optional Create dependency loading, a real
   material chest containing Create items, chest-to-inventory transfer, native
-  `block.place` of `create:shaft`, registry-backed component inspection, and
-  wrench use through the same FakePlayer-backed vanilla interaction path as
-  other item use.
+  `block.place` of `create:shaft`, bounded semantic inspection for shaft,
+  cogwheel, depot, mechanical press, and belt, unsupported client-only capability
+  hints, and wrench use through the same FakePlayer-backed vanilla interaction
+  path as other item use.
 - This is not the full Gate 7 release surface yet. Belt/press behavior,
-  rotation network speed/stress extraction, blockage diagnosis, Ponder/overlay
-  limitations, and broader Create component parity still need separate
-  implementation and evidence.
+  powered rotation network behavior, real processing flows, and broader Create
+  component parity still need separate implementation and evidence.
 
 ### Gate 8: Multi-agent, A2A, and Social Runtime
 

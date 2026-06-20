@@ -256,6 +256,47 @@ describe("MockRuntimeServer", () => {
     });
     expect(moveWrench).toMatchObject({ ok: true, result: { moved: { item: "create:wrench", count: 1 } } });
 
+    const afterWrench = (moveWrench.result as { container: ContainerSnapshot }).container;
+    const cogwheelSlot = afterWrench.slots.find((slot) => slot.item === "create:cogwheel")!;
+    const thirdInventorySlot = afterWrench.inventory_slots.find((slot) => slot.item === null)!;
+    const moveCogwheel = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: cogwheelSlot.slot_ref, to_slot_ref: thirdInventorySlot.slot_ref, count: 1 }
+    });
+    expect(moveCogwheel).toMatchObject({ ok: true, result: { moved: { item: "create:cogwheel", count: 1 } } });
+
+    const afterCogwheel = (moveCogwheel.result as { container: ContainerSnapshot }).container;
+    const depotSlot = afterCogwheel.slots.find((slot) => slot.item === "create:depot")!;
+    const fourthInventorySlot = afterCogwheel.inventory_slots.find((slot) => slot.item === null)!;
+    const moveDepot = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: depotSlot.slot_ref, to_slot_ref: fourthInventorySlot.slot_ref, count: 1 }
+    });
+    expect(moveDepot).toMatchObject({ ok: true, result: { moved: { item: "create:depot", count: 1 } } });
+
+    const afterDepot = (moveDepot.result as { container: ContainerSnapshot }).container;
+    const pressSlot = afterDepot.slots.find((slot) => slot.item === "create:mechanical_press")!;
+    const fifthInventorySlot = afterDepot.inventory_slots.find((slot) => slot.item === null)!;
+    const movePress = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: pressSlot.slot_ref, to_slot_ref: fifthInventorySlot.slot_ref, count: 1 }
+    });
+    expect(movePress).toMatchObject({ ok: true, result: { moved: { item: "create:mechanical_press", count: 1 } } });
+
+    const inspectAnchor = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "create.inspect_component",
+      arguments: { block_ref: anchor.block_ref }
+    });
+    expect(inspectAnchor).toMatchObject({ ok: false, reason: "unsupported_capability" });
+
     const place = await request(client, {
       type: "tool.execute",
       agent_id: agentId,
@@ -267,13 +308,60 @@ describe("MockRuntimeServer", () => {
     const afterPlace = await request(client, { type: "tool.execute", agent_id: agentId, name: "observe.scene", arguments: {} });
     const sceneAfterPlace = afterPlace.visible_scene as { visible_blocks: Array<{ block_ref: string; id: string; tags: string[] }> };
     const shaft = sceneAfterPlace.visible_blocks.find((block) => block.id === "create:shaft")!;
+    const cogwheel = sceneAfterPlace.visible_blocks.find((block) => block.id === "create:cogwheel")!;
+    const depot = sceneAfterPlace.visible_blocks.find((block) => block.id === "create:depot")!;
+    const press = sceneAfterPlace.visible_blocks.find((block) => block.id === "create:mechanical_press")!;
+    const belt = sceneAfterPlace.visible_blocks.find((block) => block.id === "create:belt")!;
     const inspect = await request(client, {
       type: "tool.execute",
       agent_id: agentId,
       name: "create.inspect_component",
       arguments: { block_ref: shaft.block_ref }
     });
-    expect(inspect).toMatchObject({ ok: true, result: { id: "create:shaft" } });
+    expect(inspect).toMatchObject({
+      ok: true,
+      result: {
+        id: "create:shaft",
+        create: {
+          kind: "shaft",
+          role: "kinetic_relay",
+          kinetic: { speed_hint: "stopped" },
+          unsupported_client_capabilities: expect.arrayContaining(["create_ponder_overlay", "jei_recipe_overlay"])
+        }
+      }
+    });
+
+    for (const [block, kind] of [
+      [cogwheel, "cogwheel"],
+      [depot, "depot"],
+      [press, "mechanical_press"],
+      [belt, "belt"]
+    ] as const) {
+      const inspected = await request(client, {
+        type: "tool.execute",
+        agent_id: agentId,
+        name: "create.inspect_component",
+        arguments: { block_ref: block.block_ref }
+      });
+      expect(inspected).toMatchObject({
+        ok: true,
+        result: {
+          create: {
+            kind,
+            kinetic: expect.objectContaining({
+              speed_hint: expect.any(String)
+            }),
+            common_blockage_reasons: expect.any(Array),
+            supported_interactions: expect.any(Array),
+            wrench_relevant_faces: expect.any(Array),
+            unsupported_client_capabilities: expect.arrayContaining(["client_goggle_overlay"])
+          }
+        }
+      });
+      const inspectedCreate = (inspected.result as { create: Record<string, unknown> }).create;
+      expect(inspectedCreate.kinetic).toHaveProperty("stress_impact");
+      expect(inspectedCreate.kinetic).toHaveProperty("stress_capacity");
+    }
 
     const use = await request(client, {
       type: "tool.execute",
@@ -282,6 +370,22 @@ describe("MockRuntimeServer", () => {
       arguments: { target_ref: shaft.block_ref, item: "create:wrench", face: "up" }
     });
     expect(use).toMatchObject({ ok: true, result: { used: true } });
+
+    for (let step = 0; step < 3; step++) {
+      await request(client, {
+        type: "tool.execute",
+        agent_id: agentId,
+        name: "action.move",
+        arguments: { vector: [4, 0, 0], durationMs: 1000 }
+      });
+    }
+    const farInspect = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "create.inspect_component",
+      arguments: { block_ref: shaft.block_ref }
+    });
+    expect(farInspect).toMatchObject({ ok: false, reason: "target_too_far" });
 
     const lines = readFileSync(tracePath, "utf8").trim().split("\n");
     expect(lines.length).toBeGreaterThan(0);

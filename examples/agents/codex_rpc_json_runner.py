@@ -84,6 +84,7 @@ def main() -> None:
         "last_container": None,
         "last_inventory": None,
         "last_events": None,
+        "placements": {},
         "tool_results": [],
     }
     rpc_messages: List[JsonDict] = []
@@ -125,6 +126,7 @@ def main() -> None:
                 record = {"turn": turn, "name": name, "arguments": arguments, "result": result}
                 state["tool_results"].append(record)
                 update_state_from_tool_result(state, name, result)
+                update_shared_state_from_tool_result(state, name, result)
                 log("codex_rpc_tool_result", turn=turn, name=name, result=compact_result(result))
 
             wait_ms = int(decision.get("wait_ms", 0) or 0)
@@ -151,6 +153,7 @@ def main() -> None:
             "replay_env": "MINELINK_CODEX_RPC_REPLAY",
         },
         "connect": connect,
+        "placements": state["placements"],
         "final_assertions": final_assertions,
         "tool_results": state["tool_results"],
         "rpc_messages": rpc_messages,
@@ -462,9 +465,8 @@ def find_container_slot_ref(state: JsonDict, item_id: str) -> str:
 
 
 def find_placed_block_ref(state: JsonDict, global_state: Optional[JsonDict], label: str) -> str:
-    if not global_state:
-        raise RuntimeError("${placed_block:*} requires shared placement state")
-    placement = (global_state.get("placements") or {}).get(label)
+    placement_source = global_state if global_state is not None else state
+    placement = (placement_source.get("placements") or {}).get(label)
     if not isinstance(placement, dict):
         raise RuntimeError(f"No placement label has been recorded: {label}")
     expected_pos = normalize_pos(placement.get("pos"))
@@ -687,6 +689,55 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "matching_events": len(matches),
             "observed_messages": [event.get("message") for event in events if isinstance(event, dict)],
         }
+    if kind == "create_component_semantics":
+        expected_kinds = [str(item) for item in assertion.get("kinds", [])]
+        require_client_limits = bool(assertion.get("require_unsupported_client_capabilities", True))
+        observed: Dict[str, JsonDict] = {}
+        missing_fields: Dict[str, List[str]] = {}
+        for record in tool_records(state, global_state):
+            if record.get("name") != "create.inspect_component" or is_tool_failure(record.get("result", {})):
+                continue
+            raw_result = record.get("result", {})
+            result = raw_result.get("result", raw_result) if isinstance(raw_result, dict) else {}
+            if not isinstance(result, dict):
+                continue
+            create = result.get("create")
+            if not isinstance(create, dict):
+                continue
+            create_kind = str(create.get("kind", ""))
+            observed[create_kind] = create
+            required_paths = [
+                ("role",),
+                ("kinetic", "speed_hint"),
+                ("kinetic", "stress_impact"),
+                ("kinetic", "stress_capacity"),
+                ("inventory", "accepts_loose_items"),
+                ("wrench_relevant_faces",),
+                ("supported_interactions",),
+                ("common_blockage_reasons",),
+            ]
+            if require_client_limits:
+                required_paths.append(("unsupported_client_capabilities",))
+            missing_fields[create_kind] = [
+                ".".join(path)
+                for path in required_paths
+                if not has_nested_key(create, path)
+            ]
+        missing_kinds = [create_kind for create_kind in expected_kinds if create_kind not in observed]
+        kinds_with_missing_fields = {
+            create_kind: fields
+            for create_kind, fields in missing_fields.items()
+            if create_kind in expected_kinds and fields
+        }
+        return {
+            "name": assertion.get("name", "create_component_semantics"),
+            "kind": kind,
+            "passed": not missing_kinds and not kinds_with_missing_fields,
+            "expected_kinds": expected_kinds,
+            "observed_kinds": sorted(observed.keys()),
+            "missing_kinds": missing_kinds,
+            "missing_fields": kinds_with_missing_fields,
+        }
     return {"name": assertion.get("name", "unknown_assertion"), "kind": kind, "passed": False}
 
 
@@ -720,6 +771,15 @@ def normalize_pos(value: Any) -> Optional[Tuple[int, int, int]]:
 
 def is_tool_failure(result: Any) -> bool:
     return isinstance(result, dict) and result.get("ok") is False
+
+
+def has_nested_key(value: Any, path: Tuple[str, ...]) -> bool:
+    current = value
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return False
+        current = current[key]
+    return True
 
 
 def public_state(state: JsonDict) -> JsonDict:

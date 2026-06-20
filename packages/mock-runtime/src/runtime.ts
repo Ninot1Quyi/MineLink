@@ -26,11 +26,13 @@ const PLACEABLE_BLOCK_ITEMS = new Set([
   "create:shaft",
   "create:cogwheel",
   "create:depot",
+  "create:mechanical_press",
   "minecraft:obsidian",
   "minecraft:cobblestone",
   "minecraft:dirt",
   "minecraft:stone"
 ]);
+const CREATE_COMPONENT_KINDS = new Set(["shaft", "cogwheel", "large_cogwheel", "depot", "belt", "mechanical_press"]);
 
 interface MockRuntimeOptions {
   fixture?: FixtureName;
@@ -867,17 +869,28 @@ export class MockRuntimeServer {
     const refState = this.validateRef(agent, blockRef);
     if (!refState.ok) return refState;
     const ref = refState.ref;
-    if (!ref.tags.includes("create:component")) {
-      return runtimeFail("unsupported_capability", "The referenced block is not a Create component.");
+    if (distance3(agent.position, ref.pos) > 6) {
+      return runtimeFail("target_too_far", "Create component is outside inspect range.");
     }
+    if (!ref.tags.includes("create:component")) {
+      return runtimeFail("unsupported_capability", "The referenced block is not a supported Create component for this adapter slice.");
+    }
+    const create = createComponentSemantics(ref);
     return {
       ok: true,
       status: "completed",
       result: {
         block_ref: blockRef,
         id: ref.id,
-        create: ref.metadata?.create ?? { kind: "unknown", stress: "unknown" },
-        failure_reasons_supported: ["target_too_far", "target_not_visible", "unsupported_capability"]
+        tags: ref.tags,
+        create,
+        failure_reasons_supported: [
+          "unknown_or_unobserved_target",
+          "expired_ref",
+          "target_too_far",
+          "target_not_visible",
+          "unsupported_capability"
+        ]
       }
     };
   }
@@ -1164,6 +1177,10 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
         visibleFaces: ["north", "up"],
         metadata: { fixture: "create_build_anchor" }
       },
+      createFixtureComponent("create:cogwheel", [4, 64, 1]),
+      createFixtureComponent("create:belt", [5, 64, 1]),
+      createFixtureComponent("create:depot", [4, 64, 2]),
+      createFixtureComponent("create:mechanical_press", [5, 64, 2]),
       {
         id: "minecraft:chest",
         pos: [0, 64, 3],
@@ -1175,7 +1192,8 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
             { item: "create:shaft", count: 1 },
             { item: "create:wrench", count: 1 },
             { item: "create:cogwheel", count: 1 },
-            { item: "create:depot", count: 1 }
+            { item: "create:depot", count: 1 },
+            { item: "create:mechanical_press", count: 1 }
           ]
         }
       }
@@ -1212,14 +1230,7 @@ function round(value: number): number {
 
 function placedBlock(item: string, pos: Vec3): BlockState {
   if (item.startsWith("create:")) {
-    const kind = item.slice("create:".length);
-    return {
-      id: item,
-      pos,
-      tags: ["create:component", item],
-      visibleFaces: ["north", "south", "east", "west", "up"],
-      metadata: { create: { kind, stress: "unknown", speed: "unknown", blocked: false } }
-    };
+    return createFixtureComponent(item, pos);
   }
   return {
     id: item,
@@ -1227,6 +1238,146 @@ function placedBlock(item: string, pos: Vec3): BlockState {
     tags: item === "minecraft:obsidian" ? ["minecraft:obsidian"] : [],
     visibleFaces: ["north", "south", "east", "west", "up"]
   };
+}
+
+function createFixtureComponent(id: string, pos: Vec3): BlockState {
+  const kind = id.startsWith("create:") ? id.slice("create:".length) : "unknown";
+  const tags = CREATE_COMPONENT_KINDS.has(kind) ? ["create:component", `create:${kind}`, id] : [id];
+  return {
+    id,
+    pos,
+    tags,
+    visibleFaces: ["north", "south", "east", "west", "up"],
+    metadata: { create: createComponentSemantics({ id, tags, metadata: {}, distance: 0 } as VisibleRef) }
+  };
+}
+
+function createComponentSemantics(ref: VisibleRef): RuntimeResponse {
+  const kind = ref.id.startsWith("create:") ? ref.id.slice("create:".length) : "unknown";
+  return {
+    kind,
+    adapter: "semantics-partial",
+    role: createRole(kind),
+    kinetic: createKineticDetails(kind),
+    inventory: createInventoryDetails(kind),
+    properties: createProperties(kind),
+    wrench_relevant_faces: createWrenchFaces(kind),
+    supported_interactions: createSupportedInteractions(kind),
+    common_blockage_reasons: createCommonBlockageReasons(kind),
+    unsupported_client_capabilities: ["create_ponder_overlay", "jei_recipe_overlay", "client_goggle_overlay"],
+    ...(kind === "belt"
+      ? {
+          belt: {
+            length: 1,
+            index: 0,
+            movement_speed: 0,
+            direction_aware_movement_speed: 0,
+            movement_facing: "east",
+            controller: null,
+            controller_block: true,
+            covered: false
+          }
+        }
+      : {}),
+    ...(kind === "mechanical_press"
+      ? {
+          press: {
+            processing: "pressing",
+            kinetic_speed: 0,
+            can_process_in_bulk: false,
+            pressing_behaviour_present: true
+          }
+        }
+      : {})
+  };
+}
+
+function createKineticDetails(kind: string): RuntimeResponse {
+  return {
+    role: createRole(kind),
+    rotation_axis: kind === "depot" ? "none" : "y",
+    speed: 0,
+    theoretical_speed: 0,
+    generated_speed: 0,
+    network_present: false,
+    source_present: false,
+    overstressed: false,
+    stress_impact: kind === "shaft" || kind === "cogwheel" || kind === "large_cogwheel" || kind === "depot" ? 0 : null,
+    stress_capacity: 0,
+    speed_hint: "stopped"
+  };
+}
+
+function createInventoryDetails(kind: string): RuntimeResponse {
+  return {
+    accepts_loose_items: kind === "depot" || kind === "belt",
+    exposes_server_container: false,
+    held_item: null
+  };
+}
+
+function createProperties(kind: string): RuntimeResponse {
+  if (kind === "shaft" || kind === "cogwheel" || kind === "large_cogwheel") return { axis: "y" };
+  if (kind === "belt") return { slope: "horizontal", part: "start", horizontal_facing: "east" };
+  if (kind === "mechanical_press") return { facing: "north" };
+  return {};
+}
+
+function createRole(kind: string): string {
+  switch (kind) {
+    case "shaft":
+    case "cogwheel":
+    case "large_cogwheel":
+      return "kinetic_relay";
+    case "depot":
+      return "item_buffer";
+    case "belt":
+      return "item_transport";
+    case "mechanical_press":
+      return "kinetic_processor";
+    default:
+      return "unknown_component";
+  }
+}
+
+function createWrenchFaces(kind: string): string[] {
+  if (kind === "depot" || kind === "mechanical_press") return ["north", "south", "east", "west", "up"];
+  if (kind === "belt") return ["north", "south", "east", "west"];
+  return ["north", "south", "east", "west", "up", "down"];
+}
+
+function createSupportedInteractions(kind: string): string[] {
+  switch (kind) {
+    case "shaft":
+    case "cogwheel":
+    case "large_cogwheel":
+      return ["wrench", "place_adjacent_component"];
+    case "depot":
+      return ["wrench", "insert_or_extract_item"];
+    case "belt":
+      return ["wrench", "insert_item", "observe_transport"];
+    case "mechanical_press":
+      return ["wrench", "process_item_when_powered"];
+    default:
+      return ["wrench"];
+  }
+}
+
+function createCommonBlockageReasons(kind: string): string[] {
+  switch (kind) {
+    case "shaft":
+    case "cogwheel":
+    case "large_cogwheel":
+      return ["missing_power_source", "axis_mismatch", "overstressed_network"];
+    case "depot":
+      return ["held_item_blocks_insert", "missing_processing_machine", "target_not_reachable"];
+    case "belt":
+      return ["missing_controller", "blocked_output", "missing_power_source", "overstressed_network"];
+    case "mechanical_press":
+      return ["missing_power_source", "insufficient_rpm", "missing_recipe", "blocked_output", "overstressed_network"];
+    default:
+      return ["unsupported_component_kind"];
+  }
 }
 
 function isPlaceableBlockItem(item: string): boolean {
