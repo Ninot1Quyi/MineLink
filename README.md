@@ -111,11 +111,13 @@ cooperation path. The portal path uses FakePlayer-backed vanilla
 `useItemOn`/`useItem` for block placement and ignition after MineLink ref,
 reach, visibility, and inventory checks, then proves a local A2A social event
 with `chat.say_local` and `observe.events`. The Create smoke opt-in profile loads
-Create and verifies a normal material flow: withdraw `create:shaft` and
-`create:wrench` from a visible chest, place the shaft through vanilla
-`useItemOn`, inspect the placed shaft plus visible fixture cogwheel, depot,
-mechanical press, and belt semantic payloads, then use the wrench against the
-visible placed component ref. It remains a partial adapter gate, not an
+Create and verifies normal material flows: withdraw `create:shaft`,
+`create:wrench`, and `minecraft:iron_ingot` from a visible chest, place the
+shaft through vanilla `useItemOn`, inspect the placed shaft plus visible fixture
+cogwheel, powered depot/mechanical press, and belt semantic payloads, use the
+wrench against the visible placed component ref, then right-click the visible
+depot with the iron ingot and prove Create's powered press produces
+`create:iron_sheet` on the depot. It remains a partial adapter gate, not an
 automation shortcut. Complete server menu coverage, multi-agent social runtime,
-and long soak tests remain separate acceptance gates in
+broader Create parity, and long soak tests remain separate acceptance gates in
 `docs/minelink-acceptance.md`.

@@ -74,8 +74,11 @@ Required:
 - The Create smoke path adds optional Create dependencies and verifies
   chest material withdrawal, Create component placement, structured
   `create.inspect_component` semantics for the placed shaft plus visible
-  cogwheel, depot, mechanical press, and belt fixtures, and wrench `action.use`
-  against visible component refs on a real NeoForge dev server.
+  cogwheel, depot, mechanical press, and belt fixtures, wrench `action.use`
+  against visible component refs, and a real powered press flow where
+  `action.use` places `minecraft:iron_ingot` onto a visible depot and
+  `create.inspect_component` observes `create:iron_sheet` after Create
+  processing on a real NeoForge dev server.
 - The guard-boundaries smoke path adds `action.sleep` and deliberate negative
   actions that prove unobserved refs, too-far refs, expired refs, missing
   materials, hidden fixture blocks, and vanilla sleep rejections produce
@@ -250,6 +253,8 @@ Required:
 - Create dependency remains optional for the core Mod but enabled for Create adapter test profile.
 - `create.inspect_component` identifies depot, belt, press, shaft, cogwheel, wrench-relevant faces, speed/stress hints, and common blockage reasons.
 - Agent can legally use a wrench or item on one reachable component.
+- Agent can place an iron ingot onto a visible depot through `action.use` and
+  observe a powered mechanical press produce `create:iron_sheet`.
 - Adapter does not expose `auto_build_factory` or global oracle tools.
 - Ponder/JEI/overlay limitations are documented and returned as `unsupported_capability` where applicable.
 
@@ -258,20 +263,23 @@ Evidence:
 - `bash scripts/dev/e2e.sh create_smoke` against mock.
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke` against a real Create dev server.
 - Fixture world with a visible material chest, a visible build anchor, Create
-  shaft/wrench materials, visible cogwheel/depot/mechanical press/belt fixtures,
+  shaft/wrench/iron-ingot materials, visible cogwheel/depot/mechanical
+  press/belt fixtures, a powered creative-motor-backed press above the depot,
   and a placed Create component produced through public MCP tools.
 
 Current status:
 
 - Partial real coverage exists for optional Create dependency loading, a real
-  material chest containing Create items, chest-to-inventory transfer, native
-  `block.place` of `create:shaft`, bounded semantic inspection for shaft,
-  cogwheel, depot, mechanical press, and belt, unsupported client-only capability
-  hints, and wrench use through the same FakePlayer-backed vanilla interaction
-  path as other item use.
-- This is not the full Gate 7 release surface yet. Belt/press behavior,
-  powered rotation network behavior, real processing flows, and broader Create
-  component parity still need separate implementation and evidence.
+  material chest containing Create items plus an iron ingot,
+  chest-to-inventory transfer, native `block.place` of `create:shaft`, bounded
+  semantic inspection for shaft, cogwheel, depot, mechanical press, and belt,
+  unsupported client-only capability hints, wrench use through the same
+  FakePlayer-backed vanilla interaction path as other item use, non-zero powered
+  press speed, and a real pressing result observed as `create:iron_sheet` on the
+  depot.
+- This is not the full Gate 7 release surface yet. Belt transport behavior,
+  multi-step Create recipes, broader kinetic-network diagnostics, and broader
+  Create component parity still need separate implementation and evidence.
 
 ### Gate 8: Multi-agent, A2A, and Social Runtime
 
@@ -425,7 +433,7 @@ partial, and 11 dependency audit:
 Not yet accepted as full product:
 
 - Persistent/restorable server_agent lifecycle and human-player coexistence.
-- Complete Create adapter behavior beyond the current real smoke.
+- Complete Create adapter behavior beyond the current real powered-press smoke.
 - Production Gateway admission/rate-limit/auth hardening.
 - Complete FakePlayer-backed container/crafting semantics on real server menus.
 - Multi-agent social runtime.

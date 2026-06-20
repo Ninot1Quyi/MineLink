@@ -198,7 +198,7 @@ def rpc_source_name(args: argparse.Namespace, scenario: str) -> str:
 def scenario_objective(scenario: str) -> str:
     objectives = {
         "mine_tree": "Use MineLink MCP tools to create a server_agent body, mine one visible oak log, and prove it is in inventory.",
-        "create_smoke": "Use MineLink MCP tools to take Create materials from a chest, place one Create component, inspect it, and use a wrench on it.",
+        "create_smoke": "Use MineLink MCP tools to take Create materials from a chest, place one Create component, use a wrench, and press an iron ingot into an iron sheet through a powered Create depot and mechanical press.",
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, and sleep-limited actions.",
@@ -738,6 +738,50 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "missing_kinds": missing_kinds,
             "missing_fields": kinds_with_missing_fields,
         }
+    if kind == "create_component_held_item":
+        expected_kind = str(assertion.get("component_kind", ""))
+        expected_item = str(assertion.get("item", ""))
+        min_count = int(assertion.get("min_count", 1))
+        observed_items: List[Any] = []
+        matches = 0
+        for create in inspected_create_payloads(state, global_state, expected_kind):
+            inventory = create.get("inventory", {})
+            held_item = inventory.get("held_item") if isinstance(inventory, dict) else None
+            observed_items.append(held_item)
+            if isinstance(held_item, dict) and held_item.get("item") == expected_item and int(held_item.get("count", 0)) >= min_count:
+                matches += 1
+        return {
+            "name": assertion.get("name", f"create_component_held_item_{expected_kind}_{expected_item}"),
+            "kind": kind,
+            "passed": matches > 0,
+            "component_kind": expected_kind,
+            "item": expected_item,
+            "expected_min_count": min_count,
+            "matching_components": matches,
+            "observed_items": observed_items,
+        }
+    if kind == "create_component_kinetic_nonzero":
+        expected_kind = str(assertion.get("component_kind", ""))
+        observed_speeds: List[Any] = []
+        for create in inspected_create_payloads(state, global_state, expected_kind):
+            kinetic = create.get("kinetic", {})
+            if isinstance(kinetic, dict):
+                observed_speeds.append(kinetic.get("speed"))
+            press = create.get("press", {})
+            if isinstance(press, dict):
+                observed_speeds.append(press.get("kinetic_speed"))
+        nonzero = [
+            speed
+            for speed in observed_speeds
+            if isinstance(speed, (int, float)) and speed != 0
+        ]
+        return {
+            "name": assertion.get("name", f"create_component_kinetic_nonzero_{expected_kind}"),
+            "kind": kind,
+            "passed": bool(nonzero),
+            "component_kind": expected_kind,
+            "observed_speeds": observed_speeds,
+        }
     return {"name": assertion.get("name", "unknown_assertion"), "kind": kind, "passed": False}
 
 
@@ -759,6 +803,22 @@ def assertion_agent_state(assertion: JsonDict, state: JsonDict, global_state: Op
         if isinstance(agents, dict) and isinstance(agents.get(agent), dict):
             return agents[agent]
     return state
+
+
+def inspected_create_payloads(state: JsonDict, global_state: Optional[JsonDict], component_kind: str) -> Iterable[JsonDict]:
+    for record in tool_records(state, global_state):
+        if record.get("name") != "create.inspect_component" or is_tool_failure(record.get("result", {})):
+            continue
+        raw_result = record.get("result", {})
+        result = raw_result.get("result", raw_result) if isinstance(raw_result, dict) else {}
+        if not isinstance(result, dict):
+            continue
+        create = result.get("create")
+        if not isinstance(create, dict):
+            continue
+        if component_kind and create.get("kind") != component_kind:
+            continue
+        yield create
 
 
 def normalize_pos(value: Any) -> Optional[Tuple[int, int, int]]:

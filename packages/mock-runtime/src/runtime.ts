@@ -520,6 +520,34 @@ export class MockRuntimeServer {
         this.trace({ event: "agent.action", action: "use", agent_id: agent.agentId, item, activated: "nether_portal" });
         return { ok: true, status: "completed", result: { used: true, item, activated: "minecraft:nether_portal" } };
       }
+      if (item === "minecraft:iron_ingot" && refState.ref.id === "create:depot") {
+        const block = this.blocks.find((candidate) => samePos(candidate.pos, refState.ref.pos) && candidate.id === refState.ref.id);
+        if (!block || block.mined) {
+          return runtimeFail("target_not_visible", "Block is no longer present.");
+        }
+        agent.inventory[item] -= 1;
+        if (agent.inventory[item] <= 0) delete agent.inventory[item];
+        const heldItem = { item: "create:iron_sheet", count: 1 };
+        block.metadata = {
+          create: createComponentSemantics({
+            ...refState.ref,
+            metadata: { create: { inventory: { held_item: heldItem } } }
+          })
+        };
+        this.trace({
+          event: "agent.action",
+          action: "use",
+          agent_id: agent.agentId,
+          target_ref: targetRef,
+          item,
+          processed: heldItem
+        });
+        return {
+          ok: true,
+          status: "completed",
+          result: { used: true, item, processed: { input: item, output: heldItem } }
+        };
+      }
     }
     this.trace({ event: "agent.action", action: "use", agent_id: agent.agentId, target_ref: targetRef, item });
     return { ok: true, status: "completed", result: { used: true } };
@@ -875,7 +903,9 @@ export class MockRuntimeServer {
     if (!ref.tags.includes("create:component")) {
       return runtimeFail("unsupported_capability", "The referenced block is not a supported Create component for this adapter slice.");
     }
-    const create = createComponentSemantics(ref);
+    const block = this.blocks.find((candidate) => samePos(candidate.pos, ref.pos) && candidate.id === ref.id && !candidate.mined);
+    const currentRef = { ...ref, metadata: block?.metadata ?? ref.metadata };
+    const create = createComponentSemantics(currentRef);
     return {
       ok: true,
       status: "completed",
@@ -1179,8 +1209,14 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
       },
       createFixtureComponent("create:cogwheel", [4, 64, 1]),
       createFixtureComponent("create:belt", [5, 64, 1]),
-      createFixtureComponent("create:depot", [4, 64, 2]),
-      createFixtureComponent("create:mechanical_press", [5, 64, 2]),
+      createFixtureComponent("create:depot", [3, 64, 2]),
+      createFixtureComponent("create:mechanical_press", [3, 66, 2]),
+      {
+        id: "create:creative_motor",
+        pos: [2, 66, 2],
+        tags: ["create:creative_motor", "minelink:create_fixture"],
+        visibleFaces: ["north", "south", "east", "west", "up"]
+      },
       {
         id: "minecraft:chest",
         pos: [0, 64, 3],
@@ -1193,7 +1229,8 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
             { item: "create:wrench", count: 1 },
             { item: "create:cogwheel", count: 1 },
             { item: "create:depot", count: 1 },
-            { item: "create:mechanical_press", count: 1 }
+            { item: "create:mechanical_press", count: 1 },
+            { item: "minecraft:iron_ingot", count: 1 }
           ]
         }
       }
@@ -1254,12 +1291,16 @@ function createFixtureComponent(id: string, pos: Vec3): BlockState {
 
 function createComponentSemantics(ref: VisibleRef): RuntimeResponse {
   const kind = ref.id.startsWith("create:") ? ref.id.slice("create:".length) : "unknown";
+  const overrides = objectValue(ref.metadata, "create");
+  const kineticOverrides = objectValue(overrides, "kinetic");
+  const inventoryOverrides = objectValue(overrides, "inventory");
+  const pressOverrides = objectValue(overrides, "press");
   return {
     kind,
     adapter: "semantics-partial",
     role: createRole(kind),
-    kinetic: createKineticDetails(kind),
-    inventory: createInventoryDetails(kind),
+    kinetic: { ...createKineticDetails(kind), ...kineticOverrides },
+    inventory: { ...createInventoryDetails(kind), ...inventoryOverrides },
     properties: createProperties(kind),
     wrench_relevant_faces: createWrenchFaces(kind),
     supported_interactions: createSupportedInteractions(kind),
@@ -1283,9 +1324,10 @@ function createComponentSemantics(ref: VisibleRef): RuntimeResponse {
       ? {
           press: {
             processing: "pressing",
-            kinetic_speed: 0,
+            kinetic_speed: 16,
             can_process_in_bulk: false,
-            pressing_behaviour_present: true
+            pressing_behaviour_present: true,
+            ...pressOverrides
           }
         }
       : {})
@@ -1293,18 +1335,19 @@ function createComponentSemantics(ref: VisibleRef): RuntimeResponse {
 }
 
 function createKineticDetails(kind: string): RuntimeResponse {
+  const speed = kind === "mechanical_press" ? 16 : 0;
   return {
     role: createRole(kind),
-    rotation_axis: kind === "depot" ? "none" : "y",
-    speed: 0,
-    theoretical_speed: 0,
+    rotation_axis: kind === "depot" ? "none" : kind === "mechanical_press" ? "x" : "y",
+    speed,
+    theoretical_speed: speed,
     generated_speed: 0,
-    network_present: false,
-    source_present: false,
+    network_present: kind === "mechanical_press",
+    source_present: kind === "mechanical_press",
     overstressed: false,
     stress_impact: kind === "shaft" || kind === "cogwheel" || kind === "large_cogwheel" || kind === "depot" ? 0 : null,
     stress_capacity: 0,
-    speed_hint: "stopped"
+    speed_hint: speed === 0 ? "stopped" : "moving_positive"
   };
 }
 
@@ -1378,6 +1421,13 @@ function createCommonBlockageReasons(kind: string): string[] {
     default:
       return ["unsupported_component_kind"];
   }
+}
+
+function objectValue(value: unknown, key: string): RuntimeResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const child = (value as RuntimeResponse)[key];
+  if (!child || typeof child !== "object" || Array.isArray(child)) return {};
+  return child as RuntimeResponse;
 }
 
 function isPlaceableBlockItem(item: string): boolean {

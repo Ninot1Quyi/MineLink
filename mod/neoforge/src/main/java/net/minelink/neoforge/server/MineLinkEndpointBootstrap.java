@@ -1798,8 +1798,13 @@ public final class MineLinkEndpointBootstrap {
             level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());
             setOptionalBlock(level, base.east(4).south(), "create:cogwheel");
             setOptionalBeltChain(level, base.east(5).south());
-            setOptionalBlock(level, base.east(4).south(2), "create:depot");
-            setOptionalBlock(level, base.east(5).south(2), "create:mechanical_press");
+            BlockPos processingDepot = base.east(3).south(2);
+            BlockPos processingPress = processingDepot.above(2);
+            BlockPos processingMotor = processingPress.west();
+            setOptionalBlock(level, processingDepot, "create:depot");
+            setOptionalBlock(level, processingPress, "create:mechanical_press", Map.of("facing", "east"));
+            setOptionalBlock(level, processingMotor, "create:creative_motor", Map.of("facing", "east"));
+            initializeOptionalCreateKinetics(level, processingMotor, processingPress);
             BlockPos chestPos = base.south(3);
             level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
             if (level.getBlockEntity(chestPos) instanceof Container container) {
@@ -1808,12 +1813,35 @@ public final class MineLinkEndpointBootstrap {
                 setOptionalItem(container, 2, "create:cogwheel", 1);
                 setOptionalItem(container, 3, "create:depot", 1);
                 setOptionalItem(container, 4, "create:mechanical_press", 1);
+                setOptionalItem(container, 5, "minecraft:iron_ingot", 1);
                 container.setChanged();
             }
         }
 
         private static void setOptionalBlock(ServerLevel level, BlockPos pos, String blockId) {
             blockById(blockId).ifPresent(block -> level.setBlockAndUpdate(pos, block.defaultBlockState()));
+        }
+
+        private static void setOptionalBlock(ServerLevel level, BlockPos pos, String blockId, Map<String, String> properties) {
+            blockById(blockId).ifPresent(block -> {
+                BlockState state = block.defaultBlockState();
+                for (Map.Entry<String, String> property : properties.entrySet()) {
+                    state = withStateProperty(state, property.getKey(), property.getValue());
+                }
+                level.setBlockAndUpdate(pos, state);
+            });
+        }
+
+        private static void initializeOptionalCreateKinetics(ServerLevel level, BlockPos... positions) {
+            for (BlockPos pos : positions) {
+                BlockEntity blockEntity = level.getBlockEntity(pos);
+                reflectedValue(blockEntity, "initialize");
+            }
+            for (BlockPos pos : positions) {
+                BlockEntity blockEntity = level.getBlockEntity(pos);
+                reflectedValue(blockEntity, "attachKinetics");
+                reflectedValue(blockEntity, "updateGeneratedRotation");
+            }
         }
 
         private static void setOptionalBeltChain(ServerLevel level, BlockPos start) {
@@ -2013,8 +2041,9 @@ public final class MineLinkEndpointBootstrap {
                     fixtureBase.east(3).above(),
                     fixtureBase.east(4).south(),
                     fixtureBase.east(5).south(),
-                    fixtureBase.east(4).south(2),
-                    fixtureBase.east(5).south(2),
+                    fixtureBase.east(3).south(2),
+                    fixtureBase.east(3).south(2).above(2),
+                    fixtureBase.east(2).south(2).above(2),
                     fixtureBase.south(3)
                 };
             }

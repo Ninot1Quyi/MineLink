@@ -206,7 +206,7 @@ describe("MockRuntimeServer", () => {
     clientB.close();
   });
 
-  it("places and inspects a Create component from chest materials with valid JSONL traces", async () => {
+  it("places, uses, and inspects Create components from chest materials with valid JSONL traces", async () => {
     const temp = mkdtempSync(join(tmpdir(), "minelink-runtime-test-"));
     const tracePath = join(temp, "latest-action-trace.jsonl");
     const server = new MockRuntimeServer({
@@ -289,6 +289,17 @@ describe("MockRuntimeServer", () => {
     });
     expect(movePress).toMatchObject({ ok: true, result: { moved: { item: "create:mechanical_press", count: 1 } } });
 
+    const afterPress = (movePress.result as { container: ContainerSnapshot }).container;
+    const ironSlot = afterPress.slots.find((slot) => slot.item === "minecraft:iron_ingot")!;
+    const sixthInventorySlot = afterPress.inventory_slots.find((slot) => slot.item === null)!;
+    const moveIron = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: ironSlot.slot_ref, to_slot_ref: sixthInventorySlot.slot_ref, count: 1 }
+    });
+    expect(moveIron).toMatchObject({ ok: true, result: { moved: { item: "minecraft:iron_ingot", count: 1 } } });
+
     const inspectAnchor = await request(client, {
       type: "tool.execute",
       agent_id: agentId,
@@ -361,6 +372,10 @@ describe("MockRuntimeServer", () => {
       const inspectedCreate = (inspected.result as { create: Record<string, unknown> }).create;
       expect(inspectedCreate.kinetic).toHaveProperty("stress_impact");
       expect(inspectedCreate.kinetic).toHaveProperty("stress_capacity");
+      if (kind === "mechanical_press") {
+        expect(inspectedCreate.kinetic).toMatchObject({ speed: 16, speed_hint: "moving_positive" });
+        expect(inspectedCreate.press).toMatchObject({ kinetic_speed: 16, pressing_behaviour_present: true });
+      }
     }
 
     const use = await request(client, {
@@ -370,6 +385,33 @@ describe("MockRuntimeServer", () => {
       arguments: { target_ref: shaft.block_ref, item: "create:wrench", face: "up" }
     });
     expect(use).toMatchObject({ ok: true, result: { used: true } });
+
+    const pressInput = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.use",
+      arguments: { target_ref: depot.block_ref, item: "minecraft:iron_ingot", face: "up" }
+    });
+    expect(pressInput).toMatchObject({
+      ok: true,
+      result: { used: true, processed: { input: "minecraft:iron_ingot", output: { item: "create:iron_sheet", count: 1 } } }
+    });
+
+    const inspectProcessedDepot = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "create.inspect_component",
+      arguments: { block_ref: depot.block_ref }
+    });
+    expect(inspectProcessedDepot).toMatchObject({
+      ok: true,
+      result: {
+        create: {
+          kind: "depot",
+          inventory: { held_item: { item: "create:iron_sheet", count: 1 } }
+        }
+      }
+    });
 
     for (let step = 0; step < 3; step++) {
       await request(client, {
