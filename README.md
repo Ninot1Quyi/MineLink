@@ -117,7 +117,8 @@ shaft through vanilla `useItemOn`, inspect the placed shaft plus visible fixture
 cogwheel, powered depot/mechanical press, and belt semantic payloads, use the
 wrench against the visible placed component ref, then right-click the visible
 depot with the iron ingot and prove Create's powered press produces
-`create:iron_sheet` on the depot. It remains a partial adapter gate, not an
-automation shortcut. Complete server menu coverage, multi-agent social runtime,
-broader Create parity, and long soak tests remain separate acceptance gates in
-`docs/minelink-acceptance.md`.
+`create:iron_sheet` on the depot. The replay then uses empty-hand `action.use`
+on that same visible depot to pick the sheet into the agent inventory. It
+remains a partial adapter gate, not an automation shortcut. Complete server menu
+coverage, multi-agent social runtime, broader Create parity, and long soak
+tests remain separate acceptance gates in `docs/minelink-acceptance.md`.

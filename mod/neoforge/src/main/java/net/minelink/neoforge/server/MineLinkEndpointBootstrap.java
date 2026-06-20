@@ -563,13 +563,12 @@ public final class MineLinkEndpointBootstrap {
         }
 
         ItemStack beforeStack = prepareMainHand(agent, itemId);
-        int beforeCount = beforeStack.getCount();
         BlockHitResult hit = hitResult(blockRef.pos, face);
         InteractionResult interactionResult = agent.entity.gameMode.useItemOn(agent.entity, level, beforeStack, InteractionHand.MAIN_HAND, hit);
         if (interactionResult.shouldSwing()) {
             agent.entity.swing(InteractionHand.MAIN_HAND, true);
         }
-        syncInventoryFromHand(agent, itemId, beforeCount);
+        syncInventoryFromPlayer(agent);
 
         BlockState placedState = level.getBlockState(placementPos);
         if (!interactionResult.consumesAction() || placedState.isAir()) {
@@ -599,15 +598,12 @@ public final class MineLinkEndpointBootstrap {
         if (face == null) {
             return failure(request, "invalid_arguments", "action.use face must be one of up, down, north, south, east, west.");
         }
-        if (itemId.isBlank()) {
-            return failure(request, "invalid_arguments", "action.use requires item for the NeoForge native use path.");
-        }
-        if (agent.inventory.getOrDefault(itemId, 0) <= 0) {
+        if (!itemId.isBlank() && agent.inventory.getOrDefault(itemId, 0) <= 0) {
             return failure(request, "missing_material", "Agent inventory does not contain " + itemId + ".");
         }
 
         Item item = itemById(itemId);
-        if (item == Items.AIR) {
+        if (!itemId.isBlank() && item == Items.AIR) {
             return failure(request, "unsupported_capability", "Unknown item: " + itemId + ".");
         }
 
@@ -621,7 +617,6 @@ public final class MineLinkEndpointBootstrap {
             blockRef = target.ref;
         }
         ItemStack beforeStack = prepareMainHand(agent, itemId);
-        int beforeCount = beforeStack.getCount();
         InteractionResult interactionResult;
         if (ref.isBlank()) {
             interactionResult = agent.entity.gameMode.useItem(agent.entity, level, beforeStack, InteractionHand.MAIN_HAND);
@@ -631,7 +626,7 @@ public final class MineLinkEndpointBootstrap {
         if (interactionResult.shouldSwing()) {
             agent.entity.swing(InteractionHand.MAIN_HAND, true);
         }
-        syncInventoryFromHand(agent, itemId, beforeCount);
+        syncInventoryFromPlayer(agent);
 
         if (!interactionResult.consumesAction()) {
             return failure(request, "blocked", "Vanilla use did not consume the action.");
@@ -639,7 +634,8 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject result = new JsonObject();
         result.addProperty("used", true);
-        result.addProperty("item", itemId);
+        result.addProperty("item", itemId.isBlank() ? "minecraft:air" : itemId);
+        result.addProperty("hand", itemId.isBlank() ? "empty" : "main");
         result.addProperty("interaction_result", interactionResult.name().toLowerCase());
         if (portalActivatedNear(level, agent.fixtureBase)) {
             result.addProperty("activated", "minecraft:nether_portal");
@@ -1145,22 +1141,56 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private ItemStack prepareMainHand(AgentBody agent, String itemId) {
+        syncPlayerInventoryFromAgent(agent, itemId);
+        agent.entity.getInventory().selected = 0;
+        if (itemId.isBlank()) {
+            agent.entity.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            return ItemStack.EMPTY;
+        }
         int count = Math.max(1, agent.inventory.getOrDefault(itemId, 0));
         ItemStack stack = new ItemStack(itemById(itemId), count);
-        agent.entity.getInventory().selected = 0;
         agent.entity.setItemInHand(InteractionHand.MAIN_HAND, stack);
         return stack;
     }
 
-    private void syncInventoryFromHand(AgentBody agent, String itemId, int beforeCount) {
-        ItemStack after = agent.entity.getItemInHand(InteractionHand.MAIN_HAND);
-        int afterCount = after.getItem() == itemById(itemId) ? after.getCount() : 0;
-        if (afterCount <= 0) {
-            agent.inventory.remove(itemId);
-            return;
+    private void syncPlayerInventoryFromAgent(AgentBody agent, String selectedItemId) {
+        var playerInventory = agent.entity.getInventory();
+        playerInventory.clearContent();
+        playerInventory.selected = 0;
+        int slot = 1;
+        for (Map.Entry<String, Integer> entry : agent.inventory.entrySet()) {
+            if (entry.getValue() <= 0) {
+                continue;
+            }
+            Item item = itemById(entry.getKey());
+            if (item == Items.AIR) {
+                continue;
+            }
+            int targetSlot;
+            if (!selectedItemId.isBlank() && entry.getKey().equals(selectedItemId)) {
+                targetSlot = 0;
+            } else {
+                targetSlot = slot++;
+            }
+            if (targetSlot >= playerInventory.getContainerSize()) {
+                break;
+            }
+            playerInventory.setItem(targetSlot, new ItemStack(item, entry.getValue()));
         }
-        if (afterCount <= beforeCount) {
-            agent.inventory.put(itemId, afterCount);
+        if (selectedItemId.isBlank()) {
+            playerInventory.setItem(0, ItemStack.EMPTY);
+        }
+    }
+
+    private void syncInventoryFromPlayer(AgentBody agent) {
+        agent.inventory.clear();
+        var playerInventory = agent.entity.getInventory();
+        for (int slot = 0; slot < playerInventory.getContainerSize(); slot++) {
+            ItemStack stack = playerInventory.getItem(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            agent.addInventory(stackItemId(stack), stack.getCount());
         }
     }
 

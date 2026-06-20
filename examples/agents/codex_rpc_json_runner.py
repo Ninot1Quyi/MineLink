@@ -198,7 +198,7 @@ def rpc_source_name(args: argparse.Namespace, scenario: str) -> str:
 def scenario_objective(scenario: str) -> str:
     objectives = {
         "mine_tree": "Use MineLink MCP tools to create a server_agent body, mine one visible oak log, and prove it is in inventory.",
-        "create_smoke": "Use MineLink MCP tools to take Create materials from a chest, place one Create component, use a wrench, and press an iron ingot into an iron sheet through a powered Create depot and mechanical press.",
+        "create_smoke": "Use MineLink MCP tools to take Create materials from a chest, place one Create component, use a wrench, press an iron ingot into an iron sheet through a powered Create depot and mechanical press, and pick the sheet up with an empty hand.",
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, and sleep-limited actions.",

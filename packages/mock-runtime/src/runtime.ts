@@ -548,9 +548,39 @@ export class MockRuntimeServer {
           result: { used: true, item, processed: { input: item, output: heldItem } }
         };
       }
+      if (!item && refState.ref.id === "create:depot") {
+        const block = this.blocks.find((candidate) => samePos(candidate.pos, refState.ref.pos) && candidate.id === refState.ref.id);
+        if (!block || block.mined) {
+          return runtimeFail("target_not_visible", "Block is no longer present.");
+        }
+        const heldItem = createHeldItem(block.metadata);
+        if (!heldItem) {
+          return runtimeFail("blocked", "The depot does not hold an item that can be picked up.");
+        }
+        agent.inventory[heldItem.item] = (agent.inventory[heldItem.item] ?? 0) + heldItem.count;
+        block.metadata = {
+          create: createComponentSemantics({
+            ...refState.ref,
+            metadata: { create: { inventory: { held_item: null } } }
+          })
+        };
+        this.trace({
+          event: "agent.action",
+          action: "use",
+          agent_id: agent.agentId,
+          target_ref: targetRef,
+          item: "minecraft:air",
+          taken: heldItem
+        });
+        return {
+          ok: true,
+          status: "completed",
+          result: { used: true, item: "minecraft:air", hand: "empty", taken: heldItem }
+        };
+      }
     }
     this.trace({ event: "agent.action", action: "use", agent_id: agent.agentId, target_ref: targetRef, item });
-    return { ok: true, status: "completed", result: { used: true } };
+    return { ok: true, status: "completed", result: { used: true, item: item || "minecraft:air", hand: item ? "main" : "empty" } };
   }
 
   private chat(agent: AgentState, action: JsonObject): RuntimeResponse {
@@ -1428,6 +1458,16 @@ function objectValue(value: unknown, key: string): RuntimeResponse {
   const child = (value as RuntimeResponse)[key];
   if (!child || typeof child !== "object" || Array.isArray(child)) return {};
   return child as RuntimeResponse;
+}
+
+function createHeldItem(metadata: unknown): ItemStack | null {
+  const create = objectValue(metadata, "create");
+  const inventory = objectValue(create, "inventory");
+  const heldItem = inventory.held_item;
+  if (!heldItem || typeof heldItem !== "object" || Array.isArray(heldItem)) return null;
+  const item = String((heldItem as RuntimeResponse).item ?? "");
+  const count = Number((heldItem as RuntimeResponse).count ?? 0);
+  return item && count > 0 ? { item, count } : null;
 }
 
 function isPlaceableBlockItem(item: string): boolean {

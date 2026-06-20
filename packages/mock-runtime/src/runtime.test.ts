@@ -413,6 +413,29 @@ describe("MockRuntimeServer", () => {
       }
     });
 
+    const pickupSheet = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.use",
+      arguments: { target_ref: depot.block_ref, face: "up" }
+    });
+    expect(pickupSheet).toMatchObject({
+      ok: true,
+      result: { used: true, hand: "empty", taken: { item: "create:iron_sheet", count: 1 } }
+    });
+
+    const inventoryAfterPickup = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "observe.inventory",
+      arguments: {}
+    });
+    expect(inventoryAfterPickup).toMatchObject({
+      inventory: {
+        main: expect.arrayContaining([expect.objectContaining({ item: "create:iron_sheet", count: 1 })])
+      }
+    });
+
     for (let step = 0; step < 3; step++) {
       await request(client, {
         type: "tool.execute",

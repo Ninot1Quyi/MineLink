@@ -78,7 +78,9 @@ Required:
   against visible component refs, and a real powered press flow where
   `action.use` places `minecraft:iron_ingot` onto a visible depot and
   `create.inspect_component` observes `create:iron_sheet` after Create
-  processing on a real NeoForge dev server.
+  processing on a real NeoForge dev server. The same replay then uses
+  empty-hand `action.use` on the visible depot and proves the sheet enters the
+  agent inventory.
 - The guard-boundaries smoke path adds `action.sleep` and deliberate negative
   actions that prove unobserved refs, too-far refs, expired refs, missing
   materials, hidden fixture blocks, and vanilla sleep rejections produce
@@ -255,6 +257,8 @@ Required:
 - Agent can legally use a wrench or item on one reachable component.
 - Agent can place an iron ingot onto a visible depot through `action.use` and
   observe a powered mechanical press produce `create:iron_sheet`.
+- Agent can use an empty hand on that visible depot and take the pressed sheet
+  into its inventory through the native player inventory path.
 - Adapter does not expose `auto_build_factory` or global oracle tools.
 - Ponder/JEI/overlay limitations are documented and returned as `unsupported_capability` where applicable.
 
@@ -276,7 +280,7 @@ Current status:
   unsupported client-only capability hints, wrench use through the same
   FakePlayer-backed vanilla interaction path as other item use, non-zero powered
   press speed, and a real pressing result observed as `create:iron_sheet` on the
-  depot.
+  depot, followed by empty-hand pickup of the sheet into the agent inventory.
 - This is not the full Gate 7 release surface yet. Belt transport behavior,
   multi-step Create recipes, broader kinetic-network diagnostics, and broader
   Create component parity still need separate implementation and evidence.

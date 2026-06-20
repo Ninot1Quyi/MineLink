@@ -199,8 +199,8 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
   },
   {
     name: "action.use",
-    summary: "Use the selected item or a visible target.",
-    description: "Runs a server-side use/interact action when allowed.",
+    summary: "Use a held item or empty hand on a visible target.",
+    description: "Runs a server-side use/interact action with the selected item or an empty hand when allowed.",
     tags: ["action", "use"],
     input_schema: {
       type: "object",

@@ -75,7 +75,8 @@ shaft plus visible fixture cogwheel, depot, powered mechanical press, and belt
 semantic payloads, uses the wrench on the same placed visible component, then
 right-clicks the visible depot with the iron ingot through the same
 FakePlayer-backed vanilla interaction path and proves the powered press leaves a
-`create:iron_sheet` on the depot. The
+`create:iron_sheet` on the depot. It then uses empty-hand `action.use` against
+that visible depot and proves the sheet reaches the agent inventory. The
 `portal_coop` scenario validates three server_agent bodies using public MCP
 tools to take shared materials, place a
 14-block obsidian frame through vanilla FakePlayer interaction, ignite it with
