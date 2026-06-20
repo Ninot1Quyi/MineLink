@@ -10,6 +10,7 @@ bash scripts/dev/e2e.sh mine_tree
 bash scripts/dev/e2e.sh create_smoke
 bash scripts/dev/e2e.sh craft_smoke
 bash scripts/dev/e2e.sh craft_negative
+bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative
 node packages/host/dist/index.js http --port 8765
 ```
 
@@ -61,9 +62,19 @@ output, and stale slot refs. Each NeoForge e2e run derives a distinct Minecraft
 `server-port` from the MineLink endpoint port unless `MINELINK_MINECRAFT_PORT`
 is set, so sequential CI smoke runs do not collide on the vanilla `25565` port.
 These are still smoke gates; complete FakePlayer,
-server menu, Create, and soak coverage remain separate product gates. This path
+server menu, Create, and long release soak coverage remain separate product gates. This path
 is intentionally separate from the fast mock CI path because first-run
 Minecraft/NeoForge dependency resolution and server startup are much slower.
+
+Short stability soak runs repeat e2e scenarios and writes structured evidence:
+
+```bash
+bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative
+MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative
+```
+
+Use `MINELINK_SKIP_BUILD=1` after a successful `npm run build` to avoid
+rebuilding TypeScript packages for every e2e or soak scenario.
 
 ## MCP Transports
 
@@ -101,6 +112,15 @@ The Gateway exposes `GET /healthz` and MCP Streamable HTTP at `POST /mcp`.
     logs/
     replays/
     reports/
+  soak/
+    mock/
+      soak-report.json
+      process-cleanup.json
+      queue-metrics.json
+    neoforge/
+      soak-report.json
+      process-cleanup.json
+      queue-metrics.json
 ```
 
 ## GitHub Workflow
@@ -115,9 +135,9 @@ Use short-lived `codex/*` branches for implementation work. Keep product changes
 CI is split into two layers:
 
 - `.github/workflows/ci.yml` runs fast contract, TypeScript, mock runtime, and
-  JSON-RPC replay gates on every push/PR.
+  JSON-RPC replay gates plus a short mock stability soak on every push/PR.
 - `.github/workflows/minecraft-neoforge.yml` runs a real NeoForge dedicated
-  server smoke for `mine_tree`, `craft_smoke`, and `craft_negative` on push,
-  pull request, `workflow_dispatch`, and a daily schedule, then uploads server
-  and MineLink evidence artifacts. Keep long Create worlds and soak tests on a
-  future self-hosted runner profile.
+  server smoke for `mine_tree`, `craft_smoke`, and `craft_negative`, then runs a
+  short real NeoForge stability soak on push, pull request, `workflow_dispatch`,
+  and a daily schedule. Keep long Create worlds and release-length soak tests on
+  a future self-hosted runner profile.

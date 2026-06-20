@@ -53,7 +53,9 @@ fi
 rm -rf "$work_dir"
 mkdir -p "$work_dir/logs" "$work_dir/replays" "$work_dir/reports"
 
-scripts/dev/build.sh
+if [ "${MINELINK_SKIP_BUILD:-0}" != "1" ]; then
+  scripts/dev/build.sh
+fi
 
 export MINELINK_FIXTURE="$fixture"
 export MINELINK_PORT="$port"

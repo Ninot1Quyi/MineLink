@@ -19,10 +19,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate
-      - run: bash scripts/dev/e2e.sh mine_tree
-      - run: bash scripts/dev/e2e.sh create_smoke
-      - run: bash scripts/dev/e2e.sh craft_smoke
-      - run: bash scripts/dev/e2e.sh craft_negative
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative
       - uses: actions/upload-artifact@v4
         if: always()
         with:

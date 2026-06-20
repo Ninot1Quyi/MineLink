@@ -278,9 +278,20 @@ Required:
 Evidence:
 
 - Security scan/audit output.
-- Soak report.
-- Process cleanup report.
+- Short mock and real NeoForge soak reports.
+- Process cleanup report with post-run port checks.
+- Queue/log-growth metrics report.
 - PR checklist with all passing gates and known external blockers.
+
+Current status:
+
+- `scripts/dev/soak.sh` repeats selected e2e scenarios and writes
+  `soak-report.json`, `process-cleanup.json`, and `queue-metrics.json`.
+- Fast CI runs a short mock soak for `mine_tree` and `craft_negative`.
+- The NeoForge workflow starts a real dedicated Minecraft server and runs a
+  short real NeoForge soak for `craft_negative`.
+- These reports are stability evidence, not full release acceptance. Gate 11
+  still requires a longer real Minecraft soak profile before release.
 
 ## 3. Required Boundary Tests
 
@@ -309,12 +320,17 @@ The repository currently has an executable baseline for Gates 0, 4 partial, 5 pa
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
 - `bash scripts/dev/e2e.sh craft_negative`
+- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative`
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
 - `./gradlew --no-daemon build` in `mod/neoforge`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative`
-- `.github/workflows/minecraft-neoforge.yml` starts a real NeoForge dedicated server for each real smoke scenario and uploads `.minelink-dev/` plus server logs.
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative`
+- `.minelink-dev/soak/<runtime>/soak-report.json`
+- `.minelink-dev/soak/<runtime>/process-cleanup.json`
+- `.minelink-dev/soak/<runtime>/queue-metrics.json`
+- `.github/workflows/minecraft-neoforge.yml` starts a real NeoForge dedicated server for each real smoke scenario, runs a short real NeoForge soak, and uploads `.minelink-dev/` plus server logs.
 
 Not yet accepted as full product:
 
@@ -325,4 +341,4 @@ Not yet accepted as full product:
 - Multi-agent social runtime.
 - Director UI/service.
 - Installer.
-- Soak/stability run on real Minecraft.
+- Long release-length soak/stability run on real Minecraft.

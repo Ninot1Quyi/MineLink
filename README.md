@@ -25,6 +25,7 @@ bash scripts/dev/e2e.sh mine_tree
 bash scripts/dev/e2e.sh create_smoke
 bash scripts/dev/e2e.sh craft_smoke
 bash scripts/dev/e2e.sh craft_negative
+bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative
 ```
 
 The e2e harness writes evidence under `.minelink-dev/<scenario>/`:
@@ -36,6 +37,12 @@ The e2e harness writes evidence under `.minelink-dev/<scenario>/`:
 - `logs/agent.log`
 - `replays/latest-action-trace.jsonl`
 - `reports/*-result.json`
+
+The soak harness writes stability evidence under `.minelink-dev/soak/<runtime>/`:
+
+- `soak-report.json`
+- `process-cleanup.json`
+- `queue-metrics.json`
 
 ## MCP Host and Gateway
 

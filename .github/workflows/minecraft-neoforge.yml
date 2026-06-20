@@ -29,17 +29,22 @@ jobs:
       - run: ./gradlew --no-daemon build
         working-directory: mod/neoforge
       - name: NeoForge mine tree smoke
-        run: bash scripts/dev/e2e.sh mine_tree
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge container and crafting smoke
-        run: bash scripts/dev/e2e.sh craft_smoke
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge container and crafting negative smoke
-        run: bash scripts/dev/e2e.sh craft_negative
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
+        env:
+          MINELINK_RUNTIME: neoforge
+          MINELINK_ACCEPT_EULA: "1"
+      - name: NeoForge short stability soak
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
