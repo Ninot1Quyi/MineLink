@@ -107,7 +107,8 @@ world, chest slot movement, crafting-table recipe lookup, oak-plank crafting,
 inventory assertions, structured negative crafting failures, a guard-boundary
 path that rejects unobserved refs, too-far targets, expired refs, missing
 materials, movement through blocking fixtures, and daytime sleep through
-server-side rules, and a three-agent portal cooperation path. The portal path
+server-side rules, plus submit-mode action queue backpressure, and a three-agent
+portal cooperation path. The portal path
 uses FakePlayer-backed vanilla
 `useItemOn`/`useItem` for block placement and ignition after MineLink ref,
 reach, visibility, and inventory checks, then proves a local A2A social event

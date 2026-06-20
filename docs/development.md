@@ -67,7 +67,8 @@ output, and stale slot refs. The `guard_boundaries` scenario validates that a
 real server_agent cannot act on unobserved refs, too-far refs, expired refs,
 missing materials, or daytime sleep, that `action.move` reports collision and
 clips movement against a blocking fixture, and that a fixture-hidden diamond ore
-is not returned by `observe.scene` while the opaque wall remains visible. The
+is not returned by `observe.scene` while the opaque wall remains visible. It
+also validates submit-mode queue backpressure for real NeoForge actions. The
 `create_smoke` scenario uses the opt-in Create adapter profile, loads Create in
 the real NeoForge dev server, moves `create:shaft`, `create:wrench`, and
 `minecraft:iron_ingot` from a visible chest into the agent inventory, places the

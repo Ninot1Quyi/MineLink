@@ -80,4 +80,6 @@ return concrete refs from the previous observation state.
 The `guard_boundaries` replay also uses assertions such as
 `visible_block_absent` to prove that hidden fixture blocks were not returned by
 `observe.scene`, and `move_collided` to prove movement was clipped by collision
-instead of passing through blocking fixture geometry.
+instead of passing through blocking fixture geometry. It uses `tool_call_status`
+to prove submit-mode actions are accepted before excess submissions are rejected
+with `backpressure_queue_full`.

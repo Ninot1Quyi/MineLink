@@ -74,6 +74,8 @@ public final class MineLinkEndpointBootstrap {
     private static final int REQUEST_TIMEOUT_SECONDS = 10;
     private static final double LOCAL_CHAT_RADIUS = 16.0D;
     private static final int MAX_SOCIAL_EVENTS = 200;
+    private static final int MAX_ACTION_QUEUE_DEPTH = 4;
+    private static final long SUBMITTED_ACTION_HOLD_MS = 1_000L;
 
     private final MinecraftServer server;
     private final RuntimeState runtimeState = new RuntimeState();
@@ -295,6 +297,14 @@ public final class MineLinkEndpointBootstrap {
         }
 
         String name = stringValue(request, "name", "");
+        String mode = stringValue(request, "mode", "await_completion");
+        if (!mode.equals("await_completion") && !mode.equals("submit")) {
+            return failure(request, "invalid_arguments", "tool.execute mode must be await_completion or submit.");
+        }
+        if (mode.equals("submit") && queueableTool(name)) {
+            return submitQueuedAction(request, agent, name);
+        }
+
         JsonObject arguments = objectValue(request, "arguments");
         return switch (name) {
             case "observe.self" -> observeSelf(request, agent);
@@ -316,6 +326,43 @@ public final class MineLinkEndpointBootstrap {
             case "craft.quick_craft" -> quickCraft(request, agent, arguments);
             case "create.inspect_component" -> inspectCreateComponent(request, agent, arguments);
             default -> failure(request, "unknown_tool", "Unknown dynamic tool: " + name);
+        };
+    }
+
+    private JsonObject submitQueuedAction(JsonObject request, AgentBody agent, String name) {
+        if (!agent.acceptQueuedAction()) {
+            return failure(request, "backpressure_queue_full", "Agent action queue is full.");
+        }
+        String actionId = agent.nextActionId();
+        int queuedDepth = agent.queueDepth();
+        CompletableFuture.delayedExecutor(SUBMITTED_ACTION_HOLD_MS, TimeUnit.MILLISECONDS).execute(() ->
+            server.execute(() -> {
+                AgentBody liveAgent = runtimeState.agent(agent.agentId);
+                if (liveAgent != null) {
+                    liveAgent.completeQueuedAction();
+                }
+            })
+        );
+
+        JsonObject result = new JsonObject();
+        result.addProperty("action_id", actionId);
+        result.addProperty("status", "accepted");
+        result.addProperty("lifecycle_status", "queued");
+        result.addProperty("tool_name", name);
+        result.addProperty("queue_depth", queuedDepth);
+        result.addProperty("max_queue_depth", MAX_ACTION_QUEUE_DEPTH);
+
+        JsonObject response = baseResponse(request, "tool.execute_result");
+        response.addProperty("status", "accepted");
+        response.addProperty("action_id", actionId);
+        response.add("result", result);
+        return response;
+    }
+
+    private static boolean queueableTool(String name) {
+        return switch (name) {
+            case "action.move", "action.look_at", "action.mine_visible_block", "action.use", "action.sleep", "chat.say_local" -> true;
+            default -> false;
         };
     }
 
@@ -1998,6 +2045,8 @@ public final class MineLinkEndpointBootstrap {
         private int refSeq = 0;
         private int slotSeq = 0;
         private int containerSeq = 0;
+        private int actionSeq = 0;
+        private int queueDepth = 0;
 
         private AgentBody(String agentId, String displayName, String ownerId, String seedPrompt, FakePlayer entity, BlockPos fixtureBase, String fixtureName) {
             this.agentId = agentId;
@@ -2055,6 +2104,26 @@ public final class MineLinkEndpointBootstrap {
             }
             chatTimestamps.add(now);
             return true;
+        }
+
+        private boolean acceptQueuedAction() {
+            if (queueDepth >= MAX_ACTION_QUEUE_DEPTH) {
+                return false;
+            }
+            queueDepth++;
+            return true;
+        }
+
+        private void completeQueuedAction() {
+            queueDepth = Math.max(0, queueDepth - 1);
+        }
+
+        private int queueDepth() {
+            return queueDepth;
+        }
+
+        private String nextActionId() {
+            return "act_" + agentId + "_" + (++actionSeq);
         }
 
         private BlockPos[] smokeFixturePositions() {

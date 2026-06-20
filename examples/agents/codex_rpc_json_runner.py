@@ -576,6 +576,30 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "expected_min_count": min_count,
             "matching_calls": len(matches),
         }
+    if kind == "tool_call_status":
+        name = str(assertion.get("tool_name", ""))
+        expected_status = str(assertion.get("status", ""))
+        min_count = int(assertion.get("min_count", 1))
+        observed_statuses = []
+        matches = []
+        for record in tool_records(state, global_state):
+            if name and record.get("name") != name:
+                continue
+            payload = tool_result_payload(record.get("result", {}))
+            status = payload.get("status")
+            observed_statuses.append(status)
+            if status == expected_status:
+                matches.append(record)
+        return {
+            "name": assertion.get("name", f"tool_call_status_{name}_{expected_status}"),
+            "kind": kind,
+            "passed": len(matches) >= min_count,
+            "tool_name": name,
+            "expected_status": expected_status,
+            "expected_min_count": min_count,
+            "matching_calls": len(matches),
+            "observed_statuses": observed_statuses,
+        }
     if kind == "tool_call_failed":
         name = str(assertion.get("tool_name", ""))
         expected_reason = assertion.get("reason")
