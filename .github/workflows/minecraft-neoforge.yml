@@ -65,3 +65,4 @@ jobs:
           path: |
             .minelink-dev/
             mod/neoforge/run/logs/
+          include-hidden-files: true

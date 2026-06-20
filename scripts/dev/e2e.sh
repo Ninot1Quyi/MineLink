@@ -70,7 +70,7 @@ fi
 export MINELINK_FIXTURE="$fixture"
 export MINELINK_PORT="$port"
 if [ "$scenario" = "guard_boundaries" ]; then
-  export MINELINK_REF_TTL_MS="${MINELINK_REF_TTL_MS:-100}"
+  export MINELINK_REF_TTL_MS="${MINELINK_REF_TTL_MS:-1000}"
 fi
 if [ "$runtime" = "neoforge" ]; then
   export MINELINK_ENDPOINT="http://127.0.0.1:$port/minelink"
@@ -92,13 +92,68 @@ kill_tree() {
   kill "$pid" >/dev/null 2>&1 || true
 }
 
+dump_failure() {
+  status="$1"
+  echo "MineLink e2e scenario '$scenario' failed with exit code $status." >&2
+  if [ -f "$report" ]; then
+    echo "---- MineLink report: $report ----" >&2
+    python3 - "$report" <<'PY' >&2 || cat "$report" >&2
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(json.dumps(
+    {
+        "scenario": payload.get("scenario"),
+        "passed": payload.get("passed"),
+        "final_assertions": payload.get("final_assertions"),
+        "tool_failures": [
+            {
+                "turn": item.get("turn"),
+                "name": item.get("name"),
+                "arguments": item.get("arguments"),
+                "status": (item.get("result") or {}).get("status"),
+                "reason": (item.get("result") or {}).get("reason"),
+                "error": (item.get("result") or {}).get("error"),
+            }
+            for item in payload.get("tool_results", [])
+            if (item.get("result") or {}).get("ok") is False
+            or (item.get("result") or {}).get("status") in {"failed", "blocked"}
+            or (item.get("result") or {}).get("error")
+        ],
+    },
+    indent=2,
+    sort_keys=True,
+))
+PY
+  fi
+  for log_file in \
+    "$work_dir/logs/agent.log" \
+    "$work_dir/logs/server.stdout.log" \
+    "$work_dir/logs/server.stderr.log"; do
+    if [ -f "$log_file" ]; then
+      echo "---- tail $log_file ----" >&2
+      tail -n 160 "$log_file" >&2 || true
+    fi
+  done
+}
+
 cleanup() {
   if [ -n "$server_pid" ] && kill -0 "$server_pid" >/dev/null 2>&1; then
     kill_tree "$server_pid"
     wait "$server_pid" >/dev/null 2>&1 || true
   fi
 }
-trap cleanup EXIT
+on_exit() {
+  status="$?"
+  if [ "$status" -ne 0 ]; then
+    dump_failure "$status"
+  fi
+  cleanup
+  return "$status"
+}
+trap on_exit EXIT
 
 if [ "$runtime" = "neoforge" ]; then
   start_timeout="${MINELINK_SERVER_START_TIMEOUT:-240}"

@@ -31,3 +31,4 @@ jobs:
         with:
           name: minelink-dev-evidence
           path: .minelink-dev/
+          include-hidden-files: true
