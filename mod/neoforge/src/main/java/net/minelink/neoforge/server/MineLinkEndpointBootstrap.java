@@ -547,6 +547,9 @@ public final class MineLinkEndpointBootstrap {
         if (output.isEmpty()) {
             return failure(request, "missing_material", "No output is available.");
         }
+        if (!canAcceptInventory(agent, output)) {
+            return failure(request, "inventory_full", "No inventory slot is available for the output.");
+        }
         agent.addInventory(stackItemId(output), output.getCount());
         JsonObject taken = stackPayload(output);
         agent.openContainer.output = ItemStack.EMPTY;
@@ -764,6 +767,10 @@ public final class MineLinkEndpointBootstrap {
             }
         }
         return entries;
+    }
+
+    private boolean canAcceptInventory(AgentBody agent, ItemStack stack) {
+        return agent.inventory.containsKey(stackItemId(stack)) || inventoryEntries(agent).size() < 8;
     }
 
     private JsonObject inventoryPayload(AgentBody agent) {
@@ -1083,7 +1090,14 @@ public final class MineLinkEndpointBootstrap {
             BlockPos chestPos = base.south(3);
             level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
             if (level.getBlockEntity(chestPos) instanceof Container container) {
-                container.setItem(0, new ItemStack(Items.OAK_LOG, 1));
+                container.setItem(0, new ItemStack(Items.OAK_LOG, 2));
+                container.setItem(1, new ItemStack(Items.COBBLESTONE, 1));
+                container.setItem(2, new ItemStack(Items.DIRT, 1));
+                container.setItem(3, new ItemStack(Items.STONE, 1));
+                container.setItem(4, new ItemStack(Items.SAND, 1));
+                container.setItem(5, new ItemStack(Items.GRAVEL, 1));
+                container.setItem(6, new ItemStack(Items.WHEAT, 1));
+                container.setItem(7, new ItemStack(Items.STICK, 1));
                 container.setChanged();
             }
             level.setBlockAndUpdate(base.south(4), Blocks.CRAFTING_TABLE.defaultBlockState());

@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 
 scenario="${1:-mine_tree}"
 case "$scenario" in
-  mine_tree | create_smoke | craft_smoke)
+  mine_tree | create_smoke | craft_smoke | craft_negative)
     export MINELINK_SCENARIO="$scenario"
     exec python3 examples/agents/codex_rpc_json_runner.py --scenario "$scenario"
     ;;

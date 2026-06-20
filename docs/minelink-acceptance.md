@@ -32,7 +32,8 @@ Required:
 
 - `npm install` from a clean clone sets up Host, SDK, mock runtime, tests, and scripts.
 - `npm run build`, `npm run typecheck`, `npm test`, and `npm run ci` pass.
-- CI runs build, tests, `mine_tree`, `create_smoke`, and `craft_smoke`, and uploads `.minelink-dev/` evidence.
+- CI runs build, tests, `mine_tree`, `create_smoke`, `craft_smoke`, and
+  `craft_negative`, and uploads `.minelink-dev/` evidence.
 - `scripts/dev/build.sh` records Java/NeoForge readiness as valid JSON.
 - No GitHub token, admission token, Microsoft credential, EULA acceptance, or server secret is committed.
 
@@ -49,9 +50,9 @@ Current status:
 - Real NeoForge startup now uses the committed Gradle wrapper and selects Java 21
   when available.
 - GitHub Actions now has a dedicated real NeoForge smoke workflow for
-  `mine_tree` and `craft_smoke` on push, pull request, manual dispatch, and
-  daily schedule; full release acceptance still requires the later FakePlayer,
-  Create, multi-agent, install, security, and soak gates.
+  `mine_tree`, `craft_smoke`, and `craft_negative` on push, pull request,
+  manual dispatch, and daily schedule; full release acceptance still requires
+  the later FakePlayer, Create, multi-agent, install, security, and soak gates.
 
 ### Gate 1: Real NeoForge Mod Runtime
 
@@ -165,6 +166,7 @@ Evidence:
 - `bash scripts/dev/e2e.sh mine_tree`
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
+- `bash scripts/dev/e2e.sh craft_negative`
 - `examples/codex-rpc/*.replay.jsonl`
 - `.minelink-dev/reports/mine_tree-result.json`
 
@@ -187,14 +189,18 @@ Evidence:
 Current status:
 
 - Mock runtime covers `craft_smoke` on CI.
+- Mock runtime and real NeoForge runtime cover `craft_negative`, which asserts
+  `station_too_far`, `missing_material`, `invalid_recipe`, empty output, and
+  `stale_slot_ref` failure reasons through public MCP tools.
 - Real NeoForge runtime now covers the first chest + crafting-table smoke:
   an oak log is seeded in a real chest block entity, moved through MineLink slot
   refs into the agent inventory, crafted through the server recipe registry into
   oak planks, taken from the output slot, and asserted by
   `observe.inventory`.
 - This is not the full Gate 6 release surface yet. Furnace coverage, negative
-  cases, complete server menu/slot rule parity, and FakePlayer-backed inventory
-  semantics still need separate implementation and evidence.
+  inventory-full cases, complete server menu/slot rule parity, and
+  FakePlayer-backed inventory semantics still need separate implementation and
+  evidence.
 
 ### Gate 7: Create Adapter
 
@@ -302,17 +308,20 @@ The repository currently has an executable baseline for Gates 0, 4 partial, 5 pa
 - `bash scripts/dev/e2e.sh mine_tree`
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
+- `bash scripts/dev/e2e.sh craft_negative`
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
-- `MINELINK_RUNTIME=neoforge bash scripts/dev/start-server.sh` fails correctly on this machine with a Java 21 prerequisite message because local `java -version` is OpenJDK 17.
-- `mod/neoforge` is still a skeleton without a committed Gradle wrapper or real endpoint; real Minecraft local acceptance is blocked until those are added and Java 21 is available. The dev harness generates local `eula=true` and defaults `online-mode=false` before the Java/Gradle checks.
+- `./gradlew --no-daemon build` in `mod/neoforge`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_smoke`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative`
+- `.github/workflows/minecraft-neoforge.yml` starts a real NeoForge dedicated server for each real smoke scenario and uploads `.minelink-dev/` plus server logs.
 
 Not yet accepted as full product:
 
-- Real NeoForge endpoint implementation.
 - Real Minecraft server_agent body.
 - Real Create adapter against Create.
 - Production Gateway admission/rate-limit/auth hardening.
-- Containers/crafting on real server menus.
+- Complete FakePlayer-backed container/crafting semantics on real server menus.
 - Multi-agent social runtime.
 - Director UI/service.
 - Installer.

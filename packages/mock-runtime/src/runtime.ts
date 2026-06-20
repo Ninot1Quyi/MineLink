@@ -568,6 +568,9 @@ export class MockRuntimeServer {
 
     const output = agent.openContainer.output;
     if (!output || output.count <= 0) return runtimeFail("missing_material", "No output is available.");
+    if (!this.canAcceptInventory(agent, output)) {
+      return runtimeFail("inventory_full", "No inventory slot is available for the output.", { item: output.item });
+    }
     agent.inventory[output.item] = (agent.inventory[output.item] ?? 0) + output.count;
     agent.openContainer.output = null;
     this.trace({ event: "container.take_output", agent_id: agent.agentId, item: output.item, count: output.count });
@@ -612,10 +615,6 @@ export class MockRuntimeServer {
         available: agent.inventory["minecraft:oak_log"] ?? 0
       });
     }
-    if (Object.keys(agent.inventory).length >= 8 && !agent.inventory["minecraft:oak_planks"]) {
-      return runtimeFail("inventory_full", "No inventory slot is available for the crafting output.");
-    }
-
     agent.inventory["minecraft:oak_log"] -= neededLogs;
     if (agent.inventory["minecraft:oak_log"] <= 0) delete agent.inventory["minecraft:oak_log"];
     const output = { item: "minecraft:oak_planks", count: count * 4 };
@@ -732,6 +731,10 @@ export class MockRuntimeServer {
       .map(([item, count]) => ({ item, count }));
   }
 
+  private canAcceptInventory(agent: AgentState, stack: ItemStack): boolean {
+    return Boolean(agent.inventory[stack.item] || this.inventoryEntries(agent).length < 8);
+  }
+
   private hasReachableCraftingStation(agent: AgentState): boolean {
     const open = agent.openContainer;
     if (!open || open.kind !== "crafting_table") return false;
@@ -829,7 +832,16 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
         visibleFaces: ["north", "up"],
         container: {
           kind: "chest",
-          slots: [{ item: "minecraft:oak_log", count: 2 }, null, null, null, null, null, null, null]
+          slots: [
+            { item: "minecraft:oak_log", count: 2 },
+            { item: "minecraft:cobblestone", count: 1 },
+            { item: "minecraft:dirt", count: 1 },
+            { item: "minecraft:stone", count: 1 },
+            { item: "minecraft:sand", count: 1 },
+            { item: "minecraft:gravel", count: 1 },
+            { item: "minecraft:wheat", count: 1 },
+            { item: "minecraft:stick", count: 1 }
+          ]
         }
       },
       {

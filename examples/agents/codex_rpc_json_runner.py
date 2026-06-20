@@ -161,7 +161,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a MineLink scenario from Codex JSON-RPC tool-call decisions.")
     parser.add_argument("--scenario", default=os.environ.get("MINELINK_SCENARIO", "mine_tree"))
     parser.add_argument("--replay", default=os.environ.get("MINELINK_CODEX_RPC_REPLAY"))
-    parser.add_argument("--max-turns", type=int, default=int(os.environ.get("MINELINK_AGENT_MAX_TURNS", "16")))
+    parser.add_argument("--max-turns", type=int, default=int(os.environ.get("MINELINK_AGENT_MAX_TURNS", "32")))
     return parser.parse_args()
 
 
@@ -184,6 +184,7 @@ def scenario_objective(scenario: str) -> str:
         "mine_tree": "Use MineLink MCP tools to create a server_agent body, mine one visible oak log, and prove it is in inventory.",
         "create_smoke": "Use MineLink MCP tools to inspect and interact with one reachable Create component.",
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
+        "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
     }
     return objectives.get(scenario, f"Complete MineLink scenario {scenario}.")
 
@@ -344,6 +345,31 @@ def run_assertion(assertion: JsonDict, state: JsonDict) -> JsonDict:
             "passed": bool(matches),
             "tool_name": name,
             "matching_calls": len(matches),
+        }
+    if kind == "tool_call_failed":
+        name = str(assertion.get("tool_name", ""))
+        expected_reason = assertion.get("reason")
+        matches = []
+        observed_reasons = []
+        for record in state.get("tool_results", []):
+            if name and record.get("name") != name:
+                continue
+            result = record.get("result", {})
+            if not is_tool_failure(result):
+                continue
+            reason = result.get("reason")
+            observed_reasons.append(reason)
+            if expected_reason is not None and reason != expected_reason:
+                continue
+            matches.append(record)
+        return {
+            "name": assertion.get("name", f"tool_call_failed_{name}_{expected_reason}"),
+            "kind": kind,
+            "passed": bool(matches),
+            "tool_name": name,
+            "expected_reason": expected_reason,
+            "matching_calls": len(matches),
+            "observed_reasons": observed_reasons,
         }
     if kind == "recipe_available":
         recipe_id = str(assertion.get("recipe_id", ""))

@@ -38,6 +38,11 @@ jobs:
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
+      - name: NeoForge container and crafting negative smoke
+        run: bash scripts/dev/e2e.sh craft_negative
+        env:
+          MINELINK_RUNTIME: neoforge
+          MINELINK_ACCEPT_EULA: "1"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
