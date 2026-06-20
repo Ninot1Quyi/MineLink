@@ -38,7 +38,11 @@ scripts/dev/build.sh
 
 export MINELINK_FIXTURE="$fixture"
 export MINELINK_PORT="$port"
-export MINELINK_ENDPOINT="ws://127.0.0.1:$port"
+if [ "$runtime" = "neoforge" ]; then
+  export MINELINK_ENDPOINT="http://127.0.0.1:$port/minelink"
+else
+  export MINELINK_ENDPOINT="ws://127.0.0.1:$port"
+fi
 export MINELINK_REPORT="$report"
 export MINELINK_LOG_DIR="$work_dir/logs"
 export MINELINK_TRACE="$work_dir/replays/latest-action-trace.jsonl"
@@ -52,10 +56,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [ "$runtime" = "neoforge" ]; then
+  start_timeout="${MINELINK_SERVER_START_TIMEOUT:-240}"
+else
+  start_timeout="${MINELINK_SERVER_START_TIMEOUT:-25}"
+fi
+
 MINELINK_RUNTIME="$runtime" bash scripts/dev/start-server.sh > "$work_dir/logs/server.stdout.log" 2> "$work_dir/logs/server.stderr.log" &
 server_pid="$!"
 
-scripts/dev/wait-for-port.py 127.0.0.1 "$port" 25
+scripts/dev/wait-for-port.py 127.0.0.1 "$port" "$start_timeout"
 
 scripts/dev/run-agent.sh "$scenario" > "$work_dir/logs/agent.log" 2>&1
 

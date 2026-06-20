@@ -12,9 +12,12 @@ interface PendingRequest {
   timer: NodeJS.Timeout;
 }
 
+type TransportKind = "websocket" | "http";
+
 export class MineLinkClient extends EventEmitter {
   private socket?: WebSocket;
   private endpointValue?: string;
+  private transportKind?: TransportKind;
   private pending = new Map<string, PendingRequest>();
   private seq = 0;
   private readonly requestTimeoutMs: number;
@@ -25,6 +28,7 @@ export class MineLinkClient extends EventEmitter {
   }
 
   get connected(): boolean {
+    if (this.transportKind === "http") return Boolean(this.endpointValue);
     return this.socket?.readyState === WebSocket.OPEN;
   }
 
@@ -38,6 +42,13 @@ export class MineLinkClient extends EventEmitter {
       this.close();
     }
 
+    const transportKind = detectTransport(endpoint);
+    if (transportKind === "http") {
+      this.endpointValue = endpoint;
+      this.transportKind = "http";
+      return;
+    }
+
     await new Promise<void>((resolve, reject) => {
       const socket = new WebSocket(endpoint);
       const timer = setTimeout(() => {
@@ -49,6 +60,7 @@ export class MineLinkClient extends EventEmitter {
         clearTimeout(timer);
         this.socket = socket;
         this.endpointValue = endpoint;
+        this.transportKind = "websocket";
         this.installHandlers(socket);
         resolve();
       });
@@ -60,6 +72,10 @@ export class MineLinkClient extends EventEmitter {
   }
 
   async request<T extends JsonObject = JsonObject>(payload: JsonObject & { type: string }): Promise<T> {
+    if (this.transportKind === "http") {
+      return this.httpRequest<T>(payload);
+    }
+
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       throw new Error("MineLink runtime is not connected");
     }
@@ -87,6 +103,7 @@ export class MineLinkClient extends EventEmitter {
     }
     this.socket = undefined;
     this.endpointValue = undefined;
+    this.transportKind = undefined;
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer);
       pending.reject(new Error(`MineLink client closed before ${id} completed`));
@@ -126,6 +143,7 @@ export class MineLinkClient extends EventEmitter {
       if (this.socket !== socket) return;
       this.socket = undefined;
       this.endpointValue = undefined;
+      this.transportKind = undefined;
       for (const pending of this.pending.values()) {
         clearTimeout(pending.timer);
         pending.reject(new Error("MineLink runtime connection closed"));
@@ -134,4 +152,44 @@ export class MineLinkClient extends EventEmitter {
       this.emit("close");
     });
   }
+
+  private async httpRequest<T extends JsonObject = JsonObject>(payload: JsonObject & { type: string }): Promise<T> {
+    if (!this.endpointValue) {
+      throw new Error("MineLink runtime is not connected");
+    }
+
+    const id = `req_${Date.now()}_${++this.seq}`;
+    const envelope = { id, ...payload };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+    try {
+      const response = await fetch(this.endpointValue, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(envelope),
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        throw new Error(`MineLink HTTP request failed: ${response.status} ${response.statusText}`);
+      }
+      const parsed = (await response.json()) as unknown;
+      const envelopeResult = MineLinkEnvelopeSchema.safeParse(parsed);
+      if (!envelopeResult.success) {
+        throw new Error(`Invalid MineLink HTTP envelope: ${envelopeResult.error.message}`);
+      }
+      const data = envelopeResult.data as JsonObject & { id?: string };
+      if (data.id !== id) {
+        throw new Error(`MineLink HTTP response id mismatch: expected ${id}, got ${data.id ?? "<none>"}`);
+      }
+      return data as T;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+function detectTransport(endpoint: string): TransportKind {
+  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) return "http";
+  return "websocket";
 }

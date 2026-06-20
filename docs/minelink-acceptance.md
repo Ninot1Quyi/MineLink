@@ -46,7 +46,9 @@ Evidence:
 Current status:
 
 - Implemented for the TypeScript/mock baseline.
-- Real NeoForge build is blocked on this machine by Java 17; Java 21 is required.
+- Real NeoForge startup now uses the committed Gradle wrapper and selects Java 21
+  when available; the remaining acceptance requirement is a passing real
+  `MINELINK_RUNTIME=neoforge` e2e report.
 
 ### Gate 1: Real NeoForge Mod Runtime
 
@@ -54,8 +56,10 @@ Required:
 
 - `mod/neoforge` builds on Java 21 with Minecraft `1.21.1` and NeoForge `21.1.233`.
 - `./gradlew runServer` prints `MineLink ready`.
-- The Mod opens a configurable MineLink Protocol endpoint.
-- Endpoint supports `hello`, `connect`, `agent.birth`, `agent.observe`, `agent.action`, `tool.list`, `tool.query`, `tool.execute`.
+- The Mod opens a configurable loopback MineLink Protocol endpoint.
+- Endpoint supports `hello`, `connect`, `agent.birth`, `tool.list`, and `tool.execute` for the first real smoke tools.
+- The first real smoke tools are `observe.self`, `observe.scene`, `observe.inventory`, `action.move`, `action.look_at`, and `action.mine_visible_block`.
+- `container.*`, `craft.*`, `create.*`, persistence, social runtime, and a real FakePlayer body remain later gates; they must not be claimed by the first smoke.
 - `online-mode=true` returns `unsupported_online_auth` and does not create an agent.
 - `online-mode=false` supports open admission plus server-side rate and agent-count limits.
 - Server logs and action trace survive clean server stop/restart.
@@ -66,10 +70,12 @@ Evidence:
 - Dedicated server log.
 - Real protocol trace.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree`.
+- GitHub Actions artifact from `.github/workflows/minecraft-neoforge.yml`.
 
 Blocking rule:
 
 - Local dev automation defaults `MINELINK_ACCEPT_EULA=1` and writes `mod/neoforge/run/eula.txt` with `eula=true` so Minecraft server startup is not blocked during agent validation. Set `MINELINK_ACCEPT_EULA=0` when testing the no-EULA failure path.
+- Local and GitHub validation must use `online-mode=false`; `online-mode=true` remains a negative auth test until agent-owned online authentication is implemented.
 
 ### Gate 2: server_agent Body and Guard Pipeline
 

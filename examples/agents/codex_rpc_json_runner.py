@@ -144,6 +144,8 @@ def main() -> None:
         "final_inventory": state.get("last_inventory"),
         "evidence_paths": {
             "server_log": f"{log_dir}/server.log",
+            "server_stdout_log": f"{log_dir}/server.stdout.log",
+            "server_stderr_log": f"{log_dir}/server.stderr.log",
             "host_log": f"{log_dir}/host.log",
             "agent_log": f"{log_dir}/agent.log",
             "action_trace": trace_path,

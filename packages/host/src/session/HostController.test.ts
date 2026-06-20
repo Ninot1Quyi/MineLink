@@ -19,7 +19,7 @@ describe("HostController", () => {
   });
 
   it("does not mask connected runtime tool_list failures with local fallback", async () => {
-    const server = new WebSocketServer({ host: "127.0.0.1", port: 25712 });
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
     server.on("connection", (socket: WebSocket) => {
       socket.on("message", (raw) => {
         const request = JSON.parse(raw.toString());
@@ -39,9 +39,11 @@ describe("HostController", () => {
       });
     });
     await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("WebSocket server address is unavailable");
 
     const controller = new HostController();
-    await controller.connectServer({ endpoint: "ws://127.0.0.1:25712" });
+    await controller.connectServer({ endpoint: `ws://127.0.0.1:${address.port}` });
     const result = await controller.toolList({});
     expect(result).toMatchObject({ ok: false, reason: "runtime_unavailable" });
     controller.close();

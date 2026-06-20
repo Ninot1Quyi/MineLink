@@ -13,9 +13,9 @@ This repository currently delivers the Phase 0/1 engineering baseline:
 - Agent-local SDK surface.
 - Codex JSON-RPC e2e harness that still drives MineLink through public MCP tools.
 - Mock Minecraft runtime for deterministic CI and local e2e validation.
-- NeoForge 1.21.1 mod skeleton and product acceptance gates.
+- NeoForge 1.21.1 dev server wrapper, loopback MineLink Protocol smoke endpoint, and product acceptance gates.
 
-The mock runtime is not a replacement for the NeoForge server. It is the repeatable dev harness used before running a real Minecraft server, because real server startup requires Java 21, NeoForge assets, and a completed Mod endpoint.
+The mock runtime is not a replacement for the NeoForge server. It is the repeatable fast harness used before running a real Minecraft server. Real Minecraft validation runs through the NeoForge Mod endpoint and remains the authority for product acceptance.
 
 ## Quick Start
 
@@ -29,6 +29,8 @@ bash scripts/dev/e2e.sh craft_smoke
 The e2e harness writes evidence under `.minelink-dev/<scenario>/`:
 
 - `logs/server.log`
+- `logs/server.stdout.log`
+- `logs/server.stderr.log`
 - `logs/host.log`
 - `logs/agent.log`
 - `replays/latest-action-trace.jsonl`
@@ -65,7 +67,7 @@ Dynamic game tools are discovered lazily with `tool_list` and `tool_query`, then
 
 ## Real NeoForge Runtime
 
-MineLink targets Minecraft `1.21.1`, NeoForge `21.1.233`, and Java 21. The current automated tests use the mock runtime; a real NeoForge run should use:
+MineLink targets Minecraft `1.21.1`, NeoForge `21.1.233`, and Java 21. A real NeoForge server run should use:
 
 ```bash
 MINELINK_RUNTIME=neoforge bash scripts/dev/start-server.sh
@@ -73,5 +75,19 @@ MINELINK_RUNTIME=neoforge bash scripts/dev/start-server.sh
 
 For local agent validation, the dev harness writes `mod/neoforge/run/eula.txt`
 with `eula=true` and generates `server.properties` with `online-mode=false`.
-That path still refuses to proceed when Java 21 or the NeoForge wrapper is
-missing.
+On macOS it automatically selects a Java 21 JDK when the default `java` points
+to an older runtime.
+
+Run the first real game smoke with:
+
+```bash
+MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree
+```
+
+This starts the NeoForge dedicated dev server, waits for the Mod's loopback HTTP
+MineLink Protocol endpoint, runs the MCP Host, and drives the scenario through
+the Codex JSON-RPC replay harness. The current real smoke validates connection,
+birth, observation, movement, looking, mining one visible block in the real
+world, and inventory assertion. Full FakePlayer bodies, container/crafting,
+Create adapter behavior, multi-agent social runtime, and long soak tests remain
+separate acceptance gates in `docs/minelink-acceptance.md`.
