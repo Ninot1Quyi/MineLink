@@ -1368,15 +1368,6 @@ public final class MineLinkEndpointBootstrap {
         }
     }
 
-    private static boolean setOptionalBlock(ServerLevel level, BlockPos pos, String blockId) {
-        Optional<Block> block = blockById(blockId);
-        if (block.isEmpty()) {
-            return false;
-        }
-        level.setBlockAndUpdate(pos, block.get().defaultBlockState());
-        return true;
-    }
-
     private static BlockPos portalChestPos(BlockPos anchor) {
         return anchor.west(2).above();
     }
@@ -1457,9 +1448,6 @@ public final class MineLinkEndpointBootstrap {
             entity.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
 
             AgentBody body = new AgentBody(agentId, displayName, ownerId, seedPrompt, entity, base.immutable(), fixtureName);
-            if (fixtureName.equals("create_smoke") && itemById("create:wrench") != Items.AIR) {
-                body.addInventory("create:wrench", 1);
-            }
             agents.put(agentId, body);
             return body;
         }
@@ -1501,16 +1489,24 @@ public final class MineLinkEndpointBootstrap {
                 }
             }
             level.setBlockAndUpdate(base.below(), Blocks.GRASS_BLOCK.defaultBlockState());
-            if (!setOptionalBlock(level, base.east(3), "create:depot")) {
-                level.setBlockAndUpdate(base.east(3), Blocks.COPPER_BLOCK.defaultBlockState());
+            level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());
+            BlockPos chestPos = base.south(3);
+            level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
+            if (level.getBlockEntity(chestPos) instanceof Container container) {
+                setOptionalItem(container, 0, "create:shaft", 1);
+                setOptionalItem(container, 1, "create:wrench", 1);
+                setOptionalItem(container, 2, "create:cogwheel", 1);
+                setOptionalItem(container, 3, "create:depot", 1);
+                container.setChanged();
             }
-            if (!setOptionalBlock(level, base.east(4), "create:shaft")) {
-                level.setBlockAndUpdate(base.east(4), Blocks.COPPER_BLOCK.defaultBlockState());
+        }
+
+        private static void setOptionalItem(Container container, int slot, String itemId, int count) {
+            Item item = itemById(itemId);
+            if (item == Items.AIR) {
+                return;
             }
-            if (!setOptionalBlock(level, base.east(5), "create:cogwheel")) {
-                level.setBlockAndUpdate(base.east(5), Blocks.COPPER_BLOCK.defaultBlockState());
-            }
-            level.setBlockAndUpdate(base.east(6), Blocks.OAK_LOG.defaultBlockState());
+            container.setItem(slot, new ItemStack(item, count));
         }
 
         private static void seedGuardFixture(ServerLevel level, BlockPos base) {
@@ -1651,9 +1647,8 @@ public final class MineLinkEndpointBootstrap {
             if (fixtureName.equals("create_smoke")) {
                 return new BlockPos[] {
                     fixtureBase.east(3),
-                    fixtureBase.east(4),
-                    fixtureBase.east(5),
-                    fixtureBase.east(6)
+                    fixtureBase.east(3).above(),
+                    fixtureBase.south(3)
                 };
             }
             return new BlockPos[] {
@@ -1690,6 +1685,9 @@ public final class MineLinkEndpointBootstrap {
             }
             if (fixtureName.equals("create_smoke") && id.startsWith("create:")) {
                 extra.add("minelink:create_fixture");
+            }
+            if (fixtureName.equals("create_smoke") && pos.equals(fixtureBase.east(3)) && id.equals("minecraft:stone")) {
+                extra.add("minelink:create_build_anchor");
             }
             return extra;
         }

@@ -72,8 +72,9 @@ Required:
   by NeoForge `FakePlayer` and vanilla `ServerPlayerGameMode.useItemOn/useItem`
   after MineLink observed-ref, reach, visibility, and inventory checks.
 - The Create smoke path adds optional Create dependencies and verifies
-  `create.inspect_component` plus wrench `action.use` against visible component
-  refs on a real NeoForge dev server.
+  chest material withdrawal, Create component placement, `create.inspect_component`,
+  and wrench `action.use` against visible component refs on a real NeoForge dev
+  server.
 - The guard-boundaries smoke path adds `action.sleep` and deliberate negative
   actions that prove unobserved refs, too-far refs, expired refs, missing
   materials, hidden fixture blocks, and vanilla sleep rejections produce
@@ -255,18 +256,21 @@ Evidence:
 
 - `bash scripts/dev/e2e.sh create_smoke` against mock.
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke` against a real Create dev server.
-- Fixture world with depot, belt, press, shaft, cogwheel, wrench, and material chest.
+- Fixture world with a visible material chest, a visible build anchor, Create
+  shaft/cogwheel/depot/wrench materials, and a placed Create component produced
+  through public MCP tools.
 
 Current status:
 
 - Partial real coverage exists for optional Create dependency loading, a real
-  fixture with depot/shaft/cogwheel, registry-backed component inspection, and
+  material chest containing Create items, chest-to-inventory transfer, native
+  `block.place` of `create:shaft`, registry-backed component inspection, and
   wrench use through the same FakePlayer-backed vanilla interaction path as
   other item use.
 - This is not the full Gate 7 release surface yet. Belt/press behavior,
-  rotation network speed/stress extraction, blockage diagnosis, material chest
-  flow, Ponder/overlay limitations, and broader Create component parity still
-  need separate implementation and evidence.
+  rotation network speed/stress extraction, blockage diagnosis, Ponder/overlay
+  limitations, and broader Create component parity still need separate
+  implementation and evidence.
 
 ### Gate 8: Multi-agent, A2A, and Social Runtime
 

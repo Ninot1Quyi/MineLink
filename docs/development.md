@@ -68,9 +68,11 @@ real server_agent cannot act on unobserved refs, too-far refs, expired refs,
 missing materials, or daytime sleep, and that a fixture-hidden diamond ore is
 not returned by `observe.scene` while the opaque wall remains visible. The
 `create_smoke` scenario uses the opt-in Create adapter profile, loads Create in
-the real NeoForge dev server, inspects a visible `create:depot`, then uses the
-agent's own `create:wrench` on a visible `create:shaft` through the same
-FakePlayer-backed vanilla interaction path as other item use. The
+the real NeoForge dev server, moves `create:shaft` and `create:wrench` from a
+visible chest into the agent inventory, places the shaft on a visible build
+anchor through vanilla `useItemOn`, inspects the placed shaft, then uses the
+wrench on the same visible component through the same FakePlayer-backed vanilla
+interaction path as other item use. The
 `portal_coop` scenario validates three server_agent bodies using public MCP
 tools to take shared materials, place a
 14-block obsidian frame through vanilla FakePlayer interaction, ignite it with

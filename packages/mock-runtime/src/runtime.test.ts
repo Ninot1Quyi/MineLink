@@ -114,7 +114,7 @@ describe("MockRuntimeServer", () => {
     client.close();
   });
 
-  it("returns structured Create component observations and valid JSONL traces", async () => {
+  it("places and inspects a Create component from chest materials with valid JSONL traces", async () => {
     const temp = mkdtempSync(join(tmpdir(), "minelink-runtime-test-"));
     const tracePath = join(temp, "latest-action-trace.jsonl");
     const server = new MockRuntimeServer({
@@ -132,18 +132,109 @@ describe("MockRuntimeServer", () => {
     const agentId = String(birth.agent_id);
     const observe = await request(client, { type: "tool.execute", agent_id: agentId, name: "observe.scene", arguments: {} });
     const visibleScene = observe.visible_scene as { visible_blocks: Array<{ block_ref: string; id: string; tags: string[] }> };
-    const depot = visibleScene.visible_blocks.find((block) => block.id === "create:depot")!;
+    const chest = visibleScene.visible_blocks.find((block) => block.id === "minecraft:chest")!;
+    const anchor = visibleScene.visible_blocks.find((block) => block.tags.includes("minelink:create_build_anchor"))!;
+
+    const chestOpen = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.open",
+      arguments: { block_ref: chest.block_ref }
+    });
+    const chestSnapshot = chestOpen.result as ContainerSnapshot;
+    const shaftSlot = chestSnapshot.slots.find((slot) => slot.item === "create:shaft")!;
+    const firstInventorySlot = chestSnapshot.inventory_slots.find((slot) => slot.item === null)!;
+    const moveShaft = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: shaftSlot.slot_ref, to_slot_ref: firstInventorySlot.slot_ref, count: 1 }
+    });
+    expect(moveShaft).toMatchObject({ ok: true, result: { moved: { item: "create:shaft", count: 1 } } });
+
+    const moveShaftResult = moveShaft.result as { container: ContainerSnapshot };
+    const afterShaft = moveShaftResult.container;
+    const wrenchSlot = afterShaft.slots.find((slot) => slot.item === "create:wrench")!;
+    const secondInventorySlot = afterShaft.inventory_slots.find((slot) => slot.item === null)!;
+    const moveWrench = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: wrenchSlot.slot_ref, to_slot_ref: secondInventorySlot.slot_ref, count: 1 }
+    });
+    expect(moveWrench).toMatchObject({ ok: true, result: { moved: { item: "create:wrench", count: 1 } } });
+
+    const place = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "block.place",
+      arguments: { target_ref: anchor.block_ref, face: "up", item: "create:shaft" }
+    });
+    expect(place).toMatchObject({ ok: true, result: { placed: { id: "create:shaft" } } });
+
+    const afterPlace = await request(client, { type: "tool.execute", agent_id: agentId, name: "observe.scene", arguments: {} });
+    const sceneAfterPlace = afterPlace.visible_scene as { visible_blocks: Array<{ block_ref: string; id: string; tags: string[] }> };
+    const shaft = sceneAfterPlace.visible_blocks.find((block) => block.id === "create:shaft")!;
     const inspect = await request(client, {
       type: "tool.execute",
       agent_id: agentId,
       name: "create.inspect_component",
-      arguments: { block_ref: depot.block_ref }
+      arguments: { block_ref: shaft.block_ref }
     });
-    expect(inspect).toMatchObject({ ok: true, result: { id: "create:depot" } });
+    expect(inspect).toMatchObject({ ok: true, result: { id: "create:shaft" } });
+
+    const use = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.use",
+      arguments: { target_ref: shaft.block_ref, item: "create:wrench", face: "up" }
+    });
+    expect(use).toMatchObject({ ok: true, result: { used: true } });
 
     const lines = readFileSync(tracePath, "utf8").trim().split("\n");
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.map((line) => JSON.parse(line)).some((event) => event.event === "agent.observe")).toBe(true);
+    client.close();
+  });
+
+  it("rejects non-block Create items during mock placement", async () => {
+    const server = new MockRuntimeServer({ port: 25682, fixture: "create_smoke" });
+    servers.push(server);
+    await server.start();
+
+    const client = await connect(server.endpoint());
+    await request(client, { type: "connect", server_address: "dev.local", owner: { name: "test" } });
+    const birth = await request(client, { type: "agent.birth", seed_prompt: "test", body_type: "server_agent" });
+    const agentId = String(birth.agent_id);
+    const observe = await request(client, { type: "tool.execute", agent_id: agentId, name: "observe.scene", arguments: {} });
+    const visibleScene = observe.visible_scene as { visible_blocks: Array<{ block_ref: string; id: string; tags: string[] }> };
+    const chest = visibleScene.visible_blocks.find((block) => block.id === "minecraft:chest")!;
+    const anchor = visibleScene.visible_blocks.find((block) => block.tags.includes("minelink:create_build_anchor"))!;
+
+    const chestOpen = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.open",
+      arguments: { block_ref: chest.block_ref }
+    });
+    const chestSnapshot = chestOpen.result as ContainerSnapshot;
+    const wrenchSlot = chestSnapshot.slots.find((slot) => slot.item === "create:wrench")!;
+    const inventorySlot = chestSnapshot.inventory_slots.find((slot) => slot.item === null)!;
+    const moveWrench = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: wrenchSlot.slot_ref, to_slot_ref: inventorySlot.slot_ref, count: 1 }
+    });
+    expect(moveWrench).toMatchObject({ ok: true, result: { moved: { item: "create:wrench", count: 1 } } });
+
+    const placeWrench = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "block.place",
+      arguments: { target_ref: anchor.block_ref, face: "up", item: "create:wrench" }
+    });
+    expect(placeWrench).toMatchObject({ ok: false, reason: "unsupported_capability" });
     client.close();
   });
 

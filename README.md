@@ -110,8 +110,10 @@ materials, and daytime sleep through server-side rules, and a three-agent portal
 cooperation path. The portal path uses FakePlayer-backed vanilla
 `useItemOn`/`useItem` for block placement and ignition after MineLink ref,
 reach, visibility, and inventory checks. The Create smoke opt-in profile loads
-Create and verifies `create.inspect_component` plus a wrench `action.use`
-against visible component refs; it remains a partial adapter gate, not an
-automation shortcut. Complete server menu coverage, multi-agent social runtime,
-and long soak tests remain separate acceptance gates in
+Create and verifies a normal material flow: withdraw `create:shaft` and
+`create:wrench` from a visible chest, place the shaft through vanilla
+`useItemOn`, inspect the placed component, then use the wrench against the
+visible component ref. It remains a partial adapter gate, not an automation
+shortcut. Complete server menu coverage, multi-agent social runtime, and long
+soak tests remain separate acceptance gates in
 `docs/minelink-acceptance.md`.

@@ -20,6 +20,16 @@ type SlotValidation = { ok: true; slot: SlotBinding } | ({ ok: false } & Runtime
 type ContainerKind = "chest" | "crafting_table";
 type SlotArea = "container" | "inventory" | "output";
 
+const PLACEABLE_BLOCK_ITEMS = new Set([
+  "create:shaft",
+  "create:cogwheel",
+  "create:depot",
+  "minecraft:obsidian",
+  "minecraft:cobblestone",
+  "minecraft:dirt",
+  "minecraft:stone"
+]);
+
 interface MockRuntimeOptions {
   fixture?: FixtureName;
   port?: number;
@@ -253,7 +263,7 @@ export class MockRuntimeServer {
       position: this.fixture === "portal_coop" ? [1.5, 66, -2] : [0, 64, 0],
       yaw: 0,
       pitch: 0,
-      inventory: this.fixture === "create_smoke" ? { "create:wrench": 1 } : {},
+      inventory: {},
       refs: new Map(),
       queueDepth: 0,
       nextActionId: 0,
@@ -814,6 +824,9 @@ export class MockRuntimeServer {
     const refState = this.validateRef(agent, targetRef);
     if (!refState.ok) return refState;
     if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside placement range.");
+    if (!isPlaceableBlockItem(item)) {
+      return runtimeFail("unsupported_capability", "block.place requires a placeable block item.");
+    }
     if ((agent.inventory[item] ?? 0) <= 0) {
       return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
     }
@@ -829,12 +842,7 @@ export class MockRuntimeServer {
       return runtimeFail("blocked", "The placement target is already occupied.");
     }
 
-    const block = {
-      id: item,
-      pos,
-      tags: item === "minecraft:obsidian" ? ["minecraft:obsidian"] : [],
-      visibleFaces: ["north", "south", "east", "west", "up"]
-    };
+    const block = placedBlock(item, pos);
     this.blocks.push(block);
     agent.inventory[item] -= 1;
     if (agent.inventory[item] <= 0) delete agent.inventory[item];
@@ -1049,38 +1057,26 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
   if (fixture === "create_smoke") {
     return [
       {
-        id: "create:depot",
+        id: "minecraft:stone",
         pos: [3, 64, 0],
-        tags: ["create:component", "create:depot"],
+        tags: ["minecraft:stone", "minelink:create_build_anchor"],
         visibleFaces: ["north", "up"],
-        metadata: { create: { kind: "depot", stress: "none", blocked: false } }
+        metadata: { fixture: "create_build_anchor" }
       },
       {
-        id: "create:belt",
-        pos: [5, 64, 0],
-        tags: ["create:component", "create:belt"],
+        id: "minecraft:chest",
+        pos: [0, 64, 3],
+        tags: ["minecraft:chest", "minelink:container"],
         visibleFaces: ["north", "up"],
-        metadata: { create: { kind: "belt", speed: 0, direction: "east" } }
-      },
-      {
-        id: "create:shaft",
-        pos: [4, 64, 0],
-        tags: ["create:component", "create:shaft"],
-        visibleFaces: ["north", "up"],
-        metadata: { create: { kind: "shaft", speed: 0, stress: "unknown" } }
-      },
-      {
-        id: "create:cogwheel",
-        pos: [6, 64, 0],
-        tags: ["create:component", "create:cogwheel"],
-        visibleFaces: ["north", "up"],
-        metadata: { create: { kind: "cogwheel", speed: 0, stress: "unknown" } }
-      },
-      {
-        id: "minecraft:oak_log",
-        pos: [7, 64, 0],
-        tags: ["minecraft:logs", "minecraft:mineable/axe"],
-        visibleFaces: ["west", "north", "up"]
+        container: {
+          kind: "chest",
+          slots: [
+            { item: "create:shaft", count: 1 },
+            { item: "create:wrench", count: 1 },
+            { item: "create:cogwheel", count: 1 },
+            { item: "create:depot", count: 1 }
+          ]
+        }
       }
     ];
   }
@@ -1111,6 +1107,29 @@ function samePos(a: Vec3, b: Vec3): boolean {
 
 function round(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function placedBlock(item: string, pos: Vec3): BlockState {
+  if (item.startsWith("create:")) {
+    const kind = item.slice("create:".length);
+    return {
+      id: item,
+      pos,
+      tags: ["create:component", item],
+      visibleFaces: ["north", "south", "east", "west", "up"],
+      metadata: { create: { kind, stress: "unknown", speed: "unknown", blocked: false } }
+    };
+  }
+  return {
+    id: item,
+    pos,
+    tags: item === "minecraft:obsidian" ? ["minecraft:obsidian"] : [],
+    visibleFaces: ["north", "south", "east", "west", "up"]
+  };
+}
+
+function isPlaceableBlockItem(item: string): boolean {
+  return PLACEABLE_BLOCK_ITEMS.has(item);
 }
 
 export function parseFixture(value: string | undefined): FixtureName {
