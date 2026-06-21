@@ -664,6 +664,13 @@ Current status:
   about 3m01s, `stopping` for about 1m02s, then `snapshotting` for about 13m06s
   with 0% snapshot progress before manual cancellation. This is prebuild
   stability evidence, not an accepted baseline.
+- 2026-06-21 run `27916382301` / prebuild
+  `019eebd9-8f2b-717b-8a71-f8275561edb3` passed on commit
+  `59972e0f83b5ca0fa524ff50bca39b8b7af2e393`. The phase summary recorded about
+  11m09s total observed time, including about 2m01s running, 2m03s stopping,
+  and 6m04s snapshotting, with final `PREBUILD_PHASE_COMPLETED:100` and a
+  6.22 GB snapshot. The workflow also preserved a 32 KB environment log capture
+  while the transient environment was still available.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
   Ona Platform Codex readbacks. The checked-in Ona AI automation runs
   sequentially and requires implementation readback before Linear status sync,
