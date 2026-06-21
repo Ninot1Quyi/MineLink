@@ -236,7 +236,7 @@ Required:
 
 Evidence:
 
-- Fixture worlds for opaque wall, glass, leaves, short grass, fence, water, and tree.
+- Fixture worlds for opaque wall, glass, leaves, torch, fence, water, and tree.
 - Assertion reports prove hidden blocks are not returned.
 
 Current status:
@@ -246,16 +246,14 @@ Current status:
   ore behind the wall.
 - `perception_shapes` adds repeatable mock and real NeoForge evidence for
   visible non-opaque classifications: glass and oak leaves carry
-  `minelink:vision_translucent`, short grass carries
+  `minelink:vision_translucent`, torch carries
   `minelink:vision_decorative`, water carries `minelink:vision_fluid`, oak
   fence carries `minelink:vision_partial_occluder`, stone carries
   `minelink:vision_opaque` and `minelink:opaque_fixture`, and the diamond ore
   behind that stone wall remains absent from `observe.scene`.
-- Real NeoForge decorative/fluid perception no longer depends on the exact
-  seeded fixture coordinate for short grass: the mod now classifies decorative
-  visible blocks from empty collision shape and fluid blocks from `FluidState`,
-  which covers fixture drift such as water updates replacing the originally
-  seeded grass block.
+- Real NeoForge decorative/fluid perception uses stable native block state:
+  torch proves empty-collision decorative classification and water proves
+  `FluidState` classification without relying on random world vegetation.
 - This is not the full Gate 3 release surface yet. General raycast/shape-based
   occlusion for arbitrary block shapes, complex modded blocks, and long-running
   perception cache behavior remains to be implemented.

@@ -3752,7 +3752,7 @@ public final class MineLinkEndpointBootstrap {
             }
             level.setBlockAndUpdate(base.east(2), Blocks.GLASS.defaultBlockState());
             level.setBlockAndUpdate(base.east(2).above(), Blocks.OAK_LEAVES.defaultBlockState());
-            level.setBlockAndUpdate(base.south(2), Blocks.SHORT_GRASS.defaultBlockState());
+            level.setBlockAndUpdate(base.south(2), Blocks.TORCH.defaultBlockState());
             level.setBlockAndUpdate(base.south(3), Blocks.WATER.defaultBlockState());
             level.setBlockAndUpdate(base.south(4), Blocks.OAK_FENCE.defaultBlockState());
             level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());

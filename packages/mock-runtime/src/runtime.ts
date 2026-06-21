@@ -2194,9 +2194,9 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
         visibleFaces: ["west", "north", "up"]
       },
       {
-        id: "minecraft:short_grass",
+        id: "minecraft:torch",
         pos: [0, 64, 2],
-        tags: ["minecraft:short_grass", "minelink:vision_decorative"],
+        tags: ["minecraft:torch", "minelink:vision_decorative"],
         visibleFaces: ["north", "up"]
       },
       {
