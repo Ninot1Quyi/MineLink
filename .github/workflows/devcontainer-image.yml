@@ -15,7 +15,7 @@ on:
       - "vitest.config.ts"
       - "packages/**"
       - "examples/**"
-      - "scripts/dev/**"
+      - "scripts/dev/check-devcontainer-image-access.sh"
       - "mod/neoforge/build.gradle"
       - "mod/neoforge/settings.gradle"
       - "mod/neoforge/gradle.properties"

@@ -617,8 +617,11 @@ Current status:
   builds publish immutable `sha-*` tags plus sanitized branch tags; `main`
   additionally publishes `main` and `latest`. Immutable tags anchor evidence,
   while branch tags are moving cache sources for the matching work line. This
-  is a reproducible cache-prewarm path, not a hand-uploaded
-  local container. It must not contain EULA files, tokens, secrets,
+  is a reproducible cache-prewarm path, not a hand-uploaded local container.
+  The image workflow trigger is limited to image-sensitive paths plus the image
+  access checker, so ordinary agent-factory, Linear watcher, dispatch, or
+  video-review script changes do not rebuild the GHCR image or force a new
+  prebuild baseline. The image must not contain EULA files, tokens, secrets,
   `mod/neoforge/run` state, or local generated server output. Because NeoForge
   project-local `.gradle` and generated workspace outputs are
   checkout-sensitive, this image does not replace the Ona prebuild hard gate and

@@ -48,7 +48,6 @@ ARG MINELINK_PREWARM_GRADLE=1
 COPY --chown=node:node package.json package-lock.json tsconfig.base.json tsconfig.json vitest.config.ts ./
 COPY --chown=node:node packages ./packages
 COPY --chown=node:node examples ./examples
-COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node mod/neoforge/build.gradle mod/neoforge/settings.gradle mod/neoforge/gradle.properties mod/neoforge/gradlew mod/neoforge/gradlew.bat ./mod/neoforge/
 COPY --chown=node:node mod/neoforge/gradle ./mod/neoforge/gradle
 COPY --chown=node:node mod/neoforge/src ./mod/neoforge/src

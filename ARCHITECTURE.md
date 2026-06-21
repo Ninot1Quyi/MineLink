@@ -458,7 +458,11 @@ line. After publishing, the workflow runs
 `scripts/dev/check-devcontainer-image-access.sh` against the immutable `sha-*`
 tag with authenticated GHCR access and Docker runtime smoke. The same checker
 can be run with `--require-anonymous` when an unauthenticated Ona pull path is
-being evaluated. This is a cache distribution mechanism only. It must not
+being evaluated. The workflow trigger is intentionally limited to
+image-sensitive paths plus the image access checker; ordinary agent-factory,
+Linear watcher, dispatch, or video-review script changes should not rebuild the
+GHCR image or force a new prebuild baseline. This is a cache distribution
+mechanism only. It must not
 contain committed EULA files, secrets, admission tokens, Microsoft credentials,
 local `mod/neoforge/run` state, or a hand-uploaded local container snapshot. It
 also cannot be treated as proof that NeoForge generated workspace outputs are
