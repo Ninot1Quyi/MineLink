@@ -30,6 +30,7 @@ const defaults = {
   branch: process.env.MINELINK_BRANCH ?? "",
   commit: process.env.MINELINK_COMMIT ?? "",
   prUrl: process.env.MINELINK_PR_URL ?? "",
+  prReport: ".minelink-dev/reports/agent-factory-pr.md",
   ciUrl: process.env.MINELINK_CI_URL ?? "",
   githubStatusUrl: process.env.MINELINK_GITHUB_STATUS_URL ?? "",
   linearStatusUrl: process.env.MINELINK_LINEAR_STATUS_URL ?? "",
@@ -86,6 +87,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--branch") args.branch = readValue();
   else if (arg === "--commit") args.commit = readValue();
   else if (arg === "--pr-url") args.prUrl = readValue();
+  else if (arg === "--pr-report") args.prReport = readValue();
   else if (arg === "--ci-url") args.ciUrl = readValue();
   else if (arg === "--github-status-url") args.githubStatusUrl = readValue();
   else if (arg === "--linear-status-url") args.linearStatusUrl = readValue();
@@ -355,12 +357,14 @@ const summaryInfo = await fileInfo(args.acceptanceSummary);
 const mp4Info = await fileInfo(args.acceptanceMp4);
 const reviewInfo = await fileInfo(args.videoReview);
 const releaseInfo = await fileInfo(args.videoReleaseGate);
+const prReportInfo = await fileInfo(args.prReport);
 const linearSyncInfo = await fileInfo(args.linearSyncReport);
 const secretPreflightInfo = await fileInfo(args.secretPreflight);
 const implementationReadbackInfo = await fileInfo(args.onaImplementationReadback);
 const verifierReadbackInfo = await fileInfo(args.onaVerifierReadback);
 const releaseText = await readText(args.videoReleaseGate);
 const reviewText = await readText(args.videoReview);
+const prReportText = await readText(args.prReport);
 const linearSyncText = await readText(args.linearSyncReport);
 const implementationReadbackText = await readText(args.onaImplementationReadback);
 const verifierReadbackText = await readText(args.onaVerifierReadback);
@@ -378,6 +382,9 @@ if (normalizeStatus(args.onaPrebuildStatus) === "missing" && autoPrebuild?.statu
 const autoPrebuildEvidence = Array.isArray(autoPrebuild?.evidence) ? autoPrebuild.evidence : [];
 const autoPrebuildWarnings = Array.isArray(autoPrebuild?.warnings) ? autoPrebuild.warnings : [];
 const autoPrebuildBlocker = typeof autoPrebuild?.blocker === "string" ? autoPrebuild.blocker : "";
+if (!hasValue(args.prUrl)) {
+  args.prUrl = markerValue(prReportText, "PR URL");
+}
 
 const issueStatus = hasValue(args.githubIssue) ? "passed" : hasValue(args.linearIssue) ? "partial" : "missing";
 const taskContractStatus = normalizeStatus(args.issueContractStatus) !== "missing"
@@ -515,6 +522,7 @@ const nodes = [
   ], releaseStatus === "blocked" ? "Video release gate failed or hashes do not match." : ""),
   mkNode("pr", "Pull request", prStatus, [
     args.prUrl && `PR: ${args.prUrl}`,
+    prReportInfo && args.prReport,
   ]),
   mkNode("ci", "GitHub CI", ciStatus, [
     args.ciUrl && `CI: ${args.ciUrl}`,

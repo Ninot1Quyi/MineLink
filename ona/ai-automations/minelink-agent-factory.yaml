@@ -2,7 +2,9 @@ name: minelink-agent-factory
 description: >
   MineLink issue-to-PR validation factory. Use the Ona Platform Codex agent
   for implementation and video review; this CLI automation only runs process
-  sync, validation, artifact, and PR steps.
+  sync, validation, artifact, and PR steps. The video-review-request.md
+  artifact must be produced before the separate verifier session approves the
+  acceptance video.
 triggers:
   - context:
       projects:
@@ -11,7 +13,7 @@ triggers:
     manual: {}
 action:
   limits:
-    maxParallel: 2
+    maxParallel: 1
     maxTotal: 6
   steps:
     - task:
@@ -30,6 +32,7 @@ action:
           --require-platform-codex-implementation
     - task:
         command: >
+          node scripts/dev/check-platform-codex-evidence.mjs --implementation &&
           node scripts/dev/sync-linear-status.mjs
           --issue "{{ .Parameters.linear_issue }}"
           --status "In Progress"
@@ -40,57 +43,53 @@ action:
           --require-update
     - task:
         command: >
+          node scripts/dev/check-platform-codex-evidence.mjs --implementation &&
           bash scripts/dev/verify-agent-task.sh --scope {{ .Parameters.validation_scope }} --scenarios {{ .Parameters.scenarios }}
     - task:
         command: >
+          node scripts/dev/check-platform-codex-evidence.mjs --implementation &&
           node scripts/dev/summarize-evidence.mjs
     - task:
         command: >
+          node scripts/dev/check-platform-codex-evidence.mjs --implementation &&
           node scripts/dev/prepare-video-review-request.mjs --require-mp4
     - task:
         command: >
+          node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier &&
           node scripts/dev/check-video-review.mjs --require-mp4
     - task:
         command: >
+          node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier &&
           node scripts/dev/sync-linear-status.mjs
           --issue "{{ .Parameters.linear_issue }}"
           --status "In Review"
           --comment "Ona validation and acceptance artifact steps completed for {{ .Parameters.task_id }}. Evidence paths: .minelink-dev/reports/agent-task-summary.md, .minelink-dev/reports/ci-evidence-summary.md, .minelink-dev/reports/artifacts/acceptance-summary.md, .minelink-dev/reports/artifacts/acceptance.mp4, .minelink-dev/reports/artifacts/video-review.md, and .minelink-dev/reports/artifacts/video-release-gate.md."
           --require-key
           --require-update
-    - pullRequest:
-        branch: "{{ .Parameters.branch }}"
-        description: |
-          ## Linked Work
-
-          - Linear: {{ .Parameters.linear_issue }}
-          - GitHub: {{ .Parameters.github_issue }}
-
-          ## MineLink Delivery Evidence
-
-          - Agent task id: {{ .Parameters.task_id }}
-          - Acceptance gate: {{ .Parameters.acceptance_gate }}
-          - Validation scope: {{ .Parameters.validation_scope }}
-          - Evidence summary: `.minelink-dev/reports/ci-evidence-summary.md`
-          - Agent verifier: `.minelink-dev/reports/agent-task-summary.md`
-          - Acceptance video summary: `.minelink-dev/reports/artifacts/acceptance-summary.md`
-          - Acceptance video: `.minelink-dev/reports/artifacts/acceptance.mp4`
-          - Video review request: `.minelink-dev/reports/artifacts/video-review-request.md`
-          - Dedicated Codex video review: `.minelink-dev/reports/artifacts/video-review.md`
-          - Video release gate: `.minelink-dev/reports/artifacts/video-release-gate.md`
-
-          This PR must still be reviewed against `docs/minelink-acceptance.md`.
-          Mock, replay, smoke, or short-soak evidence does not imply full product
-          completion.
-        draft: true
-        title: "{{ .Parameters.pr_title }}"
-    - report:
-        outputs:
-          - key: minelink_validation_passed
-            title: MineLink validation passed
-            boolean: {}
-            prompt: Did the MineLink validation command complete successfully?
-          - key: real_neoforge_ran
-            title: Real NeoForge ran
-            boolean: {}
-            prompt: Did this task run real NeoForge evidence, not only mock or smoke replay?
+    - task:
+        command: >
+          node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier &&
+          node scripts/dev/create-agent-factory-pr.mjs
+          --branch "{{ .Parameters.branch }}"
+          --title "{{ .Parameters.pr_title }}"
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+    - task:
+        command: >
+          node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier &&
+          node scripts/dev/report-agent-factory-chain.mjs
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --issue-contract-status passed
+          --github-dispatcher-status passed
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --ona-automation-status passed
+          --branch "{{ .Parameters.branch }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --require-platform-codex-implementation
+          --require-platform-codex-verifier

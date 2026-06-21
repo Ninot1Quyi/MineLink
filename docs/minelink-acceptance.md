@@ -638,6 +638,21 @@ Current status:
   environment-sensitive changes to `codex/minelink-mvp-engineering`, not on
   ordinary product-code commits. The workflow cancels active stale project
   prebuilds, triggers a fresh Ona prebuild, polls `ona prebuild get` until
+  completion, and uploads `minelink-ona-prebuild` evidence. Local readback on
+  2026-06-21 showed completed baselines
+  `019eeb54-6320-7a1c-ab91-be9544a5eb82` and
+  `019eeb62-6201-70c9-8bfc-77e334213155`; the newest completed snapshot was
+  about 7.75 GB and completed in about 13 minutes. Overlapping manual prebuilds
+  that were later cancelled, including
+  `019eeb05-69dc-75d4-9ffa-a6769945ae50`, are not accepted as usable baseline
+  evidence.
+- `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
+  Ona Platform Codex readbacks. The checked-in Ona AI automation runs
+  sequentially and requires implementation readback before Linear status sync,
+  validation, summary, and video-review request work; it requires both
+  implementation and verifier readbacks before video release, final Linear
+  status, PR creation, and final chain reporting. This is automation-chain
+  evidence only and does not upgrade MineLink product gates.
   `PREBUILD_PHASE_COMPLETED` with 100% snapshot completion, and uploads
   `minelink-ona-prebuild` evidence. This keeps prebuild freshness parallel to
   issue dispatch while allowing Codex task environments to update source code

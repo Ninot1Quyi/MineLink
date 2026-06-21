@@ -265,6 +265,21 @@ to that manual trigger by `.github/workflows/agent-factory-dispatch.yml`.
 After native Ona repository/Linear webhooks are available in the organization,
 add those triggers without changing the downstream evidence requirements.
 
+The finalizer is intentionally sequential (`maxParallel: 1`) and every
+downstream side-effect step is fail-closed with:
+
+```bash
+node scripts/dev/check-platform-codex-evidence.mjs --implementation
+node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier
+```
+
+The implementation gate is required before Linear status sync, validation,
+evidence summary, and video-review request generation. The verifier gate is
+additionally required before video release, final Linear status sync, PR
+creation, and the final chain report. This protects the chain if Ona continues
+later tasks after an earlier task exits non-zero, and it prevents generic Ona
+automation output from satisfying the required Codex agent work.
+
 The spec intentionally does not contain a generic `agent` step. Start the
 implementation and video-verifier work in the Ona Platform UI with the Codex
 agent option selected. The implementation Codex session must run validation and
@@ -291,9 +306,11 @@ Result: passed
 
 Generic Ona automation, task, SSH, or default-agent evidence must not satisfy
 this gate. The chain reporter enforces this with
-`--require-platform-codex-implementation`, so a dispatcher can queue the
-finalizer but cannot produce green validation/PR evidence until the accepted
-Platform Codex implementation session has written its readback.
+`--require-platform-codex-implementation`, and
+`scripts/dev/check-platform-codex-evidence.mjs` guards every downstream
+finalizer step, so a dispatcher can queue the finalizer but cannot produce
+green validation/PR evidence until the accepted Platform Codex implementation
+session has written its readback.
 
 The dedicated video verifier has the same explicit readback requirement:
 
@@ -304,6 +321,15 @@ The dedicated video verifier has the same explicit readback requirement:
 It must identify `Agent mode: Ona Platform Codex`, the verifier `Session id`,
 and `Result: passed`, in addition to the hash-checked
 `.minelink-dev/reports/artifacts/video-review.md` markers.
+
+The finalizer creates or updates the draft PR through
+`scripts/dev/create-agent-factory-pr.mjs` after both Platform Codex gates pass.
+That script uses GitHub CLI authentication from the environment, writes
+`.minelink-dev/reports/agent-factory-pr.md`, and leaves PR creation as a
+blocked edge if `gh` is not authenticated or the implementation branch has not
+been pushed. The native Ona `pullRequest` step is not used in this factory spec
+because it cannot be individually prefixed with the Platform Codex evidence
+guard.
 
 If the Ona session shows `Codex authentication failed: the LLM request was
 rejected as unauthenticated`, stop the task as `Blocked`. This failure happens
@@ -349,6 +375,12 @@ automation, and draft PR evidence:
   `pullRequest` step.
 - Local GitHub connector fallback created PR #4 so the evidence is reviewable.
 - GitHub Actions CI run `27903350282` passed on PR #4.
+- Ona prebuild readback on 2026-06-21 showed completed baselines
+  `019eeb54-6320-7a1c-ab91-be9544a5eb82` and
+  `019eeb62-6201-70c9-8bfc-77e334213155`. The newest completed snapshot was
+  about 7.75 GB and completed in about 13 minutes. Older overlapping manual
+  prebuilds, including `019eeb05-69dc-75d4-9ffa-a6769945ae50`, were cancelled
+  and are not accepted as the ready baseline.
 
 Current conclusion: Linear issue management, validation automation
 registration, `LINEAR_API_KEY`-backed status sync from inside Ona, GitHub PR
@@ -368,6 +400,8 @@ Additional current blocker: The Ona CLI automation example exposes a generic
 agent option. Until Ona exposes a repository-configurable or API-visible way to
 start that Codex option automatically, the dispatchers can queue the automation
 and produce chain evidence but cannot prove the implementation-session edge.
+The guarded finalizer now stops all later side effects when the Platform Codex
+implementation readback is missing.
 
 The next factory slice must prove a full platform run: Linear task dispatch or
 manual launch -> Ona Platform Codex implementation session -> validation
@@ -448,9 +482,10 @@ the task for another implementation iteration.
   spec, but issue/PR triggers are not enabled by the repository alone.
 - Ona Platform Codex launch and session readback still need observable evidence
   for the current PR. Generic Ona Agent evidence is not accepted for this gap.
-- Ona native `pullRequest` step still needs observable success or actionable
-  failure logs. Until then, the GitHub connector fallback can open the review
-  PR, but it is a fallback and must be reported as such.
+- The guarded GitHub CLI PR step still needs observable success or actionable
+  failure logs from a real Ona Platform Codex implementation branch. Until
+  then, the GitHub connector fallback can open the review PR, but it is a
+  fallback and must be reported as such.
 - Acceptance video is a trace visualization plus a dedicated Codex review gate.
   Real Minecraft GUI capture remains future observer-client work.
 - Agent output still needs human review before a gate can become

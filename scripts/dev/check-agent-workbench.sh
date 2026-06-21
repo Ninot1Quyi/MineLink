@@ -49,6 +49,8 @@ require_file "scripts/dev/install-smoke.sh"
 require_file "scripts/dev/bootstrap-prebuild.sh"
 require_file "scripts/dev/check-devcontainer-image-access.sh"
 require_file "scripts/dev/check-agent-factory-secrets.mjs"
+require_file "scripts/dev/check-platform-codex-evidence.mjs"
+require_file "scripts/dev/create-agent-factory-pr.mjs"
 require_file "scripts/dev/dispatch-agent-factory.mjs"
 require_file "scripts/dev/check-video-review.mjs"
 require_file "scripts/dev/prepare-video-review-request.mjs"
@@ -117,6 +119,10 @@ require_text "ona/ai-automations/minelink-agent-factory.yaml" "check-video-revie
 require_text "ona/ai-automations/minelink-agent-factory.yaml" "prepare-video-review-request.mjs"
 require_text "ona/ai-automations/minelink-agent-factory.yaml" "report-agent-factory-chain.mjs"
 require_text "ona/ai-automations/minelink-agent-factory.yaml" "--require-platform-codex-implementation"
+require_text "ona/ai-automations/minelink-agent-factory.yaml" "maxParallel: 1"
+require_text "ona/ai-automations/minelink-agent-factory.yaml" "check-platform-codex-evidence.mjs --implementation"
+require_text "ona/ai-automations/minelink-agent-factory.yaml" "check-platform-codex-evidence.mjs --implementation --verifier"
+require_text "ona/ai-automations/minelink-agent-factory.yaml" "create-agent-factory-pr.mjs"
 require_text "ona/ai-automations/minelink-agent-factory.yaml" "video-review-request.md"
 require_text ".github/workflows/devcontainer-image.yml" "ghcr.io/ninot1quyi/minelink-devcontainer"
 require_text ".github/workflows/devcontainer-image.yml" "docker/build-push-action"
@@ -186,6 +192,10 @@ require_text "scripts/dev/check-devcontainer-image-access.sh" "does not prove On
 require_text "scripts/dev/check-agent-factory-secrets.mjs" "never prints secret values"
 require_text "scripts/dev/check-agent-factory-secrets.mjs" "ONA_TOKEN"
 require_text "scripts/dev/check-agent-factory-secrets.mjs" "LINEAR_API_KEY"
+require_text "scripts/dev/check-platform-codex-evidence.mjs" "Agent mode: Ona Platform Codex"
+require_text "scripts/dev/check-platform-codex-evidence.mjs" "Generic Ona automation"
+require_text "scripts/dev/create-agent-factory-pr.mjs" "gh"
+require_text "scripts/dev/create-agent-factory-pr.mjs" "codex/minelink-mvp-engineering"
 require_text "scripts/dev/dispatch-agent-factory.mjs" "does not replace the required Ona Platform Codex"
 require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink acceptance artifacts"
 require_text "scripts/dev/report-agent-factory-chain.mjs" "automation-chain evidence only"
@@ -264,6 +274,8 @@ PY
     ".github/workflows/devcontainer-image.yml" \
     "scripts/dev/bootstrap-prebuild.sh" \
     "scripts/dev/check-devcontainer-image-access.sh" \
+    "scripts/dev/check-platform-codex-evidence.mjs" \
+    "scripts/dev/create-agent-factory-pr.mjs" \
     "scripts/dev/dispatch-agent-factory.mjs" \
     "scripts/dev/check-video-review.mjs" \
     "scripts/dev/prepare-video-review-request.mjs" \
