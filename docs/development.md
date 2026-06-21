@@ -89,18 +89,21 @@ passing `bootstrap-prebuild`. If either path fails, fix the image or temporarily
 return to the public Node 22 base image with the failure recorded in
 `docs/minelink-acceptance.md`.
 
-Ona prebuilds use two bootstrap entry points:
+Ona prebuilds and normal devcontainer creation use one bootstrap script with two
+modes:
 
 ```bash
-bash scripts/dev/bootstrap-prebuild.sh
+bash scripts/dev/bootstrap-prebuild.sh --prebuild
+bash scripts/dev/bootstrap-prebuild.sh --light
 ```
 
 The primary cloud prebuild entry is `.ona/automations.yaml`
 `bootstrap-prebuild`, triggered by Ona's `prebuild` event with
 `prebuildRequiresSuccess: true`. A failed bootstrap must fail the prebuild
 instead of leaving agents with a snapshot that skipped MineLink setup. The
-devcontainer `postCreateCommand` calls the same script for normal environment
-creation and local devcontainer rebuilds.
+devcontainer `postCreateCommand` calls the same script with `--light` for normal
+environment creation and local devcontainer rebuilds, so task startup does not
+rerun the full NeoForge warmup.
 
 This prebuild bootstrap skips `apt-get` when the prewarmed image already has the
 required OS tools, verifies Node/npm/Python/Java/ffmpeg, runs `npm ci`, `npm run
@@ -111,7 +114,9 @@ the value. Because the repository owner has authorized development EULA
 acceptance for these private Ona/devcontainer environments, the bootstrap also
 writes ignored local `mod/neoforge/run/eula.txt` and `server.properties` files
 so NeoForge can start without another setup step. It does not start a Minecraft
-server.
+server. Prebuild mode prunes checkout-local `.gradle` and `mod/neoforge/build`
+outputs after the guards pass, preserving user-home npm/Gradle caches while
+keeping the Ona snapshot smaller.
 
 When the GHCR image is present, the same bootstrap should report warm npm and
 Gradle cache paths, then still run the final `npm ci`, TypeScript checks,

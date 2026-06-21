@@ -590,18 +590,21 @@ Current status:
   checkout, runs `npm ci`, runs `bash scripts/dev/verify-agent-task.sh --scope
   fast --base HEAD`, and writes
   `.minelink-dev/install-smoke/install-smoke-report.md`.
-- `scripts/dev/bootstrap-prebuild.sh` is the shared devcontainer/Ona prebuild
-  entry point. Ona cloud prebuilds invoke it through the `.ona/automations.yaml`
-  `bootstrap-prebuild` task with `triggeredBy: prebuild` and
-  `prebuildRequiresSuccess: true`; the devcontainer `postCreateCommand` calls
-  the same script for normal environment creation and local devcontainer
-  rebuilds. It installs OS tools, verifies
-  Node/npm/Python/Java/ffmpeg, runs TypeScript build/typecheck, and runs the
-  NeoForge Gradle build so Java, Gradle, Minecraft, and NeoForge dependencies
-  are cached before Codex agents start work. For these owner-authorized private
-  development environments it writes ignored local `mod/neoforge/run/eula.txt`
-  and `server.properties` files so the real server can start without another
-  setup step. It does not start the server or print secret values.
+- `scripts/dev/bootstrap-prebuild.sh` is the shared devcontainer/Ona bootstrap
+  entry point with `--prebuild` and `--light` modes. Ona cloud prebuilds invoke
+  the prebuild mode through the `.ona/automations.yaml` `bootstrap-prebuild`
+  task with `triggeredBy: prebuild` and `prebuildRequiresSuccess: true`; the
+  devcontainer `postCreateCommand` uses `--light` so normal environment creation
+  does not rerun the full NeoForge warmup before a Codex task can start. The
+  bootstrap installs OS tools when missing, verifies Node/npm/Python/Java/ffmpeg,
+  runs `npm ci` when needed, and writes ignored local
+  `mod/neoforge/run/eula.txt` and `server.properties` files so the real server
+  can start without another setup step. Prebuild mode additionally runs
+  TypeScript build/typecheck and the NeoForge Gradle build so Java, Gradle,
+  Minecraft, and NeoForge dependency caches are warm, then prunes
+  checkout-local `.gradle` and `mod/neoforge/build` outputs before the Ona
+  snapshot while preserving user-home npm/Gradle caches. It does not start the
+  server or print secret values.
 - The report records the sanitized remote, source ref and commit, dirty-source
   decision, Node/npm/Git/Java/OS versions, exact command exit codes, log path,
   and copied agent-task summary when available.
@@ -641,10 +644,9 @@ Current status:
   with git instead of rebuilding the toolchain/cache baseline for every commit.
 - `.devcontainer/devcontainer.json` now uses
   `ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering` as
-  the default image and relies on `scripts/dev/bootstrap-prebuild.sh` as the
-  final setup/verification gate. The bootstrap skips `apt-get` when the image
-  already provides the required OS tools, then still runs the Node/TypeScript
-  and NeoForge Gradle warmup plus dev-only EULA/server property generation.
+  the default image and uses `scripts/dev/bootstrap-prebuild.sh --light` for
+  normal `postCreateCommand` startup. The full Node/TypeScript and NeoForge
+  Gradle warmup remains the Ona prebuild hard gate, not a per-task startup cost.
   This change still needs a fresh Ona prebuild readback before it can be counted
   as platform-side bootstrap evidence.
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,

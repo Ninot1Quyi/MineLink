@@ -368,29 +368,37 @@ report paths under `.minelink-dev/install-smoke/`. Dirty-source runs are local
 debugging only, not acceptance evidence. The paired GitHub workflow uploads
 `minelink-install-smoke-evidence` for install/workbench/bootstrap changes.
 
-Ona prebuilds use two bootstrap entry points that both call:
+Ona prebuilds and normal devcontainer creation use the same bootstrap script
+with different modes:
 
 ```bash
-bash scripts/dev/bootstrap-prebuild.sh
+bash scripts/dev/bootstrap-prebuild.sh --prebuild
+bash scripts/dev/bootstrap-prebuild.sh --light
 ```
 
 The primary Ona prebuild path is the `.ona/automations.yaml`
 `bootstrap-prebuild` task with `triggeredBy: prebuild` and
 `prebuildRequiresSuccess: true`, so a failed MineLink bootstrap fails the
 prebuild instead of producing a misleading snapshot. The devcontainer
-`postCreateCommand` calls the same script as a fallback for normal environment
-creation and local devcontainer rebuilds.
+`postCreateCommand` calls the same script with `--light` for normal environment
+creation and local devcontainer rebuilds, so a task environment does not rerun
+the full NeoForge warmup when it is not producing a prebuild snapshot.
 
-The bootstrap installs required OS tools such as `ffmpeg`, verifies Node, npm,
-Python, Java 21, `gh`, and sanitized Linear secret presence, runs `npm ci`,
-builds and typechecks the TypeScript workspace, and runs the NeoForge Gradle
-build to warm Gradle, Minecraft, and NeoForge dependency caches. Because the
-repository owner has authorized development EULA acceptance for these private
-Ona/devcontainer environments, it also writes ignored local files under
+Both modes install required OS tools such as `ffmpeg` when missing, verify Node,
+npm, Python, Java 21, `gh`, and sanitized Linear secret presence, run `npm ci`
+when `node_modules` is missing, and write ignored local files under
 `mod/neoforge/run/`: `eula.txt` with `eula=true` and `server.properties` with
-`online-mode=false`. It does not start a long-running Minecraft server or write
-secret values. Set `MINELINK_PREBUILD_SKIP_GRADLE=1` only when debugging a
-broken prebuild where the Gradle cache warmup must be bypassed temporarily.
+`online-mode=false`. The prebuild mode additionally builds and typechecks the
+TypeScript workspace, runs the NeoForge Gradle build to warm Gradle, Minecraft,
+and NeoForge dependency caches, runs docs guards, then prunes checkout-local
+`.gradle` and `mod/neoforge/build` outputs before Ona snapshots the environment.
+The warm user-home npm and Gradle caches remain in the image/prebuild, while
+path-sensitive generated outputs do not bloat the snapshot. The script does not
+start a long-running Minecraft server or write secret values. Set
+`MINELINK_PREBUILD_SKIP_GRADLE=1` only when debugging a broken prebuild where the
+Gradle cache warmup must be bypassed temporarily, and set
+`MINELINK_PREBUILD_KEEP_OUTPUTS=1` only when investigating generated-output
+reuse.
 
 The reproducible prewarmed image path is `.github/workflows/devcontainer-image.yml`
 plus `.devcontainer/Dockerfile`. GitHub Actions builds the image from a clean

@@ -5,6 +5,32 @@ cd "$(dirname "$0")/../.."
 
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}"
 
+mode="prebuild"
+if [[ $# -gt 0 ]]; then
+  case "$1" in
+    --prebuild|prebuild)
+      mode="prebuild"
+      ;;
+    --light|light)
+      mode="light"
+      ;;
+    -h|--help)
+      cat <<'USAGE'
+Usage: bash scripts/dev/bootstrap-prebuild.sh [--prebuild|--light]
+
+Modes:
+  --prebuild  Warm Node, TypeScript, NeoForge/Gradle caches, dev runtime files, and docs guards.
+  --light     Prepare a normal devcontainer quickly without running the NeoForge Gradle warmup.
+USAGE
+      exit 0
+      ;;
+    *)
+      echo "Unknown bootstrap mode: $1" >&2
+      exit 2
+      ;;
+  esac
+fi
+
 log() {
   printf '[minelink-prebuild] %s\n' "$*"
 }
@@ -48,6 +74,7 @@ install_os_packages() {
 }
 
 check_runtime_versions() {
+  log "bootstrap mode: $mode"
   log "devcontainer image: ${MINELINK_DEVCONTAINER_IMAGE:-unreported}"
   log "Gradle user home: $GRADLE_USER_HOME"
   run node --version
@@ -93,12 +120,26 @@ report_cache_state() {
 }
 
 warm_node_workspace() {
+  if [[ "$mode" == "light" ]]; then
+    if [[ -d node_modules ]]; then
+      log "node_modules present; skipping npm ci in light bootstrap"
+    else
+      run npm ci --prefer-offline
+    fi
+    return
+  fi
+
   run npm ci
   run npm run build
   run npm run typecheck
 }
 
 warm_neoforge_workspace() {
+  if [[ "$mode" == "light" ]]; then
+    log "light bootstrap; skipping Gradle/NeoForge cache warmup"
+    return
+  fi
+
   if [[ "${MINELINK_PREBUILD_SKIP_GRADLE:-0}" == "1" ]]; then
     log "MINELINK_PREBUILD_SKIP_GRADLE=1; skipping Gradle/NeoForge cache warmup"
     return
@@ -135,6 +176,27 @@ run_repo_guards() {
   run bash scripts/dev/verify-agent-task.sh --scope docs
 }
 
+prune_checkout_outputs_for_snapshot() {
+  if [[ "$mode" != "prebuild" ]]; then
+    return
+  fi
+
+  if [[ "${MINELINK_PREBUILD_KEEP_OUTPUTS:-0}" == "1" ]]; then
+    log "MINELINK_PREBUILD_KEEP_OUTPUTS=1; keeping checkout-local build outputs"
+    return
+  fi
+
+  rm -rf .gradle mod/neoforge/.gradle mod/neoforge/build
+  if [[ -d mod/neoforge/run ]]; then
+    find mod/neoforge/run -mindepth 1 -maxdepth 1 \
+      ! -name eula.txt \
+      ! -name server.properties \
+      -exec rm -rf {} +
+  fi
+
+  log "pruned checkout-local build outputs before Ona snapshot; user-home npm/Gradle caches remain warm"
+}
+
 install_os_packages
 check_runtime_versions
 report_cache_state
@@ -142,5 +204,6 @@ warm_node_workspace
 warm_neoforge_workspace
 prepare_dev_minecraft_runtime
 run_repo_guards
+prune_checkout_outputs_for_snapshot
 
 log "prebuild bootstrap complete"
