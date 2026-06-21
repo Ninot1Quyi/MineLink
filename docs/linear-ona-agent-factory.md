@@ -443,6 +443,14 @@ The repository dispatcher now waits briefly for the Ona automation execution
 readback in CI, so the artifacts can distinguish `queued`, `running`,
 `completed`, and `completed_with_failed_actions` instead of flattening every
 successful start into `queued`.
+GitHub Actions run `27920128911` on `codex/minelink-mvp-engineering` proved
+that readback path end to end for GitHub issue #7: dispatcher execution
+`019eec65-c9d3-740c-ba01-2460c0b5bb24` reached
+`WORKFLOW_EXECUTION_PHASE_COMPLETED` with `failedActionCount=0`, produced
+`.minelink-dev/reports/ona-automation-execution.{md,json}`, and raised the
+chain report to 31%. The first blocked edge then moved to
+`ona_automation -> implementation_codex` because no accepted automated Ona
+Platform Codex implementation-session readback was present.
 
 The next factory slice must prove a full platform run: Linear task dispatch or
 manual launch -> Ona Platform Codex implementation session -> validation

@@ -758,12 +758,18 @@ Current status:
   dispatcher for agent-ready GitHub issues plus a scheduled/manual Linear
   polling fallback. It uses `scripts/dev/dispatch-agent-factory.mjs` and
   `scripts/dev/watch-linear-agent-tasks.mjs` to start the shared Ona
-  automation, then `scripts/dev/report-agent-factory-chain.mjs` records the
-  issue-to-PR nodes, edges, first blocker, and remaining percentage. The
-  dispatcher can now wait briefly for `ona ai automation executions get` and
-  preserve `.minelink-dev/reports/ona-automation-execution.md` plus JSON with
-  the execution phase, exposed session id, failed action count, and readback
-  attempts. `completed_with_failed_actions` is partial bridge evidence only:
+  automation, wait briefly for `ona ai automation executions get`, and write
+  `.minelink-dev/reports/ona-automation-execution.{md,json}` when an execution
+  id is available. GitHub Actions run `27920128911` proved this GitHub issue
+  entry path against issue #7: Ona execution
+  `019eec65-c9d3-740c-ba01-2460c0b5bb24` completed with
+  `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `failedActionCount=0`, session
+  `3bdd290e-1ae4-4b5c-b4ee-b6ee14114c23`, and chain progress 31%. This
+  upgrades the repository-to-Ona execution edge to real automation evidence;
+  it does not prove the required Ona Platform Codex implementation session.
+  `scripts/dev/report-agent-factory-chain.mjs` records the issue-to-PR nodes,
+  edges, first blocker, and remaining percentage. `completed_with_failed_actions`
+  is partial bridge evidence only:
   it proves the guarded Ona finalizer ran and failed closed, not that Ona
   Platform Codex implemented the task. This is delivery-chain evidence only and
   does not prove Minecraft product behavior.
