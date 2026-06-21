@@ -1,4 +1,11 @@
 tasks:
+  bootstrap-prebuild:
+    name: Bootstrap MineLink prebuild runtime
+    command: |
+      bash scripts/dev/bootstrap-prebuild.sh
+    triggeredBy:
+      - prebuild
+
   verify-docs:
     name: Verify MineLink docs and agent workbench
     command: |

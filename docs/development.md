@@ -40,11 +40,16 @@ devcontainer intentionally uses the prebuilt Node 22 image, Java 21 feature,
 and image or OS provided `python3`; do not add a pinned Python feature that
 forces source compilation during cloud rebuilds.
 
-Ona prebuilds use the same devcontainer `postCreateCommand`:
+Ona prebuilds use two bootstrap entry points:
 
 ```bash
 bash scripts/dev/bootstrap-prebuild.sh
 ```
+
+The primary cloud prebuild entry is `.ona/automations.yaml`
+`bootstrap-prebuild`, triggered by Ona's `prebuild` event. The devcontainer
+`postCreateCommand` calls the same script for normal environment creation and
+local devcontainer rebuilds.
 
 This prebuild bootstrap installs OS tools, verifies Node/npm/Python/Java/ffmpeg,
 runs `npm ci`, `npm run build`, `npm run typecheck`, and runs

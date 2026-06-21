@@ -318,11 +318,16 @@ report paths under `.minelink-dev/install-smoke/`. Dirty-source runs are local
 debugging only, not acceptance evidence. The paired GitHub workflow uploads
 `minelink-install-smoke-evidence` for install/workbench/bootstrap changes.
 
-Ona prebuilds run the devcontainer `postCreateCommand`, which calls:
+Ona prebuilds use two bootstrap entry points that both call:
 
 ```bash
 bash scripts/dev/bootstrap-prebuild.sh
 ```
+
+The primary Ona prebuild path is the `.ona/automations.yaml`
+`bootstrap-prebuild` task with `triggeredBy: prebuild`. The devcontainer
+`postCreateCommand` calls the same script as a fallback for normal environment
+creation and local devcontainer rebuilds.
 
 The bootstrap installs required OS tools such as `ffmpeg`, verifies Node, npm,
 Python, Java 21, `gh`, and sanitized Linear secret presence, runs `npm ci`,
