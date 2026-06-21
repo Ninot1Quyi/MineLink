@@ -18,78 +18,127 @@ action:
   steps:
     - task:
         command: >
-          node scripts/dev/report-agent-factory-chain.mjs
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage initial-report
           --task-id "{{ .Parameters.task_id }}"
           --github-issue "{{ .Parameters.github_issue }}"
           --linear-issue "{{ .Parameters.linear_issue }}"
-          --issue-contract-status passed
-          --github-dispatcher-status passed
           --ona-project "{{ .Parameters.ona_project }}"
           --ona-automation "{{ .Parameters.ona_automation }}"
-          --ona-automation-status partial
           --branch "{{ .Parameters.branch }}"
-          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
-          --require-platform-codex-implementation
-    - task:
-        command: >
-          node scripts/dev/check-platform-codex-evidence.mjs --implementation &&
-          node scripts/dev/sync-linear-status.mjs
-          --issue "{{ .Parameters.linear_issue }}"
-          --status "In Progress"
-          --comment "Ona automation started for {{ .Parameters.task_id }} on branch {{ .Parameters.branch }}. Source issue: {{ .Parameters.github_issue }}"
-          --attachment-title "MineLink source task {{ .Parameters.task_id }}"
-          --attachment-url "{{ .Parameters.github_issue }}"
-          --require-key
-          --require-update
-    - task:
-        command: >
-          node scripts/dev/check-platform-codex-evidence.mjs --implementation &&
-          bash scripts/dev/verify-agent-task.sh --scope {{ .Parameters.validation_scope }} --scenarios {{ .Parameters.scenarios }}
-    - task:
-        command: >
-          node scripts/dev/check-platform-codex-evidence.mjs --implementation &&
-          node scripts/dev/summarize-evidence.mjs
-    - task:
-        command: >
-          node scripts/dev/check-platform-codex-evidence.mjs --implementation &&
-          node scripts/dev/prepare-video-review-request.mjs --require-mp4
-    - task:
-        command: >
-          node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier &&
-          node scripts/dev/check-video-review.mjs --require-mp4
-    - task:
-        command: >
-          node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier &&
-          node scripts/dev/sync-linear-status.mjs
-          --issue "{{ .Parameters.linear_issue }}"
-          --status "In Review"
-          --comment "Ona validation and acceptance artifact steps completed for {{ .Parameters.task_id }}. Evidence paths: .minelink-dev/reports/agent-task-summary.md, .minelink-dev/reports/ci-evidence-summary.md, .minelink-dev/reports/artifacts/acceptance-summary.md, .minelink-dev/reports/artifacts/acceptance.mp4, .minelink-dev/reports/artifacts/video-review.md, and .minelink-dev/reports/artifacts/video-release-gate.md."
-          --require-key
-          --require-update
-    - task:
-        command: >
-          node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier &&
-          node scripts/dev/create-agent-factory-pr.mjs
-          --branch "{{ .Parameters.branch }}"
-          --title "{{ .Parameters.pr_title }}"
-          --task-id "{{ .Parameters.task_id }}"
-          --github-issue "{{ .Parameters.github_issue }}"
-          --linear-issue "{{ .Parameters.linear_issue }}"
+          --pr-title "{{ .Parameters.pr_title }}"
           --acceptance-gate "{{ .Parameters.acceptance_gate }}"
           --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
     - task:
         command: >
-          node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier &&
-          node scripts/dev/report-agent-factory-chain.mjs
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage sync-in-progress
           --task-id "{{ .Parameters.task_id }}"
           --github-issue "{{ .Parameters.github_issue }}"
           --linear-issue "{{ .Parameters.linear_issue }}"
-          --issue-contract-status passed
-          --github-dispatcher-status passed
           --ona-project "{{ .Parameters.ona_project }}"
           --ona-automation "{{ .Parameters.ona_automation }}"
-          --ona-automation-status passed
           --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
           --acceptance-gate "{{ .Parameters.acceptance_gate }}"
-          --require-platform-codex-implementation
-          --require-platform-codex-verifier
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
+    - task:
+        command: >
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage validate
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
+    - task:
+        command: >
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage summarize
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
+    - task:
+        command: >
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage prepare-video
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
+    - task:
+        command: >
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage check-video-release
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
+    - task:
+        command: >
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage sync-in-review
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
+    - task:
+        command: >
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage create-pr
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
+    - task:
+        command: >
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage final-report
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"

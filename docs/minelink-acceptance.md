@@ -723,13 +723,17 @@ Current status:
   completion time `2026-06-21T22:23:43.281513712Z`. The phase summary observed
   about 15m10s end to end: about 5m03s running, 1m33s stopping, and 7m04s
   snapshotting. This is the current accepted Ona prebuild baseline evidence.
-- `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
-  Ona Platform Codex readbacks. The checked-in Ona AI automation runs
-  sequentially and requires implementation readback before Linear status sync,
-  validation, summary, and video-review request work; it requires both
-  implementation and verifier readbacks before video release, final Linear
-  status, PR creation, and final chain reporting. This is automation-chain
-  evidence only and does not upgrade MineLink product gates.
+- `scripts/dev/check-platform-codex-evidence.mjs` is the evidence check for Ona
+  Platform Codex readbacks, and `scripts/dev/run-agent-factory-stage.mjs` is
+  the Ona finalizer wrapper. The checked-in Ona AI automation runs sequentially
+  and routes each stage through that wrapper. Missing implementation or
+  verifier readback writes `platform-codex-evidence.md` plus an
+  `agent-factory-stage-<stage>.md` blocked report and exits 0 so the Ona
+  execution can terminate with readable evidence instead of lingering in a
+  failed Codex task loop. The wrapper still skips validation, video release,
+  Linear final status, PR creation, and final chain reporting until the
+  required Platform Codex readbacks pass. This is automation-chain evidence
+  only and does not upgrade MineLink product gates.
 - `.devcontainer/devcontainer.json` now uses
   `ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering` as
   the default image and uses `scripts/dev/bootstrap-prebuild.sh --light` for
@@ -797,6 +801,19 @@ Current status:
   plus a dispatch-boundary comment. That prevents schedule spam while preserving
   the fail-closed Platform Codex readback guard for validation, video release,
   PR, and product acceptance.
+  GitHub Actions run `27920695755` proved the Linear status writeback path:
+  `NIN-8` was updated from `Ready for Agent/unstarted` to `In Progress`, with
+  comment `78d49cc3-6bb6-4fd4-b0d9-61d708fdc6d5`, after dispatching Ona
+  execution `019eec7b-5a90-7ee8-a7d9-83ec135f759f`. That execution started a
+  workflow environment from accepted prebuild
+  `019eec3a-85b2-75e7-a5f3-db79a7a2ce2c` and a Codex Exec Agent session, but
+  the conversation log showed the Platform Codex evidence gate failing because
+  `.minelink-dev/reports/ona-codex-implementation-session.md` was missing. Ona
+  did not close the automation execution after that failed command, so it was
+  cancelled and the workflow environment was stopped after evidence capture.
+  Follow-up run `27920953104` proved duplicate prevention: `NIN-8` was skipped
+  with `reason=active_state_In_Progress`, `Candidate count: 0`, and
+  `Dispatched count: 0`.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.
@@ -965,6 +982,9 @@ Not yet accepted as full product:
 - Multi-agent social runtime.
 - Director UI/service.
 - Installer.
-- Ona Platform Codex end-to-end task execution remains blocked while the
-  platform reports `Codex authentication failed` before repository commands run.
+- Ona Platform Codex end-to-end task execution remains blocked at automated
+  implementation-session launch/readback. Recent Ona evidence shows a Codex
+  Exec Agent can start in the prepared environment, but no accepted
+  implementation session has written the required
+  `.minelink-dev/reports/ona-codex-implementation-session.md` readback.
 - Long release-length soak/stability run on real Minecraft.

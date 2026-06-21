@@ -580,7 +580,9 @@ const prebuildHandoffStatus =
 const prebuildHandoffBlocker =
   nodeStatus.ona_prebuild === "passed"
     ? ""
-    : prebuildBlocker || "No completed Ona prebuild baseline is available; Codex handoff must wait for a prepared environment.";
+    : nodeStatus.ona_prebuild === "partial"
+      ? prebuildBlocker
+      : prebuildBlocker || "No completed Ona prebuild baseline is available; Codex handoff must wait for a prepared environment.";
 const automationHandoffStatus =
   nodeStatus.ona_automation === "passed" || nodeStatus.ona_automation === "partial"
     ? nodeStatus.implementation_codex

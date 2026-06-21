@@ -288,18 +288,27 @@ After native Ona repository/Linear webhooks are available in the organization,
 add those triggers without changing the downstream evidence requirements.
 
 The finalizer is intentionally sequential (`maxParallel: 1`) and every
-downstream side-effect step is fail-closed with:
+downstream side-effect step is routed through:
 
 ```bash
-node scripts/dev/check-platform-codex-evidence.mjs --implementation
-node scripts/dev/check-platform-codex-evidence.mjs --implementation --verifier
+node scripts/dev/run-agent-factory-stage.mjs --stage <stage>
 ```
+
+That wrapper calls `scripts/dev/check-platform-codex-evidence.mjs
+--implementation` or `--implementation --verifier` as required for the stage.
+If the accepted readback is missing, it writes
+`.minelink-dev/reports/platform-codex-evidence.md` and
+`.minelink-dev/reports/agent-factory-stage-<stage>.md`, skips side effects, and
+exits 0. Exiting 0 here is deliberate: it lets Ona terminate the automation
+with readable blocked evidence instead of leaving a failed Codex task running.
+It does not mark validation, video release, PR creation, or product acceptance
+as passed.
 
 The implementation gate is required before Linear status sync, validation,
 evidence summary, and video-review request generation. The verifier gate is
 additionally required before video release, final Linear status sync, PR
 creation, and the final chain report. This protects the chain if Ona continues
-later tasks after an earlier task exits non-zero, and it prevents generic Ona
+later tasks after an earlier task cannot proceed, and it prevents generic Ona
 automation output from satisfying the required Codex agent work.
 
 The spec intentionally does not contain a generic `agent` step. Start the
@@ -329,10 +338,9 @@ Result: passed
 Generic Ona automation, task, SSH, or default-agent evidence must not satisfy
 this gate. The chain reporter enforces this with
 `--require-platform-codex-implementation`, and
-`scripts/dev/check-platform-codex-evidence.mjs` guards every downstream
-finalizer step, so a dispatcher can queue the finalizer but cannot produce
-green validation/PR evidence until the accepted Platform Codex implementation
-session has written its readback.
+`scripts/dev/run-agent-factory-stage.mjs` prevents every downstream finalizer
+stage from producing green validation/PR evidence until the accepted Platform
+Codex implementation session has written its readback.
 
 The dedicated video verifier has the same explicit readback requirement:
 
@@ -426,19 +434,21 @@ generic Ona Agent executions are reclassified as process smoke only and are not
 accepted as MineLink agent evidence because they did not use the Ona Platform
 Codex option.
 
-Current blocker: Ona Platform Codex launch reaches the Codex provider selection
-surface but fails with `Codex authentication failed: the LLM request was
-rejected as unauthenticated` before command execution. Until the Ona account's
-Codex/OpenAI subscription binding is fixed and a new Codex session runs
-validation, the factory is not end-to-end accepted.
-
-Additional current blocker: The Ona CLI automation example exposes a generic
-`agent` step, but the accepted MineLink path requires the Ona Platform Codex
-agent option. Until Ona exposes a repository-configurable or API-visible way to
-start that Codex option automatically, the dispatchers can queue the automation
-and produce chain evidence but cannot prove the implementation-session edge.
+Current blocker: Ona automation can start a Codex Exec Agent session in the
+prepared environment, but the accepted MineLink path still lacks an automated
+Ona Platform Codex implementation session that writes
+`.minelink-dev/reports/ona-codex-implementation-session.md` with `Agent mode:
+Ona Platform Codex`, a session id, and `Result: passed`. Until Ona exposes a
+repository-configurable or API-visible way to start that Codex implementation
+task and read back the provider mode/session, the dispatchers can queue the
+automation and produce chain evidence but cannot prove the
+implementation-session edge.
 The guarded finalizer now stops all later side effects when the Platform Codex
 implementation readback is missing.
+The finalizer stages now run through `scripts/dev/run-agent-factory-stage.mjs`;
+missing implementation or verifier evidence writes blocked stage reports and
+exits 0 so Ona can close the automation instead of leaving a failed Codex task
+running.
 The repository dispatcher now waits briefly for the Ona automation execution
 readback in CI, so the artifacts can distinguish `queued`, `running`,
 `completed`, and `completed_with_failed_actions` instead of flattening every
@@ -461,6 +471,19 @@ guarded-finalizer results are captured in CI artifacts. The watcher also treats
 started/In Progress/In Review issues as active and marks a successfully
 dispatched Linear issue `In Progress` with a comment before the next schedule,
 preventing repeated environments for the same unresolved task.
+GitHub Actions run `27920695755` proved the Linear dispatch status sync path
+for `NIN-8`: the watcher selected the Ready for Agent issue, started Ona
+execution `019eec7b-5a90-7ee8-a7d9-83ec135f759f`, updated Linear to
+`In Progress`, and created comment `78d49cc3-6bb6-4fd4-b0d9-61d708fdc6d5`.
+The corresponding Ona environment used accepted prebuild
+`019eec3a-85b2-75e7-a5f3-db79a7a2ce2c` and started a Codex Exec Agent
+conversation, but the conversation log showed the Platform Codex evidence gate
+failing because the implementation readback was missing. Ona did not close that
+automation after the failed command, so the execution was cancelled and the
+workflow environment stopped after evidence capture. GitHub Actions run
+`27920953104` then proved duplicate prevention after the status sync:
+`NIN-8` was skipped with `reason=active_state_In_Progress`,
+`Candidate count: 0`, and `Dispatched count: 0`.
 
 The next factory slice must prove a full platform run: Linear task dispatch or
 manual launch -> Ona Platform Codex implementation session -> validation
