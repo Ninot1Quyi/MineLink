@@ -636,14 +636,16 @@ Current status:
 - `.github/workflows/ona-prebuild.yml` is the CI fallback for automatic
   environment baseline readiness. It runs on manual dispatch and
   environment-sensitive changes to `codex/minelink-mvp-engineering`, not on
-  ordinary product-code commits. The workflow cancels active stale project
-  prebuilds, triggers a fresh Ona prebuild, polls `ona prebuild get` until
-  completion, writes phase-history and phase-duration summary artifacts, and
-  uploads `minelink-ona-prebuild` evidence. Local readback on 2026-06-21 showed
-  completed baselines
-  `019eeb54-6320-7a1c-ab91-be9544a5eb82` and
-  `019eeb62-6201-70c9-8bfc-77e334213155`; the newest completed snapshot was
-  about 7.75 GB and completed in about 13 minutes. Overlapping manual prebuilds
+  ordinary product-code, package, or source commits. The workflow cancels active
+  stale project prebuilds, triggers a fresh Ona prebuild with a default 45-minute
+  platform timeout, wraps individual Ona CLI calls in a short timeout, polls
+  `ona prebuild get` until completion, writes phase-history and phase-duration
+  summary artifacts, and uploads `minelink-ona-prebuild` evidence. Local
+  readback on 2026-06-21 showed completed baselines
+  `019eeb54-6320-7a1c-ab91-be9544a5eb82`,
+  `019eeb62-6201-70c9-8bfc-77e334213155`, and
+  `019eebd9-8f2b-717b-8a71-f8275561edb3`; the newest completed snapshot was
+  about 6.22 GB and completed in about 11 minutes. Overlapping manual prebuilds
   that were later cancelled, including
   `019eeb05-69dc-75d4-9ffa-a6769945ae50`, are not accepted as usable baseline
   evidence.
@@ -657,7 +659,7 @@ Current status:
   snapshotting refreshes that exceed
   `MINELINK_ONA_SNAPSHOT_STALE_MINUTES` (15 minutes by default), so stuck
   platform snapshot saves become explicit evidence instead of hanging CI for
-  the full prebuild timeout.
+  the full prebuild timeout or a stuck Ona status-poll command.
 - 2026-06-21 run `27915819949` / prebuild
   `019eebc5-23ae-754f-b0bf-6cec6de45668` showed the environment startup and
   bootstrap path were not the blocker: phase evidence recorded `running` for
@@ -671,6 +673,16 @@ Current status:
   and 6m04s snapshotting, with final `PREBUILD_PHASE_COMPLETED:100` and a
   6.22 GB snapshot. The workflow also preserved a 32 KB environment log capture
   while the transient environment was still available.
+- 2026-06-21 run `27917165575` / prebuild
+  `019eebf6-2c0c-7b40-8d59-7516ada89b62` reproduced the same platform-side
+  snapshot stall after the GHCR image and devcontainer startup had already
+  completed. Ona logs showed GHCR metadata resolution in about 0.3s, layer pull
+  completing in about 20s, the derived devcontainer image build completing in
+  about 1m31s, the devcontainer becoming ready in about 2m07s, and MineLink
+  prebuild tasks completing before snapshot preparation. The prebuild then
+  remained in `PREBUILD_PHASE_SNAPSHOTTING` and was cancelled as a stale
+  refresh. This is negative stability evidence; the usable baseline remains
+  `019eebd9-8f2b-717b-8a71-f8275561edb3`.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
   Ona Platform Codex readbacks. The checked-in Ona AI automation runs
   sequentially and requires implementation readback before Linear status sync,
@@ -678,10 +690,6 @@ Current status:
   implementation and verifier readbacks before video release, final Linear
   status, PR creation, and final chain reporting. This is automation-chain
   evidence only and does not upgrade MineLink product gates.
-  `PREBUILD_PHASE_COMPLETED` with 100% snapshot completion, and uploads
-  `minelink-ona-prebuild` evidence. This keeps prebuild freshness parallel to
-  issue dispatch while allowing Codex task environments to update source code
-  with git instead of rebuilding the toolchain/cache baseline for every commit.
 - `.devcontainer/devcontainer.json` now uses
   `ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering` as
   the default image and uses `scripts/dev/bootstrap-prebuild.sh --light` for

@@ -12,16 +12,19 @@ on:
       - "mod/neoforge/gradle.properties"
       - "mod/neoforge/gradle/**"
       - "mod/neoforge/settings.gradle"
-      - "package-lock.json"
-      - "package.json"
-      - "packages/**/package.json"
       - "scripts/dev/bootstrap-prebuild.sh"
+      - "scripts/dev/capture-ona-prebuild-logs.sh"
+      - "scripts/dev/summarize-ona-prebuild-phases.mjs"
   workflow_dispatch:
     inputs:
       prebuild_timeout:
         description: Ona prebuild timeout
         required: false
-        default: 2h
+        default: 45m
+      snapshot_stale_minutes:
+        description: Cancel the refresh if snapshotting remains stale for this many minutes
+        required: false
+        default: "15"
 
 permissions:
   contents: read
@@ -34,7 +37,7 @@ jobs:
   trigger:
     name: Refresh Ona prebuild baseline
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -49,13 +52,19 @@ jobs:
         env:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
           MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
-          MINELINK_ONA_PREBUILD_TIMEOUT: ${{ github.event.inputs.prebuild_timeout || '2h' }}
-          MINELINK_ONA_SNAPSHOT_STALE_MINUTES: ${{ vars.MINELINK_ONA_SNAPSHOT_STALE_MINUTES || '15' }}
+          MINELINK_ONA_PREBUILD_TIMEOUT: ${{ github.event.inputs.prebuild_timeout || '45m' }}
+          MINELINK_ONA_SNAPSHOT_STALE_MINUTES: ${{ github.event.inputs.snapshot_stale_minutes || vars.MINELINK_ONA_SNAPSHOT_STALE_MINUTES || '15' }}
+          MINELINK_ONA_CLI_TIMEOUT_SECONDS: ${{ vars.MINELINK_ONA_CLI_TIMEOUT_SECONDS || '60' }}
         run: |
+          set -euo pipefail
           mkdir -p .minelink-dev/reports
           phase_history=".minelink-dev/reports/ona-prebuild-phase-history.jsonl"
           : > "$phase_history"
           export MINELINK_ONA_PHASE_HISTORY="$phase_history"
+          run_ona() {
+            timeout "${MINELINK_ONA_CLI_TIMEOUT_SECONDS}s" ona "$@"
+          }
+
           if [ -z "${ONA_TOKEN:-}" ]; then
             {
               echo "# MineLink Ona Prebuild"
@@ -66,10 +75,10 @@ jobs:
             exit 1
           fi
 
-          ona login
+          run_ona login
 
           active_ids="$(
-            ona prebuild list --project-id "$MINELINK_ONA_PROJECT_ID" --format json \
+            run_ona prebuild list --project-id "$MINELINK_ONA_PROJECT_ID" --format json \
               | node -e '
                   const fs = require("node:fs");
                   const records = JSON.parse(fs.readFileSync(0, "utf8"));
@@ -83,11 +92,11 @@ jobs:
             while IFS= read -r prebuild_id; do
               [ -n "$prebuild_id" ] || continue
               echo "Cancelling stale active Ona prebuild $prebuild_id"
-              ona prebuild cancel "$prebuild_id" || true
+              run_ona prebuild cancel "$prebuild_id" || true
             done <<< "$active_ids"
           fi
 
-          ona prebuild trigger "$MINELINK_ONA_PROJECT_ID" \
+          run_ona prebuild trigger "$MINELINK_ONA_PROJECT_ID" \
             --prebuild-timeout "$MINELINK_ONA_PREBUILD_TIMEOUT" \
             --format json | tee .minelink-dev/reports/ona-prebuild-trigger.json
 
@@ -101,11 +110,17 @@ jobs:
             '
           )"
 
-          deadline=$((SECONDS + 7200))
+          deadline=$((SECONDS + 3600))
           snapshot_started_at=0
           snapshot_stale_seconds=$((MINELINK_ONA_SNAPSHOT_STALE_MINUTES * 60))
           while true; do
-            ona prebuild get "$prebuild_id" --format json | tee .minelink-dev/reports/ona-prebuild-status.json
+            if ! run_ona prebuild get "$prebuild_id" --format json | tee .minelink-dev/reports/ona-prebuild-status.json; then
+              bash scripts/dev/capture-ona-prebuild-logs.sh || true
+              node scripts/dev/summarize-ona-prebuild-phases.mjs || true
+              echo "Ona prebuild $prebuild_id status poll failed or exceeded ${MINELINK_ONA_CLI_TIMEOUT_SECONDS}s; cancelling stale refresh" >&2
+              run_ona prebuild cancel "$prebuild_id" || true
+              exit 1
+            fi
             phase="$(
               node -e '
                 const fs = require("node:fs");
@@ -148,7 +163,7 @@ jobs:
                   bash scripts/dev/capture-ona-prebuild-logs.sh || true
                   node scripts/dev/summarize-ona-prebuild-phases.mjs || true
                   echo "Ona prebuild $prebuild_id stayed in snapshotting for at least ${MINELINK_ONA_SNAPSHOT_STALE_MINUTES} minutes; cancelling stale refresh" >&2
-                  ona prebuild cancel "$prebuild_id" || true
+                  run_ona prebuild cancel "$prebuild_id" || true
                   exit 1
                 fi
                 ;;

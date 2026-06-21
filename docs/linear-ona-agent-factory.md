@@ -389,11 +389,14 @@ automation, and draft PR evidence:
 - Local GitHub connector fallback created PR #4 so the evidence is reviewable.
 - GitHub Actions CI run `27903350282` passed on PR #4.
 - Ona prebuild readback on 2026-06-21 showed completed baselines
-  `019eeb54-6320-7a1c-ab91-be9544a5eb82` and
-  `019eeb62-6201-70c9-8bfc-77e334213155`. The newest completed snapshot was
-  about 7.75 GB and completed in about 13 minutes. Older overlapping manual
-  prebuilds, including `019eeb05-69dc-75d4-9ffa-a6769945ae50`, were cancelled
-  and are not accepted as the ready baseline.
+  `019eeb54-6320-7a1c-ab91-be9544a5eb82`,
+  `019eeb62-6201-70c9-8bfc-77e334213155`, and
+  `019eebd9-8f2b-717b-8a71-f8275561edb3`. The newest completed snapshot was
+  about 6.22 GB and completed in about 11 minutes after the checkout-local
+  Gradle/build output pruning. Older overlapping or stale refresh prebuilds,
+  including `019eeb05-69dc-75d4-9ffa-a6769945ae50` and
+  `019eebf6-2c0c-7b40-8d59-7516ada89b62`, were cancelled and are not accepted as
+  the ready baseline.
 - Linear setup readback on 2026-06-21 ran
   `npm run agent-factory:setup-linear -- --require-key` and created the
   `MineLink` project at
