@@ -4,6 +4,18 @@ on:
   push:
     branches:
       - codex/minelink-mvp-engineering
+    paths:
+      - ".devcontainer/**"
+      - ".github/workflows/ona-prebuild.yml"
+      - ".ona/**"
+      - "mod/neoforge/build.gradle"
+      - "mod/neoforge/gradle.properties"
+      - "mod/neoforge/gradle/**"
+      - "mod/neoforge/settings.gradle"
+      - "package-lock.json"
+      - "package.json"
+      - "packages/**/package.json"
+      - "scripts/dev/bootstrap-prebuild.sh"
   workflow_dispatch:
     inputs:
       prebuild_timeout:
@@ -20,7 +32,7 @@ concurrency:
 
 jobs:
   trigger:
-    name: Trigger latest Ona prebuild
+    name: Refresh Ona prebuild baseline
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
@@ -33,7 +45,7 @@ jobs:
           chmod +x "$tmp_ona"
           sudo mv "$tmp_ona" /usr/local/bin/ona
 
-      - name: Trigger and follow Ona prebuild
+      - name: Trigger and wait for Ona prebuild baseline
         env:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
           MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
@@ -73,17 +85,58 @@ jobs:
 
           ona prebuild trigger "$MINELINK_ONA_PROJECT_ID" \
             --prebuild-timeout "$MINELINK_ONA_PREBUILD_TIMEOUT" \
-            --follow \
             --format json | tee .minelink-dev/reports/ona-prebuild-trigger.json
+
+          prebuild_id="$(
+            node -e '
+              const fs = require("node:fs");
+              const records = JSON.parse(fs.readFileSync(".minelink-dev/reports/ona-prebuild-trigger.json", "utf8"));
+              const id = records?.[0]?.id;
+              if (!id) process.exit(1);
+              console.log(id);
+            '
+          )"
+
+          deadline=$((SECONDS + 7200))
+          while true; do
+            ona prebuild get "$prebuild_id" --format json | tee .minelink-dev/reports/ona-prebuild-status.json
+            phase="$(
+              node -e '
+                const fs = require("node:fs");
+                const records = JSON.parse(fs.readFileSync(".minelink-dev/reports/ona-prebuild-status.json", "utf8"));
+                const status = records?.[0]?.status ?? {};
+                const phase = status.phase ?? "unknown";
+                const pct = Number(status.snapshotCompletionPercentage ?? 0);
+                console.log(`${phase}:${pct}`);
+              '
+            )"
+            echo "Ona prebuild $prebuild_id status: $phase"
+            case "$phase" in
+              PREBUILD_PHASE_COMPLETED:100)
+                break
+                ;;
+              PREBUILD_PHASE_FAILED:*|PREBUILD_PHASE_CANCELLED:*)
+                echo "Ona prebuild $prebuild_id failed with status $phase" >&2
+                exit 1
+                ;;
+            esac
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "Timed out waiting for Ona prebuild $prebuild_id to complete" >&2
+              exit 1
+            fi
+            sleep 30
+          done
 
           {
             echo "# MineLink Ona Prebuild"
             echo
             echo "- Result: passed"
             echo "- Project: \`$MINELINK_ONA_PROJECT_ID\`"
+            echo "- Prebuild: \`$prebuild_id\`"
             echo "- Branch: \`${GITHUB_REF_NAME:-unknown}\`"
             echo "- Commit: \`${GITHUB_SHA:-unknown}\`"
             echo "- Trigger output: \`.minelink-dev/reports/ona-prebuild-trigger.json\`"
+            echo "- Final status: \`.minelink-dev/reports/ona-prebuild-status.json\`"
           } > .minelink-dev/reports/ona-prebuild.md
 
       - name: Upload Ona prebuild evidence

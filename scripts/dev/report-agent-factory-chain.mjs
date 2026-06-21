@@ -259,30 +259,41 @@ function queryOnaPrebuild(projectId) {
   });
   const active = activePrebuildPhases.has(latestStatus.phase) ? latest : null;
   const staleActive = active && now - prebuildUpdatedMs(active) >= prebuildStaleMs ? active : null;
-  if (latestStatus.phase === "PREBUILD_PHASE_COMPLETED" && Number(latestStatus.snapshotCompletionPercentage ?? 0) >= 100) {
+  if (completed) {
     const status = completed.status ?? {};
+    const warnings = [];
+    if (active && prebuildCreatedMs(active) > prebuildCreatedMs(completed)) {
+      warnings.push(
+        `${describePrebuild(active)}; completed baseline ${completed.id} remains usable while the environment refresh runs.`,
+      );
+    }
+    if (staleActive) {
+      warnings.push(`${describePrebuild(active)}; inspect or cancel this stale background prebuild refresh.`);
+    }
+    if (failedPrebuildPhases.has(latestStatus.phase) && prebuildCreatedMs(latest) > prebuildCreatedMs(completed)) {
+      warnings.push(
+        `${describePrebuild(latest)}; completed baseline ${completed.id} remains usable, but the latest environment refresh failed or was cancelled.`,
+      );
+    }
     return {
       id: completed.id,
       status: "passed",
       evidence: [
-        `Ona prebuild ${completed.id} completed`,
+        `Ona prebuild baseline ${completed.id} completed`,
         status.snapshotSizeBytes ? `snapshot ${status.snapshotSizeBytes} bytes` : "",
         status.completionTime ? `completed ${status.completionTime}` : "",
       ].filter(Boolean),
+      warnings,
     };
   }
 
   if (active) {
-    const fallbackEvidence =
-      completed && prebuildCreatedMs(active) > prebuildCreatedMs(completed)
-        ? [`Older completed prebuild ${completed.id} exists, but latest prebuild must complete before Node G can pass.`]
-        : [];
     return {
       id: active.id,
       status: staleActive ? "blocked" : "partial",
-      evidence: [describePrebuild(active), ...fallbackEvidence],
+      evidence: [describePrebuild(active), "No completed Ona prebuild baseline is available yet."],
       blocker: staleActive
-        ? "Latest Ona prebuild is stale and has not produced a completed snapshot for new Codex environments."
+        ? "Ona prebuild refresh is stale and no completed baseline is available for new Codex environments."
         : "",
       warnings: staleActive ? [`${describePrebuild(active)}; inspect or cancel this stale prebuild.`] : [],
     };
@@ -292,8 +303,8 @@ function queryOnaPrebuild(projectId) {
     return {
       id: latest.id,
       status: "blocked",
-      evidence: [`Latest Ona prebuild evidence is ${latestStatus.phase}`],
-      blocker: "Latest Ona prebuild did not complete successfully.",
+      evidence: [`Ona prebuild evidence is ${latestStatus.phase}`],
+      blocker: "No completed Ona prebuild baseline is available.",
     };
   }
 
@@ -397,7 +408,7 @@ const codexBlocker = codexAuthFailed
 const globalBlocker = args.blocker || codexBlocker;
 const prebuildBlocker =
   prebuildStatus === "blocked"
-    ? autoPrebuildBlocker || args.blocker || "Latest Ona prebuild has not produced a completed snapshot for new Codex environments."
+    ? autoPrebuildBlocker || args.blocker || "No completed Ona prebuild baseline is available for new Codex environments."
     : "";
 
 const nodes = [
@@ -461,7 +472,7 @@ const prebuildHandoffStatus = nodeStatus.ona_prebuild === "passed" ? nodeStatus.
 const prebuildHandoffBlocker =
   nodeStatus.ona_prebuild === "passed"
     ? codexBlocker
-    : prebuildBlocker || "Latest Ona prebuild is not completed; Codex handoff must wait for the prepared environment.";
+    : prebuildBlocker || "No completed Ona prebuild baseline is available; Codex handoff must wait for a prepared environment.";
 const automationHandoffStatus =
   nodeStatus.ona_automation === "passed" || nodeStatus.ona_automation === "partial"
     ? nodeStatus.implementation_codex
@@ -547,8 +558,12 @@ if (firstBlockedEdge?.to === "issue_contract") {
   }
 } else if (firstBlockedEdge?.to === "ona_automation") {
   nextActions.push("Provide ONA_TOKEN/Ona CLI authentication, start the Ona automation, and capture the automation execution id.");
-} else if (firstBlockedEdge?.from === "ona_prebuild" && firstBlockedEdge?.to === "implementation_codex") {
-  nextActions.push("Wait for the automatic Ona prebuild pipeline to produce the latest completed snapshot before Codex handoff.");
+} else if (
+  firstBlockedEdge?.from === "ona_prebuild" &&
+  firstBlockedEdge?.to === "implementation_codex" &&
+  nodeStatus.ona_prebuild !== "passed"
+) {
+  nextActions.push("Trigger the Ona prebuild refresh only when the environment baseline is missing or environment-sensitive files changed, then wait for a completed baseline before Codex handoff.");
   if (prebuildBlocker) nextActions.push(prebuildBlocker);
 } else if (firstBlockedEdge?.to === "implementation_codex") {
   nextActions.push("Repair or expose programmatic Ona Platform Codex launch/authentication, start a fresh Codex implementation session, and capture the session id plus logs.");
