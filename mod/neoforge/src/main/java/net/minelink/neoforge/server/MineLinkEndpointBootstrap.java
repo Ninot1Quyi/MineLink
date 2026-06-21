@@ -53,6 +53,9 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player.BedSleepingProblem;
+import net.minecraft.world.inventory.FurnaceMenu;
+import net.minecraft.world.inventory.SimpleContainerData;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -971,37 +974,68 @@ public final class MineLinkEndpointBootstrap {
             return failure(request, "invalid_arguments", "Use container.take_output for output slots.");
         }
 
-        ItemStack source = readSlot(agent, from);
+        Slot sourceSlot = serverSlot(agent, from);
+        Slot destinationSlot = serverSlot(agent, to);
+        if (sourceSlot == null || destinationSlot == null) {
+            return failure(request, "blocked", "The requested slot is not available through server slot hooks.");
+        }
+
+        ItemStack source = sourceSlot.getItem().copy();
         if (source.isEmpty()) {
             return failure(request, "missing_material", "Source slot is empty.");
         }
-        ItemStack destination = readSlot(agent, to);
+        if (!sourceSlot.mayPickup(agent.entity)) {
+            return failure(request, "blocked", "Server slot rules rejected taking from the source slot.");
+        }
+        ItemStack destination = destinationSlot.getItem().copy();
         if (!destination.isEmpty() && !ItemStack.isSameItemSameComponents(destination, source)) {
             return failure(request, "inventory_full", "Destination slot already contains a different item.");
         }
-        JsonObject slotRuleFailure = validateDestinationSlot(request, agent, to, source);
-        if (slotRuleFailure != null) {
-            return slotRuleFailure;
+        if (!destinationSlot.mayPlace(source.copyWithCount(1))) {
+            return failure(request, "blocked", "Server slot rules rejected this item for the destination slot.");
         }
 
         int requestedCount = Math.max(1, intValue(arguments, "count", source.getCount()));
-        int destinationLimit = destinationLimit(agent, to, source, destination);
+        int destinationLimit = destinationSlot.getMaxStackSize(source);
         int destinationRoom = destinationLimit - (destination.isEmpty() ? 0 : destination.getCount());
         if (destinationRoom <= 0) {
             return failure(request, "inventory_full", "Destination slot cannot accept more of this item.");
         }
         int count = Math.min(Math.min(requestedCount, source.getCount()), destinationRoom);
 
-        ItemStack moved = source.copyWithCount(count);
-        ItemStack remaining = source.copy();
-        remaining.shrink(count);
-        writeSlot(agent, from, remaining.isEmpty() ? ItemStack.EMPTY : remaining);
-        ItemStack merged = destination.isEmpty() ? moved.copy() : destination.copyWithCount(destination.getCount() + count);
-        writeSlot(agent, to, merged);
+        ItemStack extracted = sourceSlot.safeTake(count, count, agent.entity);
+        if (extracted.isEmpty()) {
+            return failure(request, "blocked", "Server slot rules rejected taking from the source slot.");
+        }
+        int extractedCount = extracted.getCount();
+        ItemStack remaining = destinationSlot.safeInsert(extracted.copy(), extractedCount);
+        int movedCount = extractedCount - remaining.getCount();
+        if (movedCount <= 0) {
+            sourceSlot.safeInsert(extracted, extracted.getCount());
+            return failure(request, "blocked", "Server slot rules rejected inserting into the destination slot.");
+        }
+        if (!remaining.isEmpty()) {
+            sourceSlot.safeInsert(remaining, remaining.getCount());
+        }
+        sourceSlot.setChanged();
+        destinationSlot.setChanged();
+        if (agent.openContainer.container != null) {
+            agent.openContainer.container.setChanged();
+        }
+        syncInventoryMirrorFromPlayer(agent);
 
         JsonObject result = new JsonObject();
+        ItemStack moved = source.copyWithCount(movedCount);
         JsonObject movedPayload = stackPayload(moved);
         result.add("moved", movedPayload);
+        result.add("slot_transfer", slotTransferPayload(
+            "slot.safe_take_safe_insert",
+            from,
+            to,
+            sourceSlot,
+            destinationSlot,
+            moved
+        ));
         result.add("container", containerSnapshot(agent));
 
         JsonObject response = toolCompleted(request);
@@ -1024,21 +1058,47 @@ public final class MineLinkEndpointBootstrap {
             }
         }
 
-        ItemStack output = outputStack(agent.openContainer);
+        Slot outputSlot = serverSlot(agent, new SlotRef(agent.openContainer.containerId, "output", outputIndex(agent.openContainer)));
+        ItemStack output = outputSlot == null ? outputStack(agent.openContainer) : outputSlot.getItem().copy();
         if (output.isEmpty()) {
             return failure(request, "missing_material", "No output is available.");
         }
         if (!canAcceptInventory(agent, output)) {
             return failure(request, "inventory_full", "No inventory slot is available for the output.");
         }
-        if (!addToPlayerInventory(agent, output)) {
+
+        ItemStack takenStack;
+        if (outputSlot != null) {
+            if (!outputSlot.mayPickup(agent.entity)) {
+                return failure(request, "blocked", "Server slot rules rejected taking from the output slot.");
+            }
+            takenStack = outputSlot.safeTake(output.getCount(), output.getCount(), agent.entity);
+            if (takenStack.isEmpty()) {
+                return failure(request, "blocked", "Server slot rules rejected taking from the output slot.");
+            }
+        } else {
+            takenStack = output.copy();
+        }
+
+        if (!addToPlayerInventoryThroughSlotHooks(agent, takenStack)) {
+            if (outputSlot == null) {
+                writeOutputStack(agent.openContainer, output);
+            }
             return failure(request, "inventory_full", "No inventory slot is available for the output.");
         }
-        JsonObject taken = stackPayload(output);
-        writeOutputStack(agent.openContainer, ItemStack.EMPTY);
+        JsonObject taken = stackPayload(takenStack);
+        if (outputSlot == null) {
+            writeOutputStack(agent.openContainer, ItemStack.EMPTY);
+        } else {
+            outputSlot.setChanged();
+            if (agent.openContainer.container != null) {
+                agent.openContainer.container.setChanged();
+            }
+        }
 
         JsonObject result = new JsonObject();
         result.add("taken", taken);
+        result.add("slot_transfer", outputTransferPayload(outputSlot, takenStack));
         result.add("inventory", inventoryPayload(agent));
 
         JsonObject response = toolCompleted(request);
@@ -1563,6 +1623,33 @@ public final class MineLinkEndpointBootstrap {
         return remaining.isEmpty();
     }
 
+    private boolean addToPlayerInventoryThroughSlotHooks(AgentBody agent, ItemStack stack) {
+        if (!canAcceptInventory(agent, stack)) {
+            return false;
+        }
+        ItemStack remaining = stack.copy();
+        int size = playerInventorySize(agent);
+        for (int index = 0; index < size && !remaining.isEmpty(); index++) {
+            ItemStack existing = agent.entity.getInventory().getItem(index);
+            if (existing.isEmpty() || !ItemStack.isSameItemSameComponents(existing, remaining)) {
+                continue;
+            }
+            Slot slot = new Slot(agent.entity.getInventory(), index, 0, 0);
+            remaining = slot.safeInsert(remaining, remaining.getCount());
+            slot.setChanged();
+        }
+        for (int index = 0; index < size && !remaining.isEmpty(); index++) {
+            if (!agent.entity.getInventory().getItem(index).isEmpty()) {
+                continue;
+            }
+            Slot slot = new Slot(agent.entity.getInventory(), index, 0, 0);
+            remaining = slot.safeInsert(remaining, remaining.getCount());
+            slot.setChanged();
+        }
+        syncInventoryMirrorFromPlayer(agent);
+        return remaining.isEmpty();
+    }
+
     private boolean removeFromPlayerInventory(AgentBody agent, String itemId, int count) {
         if (inventoryCounts(agent).getOrDefault(itemId, 0) < count) {
             return false;
@@ -1763,6 +1850,67 @@ public final class MineLinkEndpointBootstrap {
         }
         SlotRef slot = open.slotRefs.get(ref);
         return slot != null && slot.containerId.equals(open.containerId) ? slot : null;
+    }
+
+    private Slot serverSlot(AgentBody agent, SlotRef slot) {
+        OpenContainer open = agent.openContainer;
+        if (open == null || !open.containerId.equals(slot.containerId)) {
+            return null;
+        }
+        if (slot.area.equals("inventory")) {
+            if (slot.index < 0 || slot.index >= playerInventorySize(agent)) {
+                return null;
+            }
+            return new Slot(agent.entity.getInventory(), slot.index, 0, 0);
+        }
+        if (slot.area.equals("container") && open.container != null && slot.index >= 0 && slot.index < open.container.getContainerSize()) {
+            if (open.kind.equals("furnace")) {
+                return furnaceMenuSlot(agent, open, slot.index);
+            }
+            return new Slot(open.container, slot.index, 0, 0);
+        }
+        if (slot.area.equals("output") && open.kind.equals("furnace") && open.container != null && slot.index == 2) {
+            return furnaceMenuSlot(agent, open, 2);
+        }
+        return null;
+    }
+
+    private Slot furnaceMenuSlot(AgentBody agent, OpenContainer open, int containerSlot) {
+        if (open.container == null || containerSlot < 0 || containerSlot >= open.container.getContainerSize()) {
+            return null;
+        }
+        FurnaceMenu menu = new FurnaceMenu(-1, agent.entity.getInventory(), open.container, new SimpleContainerData(4));
+        var menuSlot = menu.findSlot(open.container, containerSlot);
+        return menuSlot.isPresent() ? menu.slots.get(menuSlot.getAsInt()) : null;
+    }
+
+    private JsonObject slotTransferPayload(String method, SlotRef source, SlotRef destination, Slot sourceSlot, Slot destinationSlot, ItemStack moved) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("method", method);
+        payload.addProperty("body_ui", "headless_server_agent");
+        payload.addProperty("source_area", source.area);
+        payload.addProperty("source_index", source.index);
+        payload.addProperty("source_slot_class", sourceSlot.getClass().getName());
+        payload.addProperty("destination_area", destination.area);
+        payload.addProperty("destination_index", destination.index);
+        payload.addProperty("destination_slot_class", destinationSlot.getClass().getName());
+        payload.addProperty("server_slot_hooks", true);
+        payload.add("moved", stackPayload(moved));
+        return payload;
+    }
+
+    private JsonObject outputTransferPayload(Slot outputSlot, ItemStack taken) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("method", outputSlot == null ? "synthetic_output_inventory_safe_insert" : "slot.safe_take_inventory_safe_insert");
+        payload.addProperty("body_ui", "headless_server_agent");
+        payload.addProperty("source_area", "output");
+        payload.addProperty("source_slot_class", outputSlot == null ? "minelink.synthetic_crafting_output" : outputSlot.getClass().getName());
+        payload.addProperty("destination_area", "inventory");
+        payload.addProperty("destination_slot_class", Slot.class.getName());
+        payload.addProperty("server_slot_hooks", outputSlot != null);
+        payload.addProperty("inventory_insert_method", "slot.safe_insert");
+        payload.add("taken", stackPayload(taken));
+        return payload;
     }
 
     private JsonObject validateDestinationSlot(JsonObject request, AgentBody agent, SlotRef slot, ItemStack stack) {
@@ -2266,7 +2414,7 @@ public final class MineLinkEndpointBootstrap {
             tool(
                 "container.move_stack",
                 "Move a stack between smoke fixture container and agent inventory.",
-                "Moves item stacks through normal slot, placement, stack-capacity, and output-slot rules.",
+                "Moves item stacks through server Slot take/insert hooks and stack-capacity rules.",
                 objectSchema(properties(
                     prop("from_slot_ref", stringSchema()),
                     prop("to_slot_ref", stringSchema()),
@@ -2279,7 +2427,7 @@ public final class MineLinkEndpointBootstrap {
             tool(
                 "container.take_output",
                 "Take crafting output into agent inventory.",
-                "Takes output through real server output-slot rules.",
+                "Takes output through server output-slot hooks when the opened container exposes them.",
                 objectSchema(properties(prop("slot_ref", stringSchema()))),
                 List.of("container", "craft"),
                 List.of("container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments"),

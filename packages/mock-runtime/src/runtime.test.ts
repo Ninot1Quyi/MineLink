@@ -688,7 +688,19 @@ describe("MockRuntimeServer", () => {
         count: 1
       }
     });
-    expect(move).toMatchObject({ ok: true, result: { moved: { item: "minecraft:oak_log", count: 1 } } });
+    expect(move).toMatchObject({
+      ok: true,
+      result: {
+        moved: { item: "minecraft:oak_log", count: 1 },
+        slot_transfer: {
+          method: "slot.safe_take_safe_insert",
+          source_slot_class: "net.minecraft.world.inventory.Slot",
+          destination_slot_class: "net.minecraft.world.inventory.Slot",
+          server_slot_hooks: true,
+          body_ui: "headless_server_agent"
+        }
+      }
+    });
 
     const staleMove = await request(client, {
       type: "tool.execute",
@@ -757,7 +769,18 @@ describe("MockRuntimeServer", () => {
       name: "container.take_output",
       arguments: { slot_ref: outputSlot.slot_ref }
     });
-    expect(take).toMatchObject({ ok: true, result: { taken: { item: "minecraft:oak_planks", count: 4 } } });
+    expect(take).toMatchObject({
+      ok: true,
+      result: {
+        taken: { item: "minecraft:oak_planks", count: 4 },
+        slot_transfer: {
+          method: "synthetic_output_inventory_safe_insert",
+          source_slot_class: "minelink.synthetic_crafting_output",
+          inventory_insert_method: "slot.safe_insert",
+          body_ui: "headless_server_agent"
+        }
+      }
+    });
 
     const inventory = await request(client, {
       type: "tool.execute",
@@ -888,6 +911,16 @@ describe("MockRuntimeServer", () => {
       name: "container.move_stack",
       arguments: { from_slot_ref: coalSlot.slot_ref, to_slot_ref: validFuelSlot.slot_ref, count: 1 }
     });
+    expect(moveCoal).toMatchObject({
+      ok: true,
+      result: {
+        slot_transfer: {
+          method: "slot.safe_take_safe_insert",
+          destination_slot_class: "net.minecraft.world.inventory.FurnaceFuelSlot",
+          server_slot_hooks: true
+        }
+      }
+    });
     snapshot = (moveCoal.result as { container: ContainerSnapshot }).container;
     expect(snapshot.output_slot).toMatchObject({ item: "minecraft:iron_ingot", count: 1 });
 
@@ -897,7 +930,18 @@ describe("MockRuntimeServer", () => {
       name: "container.take_output",
       arguments: { slot_ref: snapshot.output_slot!.slot_ref }
     });
-    expect(take).toMatchObject({ ok: true, result: { taken: { item: "minecraft:iron_ingot", count: 1 } } });
+    expect(take).toMatchObject({
+      ok: true,
+      result: {
+        taken: { item: "minecraft:iron_ingot", count: 1 },
+        slot_transfer: {
+          method: "slot.safe_take_inventory_safe_insert",
+          source_slot_class: "net.minecraft.world.inventory.FurnaceResultSlot",
+          inventory_insert_method: "slot.safe_insert",
+          server_slot_hooks: true
+        }
+      }
+    });
     client.close();
   });
 });

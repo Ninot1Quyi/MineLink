@@ -349,7 +349,7 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
   {
     name: "container.move_stack",
     summary: "Move items between server container slots.",
-    description: "Moves item stacks through normal slot/menu rules.",
+    description: "Moves item stacks through server Slot take/insert hooks and stack-capacity rules.",
     tags: ["container"],
     input_schema: {
       type: "object",
@@ -372,7 +372,7 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
   {
     name: "container.take_output",
     summary: "Take output from an open crafting or processing container.",
-    description: "Takes output through real server slot rules.",
+    description: "Takes output through server output-slot hooks when the opened container exposes them.",
     tags: ["container", "craft"],
     input_schema: { type: "object", properties: { slot_ref: { type: "string" } } },
     failure_reasons: ["container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments"]

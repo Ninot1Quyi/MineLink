@@ -938,12 +938,23 @@ export class MockRuntimeServer {
       from_slot_ref: fromSlotRef,
       to_slot_ref: toSlotRef,
       item: source.item,
-      count: movedCount
+      count: movedCount,
+      slot_transfer: this.slotTransferPayload("slot.safe_take_safe_insert", agent.openContainer, from.slot, to.slot, {
+        item: source.item,
+        count: movedCount
+      })
     });
     return {
       ok: true,
       status: "completed",
-      result: { moved: { item: source.item, count: movedCount }, container: this.containerSnapshot(agent) }
+      result: {
+        moved: { item: source.item, count: movedCount },
+        slot_transfer: this.slotTransferPayload("slot.safe_take_safe_insert", agent.openContainer, from.slot, to.slot, {
+          item: source.item,
+          count: movedCount
+        }),
+        container: this.containerSnapshot(agent)
+      }
     };
   }
 
@@ -965,8 +976,66 @@ export class MockRuntimeServer {
     }
     this.addToInventory(agent, output);
     this.writeOutputSlot(agent.openContainer, null);
-    this.trace({ event: "container.take_output", agent_id: agent.agentId, item: output.item, count: output.count });
-    return { ok: true, status: "completed", result: { taken: output, inventory: this.inventoryEntries(agent) } };
+    const slotTransfer = this.outputTransferPayload(agent.openContainer, output);
+    this.trace({
+      event: "container.take_output",
+      agent_id: agent.agentId,
+      item: output.item,
+      count: output.count,
+      slot_transfer: slotTransfer
+    });
+    return {
+      ok: true,
+      status: "completed",
+      result: { taken: output, slot_transfer: slotTransfer, inventory: this.inventoryEntries(agent) }
+    };
+  }
+
+  private slotTransferPayload(
+    method: string,
+    open: OpenContainerState,
+    source: SlotBinding,
+    destination: SlotBinding,
+    moved: ItemStack
+  ): JsonObject {
+    return {
+      method,
+      body_ui: "headless_server_agent",
+      source_area: source.area,
+      source_index: source.index,
+      source_slot_class: this.slotClass(open, source),
+      destination_area: destination.area,
+      destination_index: destination.index,
+      destination_slot_class: this.slotClass(open, destination),
+      server_slot_hooks: true,
+      moved: { item: moved.item, count: moved.count }
+    };
+  }
+
+  private outputTransferPayload(open: OpenContainerState, taken: ItemStack): JsonObject {
+    const furnaceOutput = open.kind === "furnace";
+    return {
+      method: furnaceOutput ? "slot.safe_take_inventory_safe_insert" : "synthetic_output_inventory_safe_insert",
+      body_ui: "headless_server_agent",
+      source_area: "output",
+      source_slot_class: furnaceOutput ? "net.minecraft.world.inventory.FurnaceResultSlot" : "minelink.synthetic_crafting_output",
+      destination_area: "inventory",
+      destination_slot_class: "net.minecraft.world.inventory.Slot",
+      server_slot_hooks: furnaceOutput,
+      inventory_insert_method: "slot.safe_insert",
+      taken: { item: taken.item, count: taken.count }
+    };
+  }
+
+  private slotClass(open: OpenContainerState, slot: SlotBinding): string {
+    if (slot.area === "inventory") return "net.minecraft.world.inventory.Slot";
+    if (open.kind === "furnace" && slot.area === "container" && slot.index === 1) {
+      return "net.minecraft.world.inventory.FurnaceFuelSlot";
+    }
+    if (open.kind === "furnace" && slot.area === "output" && slot.index === 2) {
+      return "net.minecraft.world.inventory.FurnaceResultSlot";
+    }
+    return "net.minecraft.world.inventory.Slot";
   }
 
   private listCraftable(agentId: string, query: string, limit: number): RuntimeResponse {

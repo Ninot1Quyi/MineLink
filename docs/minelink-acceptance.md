@@ -46,7 +46,7 @@ Current audit:
 | Gate 3: Limited Perception | real-partial | Real fixture evidence covers occlusion and selected shape classifications; generic raycast/block-shape visibility and long-running perception cache behavior remain incomplete. |
 | Gate 4: MCP Host and Gateway | real-partial | MCP stdio, Streamable HTTP, reconnect, catalog preflight, token/rate/session checks, and real HTTP gateway smoke exist; full hosted gateway operations remain incomplete. |
 | Gate 5: Agent RPC JSON, MCP Compatibility, and Local SDK | real-partial | Codex JSON-RPC replay and generic MCP dynamic tools are verified; Python helper parity, polling/subscription helpers, reconnect ergonomics, replay SDK, and semantic retries remain incomplete. |
-| Gate 6: Container and Crafting | real-partial | Real chest, crafting table, furnace, native `useItemOn` container entry, slot refs, recipe registry, and FakePlayer inventory evidence exists; full server menu click parity remains incomplete. |
+| Gate 6: Container and Crafting | real-partial | Real chest, crafting table, furnace, native `useItemOn` container entry, server `Slot.safeTake/safeInsert` transfer evidence, slot refs, recipe registry, and FakePlayer inventory evidence exists; full server menu click parity and native crafting result parity remain incomplete. |
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
@@ -372,6 +372,15 @@ Current status:
   snapshot. The reports also mark the body UI as `headless_server_agent`, so
   server_agent validation does not imply keyboard, mouse, screenshot, or
   client GUI perception.
+- Mock runtime and real NeoForge `craft_smoke`, `furnace_smoke`,
+  `create_smoke`, and `portal_coop` now assert that successful
+  `container.move_stack` results include `slot_transfer.method` =
+  `slot.safe_take_safe_insert`, proving this slice no longer writes source and
+  destination slots only through MineLink-local `setItem` helpers. Furnace
+  fuel moves additionally report `net.minecraft.world.inventory.FurnaceFuelSlot`,
+  and furnace `container.take_output` reports
+  `net.minecraft.world.inventory.FurnaceResultSlot` plus `slot.safe_insert`
+  inventory insertion.
 - Real NeoForge `craft_smoke` and `furnace_smoke` reports now include
   `inventory.source=fake_player` for the final inventory observation, proving
   that recipe output and furnace output are read back from the native
@@ -383,6 +392,9 @@ Current status:
 - This is not the full Gate 6 release surface yet. Negative inventory-full
   coverage is present for the current crafting output path, but complete server
   menu/slot rule parity still needs separate implementation and evidence.
+  `craft.quick_craft` still stages crafting-table output as
+  `minelink.synthetic_crafting_output`; the next required slice is a native
+  crafting menu/result-slot implementation for the quick-craft path.
 
 ### Gate 7: Create Adapter
 
