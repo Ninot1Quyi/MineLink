@@ -179,12 +179,42 @@ record(
 
 const observedIssues = checks.some((check) => check.status === "blocked");
 const result = blockers.length > 0 ? "blocked" : observedIssues ? "attention" : "completed";
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+const nextActions = unique([
+  ...blockers,
+  ...checks.flatMap((check) => {
+    if (check.name === "current ONA_TOKEN/GITPOD_TOKEN" && check.status === "missing") {
+      return ["Provide ONA_TOKEN to the runner before dispatching Ona automation."];
+    }
+    if (check.name === "current LINEAR_API_KEY" && check.status === "missing") {
+      return ["Provide LINEAR_API_KEY to the runner before enabling Linear watch/status sync."];
+    }
+    if (check.name === "GitHub CLI auth" && check.status === "blocked") {
+      return ["Authenticate GitHub CLI or provide GH_TOKEN/GITHUB_TOKEN before inspecting repository state."];
+    }
+    if (check.name === "GitHub repo secrets" && check.status === "blocked") {
+      return ["Configure GitHub repository secrets: ONA_TOKEN and LINEAR_API_KEY."];
+    }
+    if (check.name === "GitHub Actions secret env" && check.status === "blocked") {
+      return ["Configure GitHub repository or environment secrets so ONA_TOKEN and LINEAR_API_KEY are visible to the workflow runner."];
+    }
+    if (check.name === "Ona CLI active context" && check.status === "blocked") {
+      return ["Verify ona login creates an active Ona context before running ona ai automation start."];
+    }
+    return [];
+  }),
+]);
+
 const report = {
   repo: repo || "unknown",
   generatedAt: new Date().toISOString(),
   result,
   checks,
   blockers,
+  nextActions,
   boundary:
     "This report checks credential presence and CLI context only. It never proves MineLink product acceptance.",
 };
@@ -215,7 +245,7 @@ const lines = [
   "",
   "## Next Actions",
   "",
-  ...(blockers.length > 0 ? blockers.map((blocker) => `- ${escapeMd(blocker)}`) : ["- none"]),
+  ...(nextActions.length > 0 ? nextActions.map((action) => `- ${escapeMd(action)}`) : ["- none"]),
   "",
 ];
 
