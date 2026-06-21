@@ -3,6 +3,7 @@ tasks:
     name: Bootstrap MineLink prebuild runtime
     command: |
       bash scripts/dev/bootstrap-prebuild.sh
+    prebuildRequiresSuccess: true
     triggeredBy:
       - prebuild
 

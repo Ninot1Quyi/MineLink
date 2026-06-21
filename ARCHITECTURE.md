@@ -325,7 +325,9 @@ bash scripts/dev/bootstrap-prebuild.sh
 ```
 
 The primary Ona prebuild path is the `.ona/automations.yaml`
-`bootstrap-prebuild` task with `triggeredBy: prebuild`. The devcontainer
+`bootstrap-prebuild` task with `triggeredBy: prebuild` and
+`prebuildRequiresSuccess: true`, so a failed MineLink bootstrap fails the
+prebuild instead of producing a misleading snapshot. The devcontainer
 `postCreateCommand` calls the same script as a fallback for normal environment
 creation and local devcontainer rebuilds.
 

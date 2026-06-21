@@ -47,9 +47,11 @@ bash scripts/dev/bootstrap-prebuild.sh
 ```
 
 The primary cloud prebuild entry is `.ona/automations.yaml`
-`bootstrap-prebuild`, triggered by Ona's `prebuild` event. The devcontainer
-`postCreateCommand` calls the same script for normal environment creation and
-local devcontainer rebuilds.
+`bootstrap-prebuild`, triggered by Ona's `prebuild` event with
+`prebuildRequiresSuccess: true`. A failed bootstrap must fail the prebuild
+instead of leaving agents with a snapshot that skipped MineLink setup. The
+devcontainer `postCreateCommand` calls the same script for normal environment
+creation and local devcontainer rebuilds.
 
 This prebuild bootstrap installs OS tools, verifies Node/npm/Python/Java/ffmpeg,
 runs `npm ci`, `npm run build`, `npm run typecheck`, and runs

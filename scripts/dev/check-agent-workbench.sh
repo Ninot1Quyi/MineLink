@@ -117,6 +117,7 @@ require_text ".devcontainer/devcontainer.json" "ghcr.io/devcontainers/features/j
 require_text ".ona/automations.yaml" "bootstrap-prebuild"
 require_text ".ona/automations.yaml" "triggeredBy"
 require_text ".ona/automations.yaml" "prebuild"
+require_text ".ona/automations.yaml" "prebuildRequiresSuccess: true"
 require_text ".ona/automations.yaml" "scripts/dev/bootstrap-prebuild.sh"
 require_text "scripts/dev/bootstrap-prebuild.sh" "ffmpeg"
 require_text "scripts/dev/bootstrap-prebuild.sh" "python3 --version"

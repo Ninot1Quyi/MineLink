@@ -594,9 +594,10 @@ Current status:
   `.minelink-dev/install-smoke/install-smoke-report.md`.
 - `scripts/dev/bootstrap-prebuild.sh` is the shared devcontainer/Ona prebuild
   entry point. Ona cloud prebuilds invoke it through the `.ona/automations.yaml`
-  `bootstrap-prebuild` task with `triggeredBy: prebuild`; the devcontainer
-  `postCreateCommand` calls the same script for normal environment creation and
-  local devcontainer rebuilds. It installs OS tools, verifies
+  `bootstrap-prebuild` task with `triggeredBy: prebuild` and
+  `prebuildRequiresSuccess: true`; the devcontainer `postCreateCommand` calls
+  the same script for normal environment creation and local devcontainer
+  rebuilds. It installs OS tools, verifies
   Node/npm/Python/Java/ffmpeg, runs TypeScript build/typecheck, and runs the
   NeoForge Gradle build so Java, Gradle, Minecraft, and NeoForge dependencies
   are cached before Codex agents start work. For these owner-authorized private
