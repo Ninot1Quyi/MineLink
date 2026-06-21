@@ -49,6 +49,11 @@ jobs:
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
+      - name: NeoForge furnace container smoke
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
+        env:
+          MINELINK_RUNTIME: neoforge
+          MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge container and crafting negative smoke
         run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
         env:
@@ -70,7 +75,7 @@ jobs:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge short stability soak
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,guard_boundaries,perception_shapes,portal_coop
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"

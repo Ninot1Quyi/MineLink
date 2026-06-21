@@ -16,6 +16,7 @@ type FixtureName =
   | "vanilla_tree"
   | "create_smoke"
   | "craft_smoke"
+  | "furnace_smoke"
   | "portal_coop"
   | "guard_boundaries"
   | "perception_shapes";
@@ -23,7 +24,7 @@ type RuntimeResponse = Record<string, unknown>;
 type RuntimeRequest = RuntimeResponse & { id?: string; type?: string };
 type RefValidation = { ok: true; ref: VisibleRef } | ({ ok: false } & RuntimeResponse);
 type SlotValidation = { ok: true; slot: SlotBinding } | ({ ok: false } & RuntimeResponse);
-type ContainerKind = "chest" | "crafting_table";
+type ContainerKind = "chest" | "crafting_table" | "furnace";
 type SlotArea = "container" | "inventory" | "output";
 
 const LOCAL_CHAT_RADIUS = 16;
@@ -838,13 +839,13 @@ export class MockRuntimeServer {
       if (slot.slot.area !== "output") return runtimeFail("invalid_arguments", "slot_ref does not point at an output slot.");
     }
 
-    const output = agent.openContainer.output;
+    const output = this.outputSlot(agent.openContainer);
     if (!output || output.count <= 0) return runtimeFail("missing_material", "No output is available.");
     if (!this.canAcceptInventory(agent, output)) {
       return runtimeFail("inventory_full", "No inventory slot is available for the output.", { item: output.item });
     }
     agent.inventory[output.item] = (agent.inventory[output.item] ?? 0) + output.count;
-    agent.openContainer.output = null;
+    this.writeOutputSlot(agent.openContainer, null);
     this.trace({ event: "container.take_output", agent_id: agent.agentId, item: output.item, count: output.count });
     return { ok: true, status: "completed", result: { taken: output, inventory: this.inventoryEntries(agent) } };
   }
@@ -909,6 +910,7 @@ export class MockRuntimeServer {
     const open = agent.openContainer;
     if (!open) return runtimeFail("container_not_open", "No server-side container is currently open.");
 
+    this.processFurnace(open);
     open.slotRefs.clear();
     const bind = (area: SlotArea, index: number): string => {
       const ref = `slot_${open.containerId}_${area}_${index}_${++this.seq}`;
@@ -920,12 +922,15 @@ export class MockRuntimeServer {
       count: stack?.count ?? 0
     });
 
-    const containerSlots = (open.block?.container?.slots ?? []).map((stack, index) => ({
-      slot_ref: bind("container", index),
-      area: "container",
-      index,
-      ...stackPayload(stack)
-    }));
+    const containerSlots = (open.block?.container?.slots ?? [])
+      .map((stack, index) => ({ stack, index }))
+      .filter(({ index }) => !(open.kind === "furnace" && index === 2))
+      .map(({ stack, index }) => ({
+        slot_ref: bind("container", index),
+        area: "container",
+        index,
+        ...stackPayload(stack)
+      }));
     const inventoryEntries = this.inventoryEntries(agent);
     const inventorySlots = Array.from({ length: 8 }, (_, index) => ({
       slot_ref: bind("inventory", index),
@@ -933,12 +938,14 @@ export class MockRuntimeServer {
       index,
       ...stackPayload(inventoryEntries[index] ?? null)
     }));
-    const outputSlot = open.output
+    const output = this.outputSlot(open);
+    const outputIndex = open.kind === "furnace" ? 2 : 0;
+    const outputSlot = output
       ? {
-          slot_ref: bind("output", 0),
+          slot_ref: bind("output", outputIndex),
           area: "output",
-          index: 0,
-          ...stackPayload(open.output)
+          index: outputIndex,
+          ...stackPayload(output)
         }
       : null;
 
@@ -972,7 +979,7 @@ export class MockRuntimeServer {
     if (slot.area === "inventory") {
       return this.inventoryEntries(agent)[slot.index] ?? null;
     }
-    return open.output;
+    return this.outputSlot(open);
   }
 
   private writeSlot(agent: AgentState, slot: SlotBinding, stack: ItemStack | null): void {
@@ -983,7 +990,7 @@ export class MockRuntimeServer {
       return;
     }
     if (slot.area === "output") {
-      open.output = stack;
+      this.writeOutputSlot(open, stack);
       return;
     }
 
@@ -995,6 +1002,34 @@ export class MockRuntimeServer {
     if (stack) {
       agent.inventory[stack.item] = (agent.inventory[stack.item] ?? 0) + stack.count;
     }
+  }
+
+  private outputSlot(open: OpenContainerState): ItemStack | null {
+    if (open.kind === "furnace") {
+      return open.block?.container?.slots[2] ?? null;
+    }
+    return open.output;
+  }
+
+  private writeOutputSlot(open: OpenContainerState, stack: ItemStack | null): void {
+    if (open.kind === "furnace") {
+      if (open.block?.container) open.block.container.slots[2] = stack;
+      return;
+    }
+    open.output = stack;
+  }
+
+  private processFurnace(open: OpenContainerState): void {
+    if (open.kind !== "furnace" || !open.block?.container) return;
+    const slots = open.block.container.slots;
+    const input = slots[0];
+    const fuel = slots[1];
+    const output = slots[2];
+    if (output || !input || !fuel) return;
+    if (input.item !== "minecraft:raw_iron" || fuel.item !== "minecraft:coal") return;
+    slots[0] = input.count > 1 ? { item: input.item, count: input.count - 1 } : null;
+    slots[1] = fuel.count > 1 ? { item: fuel.item, count: fuel.count - 1 } : null;
+    slots[2] = { item: "minecraft:iron_ingot", count: 1 };
   }
 
   private inventoryEntries(agent: AgentState): ItemStack[] {
@@ -1333,6 +1368,34 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
     ];
   }
 
+  if (fixture === "furnace_smoke") {
+    return [
+      {
+        id: "minecraft:chest",
+        pos: [3, 64, 0],
+        tags: ["minecraft:chest", "minelink:container"],
+        visibleFaces: ["north", "up"],
+        container: {
+          kind: "chest",
+          slots: [
+            { item: "minecraft:raw_iron", count: 1 },
+            { item: "minecraft:coal", count: 1 }
+          ]
+        }
+      },
+      {
+        id: "minecraft:furnace",
+        pos: [3, 64, 1],
+        tags: ["minecraft:furnace", "minelink:container", "minelink:furnace_fixture"],
+        visibleFaces: ["north", "up"],
+        container: {
+          kind: "furnace",
+          slots: [null, null, null]
+        }
+      }
+    ];
+  }
+
   if (fixture === "craft_smoke") {
     return [
       {
@@ -1639,6 +1702,7 @@ export function parseFixture(value: string | undefined): FixtureName {
   if (value === "guard_boundaries") return "guard_boundaries";
   if (value === "perception_shapes") return "perception_shapes";
   if (value === "portal_coop") return "portal_coop";
+  if (value === "furnace_smoke") return "furnace_smoke";
   if (value === "create_smoke") return "create_smoke";
   if (value === "craft_smoke") return "craft_smoke";
   return "vanilla_tree";

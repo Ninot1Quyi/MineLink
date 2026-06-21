@@ -24,6 +24,11 @@ case "$scenario" in
     report="$work_dir/reports/craft_smoke-result.json"
     default_port="25577"
     ;;
+  furnace_smoke)
+    fixture="furnace_smoke"
+    report="$work_dir/reports/furnace_smoke-result.json"
+    default_port="25582"
+    ;;
   craft_negative)
     fixture="craft_smoke"
     report="$work_dir/reports/craft_negative-result.json"

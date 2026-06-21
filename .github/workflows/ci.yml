@@ -23,11 +23,12 @@ jobs:
       - run: MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/http-mine_tree bash scripts/dev/e2e.sh mine_tree
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,perception_shapes,portal_coop
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop
       - uses: actions/upload-artifact@v4
         if: always()
         with:

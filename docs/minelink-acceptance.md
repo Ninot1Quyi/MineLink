@@ -33,9 +33,9 @@ Required:
 - `npm install` from a clean clone sets up Host, SDK, mock runtime, tests, and scripts.
 - `npm run build`, `npm run typecheck`, `npm test`, and `npm run ci` pass.
 - CI runs build, tests, mock `mine_tree`, `create_smoke`, `craft_smoke`,
-  `craft_negative`, `guard_boundaries`, `perception_shapes`, and
-  `portal_coop`, plus real NeoForge smoke for those scenarios, and uploads
-  `.minelink-dev/` evidence.
+  `furnace_smoke`, `craft_negative`, `guard_boundaries`,
+  `perception_shapes`, and `portal_coop`, plus real NeoForge smoke for those
+  scenarios, and uploads `.minelink-dev/` evidence.
 - `scripts/dev/build.sh` records Java/NeoForge readiness as valid JSON.
 - No GitHub token, admission token, Microsoft credential, EULA acceptance, or server secret is committed.
 
@@ -52,11 +52,11 @@ Current status:
 - Real NeoForge startup now uses the committed Gradle wrapper and selects Java 21
   when available.
 - GitHub Actions now has a dedicated real NeoForge smoke workflow for
-  `mine_tree`, `create_smoke`, `craft_smoke`, `craft_negative`,
-  `guard_boundaries`, `perception_shapes`, and `portal_coop` on push, pull
-  request, manual dispatch, and daily schedule; full release acceptance still
-  requires the later complete Create, social runtime, install, security, and
-  release-length soak gates.
+  `mine_tree`, `create_smoke`, `craft_smoke`, `furnace_smoke`,
+  `craft_negative`, `guard_boundaries`, `perception_shapes`, and
+  `portal_coop` on push, pull request, manual dispatch, and daily schedule;
+  full release acceptance still requires the later complete Create, social
+  runtime, install, security, and release-length soak gates.
 
 ### Gate 1: Real NeoForge Mod Runtime
 
@@ -104,6 +104,7 @@ Evidence:
 - Real protocol trace.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh mine_tree`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke`.
+- `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh furnace_smoke`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh guard_boundaries`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh perception_shapes`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh portal_coop`.
@@ -252,6 +253,7 @@ Evidence:
 - `bash scripts/dev/e2e.sh mine_tree`
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
+- `bash scripts/dev/e2e.sh furnace_smoke`
 - `bash scripts/dev/e2e.sh craft_negative`
 - `bash scripts/dev/e2e.sh guard_boundaries`
 - `bash scripts/dev/e2e.sh perception_shapes`
@@ -292,6 +294,7 @@ Evidence:
 - Chest/furnace fixture.
 - Negative tests for missing material, station too far, inventory full, invalid recipe, and stale slot ref.
 - `bash scripts/dev/e2e.sh craft_smoke`
+- `bash scripts/dev/e2e.sh furnace_smoke`
 
 Current status:
 
@@ -304,10 +307,15 @@ Current status:
   refs into the agent inventory, crafted through the server recipe registry into
   oak planks, taken from the output slot, and asserted by
   `observe.inventory`.
-- This is not the full Gate 6 release surface yet. Furnace coverage, negative
-  inventory-full cases, complete server menu/slot rule parity, and
-  FakePlayer-backed inventory semantics still need separate implementation and
-  evidence.
+- Mock runtime and real NeoForge runtime cover `furnace_smoke`: raw iron and
+  coal move from a visible chest into a visible furnace through public
+  `container.move_stack` slot refs, the real NeoForge furnace processes through
+  its vanilla block entity tick path, slot 2 is exposed only as an output slot,
+  and `container.take_output` moves the resulting `minecraft:iron_ingot` into
+  the agent inventory.
+- This is not the full Gate 6 release surface yet. Negative inventory-full
+  cases, complete server menu/slot rule parity, and FakePlayer-backed inventory
+  semantics still need separate implementation and evidence.
 
 ### Gate 7: Create Adapter
 
@@ -445,11 +453,12 @@ Current status:
 
 - `scripts/dev/soak.sh` repeats selected e2e scenarios and writes
   `soak-report.json`, `process-cleanup.json`, and `queue-metrics.json`.
-- Fast CI runs a short mock soak for `mine_tree`, `craft_negative`,
-  `guard_boundaries`, `perception_shapes`, and `portal_coop`.
+- Fast CI runs a short mock soak for `mine_tree`, `furnace_smoke`,
+  `craft_negative`, `guard_boundaries`, `perception_shapes`, and
+  `portal_coop`.
 - The NeoForge workflow starts a real dedicated Minecraft server and runs a
-  short real NeoForge soak for `craft_negative`, `guard_boundaries`,
-  `perception_shapes`, and `portal_coop`.
+  short real NeoForge soak for `furnace_smoke`, `craft_negative`,
+  `guard_boundaries`, `perception_shapes`, and `portal_coop`.
 - Host tests cover Gateway token admission, public-bind startup refusal without
   a token, fixed-window rate limiting, and active MCP session caps.
 - Runtime tests and the real `portal_coop` smoke cover the server-side
@@ -470,6 +479,8 @@ Before a release tag, these must pass against mock and real runtime where applic
 - Placing without inventory material returns `missing_material`.
 - Daytime bed sleep through the native server path returns a structured
   rejection.
+- Furnace output is exposed as an output slot and taken through
+  `container.take_output`, not moved as a normal input/fuel slot.
 - An opaque-wall fixture does not return the hidden diamond ore in
   `observe.scene`.
 - Transparent, decorative, fluid, partial-occluder, and opaque fixture blocks
@@ -498,18 +509,19 @@ The repository currently has an executable baseline for Gates 0, 3 partial,
 - `bash scripts/dev/e2e.sh guard_boundaries`
 - `bash scripts/dev/e2e.sh perception_shapes`
 - `bash scripts/dev/e2e.sh portal_coop`
-- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,perception_shapes,portal_coop`
+- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop`
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
 - `./gradlew --no-daemon build` in `mod/neoforge`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/neoforge-http-mine_tree bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_smoke`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh furnace_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh guard_boundaries`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh perception_shapes`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh portal_coop`
-- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,guard_boundaries,perception_shapes,portal_coop`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop`
 - `.minelink-dev/soak/<runtime>/soak-report.json`
 - `.minelink-dev/soak/<runtime>/process-cleanup.json`
 - `.minelink-dev/soak/<runtime>/queue-metrics.json`

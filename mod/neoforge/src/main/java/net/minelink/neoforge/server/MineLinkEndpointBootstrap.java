@@ -842,6 +842,13 @@ public final class MineLinkEndpointBootstrap {
             }
             container = blockContainer;
             kind = "chest";
+        } else if (blockId.equals("minecraft:furnace")) {
+            BlockEntity blockEntity = level.getBlockEntity(blockRef.pos);
+            if (!(blockEntity instanceof Container blockContainer)) {
+                return failure(request, "unsupported_capability", "The referenced furnace does not expose a server container.");
+            }
+            container = blockContainer;
+            kind = "furnace";
         } else if (blockId.equals("minecraft:crafting_table")) {
             kind = "crafting_table";
         } else {
@@ -922,7 +929,7 @@ public final class MineLinkEndpointBootstrap {
             }
         }
 
-        ItemStack output = agent.openContainer.output;
+        ItemStack output = outputStack(agent.openContainer);
         if (output.isEmpty()) {
             return failure(request, "missing_material", "No output is available.");
         }
@@ -931,7 +938,7 @@ public final class MineLinkEndpointBootstrap {
         }
         agent.addInventory(stackItemId(output), output.getCount());
         JsonObject taken = stackPayload(output);
-        agent.openContainer.output = ItemStack.EMPTY;
+        writeOutputStack(agent.openContainer, ItemStack.EMPTY);
 
         JsonObject result = new JsonObject();
         result.add("taken", taken);
@@ -1485,6 +1492,9 @@ public final class MineLinkEndpointBootstrap {
         JsonArray slots = new JsonArray();
         if (open.container != null) {
             for (int index = 0; index < open.container.getContainerSize(); index++) {
+                if (open.kind.equals("furnace") && index == 2) {
+                    continue;
+                }
                 slots.add(slotPayload(agent, "container", index, open.container.getItem(index)));
             }
         }
@@ -1498,7 +1508,8 @@ public final class MineLinkEndpointBootstrap {
         }
         snapshot.add("inventory_slots", inventorySlots);
 
-        snapshot.add("output_slot", open.output.isEmpty() ? null : slotPayload(agent, "output", 0, open.output));
+        ItemStack output = outputStack(open);
+        snapshot.add("output_slot", output.isEmpty() ? null : slotPayload(agent, "output", outputIndex(open), output));
         return snapshot;
     }
 
@@ -1543,7 +1554,7 @@ public final class MineLinkEndpointBootstrap {
             return slot.index >= 0 && slot.index < inventory.size() ? inventory.get(slot.index).copy() : ItemStack.EMPTY;
         }
         if (slot.area.equals("output")) {
-            return open.output.copy();
+            return outputStack(open);
         }
         return ItemStack.EMPTY;
     }
@@ -1570,8 +1581,28 @@ public final class MineLinkEndpointBootstrap {
             return;
         }
         if (slot.area.equals("output")) {
-            open.output = stack;
+            writeOutputStack(open, stack);
         }
+    }
+
+    private ItemStack outputStack(OpenContainer open) {
+        if (open.kind.equals("furnace") && open.container != null && open.container.getContainerSize() > 2) {
+            return open.container.getItem(2).copy();
+        }
+        return open.output.copy();
+    }
+
+    private void writeOutputStack(OpenContainer open, ItemStack stack) {
+        if (open.kind.equals("furnace") && open.container != null && open.container.getContainerSize() > 2) {
+            open.container.setItem(2, stack);
+            open.container.setChanged();
+            return;
+        }
+        open.output = stack;
+    }
+
+    private int outputIndex(OpenContainer open) {
+        return open.kind.equals("furnace") ? 2 : 0;
     }
 
     private List<ItemStack> inventoryEntries(AgentBody agent) {
@@ -1961,6 +1992,10 @@ public final class MineLinkEndpointBootstrap {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedCreateFixture(level, base);
                 spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
+            } else if (fixtureName.equals("furnace_smoke")) {
+                base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
+                seedFurnaceFixture(level, base);
+                spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
             } else {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedFixture(level, base);
@@ -2107,6 +2142,25 @@ public final class MineLinkEndpointBootstrap {
                 setOptionalItem(container, 5, "minecraft:iron_ingot", 1);
                 container.setChanged();
             }
+        }
+
+        private static void seedFurnaceFixture(ServerLevel level, BlockPos base) {
+            for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -1), base.offset(5, 4, 5))) {
+                if (pos.getY() >= base.getY()) {
+                    level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
+                }
+            }
+            for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -1), base.offset(5, -1, 5))) {
+                level.setBlockAndUpdate(pos.immutable(), Blocks.GRASS_BLOCK.defaultBlockState());
+            }
+            BlockPos chestPos = base.south(3);
+            level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
+            if (level.getBlockEntity(chestPos) instanceof Container container) {
+                container.setItem(0, new ItemStack(Items.RAW_IRON, 1));
+                container.setItem(1, new ItemStack(Items.COAL, 1));
+                container.setChanged();
+            }
+            level.setBlockAndUpdate(base.south(4), Blocks.FURNACE.defaultBlockState());
         }
 
         private static void setOptionalBlock(ServerLevel level, BlockPos pos, String blockId) {
@@ -2389,6 +2443,12 @@ public final class MineLinkEndpointBootstrap {
                     fixtureBase.south(3)
                 };
             }
+            if (fixtureName.equals("furnace_smoke")) {
+                return new BlockPos[] {
+                    fixtureBase.south(3),
+                    fixtureBase.south(4)
+                };
+            }
             return new BlockPos[] {
                 fixtureBase.east(3),
                 fixtureBase.east(3).above(),
@@ -2401,7 +2461,7 @@ public final class MineLinkEndpointBootstrap {
         private List<String> extraTags(BlockPos pos, BlockState state) {
             List<String> extra = new ArrayList<>();
             String id = blockId(state);
-            if (id.equals("minecraft:chest") || id.equals("minecraft:crafting_table")) {
+            if (id.equals("minecraft:chest") || id.equals("minecraft:crafting_table") || id.equals("minecraft:furnace")) {
                 extra.add("minelink:container");
             }
             if (state.is(BlockTags.BEDS)) {

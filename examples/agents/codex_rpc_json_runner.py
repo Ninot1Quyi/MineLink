@@ -203,6 +203,7 @@ def scenario_objective(scenario: str) -> str:
         "mine_tree": "Use MineLink MCP tools to create a server_agent body, mine one visible oak log, and prove it is in inventory.",
         "create_smoke": "Use MineLink MCP tools to take Create materials from a chest, place one Create component, use a wrench, press an iron ingot into an iron sheet through a powered Create depot and mechanical press, and pick the sheet up with an empty hand.",
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
+        "furnace_smoke": "Use MineLink MCP tools to move raw iron and coal from a chest into a reachable furnace, wait for vanilla furnace processing, and take the iron ingot output.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, movement-collision, and sleep-limited actions.",
         "perception_shapes": "Use MineLink MCP tools to prove limited perception classifies visible translucent, decorative, fluid, partial-occluder, and opaque fixtures while hiding a blocked ore.",
@@ -464,6 +465,10 @@ def resolve_templates(value: Any, state: JsonDict, global_state: Optional[JsonDi
         return find_placed_block_ref(state, global_state, value.removeprefix("${placed_block:").removesuffix("}"))
     if value.startswith("${container_slot:") and value.endswith("}"):
         return find_container_slot_ref(state, value.removeprefix("${container_slot:").removesuffix("}"))
+    if value.startswith("${container_slot_index:") and value.endswith("}"):
+        return find_container_slot_index_ref(state, value.removeprefix("${container_slot_index:").removesuffix("}"))
+    if value.startswith("${inventory_slot:") and value.endswith("}"):
+        return find_inventory_slot_ref(state, value.removeprefix("${inventory_slot:").removesuffix("}"))
     return value
 
 
@@ -487,6 +492,23 @@ def find_container_slot_ref(state: JsonDict, item_id: str) -> str:
         if slot.get("item") == item_id and int(slot.get("count", 0)) > 0:
             return str(slot["slot_ref"])
     raise RuntimeError(f"No open container slot contains {item_id}")
+
+
+def find_container_slot_index_ref(state: JsonDict, index_text: str) -> str:
+    target_index = int(index_text)
+    container = current_container(state)
+    for slot in container.get("slots", []):
+        if int(slot.get("index", -1)) == target_index:
+            return str(slot["slot_ref"])
+    raise RuntimeError(f"No open container slot has index {target_index}")
+
+
+def find_inventory_slot_ref(state: JsonDict, item_id: str) -> str:
+    container = current_container(state)
+    for slot in container.get("inventory_slots", []):
+        if slot.get("item") == item_id and int(slot.get("count", 0)) > 0:
+            return str(slot["slot_ref"])
+    raise RuntimeError(f"No inventory slot contains {item_id}")
 
 
 def find_placed_block_ref(state: JsonDict, global_state: Optional[JsonDict], label: str) -> str:
