@@ -140,6 +140,8 @@ interface OpenContainerState {
   block?: BlockState;
   slotRefs: Map<string, SlotBinding>;
   output: ItemStack | null;
+  pendingResultTakes?: number;
+  repeatedCraftOutput?: ItemStack;
   nativeInteraction: {
     method: "server_player_game_mode.use_item_on";
     server_container_available: boolean;
@@ -977,7 +979,14 @@ export class MockRuntimeServer {
       return runtimeFail("inventory_full", "No inventory slot is available for the output.", { item: output.item });
     }
     this.addToInventory(agent, output);
-    this.writeOutputSlot(agent.openContainer, null);
+    if (agent.openContainer.kind === "crafting_table" && (agent.openContainer.pendingResultTakes ?? 0) > 1) {
+      agent.openContainer.pendingResultTakes = (agent.openContainer.pendingResultTakes ?? 1) - 1;
+      this.writeOutputSlot(agent.openContainer, agent.openContainer.repeatedCraftOutput ?? output);
+    } else {
+      agent.openContainer.pendingResultTakes = 0;
+      agent.openContainer.repeatedCraftOutput = undefined;
+      this.writeOutputSlot(agent.openContainer, null);
+    }
     const slotTransfer = this.outputTransferPayload(agent.openContainer, output);
     this.trace({
       event: "container.take_output",
@@ -989,7 +998,7 @@ export class MockRuntimeServer {
     return {
       ok: true,
       status: "completed",
-      result: { taken: output, slot_transfer: slotTransfer, inventory: this.inventoryEntries(agent) }
+      result: { taken: output, slot_transfer: slotTransfer, inventory: this.inventoryEntries(agent), container: this.containerSnapshot(agent) }
     };
   }
 
@@ -1078,9 +1087,6 @@ export class MockRuntimeServer {
     }
 
     const count = Math.max(1, Math.floor(requestedCount || 1));
-    if (count !== 1) {
-      return runtimeFail("unsupported_capability", "Native quick_craft currently stages one craft per output take.");
-    }
     const neededLogs = count;
     if (agent.openContainer?.output) {
       return runtimeFail("inventory_full", "Take the current crafting output before crafting again.");
@@ -1092,7 +1098,8 @@ export class MockRuntimeServer {
       });
     }
     this.removeFromInventory(agent, "minecraft:oak_log", neededLogs);
-    const output = { item: "minecraft:oak_planks", count: count * 4 };
+    const output = { item: "minecraft:oak_planks", count: 4 };
+    const plannedOutput = { item: "minecraft:oak_planks", count: count * 4 };
     const craftingTransfer = {
       method: "crafting_menu.safe_take_safe_insert_grid",
       body_ui: "headless_server_agent",
@@ -1102,22 +1109,34 @@ export class MockRuntimeServer {
       result_slot_class: "net.minecraft.world.inventory.ResultSlot",
       server_slot_hooks: true,
       menu_type: agent.openContainer!.nativeInteraction.menu_type,
+      planned_result_takes: count,
+      planned_output: plannedOutput,
       consumed: { "minecraft:oak_log": neededLogs },
       grid: [{ grid_index: 0, item: "minecraft:oak_log", count: neededLogs, destination_slot_class: "net.minecraft.world.inventory.Slot" }]
     };
     agent.openContainer!.output = output;
+    agent.openContainer!.pendingResultTakes = count;
+    agent.openContainer!.repeatedCraftOutput = output;
     this.trace({
       event: "craft.quick_craft",
       agent_id: agent.agentId,
       recipe_id: recipeId,
       consumed: { item: "minecraft:oak_log", count: neededLogs },
       output,
+      planned_output: plannedOutput,
       crafting_transfer: craftingTransfer
     });
     return {
       ok: true,
       status: "completed",
-      result: { recipe_id: recipeId, output, crafting_transfer: craftingTransfer, container: this.containerSnapshot(agent) }
+      result: {
+        recipe_id: recipeId,
+        requested_count: count,
+        planned_output: plannedOutput,
+        output,
+        crafting_transfer: craftingTransfer,
+        container: this.containerSnapshot(agent)
+      }
     };
   }
 

@@ -1115,6 +1115,7 @@ public final class MineLinkEndpointBootstrap {
         result.add("taken", taken);
         result.add("slot_transfer", outputTransferPayload(agent.openContainer, outputSlot, takenStack));
         result.add("inventory", inventoryPayload(agent));
+        result.add("container", containerSnapshot(agent));
 
         JsonObject response = toolCompleted(request);
         response.add("result", result);
@@ -1160,9 +1161,6 @@ public final class MineLinkEndpointBootstrap {
         }
         String recipeId = stringValue(arguments, "recipe_id", "");
         int count = Math.min(Math.max(intValue(arguments, "count", 1), 1), 64);
-        if (count != 1) {
-            return failure(request, "unsupported_capability", "Native quick_craft currently stages one craft per output take.");
-        }
         ResourceLocation recipeLocation;
         try {
             recipeLocation = ResourceLocation.parse(recipeId);
@@ -1214,6 +1212,8 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject result = new JsonObject();
         result.addProperty("recipe_id", recipeId);
+        result.addProperty("requested_count", count);
+        result.add("planned_output", stackPayload(plan.get().plannedOutput()));
         result.add("output", stackPayload(nativeOutput));
         result.add("crafting_transfer", craftingTransferPayload(agent.openContainer, resultSlot, plan.get()));
         result.add("container", containerSnapshot(agent));
@@ -2167,25 +2167,16 @@ public final class MineLinkEndpointBootstrap {
             if (ingredient.isEmpty()) {
                 continue;
             }
-            int sourceIndex = firstPlayerSlotMatching(agent, ingredient);
-            if (sourceIndex < 0) {
+            ItemStack taken = takeFromPlayerInventoryThroughSlotHooks(agent, ingredient);
+            if (taken.isEmpty()) {
                 returnCraftingGridToInventory(agent, menu);
                 return failure(request, "missing_material", "Current agent inventory cannot satisfy the requested recipe.");
             }
-            Slot sourceSlot = new Slot(agent.entity.getInventory(), sourceIndex, 0, 0);
-            if (!sourceSlot.mayPickup(agent.entity)) {
-                returnCraftingGridToInventory(agent, menu);
-                return failure(request, "blocked", "Server slot rules rejected taking an ingredient from inventory.");
-            }
             Slot destinationSlot = menu.slots.get(CRAFTING_GRID_SLOT_START + gridIndex);
             if (!destinationSlot.mayPlace(ingredient)) {
+                addToPlayerInventoryThroughSlotHooks(agent, taken);
                 returnCraftingGridToInventory(agent, menu);
                 return failure(request, "blocked", "Server slot rules rejected placing an ingredient into the crafting grid.");
-            }
-            ItemStack taken = sourceSlot.safeTake(ingredient.getCount(), ingredient.getCount(), agent.entity);
-            if (taken.isEmpty()) {
-                returnCraftingGridToInventory(agent, menu);
-                return failure(request, "blocked", "Server slot rules rejected taking an ingredient from inventory.");
             }
             ItemStack remaining = destinationSlot.safeInsert(taken, taken.getCount());
             if (!remaining.isEmpty()) {
@@ -2193,11 +2184,51 @@ public final class MineLinkEndpointBootstrap {
                 returnCraftingGridToInventory(agent, menu);
                 return failure(request, "blocked", "Server slot rules rejected inserting an ingredient into the crafting grid.");
             }
-            sourceSlot.setChanged();
             destinationSlot.setChanged();
         }
         syncInventoryMirrorFromPlayer(agent);
         return null;
+    }
+
+    private ItemStack takeFromPlayerInventoryThroughSlotHooks(AgentBody agent, ItemStack wanted) {
+        ItemStack remaining = wanted.copy();
+        ItemStack gathered = ItemStack.EMPTY;
+        while (!remaining.isEmpty()) {
+            int sourceIndex = firstPlayerSlotMatching(agent, remaining.copyWithCount(1));
+            if (sourceIndex < 0) {
+                break;
+            }
+            Slot sourceSlot = new Slot(agent.entity.getInventory(), sourceIndex, 0, 0);
+            if (!sourceSlot.mayPickup(agent.entity)) {
+                if (!gathered.isEmpty()) {
+                    addToPlayerInventoryThroughSlotHooks(agent, gathered);
+                }
+                return ItemStack.EMPTY;
+            }
+            int takeCount = Math.min(remaining.getCount(), sourceSlot.getItem().getCount());
+            ItemStack taken = sourceSlot.safeTake(takeCount, takeCount, agent.entity);
+            if (taken.isEmpty()) {
+                if (!gathered.isEmpty()) {
+                    addToPlayerInventoryThroughSlotHooks(agent, gathered);
+                }
+                return ItemStack.EMPTY;
+            }
+            if (gathered.isEmpty()) {
+                gathered = taken.copy();
+            } else {
+                gathered.grow(taken.getCount());
+            }
+            remaining.shrink(taken.getCount());
+            sourceSlot.setChanged();
+        }
+        if (!remaining.isEmpty()) {
+            if (!gathered.isEmpty()) {
+                addToPlayerInventoryThroughSlotHooks(agent, gathered);
+            }
+            return ItemStack.EMPTY;
+        }
+        syncInventoryMirrorFromPlayer(agent);
+        return gathered;
     }
 
     private void returnCraftingGridToInventory(AgentBody agent, CraftingMenu menu) {
@@ -2226,6 +2257,8 @@ public final class MineLinkEndpointBootstrap {
         payload.addProperty("result_slot_class", resultSlot.getClass().getName());
         payload.addProperty("server_slot_hooks", true);
         payload.addProperty("menu_type", open.nativeMenuType);
+        payload.addProperty("planned_result_takes", plan.plannedCrafts());
+        payload.add("planned_output", stackPayload(plan.plannedOutput()));
 
         JsonObject consumed = new JsonObject();
         for (Map.Entry<String, Integer> entry : plan.consumed.entrySet()) {
@@ -2283,8 +2316,13 @@ public final class MineLinkEndpointBootstrap {
                 consumed.merge(stackItemId(stack), 1, Integer::sum);
                 ItemStack one = stack.copyWithCount(1);
                 grid.set(gridIndex, one);
-                if (craftIndex == 0) {
+                ItemStack staged = stagedGrid.get(gridIndex);
+                if (staged.isEmpty()) {
                     stagedGrid.set(gridIndex, one.copy());
+                } else if (ItemStack.isSameItemSameComponents(staged, one) && staged.getCount() < staged.getMaxStackSize()) {
+                    staged.grow(1);
+                } else {
+                    return Optional.empty();
                 }
                 gridIndex++;
             }
@@ -2305,7 +2343,7 @@ public final class MineLinkEndpointBootstrap {
                 return Optional.empty();
             }
         }
-        return Optional.of(new CraftPlan(consumed, stagedGrid));
+        return Optional.of(new CraftPlan(consumed, stagedGrid, count, output));
     }
 
     private Optional<ItemStack> selectIngredient(net.minecraft.world.item.crafting.Ingredient ingredient, Map<String, Integer> available) {
@@ -3673,6 +3711,6 @@ public final class MineLinkEndpointBootstrap {
     private record SlotRef(String containerId, String area, int index) {
     }
 
-    private record CraftPlan(Map<String, Integer> consumed, List<ItemStack> grid) {
+    private record CraftPlan(Map<String, Integer> consumed, List<ItemStack> grid, int plannedCrafts, ItemStack plannedOutput) {
     }
 }

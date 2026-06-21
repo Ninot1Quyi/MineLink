@@ -685,13 +685,13 @@ describe("MockRuntimeServer", () => {
       arguments: {
         from_slot_ref: logSlot.slot_ref,
         to_slot_ref: emptyInventorySlot.slot_ref,
-        count: 1
+        count: 2
       }
     });
     expect(move).toMatchObject({
       ok: true,
       result: {
-        moved: { item: "minecraft:oak_log", count: 1 },
+        moved: { item: "minecraft:oak_log", count: 2 },
         slot_transfer: {
           method: "slot.safe_take_safe_insert",
           source_slot_class: "net.minecraft.world.inventory.Slot",
@@ -749,7 +749,7 @@ describe("MockRuntimeServer", () => {
       type: "tool.execute",
       agent_id: agentId,
       name: "craft.quick_craft",
-      arguments: { recipe_id: "minecraft:oak_planks", count: 1 }
+      arguments: { recipe_id: "minecraft:oak_planks", count: 2 }
     });
     const craftSnapshot = (craft.result as { container: ContainerSnapshot }).container;
     expect(craftSnapshot.output_slot).toMatchObject({ item: "minecraft:oak_planks", count: 4 });
@@ -761,6 +761,8 @@ describe("MockRuntimeServer", () => {
           output_source: "native_crafting_result_slot",
           result_slot_class: "net.minecraft.world.inventory.ResultSlot",
           server_slot_hooks: true,
+          planned_result_takes: 2,
+          planned_output: { item: "minecraft:oak_planks", count: 8 },
           body_ui: "headless_server_agent"
         }
       }
@@ -775,13 +777,13 @@ describe("MockRuntimeServer", () => {
     expect(duplicateCraft).toMatchObject({ ok: false, reason: "inventory_full" });
 
     const outputSlot = craftSnapshot.output_slot!;
-    const take = await request(client, {
+    const firstTake = await request(client, {
       type: "tool.execute",
       agent_id: agentId,
       name: "container.take_output",
       arguments: { slot_ref: outputSlot.slot_ref }
     });
-    expect(take).toMatchObject({
+    expect(firstTake).toMatchObject({
       ok: true,
       result: {
         taken: { item: "minecraft:oak_planks", count: 4 },
@@ -795,6 +797,25 @@ describe("MockRuntimeServer", () => {
         }
       }
     });
+    const refreshedOutput = (firstTake.result as { container: ContainerSnapshot }).container.output_slot!;
+    expect(refreshedOutput).toMatchObject({ item: "minecraft:oak_planks", count: 4 });
+
+    const secondTake = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.take_output",
+      arguments: { slot_ref: refreshedOutput.slot_ref }
+    });
+    expect(secondTake).toMatchObject({
+      ok: true,
+      result: {
+        taken: { item: "minecraft:oak_planks", count: 4 },
+        slot_transfer: {
+          source_slot_class: "net.minecraft.world.inventory.ResultSlot",
+          server_slot_hooks: true
+        }
+      }
+    });
 
     const inventory = await request(client, {
       type: "tool.execute",
@@ -802,7 +823,7 @@ describe("MockRuntimeServer", () => {
       name: "observe.inventory",
       arguments: {}
     });
-    expect(countItem(inventory, "minecraft:oak_planks")).toBe(4);
+    expect(countItem(inventory, "minecraft:oak_planks")).toBe(8);
     client.close();
   });
 
