@@ -9,6 +9,9 @@ describe("Agent SDK", () => {
       return { ok: true, result: {} };
     });
 
+    await agent.body.freeze("pause");
+    await agent.body.restore();
+    await agent.body.remove("done");
     await agent.body.move([1, 0, 0], 200);
     await agent.body.mine("blk_obs_1");
     await agent.body.use("blk_portal_frame", "minecraft:flint_and_steel", "east");
@@ -22,6 +25,9 @@ describe("Agent SDK", () => {
     await agent.craft.quickCraft("minecraft:oak_planks", 2);
 
     expect(calls).toEqual([
+      { name: "body.freeze", args: { reason: "pause" }, options: undefined },
+      { name: "body.restore", args: {}, options: undefined },
+      { name: "body.remove", args: { reason: "done" }, options: undefined },
       { name: "action.move", args: { vector: [1, 0, 0], durationMs: 200 }, options: undefined },
       {
         name: "action.mine_visible_block",

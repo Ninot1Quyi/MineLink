@@ -89,6 +89,7 @@ interface AgentState {
   displayName: string;
   bodyId: string;
   ownerId: string;
+  bodyStatus: "active" | "frozen";
   position: Vec3;
   yaw: number;
   pitch: number;
@@ -286,6 +287,7 @@ export class MockRuntimeServer {
           capabilities: {
             server_agent: true,
             birth: true,
+            body_lifecycle: "same-process",
             visible_surface_scan: true,
             inventory: true,
             container_basic: this.fixture === "craft_smoke",
@@ -355,6 +357,7 @@ export class MockRuntimeServer {
       displayName,
       bodyId,
       ownerId,
+      bodyStatus: "active",
       position: this.fixture === "portal_coop" ? [1.5, 66, -2] : [0, 64, 0],
       yaw: 0,
       pitch: 0,
@@ -373,6 +376,7 @@ export class MockRuntimeServer {
       agent_id: agentId,
       display_name: displayName,
       body_id: bodyId,
+      body_status: agent.bodyStatus,
       spawn: { dimension: "minecraft:overworld", position: agent.position },
       initial_profile: {
         personality: { curiosity: 0.72, risk_tolerance: 0.28 },
@@ -400,6 +404,8 @@ export class MockRuntimeServer {
     const result: RuntimeResponse = {
       ok: true,
       agent_id: agent.agentId,
+      body_id: agent.bodyId,
+      body_status: agent.bodyStatus,
       observation_id: observationId,
       issued_at: new Date().toISOString(),
       expires_at: new Date(expiresAt).toISOString()
@@ -409,6 +415,8 @@ export class MockRuntimeServer {
       result.self = {
         health: 20,
         hunger: 18,
+        body_status: agent.bodyStatus,
+        body_id: agent.bodyId,
         position: agent.position,
         yaw: agent.yaw,
         pitch: agent.pitch,
@@ -443,6 +451,13 @@ export class MockRuntimeServer {
     if (!tool) return runtimeFail("unknown_tool", `Unknown dynamic tool ${name}`);
     if (mode !== "await_completion" && mode !== "submit") {
       return runtimeFail("invalid_arguments", `Unsupported execute mode ${mode}`);
+    }
+
+    if (name === "body.freeze") return this.freezeBody(agentId, String(args.reason ?? ""));
+    if (name === "body.restore") return this.restoreBody(agentId);
+    if (name === "body.remove") return this.removeBody(agentId, String(args.reason ?? ""));
+    if (this.bodyFrozen(agentId) && !this.toolAllowedWhileFrozen(name)) {
+      return runtimeFail("body_frozen", "The active server_agent body is frozen until body.restore succeeds.");
     }
 
     if (name === "observe.self") return this.observe(agentId, ["self"]);
@@ -506,6 +521,94 @@ export class MockRuntimeServer {
       return this.quickCraft(agentId, String(args.recipe_id ?? ""), Number(args.count ?? 1));
     }
     return runtimeFail("unknown_tool", `Unhandled dynamic tool ${name}`);
+  }
+
+  private freezeBody(agentId: string, reason: string): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    const cancelledActions = this.cancelActiveActions(
+      agent,
+      "body_frozen",
+      reason || "server_agent body was frozen."
+    );
+    agent.bodyStatus = "frozen";
+    this.trace({ event: "agent.body_lifecycle", agent_id: agent.agentId, status: "frozen", cancelled_actions: cancelledActions });
+    return {
+      ok: true,
+      status: "completed",
+      result: {
+        agent_id: agent.agentId,
+        body_id: agent.bodyId,
+        body_status: agent.bodyStatus,
+        frozen: true,
+        cancelled_actions: cancelledActions,
+        owner_active_bodies: this.agentCountForOwner(agent.ownerId),
+        max_owner_bodies: MAX_AGENTS_PER_OWNER
+      }
+    };
+  }
+
+  private restoreBody(agentId: string): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    const wasFrozen = agent.bodyStatus === "frozen";
+    agent.bodyStatus = "active";
+    this.trace({ event: "agent.body_lifecycle", agent_id: agent.agentId, status: "active", restored: wasFrozen });
+    return {
+      ok: true,
+      status: "completed",
+      result: {
+        agent_id: agent.agentId,
+        body_id: agent.bodyId,
+        body_status: agent.bodyStatus,
+        restored: wasFrozen,
+        restore_scope: "same_process",
+        persistent_restore: false,
+        owner_active_bodies: this.agentCountForOwner(agent.ownerId),
+        max_owner_bodies: MAX_AGENTS_PER_OWNER
+      }
+    };
+  }
+
+  private removeBody(agentId: string, reason: string): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    const ownerId = agent.ownerId;
+    const cancelledActions = this.cancelActiveActions(
+      agent,
+      "body_removed",
+      reason || "server_agent body was removed."
+    );
+    this.agents.delete(agentId);
+    this.trace({ event: "agent.body_lifecycle", agent_id: agent.agentId, status: "removed", cancelled_actions: cancelledActions });
+    return {
+      ok: true,
+      status: "completed",
+      result: {
+        agent_id: agent.agentId,
+        body_id: agent.bodyId,
+        body_status: "removed",
+        removed: true,
+        cancelled_actions: cancelledActions,
+        owner_active_bodies: this.agentCountForOwner(ownerId),
+        max_owner_bodies: MAX_AGENTS_PER_OWNER
+      }
+    };
+  }
+
+  private bodyFrozen(agentId: string): boolean {
+    return this.agents.get(agentId)?.bodyStatus === "frozen";
+  }
+
+  private toolAllowedWhileFrozen(name: string): boolean {
+    return (
+      name.startsWith("observe.") ||
+      name === "action.status" ||
+      name === "action.cancel" ||
+      name === "body.freeze" ||
+      name === "body.restore" ||
+      name === "body.remove"
+    );
   }
 
   private executeAction(agentId: string, action: JsonObject, mode = "await_completion"): RuntimeResponse {
@@ -656,6 +759,21 @@ export class MockRuntimeServer {
     if (record.queueReleased) return;
     record.queueReleased = true;
     agent.queueDepth = Math.max(0, agent.queueDepth - 1);
+  }
+
+  private cancelActiveActions(agent: AgentState, reason: string, message: string): number {
+    let cancelled = 0;
+    for (const record of agent.actions.values()) {
+      if (!this.activeAction(record)) continue;
+      record.lifecycleStatus = "cancelled";
+      record.failureReason = reason;
+      record.failureMessage = message;
+      record.updatedAt = Date.now();
+      this.releaseActionQueue(agent, record);
+      cancelled += 1;
+      this.trace({ event: "agent.action_event", action_id: record.actionId, status: "cancelled", reason });
+    }
+    return cancelled;
   }
 
   private activeAction(record: ActionLifecycle): boolean {

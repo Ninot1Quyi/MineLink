@@ -14,6 +14,7 @@ online_mode="${MINELINK_ONLINE_MODE:-false}"
 minecraft_port="${MINELINK_MINECRAFT_PORT:-}"
 ref_ttl_ms="${MINELINK_REF_TTL_MS:-}"
 enable_create="${MINELINK_ENABLE_CREATE:-0}"
+gradle_cmd="${MINELINK_GRADLE_CMD:-}"
 
 upsert_server_property() {
   key="$1"
@@ -89,10 +90,18 @@ if [ "$runtime" = "neoforge" ]; then
     exit 1
   fi
   if [ "$enable_create" = "1" ] || [ "$enable_create" = "true" ]; then
-    (cd mod/neoforge && exec ./gradlew --no-daemon -PenableCreateAdapter=true runServer)
+    if [ -n "$gradle_cmd" ]; then
+      (cd mod/neoforge && exec "$gradle_cmd" --no-daemon -PenableCreateAdapter=true runServer)
+    else
+      (cd mod/neoforge && exec ./gradlew --no-daemon -PenableCreateAdapter=true runServer)
+    fi
     exit $?
   fi
-  (cd mod/neoforge && exec ./gradlew --no-daemon runServer)
+  if [ -n "$gradle_cmd" ]; then
+    (cd mod/neoforge && exec "$gradle_cmd" --no-daemon runServer)
+  else
+    (cd mod/neoforge && exec ./gradlew --no-daemon runServer)
+  fi
 fi
 
 echo "Unknown MINELINK_RUNTIME=$runtime" >&2

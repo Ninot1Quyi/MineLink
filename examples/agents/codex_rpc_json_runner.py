@@ -210,6 +210,7 @@ def scenario_objective(scenario: str) -> str:
         "furnace_smoke": "Use MineLink MCP tools to move raw iron and coal from a chest into a reachable furnace, wait for vanilla furnace processing, and take the iron ingot output.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, movement-collision, and sleep-limited actions.",
+        "body_lifecycle": "Use MineLink MCP tools to freeze, restore, and remove one same-process server_agent body while proving queued action cancellation, frozen action rejection, and quota release metadata.",
         "perception_shapes": "Use MineLink MCP tools to prove limited perception classifies visible translucent, decorative, fluid, partial-occluder, and opaque fixtures while hiding a blocked ore.",
         "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to exchange local social and notice-board events, withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
     }
@@ -445,6 +446,15 @@ def validate_dynamic_catalog(client: MineLinkMcpClient) -> JsonDict:
     if not any(tool.get("name") == "create.inspect_component" for tool in create_tools if isinstance(tool, dict)):
         raise RuntimeError(f"Create query did not return create.inspect_component: {create_list}")
 
+    body_list = client.tool_list({"namespace": "body", "limit": 10})
+    body_tools = body_list.get("tools", [])
+    if not any(tool.get("name") == "body.freeze" for tool in body_tools if isinstance(tool, dict)):
+        raise RuntimeError(f"body namespace did not return body.freeze: {body_list}")
+
+    body_freeze = client.tool_query("body.freeze")
+    if body_freeze.get("name") != "body.freeze" or "body" not in body_freeze.get("tags", []):
+        raise RuntimeError(f"tool_query did not return body.freeze lifecycle schema: {body_freeze}")
+
     move_stack = client.tool_query("container.move_stack")
     input_schema = move_stack.get("input_schema")
     failure_reasons = move_stack.get("failure_reasons", [])
@@ -461,6 +471,12 @@ def validate_dynamic_catalog(client: MineLinkMcpClient) -> JsonDict:
         "default_list": default_list,
         "container_list": container_list,
         "create_query_list": create_list,
+        "body_list": body_list,
+        "body_lifecycle_tool": {
+            "name": body_freeze.get("name"),
+            "tags": body_freeze.get("tags"),
+            "failure_reasons": body_freeze.get("failure_reasons", []),
+        },
         "queried_tool": {
             "name": move_stack.get("name"),
             "input_schema": input_schema,

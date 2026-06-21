@@ -305,6 +305,113 @@ describe("MockRuntimeServer", () => {
     client.close();
   });
 
+  it("freezes, restores, and removes a server_agent body while releasing lifecycle state", async () => {
+    const server = new MockRuntimeServer({ port: 25686 });
+    servers.push(server);
+    await server.start();
+
+    const client = await connect(server.endpoint());
+    const connectResult = await request(client, {
+      type: "connect",
+      server_address: "dev.local",
+      owner: { name: "body-lifecycle" }
+    });
+    const ownerId = String(connectResult.owner_id);
+    const birth = await request(client, { type: "agent.birth", owner_id: ownerId, seed_prompt: "test", body_type: "server_agent" });
+    const agentId = String(birth.agent_id);
+
+    const submitted = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.move",
+      mode: "submit",
+      arguments: { vector: [1, 0, 0], durationMs: 3000 }
+    });
+    expect(submitted).toMatchObject({ ok: true, status: "accepted" });
+
+    const freeze = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "body.freeze",
+      arguments: { reason: "test freeze" }
+    });
+    expect(freeze).toMatchObject({
+      ok: true,
+      result: { body_status: "frozen", frozen: true, cancelled_actions: 1, owner_active_bodies: 1 }
+    });
+
+    const cancelled = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.status",
+      arguments: { action_id: submitted.action_id }
+    });
+    expect(cancelled).toMatchObject({
+      ok: true,
+      result: { lifecycle_status: "cancelled", failure_reason: "body_frozen" }
+    });
+
+    const frozenSelf = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "observe.self",
+      arguments: {}
+    });
+    expect(frozenSelf).toMatchObject({ ok: true, self: { body_status: "frozen" } });
+
+    const blockedMove = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.move",
+      arguments: { vector: [1, 0, 0], durationMs: 1000 }
+    });
+    expect(blockedMove).toMatchObject({ ok: false, reason: "body_frozen" });
+
+    const restore = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "body.restore",
+      arguments: {}
+    });
+    expect(restore).toMatchObject({
+      ok: true,
+      result: { body_status: "active", restored: true, restore_scope: "same_process", persistent_restore: false }
+    });
+
+    const restoredMove = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.move",
+      arguments: { vector: [1, 0, 0], durationMs: 1000 }
+    });
+    expect(restoredMove).toMatchObject({ ok: true, result: { collision: false } });
+
+    const remove = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "body.remove",
+      arguments: { reason: "test remove" }
+    });
+    expect(remove).toMatchObject({ ok: true, result: { body_status: "removed", removed: true, owner_active_bodies: 0 } });
+
+    const afterRemove = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "observe.self",
+      arguments: {}
+    });
+    expect(afterRemove).toMatchObject({ ok: false, reason: "agent_not_born" });
+
+    const rebirth = await request(client, {
+      type: "agent.birth",
+      owner_id: ownerId,
+      seed_prompt: "new body",
+      body_type: "server_agent"
+    });
+    expect(rebirth).toMatchObject({ ok: true, body_status: "active" });
+    client.close();
+  });
+
   it("shares local chat events only with nearby server agents", async () => {
     const server = new MockRuntimeServer({ port: 25683, fixture: "portal_coop" });
     servers.push(server);

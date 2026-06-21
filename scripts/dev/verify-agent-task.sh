@@ -123,9 +123,9 @@ fi
 
 if [[ -z "$scenarios" ]]; then
   if [[ "$scope" == "neoforge" || "$scope" == "all" ]]; then
-    scenarios="${MINELINK_VERIFY_SCENARIOS:-mine_tree,craft_smoke,craft_negative,guard_boundaries}"
+    scenarios="${MINELINK_VERIFY_SCENARIOS:-mine_tree,craft_smoke,craft_negative,guard_boundaries,body_lifecycle}"
   elif [[ "$scope" == "runtime" ]]; then
-    scenarios="${MINELINK_VERIFY_SCENARIOS:-mine_tree,craft_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop}"
+    scenarios="${MINELINK_VERIFY_SCENARIOS:-mine_tree,craft_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop}"
   else
     scenarios="${MINELINK_VERIFY_SCENARIOS:-}"
   fi

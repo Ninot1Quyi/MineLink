@@ -17,7 +17,7 @@ specific gate:
 ```bash
 bash scripts/dev/verify-agent-task.sh --scope docs
 bash scripts/dev/verify-agent-task.sh --scope runtime --scenarios craft_smoke,craft_negative
-bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
+bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries,body_lifecycle
 bash scripts/dev/verify-agent-task.sh --scope install
 ```
 
@@ -111,8 +111,9 @@ bash scripts/dev/e2e.sh create_smoke
 bash scripts/dev/e2e.sh craft_smoke
 bash scripts/dev/e2e.sh craft_negative
 bash scripts/dev/e2e.sh guard_boundaries
+bash scripts/dev/e2e.sh body_lifecycle
 bash scripts/dev/e2e.sh portal_coop
-bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,portal_coop
+bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,body_lifecycle,portal_coop
 node packages/host/dist/index.js http --port 8765
 node scripts/dev/summarize-evidence.mjs
 node scripts/dev/render-acceptance-video.mjs
@@ -146,6 +147,10 @@ selects a Java 21 JDK from `/usr/libexec/java_home -v 21` when the default
 set `MINELINK_ACCEPT_EULA=0` to disable that local automation.
 It also writes `online-mode=false` by default. Use `MINELINK_ONLINE_MODE=true`
 only for the negative auth gate that proves online-mode agent birth is rejected.
+If the local Gradle wrapper process is unavailable or hangs while the cached
+Gradle distribution is healthy, set `MINELINK_GRADLE_CMD=/absolute/path/to/gradle`
+for `scripts/dev/build.sh` or `scripts/dev/start-server.sh`. The default path
+remains the committed wrapper.
 
 Real NeoForge e2e uses the Mod's loopback HTTP MineLink Protocol endpoint:
 
@@ -155,6 +160,7 @@ MINELINK_RUNTIME=neoforge MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh creat
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_negative
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh guard_boundaries
+MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh body_lifecycle
 MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh portal_coop
 ```
 
@@ -171,6 +177,13 @@ missing materials, or daytime sleep, that `action.move` reports collision and
 clips movement against a blocking fixture, and that a fixture-hidden diamond ore
 is not returned by `observe.scene` while the opaque wall remains visible. It
 also validates submit-mode queue backpressure for real NeoForge actions. The
+`body_lifecycle` scenario validates the same public MCP body lifecycle surface
+in mock and real NeoForge: `body.freeze` cancels an active submitted action and
+freezes the body, world-changing action tools reject with `body_frozen`,
+`body.restore` returns the same in-process body to `active`, and `body.remove`
+deletes the runtime body so later `observe.self` returns `agent_not_born` while
+the owner quota slot is released. It is not persistent restart restore
+evidence. The
 `create_smoke` scenario uses the opt-in Create adapter profile, loads Create in
 the real NeoForge dev server, moves `create:shaft`, `create:wrench`, and
 `minecraft:iron_ingot` from a visible chest into the agent inventory, places the
@@ -198,8 +211,8 @@ Minecraft/NeoForge dependency resolution and server startup are much slower.
 Short stability soak runs repeat e2e scenarios and writes structured evidence:
 
 ```bash
-bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,portal_coop
-MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,guard_boundaries,portal_coop
+bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,body_lifecycle,portal_coop
+MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,guard_boundaries,body_lifecycle,portal_coop
 ```
 
 Use `MINELINK_SKIP_BUILD=1` after a successful `npm run build` to avoid
@@ -294,7 +307,7 @@ CI is split into two layers:
 - `.github/workflows/minecraft-neoforge.yml` runs a real NeoForge dedicated
   server smoke for `create_smoke`, `mine_tree`, HTTP `mine_tree`,
   `craft_smoke`, `furnace_smoke`, `craft_negative`, `guard_boundaries`,
-  `perception_shapes`, and `portal_coop`, then runs a short real NeoForge
-  stability soak on push, pull request, `workflow_dispatch`, and a daily
-  schedule. Keep long Create worlds and release-length soak tests on a future
-  self-hosted runner profile.
+  `body_lifecycle`, `perception_shapes`, and `portal_coop`, then runs a short
+  real NeoForge stability soak on push, pull request, `workflow_dispatch`, and
+  a daily schedule. Keep long Create worlds and release-length soak tests on a
+  future self-hosted runner profile.

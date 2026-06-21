@@ -219,6 +219,7 @@ public final class MineLinkEndpointBootstrap {
         JsonObject capabilities = new JsonObject();
         capabilities.addProperty("server_agent", true);
         capabilities.addProperty("birth", true);
+        capabilities.addProperty("body_lifecycle", "same-process");
         capabilities.addProperty("visible_surface_scan", true);
         capabilities.addProperty("inventory", true);
         capabilities.addProperty("container_basic", true);
@@ -270,6 +271,8 @@ public final class MineLinkEndpointBootstrap {
         JsonObject response = baseResponse(request, "agent.birth_result");
         response.addProperty("agent_id", agent.agentId);
         response.addProperty("display_name", agent.displayName);
+        response.addProperty("body_id", agent.bodyId());
+        response.addProperty("body_status", "active");
         response.addProperty("body_type", "server_agent.command_body");
         response.add("position", vector(agent.position()));
         response.add("initial_needs", stringArray("food", "shelter", "tools"));
@@ -278,6 +281,9 @@ public final class MineLinkEndpointBootstrap {
             "observe.scene",
             "observe.inventory",
             "observe.events",
+            "body.freeze",
+            "body.restore",
+            "body.remove",
             "action.move",
             "action.look_at",
             "action.mine_visible_block",
@@ -338,11 +344,26 @@ public final class MineLinkEndpointBootstrap {
         }
 
         String name = stringValue(request, "name", "");
+        if (!knownDynamicTool(name)) {
+            return failure(request, "unknown_tool", "Unknown dynamic tool: " + name);
+        }
         String mode = stringValue(request, "mode", "await_completion");
         if (!mode.equals("await_completion") && !mode.equals("submit")) {
             return failure(request, "invalid_arguments", "tool.execute mode must be await_completion or submit.");
         }
         JsonObject arguments = objectValue(request, "arguments");
+        if (name.equals("body.freeze")) {
+            return freezeBody(request, agent, arguments);
+        }
+        if (name.equals("body.restore")) {
+            return restoreBody(request, agent);
+        }
+        if (name.equals("body.remove")) {
+            return removeBody(request, agent, arguments);
+        }
+        if (agent.frozen() && !toolAllowedWhileFrozen(name)) {
+            return failure(request, "body_frozen", "The active server_agent body is frozen until body.restore succeeds.");
+        }
         if (mode.equals("submit") && queueableTool(name)) {
             return submitQueuedAction(request, agent, name, arguments);
         }
@@ -373,6 +394,57 @@ public final class MineLinkEndpointBootstrap {
             case "create.inspect_component" -> inspectCreateComponent(request, agent, arguments);
             default -> failure(request, "unknown_tool", "Unknown dynamic tool: " + name);
         };
+    }
+
+    private JsonObject freezeBody(JsonObject request, AgentBody agent, JsonObject arguments) {
+        int cancelledActions = agent.freeze(stringValue(arguments, "reason", "server_agent body was frozen."));
+        JsonObject response = toolCompleted(request);
+        response.add("result", bodyLifecyclePayload(agent, "frozen", cancelledActions));
+        return response;
+    }
+
+    private JsonObject restoreBody(JsonObject request, AgentBody agent) {
+        boolean restored = agent.restore();
+        JsonObject payload = bodyLifecyclePayload(agent, "active", 0);
+        payload.addProperty("restored", restored);
+        payload.addProperty("restore_scope", "same_process");
+        payload.addProperty("persistent_restore", false);
+        JsonObject response = toolCompleted(request);
+        response.add("result", payload);
+        return response;
+    }
+
+    private JsonObject removeBody(JsonObject request, AgentBody agent, JsonObject arguments) {
+        int cancelledActions = agent.prepareRemove(stringValue(arguments, "reason", "server_agent body was removed."));
+        String ownerId = agent.ownerId;
+        String agentId = agent.agentId;
+        String bodyId = agent.bodyId();
+        runtimeState.removeAgent(agentId);
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("agent_id", agentId);
+        payload.addProperty("body_id", bodyId);
+        payload.addProperty("body_status", "removed");
+        payload.addProperty("removed", true);
+        payload.addProperty("cancelled_actions", cancelledActions);
+        payload.addProperty("owner_active_bodies", runtimeState.agentCountForOwner(ownerId));
+        payload.addProperty("max_owner_bodies", MAX_AGENTS_PER_OWNER);
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", payload);
+        return response;
+    }
+
+    private JsonObject bodyLifecyclePayload(AgentBody agent, String status, int cancelledActions) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("agent_id", agent.agentId);
+        payload.addProperty("body_id", agent.bodyId());
+        payload.addProperty("body_status", status);
+        payload.addProperty("frozen", agent.frozen());
+        payload.addProperty("cancelled_actions", cancelledActions);
+        payload.addProperty("owner_active_bodies", runtimeState.agentCountForOwner(agent.ownerId));
+        payload.addProperty("max_owner_bodies", MAX_AGENTS_PER_OWNER);
+        return payload;
     }
 
     private JsonObject submitQueuedAction(JsonObject request, AgentBody agent, String name, JsonObject arguments) {
@@ -509,6 +581,19 @@ public final class MineLinkEndpointBootstrap {
         };
     }
 
+    private static boolean knownDynamicTool(String name) {
+        return toolDefinitions().stream().anyMatch(tool -> tool.name.equals(name));
+    }
+
+    private static boolean toolAllowedWhileFrozen(String name) {
+        return name.startsWith("observe.")
+            || name.equals("action.status")
+            || name.equals("action.cancel")
+            || name.equals("body.freeze")
+            || name.equals("body.restore")
+            || name.equals("body.remove");
+    }
+
     private static long submittedActionHoldMs(JsonObject arguments) {
         int durationMs = intValue(arguments, "durationMs", 0);
         if (durationMs <= 0) {
@@ -540,9 +625,16 @@ public final class MineLinkEndpointBootstrap {
         response.addProperty("status", "completed");
         response.addProperty("agent_id", agent.agentId);
         response.addProperty("body_type", "server_agent.command_body");
+        response.addProperty("body_id", agent.bodyId());
+        response.addProperty("body_status", agent.frozen() ? "frozen" : "active");
         response.add("position", vector(agent.position()));
         response.addProperty("health", 20);
         response.addProperty("hunger", 20);
+        JsonObject self = new JsonObject();
+        self.addProperty("body_id", agent.bodyId());
+        self.addProperty("body_status", agent.frozen() ? "frozen" : "active");
+        self.add("position", vector(agent.position()));
+        response.add("self", self);
         return response;
     }
 
@@ -2817,6 +2909,33 @@ public final class MineLinkEndpointBootstrap {
                 List.of()
             ),
             tool(
+                "body.freeze",
+                "Freeze the active server_agent body.",
+                "Pauses the active server_agent body, cancels queued or running actions, and rejects further world-changing tools until restored.",
+                objectSchema(properties(prop("reason", stringSchema()))),
+                List.of("body", "lifecycle"),
+                List.of("body_removed"),
+                List.of()
+            ),
+            tool(
+                "body.restore",
+                "Restore a frozen server_agent body.",
+                "Restores a same-process frozen server_agent body. This is not restart persistence.",
+                objectSchema(),
+                List.of("body", "lifecycle"),
+                List.of("body_removed"),
+                List.of()
+            ),
+            tool(
+                "body.remove",
+                "Remove the active server_agent body.",
+                "Closes server-side body state, cancels pending actions, releases the owner body quota, and makes later tool calls fail as not born.",
+                objectSchema(properties(prop("reason", stringSchema()))),
+                List.of("body", "lifecycle"),
+                List.of("body_removed"),
+                List.of()
+            ),
+            tool(
                 "action.move",
                 "Move the active body using a bounded vector.",
                 "Moves by a small vector and returns collision plus moved-distance feedback.",
@@ -2825,7 +2944,7 @@ public final class MineLinkEndpointBootstrap {
                     prop("durationMs", numberSchema(50, 5000, null))
                 ), "vector", "durationMs"),
                 List.of("action", "movement"),
-                List.of("blocked", "backpressure_queue_full"),
+                List.of("blocked", "backpressure_queue_full", "body_frozen"),
                 List.of()
             ),
             tool(
@@ -3322,6 +3441,10 @@ public final class MineLinkEndpointBootstrap {
             return agents.get(agentId);
         }
 
+        private AgentBody removeAgent(String agentId) {
+            return agents.remove(agentId);
+        }
+
         private int agentCountForOwner(String ownerId) {
             int count = 0;
             for (AgentBody agent : agents.values()) {
@@ -3677,6 +3800,7 @@ public final class MineLinkEndpointBootstrap {
         private int containerSeq = 0;
         private int actionSeq = 0;
         private int queueDepth = 0;
+        private boolean frozen = false;
 
         private AgentBody(String agentId, String displayName, String ownerId, String seedPrompt, FakePlayer entity, BlockPos fixtureBase, String fixtureName) {
             this.agentId = agentId;
@@ -3694,6 +3818,36 @@ public final class MineLinkEndpointBootstrap {
 
         private BlockPos blockPosition() {
             return entity.blockPosition();
+        }
+
+        private String bodyId() {
+            return "body:" + agentId;
+        }
+
+        private boolean frozen() {
+            return frozen;
+        }
+
+        private int freeze(String reason) {
+            frozen = true;
+            return cancelActiveActions("body_frozen", reason);
+        }
+
+        private boolean restore() {
+            boolean wasFrozen = frozen;
+            frozen = false;
+            return wasFrozen;
+        }
+
+        private int prepareRemove(String reason) {
+            int cancelled = cancelActiveActions("body_removed", reason);
+            if (openContainer != null) {
+                entity.closeContainer();
+                openContainer = null;
+            }
+            entity.discard();
+            frozen = false;
+            return cancelled;
         }
 
         private String addRef(BlockPos pos, String blockId) {
@@ -3814,6 +3968,22 @@ public final class MineLinkEndpointBootstrap {
             }
             action.queueReleased = true;
             queueDepth = Math.max(0, queueDepth - 1);
+        }
+
+        private int cancelActiveActions(String reason, String message) {
+            int cancelled = 0;
+            for (ActionLifecycle action : actions.values()) {
+                if (!action.active()) {
+                    continue;
+                }
+                action.lifecycleStatus = "cancelled";
+                action.failureReason = reason;
+                action.failureMessage = message;
+                action.updatedAt = System.currentTimeMillis();
+                releaseActionQueue(action);
+                cancelled++;
+            }
+            return cancelled;
         }
 
         private int queueDepth() {

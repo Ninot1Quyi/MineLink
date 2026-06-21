@@ -8,6 +8,8 @@ export const FAILURE_REASONS = [
   "not_connected",
   "agent_quota_exceeded",
   "agent_not_born",
+  "body_frozen",
+  "body_removed",
   "unknown_tool",
   "invalid_arguments",
   "invalid_cursor",
@@ -155,6 +157,32 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
     failure_reasons: ["invalid_cursor"]
   },
   {
+    name: "body.freeze",
+    summary: "Freeze the active server_agent body.",
+    description:
+      "Pauses the active server_agent body, cancels queued or running actions, and rejects further world-changing tools until restored.",
+    tags: ["body", "lifecycle"],
+    input_schema: { type: "object", properties: { reason: { type: "string", maxLength: 256 } } },
+    failure_reasons: ["body_removed"]
+  },
+  {
+    name: "body.restore",
+    summary: "Restore a frozen server_agent body.",
+    description: "Restores a same-process frozen server_agent body. This is not restart persistence.",
+    tags: ["body", "lifecycle"],
+    input_schema: { type: "object", properties: {} },
+    failure_reasons: ["body_removed"]
+  },
+  {
+    name: "body.remove",
+    summary: "Remove the active server_agent body.",
+    description:
+      "Closes server-side body state, cancels pending actions, releases the owner body quota, and makes later tool calls fail as not born.",
+    tags: ["body", "lifecycle"],
+    input_schema: { type: "object", properties: { reason: { type: "string", maxLength: 256 } } },
+    failure_reasons: ["body_removed"]
+  },
+  {
     name: "action.move",
     summary: "Move the active body using legal motor primitives.",
     description: "Moves by a small vector/duration and returns collision and moved distance feedback.",
@@ -167,7 +195,7 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
         durationMs: { type: "number", minimum: 50, maximum: 5000 }
       }
     },
-    failure_reasons: ["blocked", "backpressure_queue_full"]
+    failure_reasons: ["blocked", "backpressure_queue_full", "body_frozen"]
   },
   {
     name: "action.look_at",

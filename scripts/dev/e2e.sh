@@ -39,6 +39,11 @@ case "$scenario" in
     report="$work_dir/reports/guard_boundaries-result.json"
     default_port="25580"
     ;;
+  body_lifecycle)
+    fixture="vanilla_tree"
+    report="$work_dir/reports/body_lifecycle-result.json"
+    default_port="25583"
+    ;;
   perception_shapes)
     fixture="perception_shapes"
     report="$work_dir/reports/perception_shapes-result.json"

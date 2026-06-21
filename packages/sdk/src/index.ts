@@ -105,6 +105,18 @@ export class ObserveApi {
 export class BodyApi {
   constructor(private readonly execute: MineLinkToolExecutor) {}
 
+  freeze(reason?: string): Promise<ToolResult> {
+    return this.execute("body.freeze", reason ? { reason } : {});
+  }
+
+  restore(): Promise<ToolResult> {
+    return this.execute("body.restore", {});
+  }
+
+  remove(reason?: string): Promise<ToolResult> {
+    return this.execute("body.remove", reason ? { reason } : {});
+  }
+
   move(vector: [number, number, number], durationMs = 250, options?: ToolExecuteOptions): Promise<ToolResult> {
     return this.execute("action.move", { vector, durationMs }, options);
   }

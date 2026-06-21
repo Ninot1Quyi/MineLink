@@ -49,8 +49,15 @@ PY
 if [ "${MINELINK_BUILD_NEOFORGE:-false}" = "true" ]; then
   if [ "$java_status" != "${java_status#ok:}" ]; then
     if [ -x mod/neoforge/gradlew ]; then
+      gradle_cmd="${MINELINK_GRADLE_CMD:-}"
       if [ "${MINELINK_ENABLE_CREATE:-0}" = "1" ] || [ "${MINELINK_ENABLE_CREATE:-0}" = "true" ]; then
-        (cd mod/neoforge && ./gradlew --no-daemon -PenableCreateAdapter=true build)
+        if [ -n "$gradle_cmd" ]; then
+          (cd mod/neoforge && "$gradle_cmd" --no-daemon -PenableCreateAdapter=true build)
+        else
+          (cd mod/neoforge && ./gradlew --no-daemon -PenableCreateAdapter=true build)
+        fi
+      elif [ -n "$gradle_cmd" ]; then
+        (cd mod/neoforge && "$gradle_cmd" --no-daemon build)
       else
         (cd mod/neoforge && ./gradlew --no-daemon build)
       fi

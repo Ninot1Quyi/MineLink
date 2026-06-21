@@ -88,6 +88,22 @@ must preserve the public tool failure reason. Mock runtime behavior may mirror
 this lifecycle contract for fast replay, but real Gate 2 evidence requires a
 NeoForge report.
 
+## Body Lifecycle
+
+`server_agent` lifecycle is exposed through public dynamic MCP tools:
+`body.freeze`, `body.restore`, and `body.remove`. The Mod remains the authority
+for body state. Freeze changes the body status to `frozen`, cancels active
+submitted actions with `body_frozen`, and rejects world-changing tools while
+leaving safe observation and lifecycle tools available. Restore changes the
+same in-memory body back to `active`. Remove closes open containers, discards
+the FakePlayer body, deletes the runtime agent record, and releases the owner
+quota slot.
+
+This is same-process lifecycle evidence only. It does not prove persistent body
+restore after Minecraft server restart, full action replay recovery, or
+human-player coexistence. Those remain separate acceptance gaps until a real
+restart/reconnect report proves them.
+
 ## Layering Rules
 
 Allowed dependency direction:

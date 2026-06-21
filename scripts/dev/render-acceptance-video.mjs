@@ -102,6 +102,25 @@ function status(value) {
   return "unknown";
 }
 
+function toolTimelineStatus(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "unknown";
+  }
+  if (payload.ok === false) {
+    return "failed";
+  }
+  if (payload.ok === true) {
+    return "passed";
+  }
+  if (typeof payload.status === "string" && payload.status) {
+    return payload.status;
+  }
+  if (payload.reason || payload.failure_reason || payload.error) {
+    return "failed";
+  }
+  return "passed";
+}
+
 function md(value) {
   return String(value ?? "")
     .replaceAll("|", "\\|")
@@ -220,17 +239,13 @@ function collectToolTimeline(report) {
       result?.request?.name ??
       result?.call?.tool ??
       "tool";
-    const ok =
-      result?.ok ??
-      result?.result?.ok ??
-      result?.result?.success ??
-      (result?.result?.error ? false : undefined);
+    const payload = result?.result ?? {};
     const reason =
-      result?.result?.error?.reason ??
-      result?.result?.failure_reason ??
-      result?.result?.reason ??
+      payload?.error?.reason ??
+      payload?.failure_reason ??
+      payload?.reason ??
       "";
-    timeline.push(`${tool} -> ${status(ok)}${reason ? ` (${reason})` : ""}`);
+    timeline.push(`${tool} -> ${toolTimelineStatus(payload)}${reason ? ` (${reason})` : ""}`);
   }
   return timeline;
 }

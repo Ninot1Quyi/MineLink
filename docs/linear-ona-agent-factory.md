@@ -207,6 +207,15 @@ existing artifacts and finalizes status/PR output. If
 `.minelink-dev/reports/artifacts/video-review.md` is missing or does not
 declare `Verifier: Ona Platform Codex`, the automation must fail before release.
 
+If the Ona session shows `Codex authentication failed: the LLM request was
+rejected as unauthenticated`, stop the task as `Blocked`. This failure happens
+before the Codex agent executes repository commands, so it is not MineLink code
+evidence and not a validation failure. `LINEAR_API_KEY` only enables Linear
+status sync; it does not authenticate the Ona Platform Codex LLM provider.
+Reconnect or repair the Ona account's Codex/OpenAI subscription binding, start
+a fresh Codex session, and attach the Ona support bundle if the platform keeps
+rejecting the LLM request.
+
 For local environment tasks, Ona discovers:
 
 ```text
@@ -249,6 +258,12 @@ creation through the connector fallback, and CI evidence are proven. Earlier
 generic Ona Agent executions are reclassified as process smoke only and are not
 accepted as MineLink agent evidence because they did not use the Ona Platform
 Codex option.
+
+Current blocker: Ona Platform Codex launch reaches the Codex provider selection
+surface but fails with `Codex authentication failed: the LLM request was
+rejected as unauthenticated` before command execution. Until the Ona account's
+Codex/OpenAI subscription binding is fixed and a new Codex session runs
+validation, the factory is not end-to-end accepted.
 
 The next factory slice must prove a full platform run: Linear task dispatch or
 manual launch -> Ona Platform Codex implementation session -> validation

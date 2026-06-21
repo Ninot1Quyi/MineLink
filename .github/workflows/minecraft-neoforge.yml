@@ -80,6 +80,11 @@ jobs:
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
+      - name: NeoForge body lifecycle smoke
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
+        env:
+          MINELINK_RUNTIME: neoforge
+          MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge perception shapes smoke
         run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
         env:
@@ -91,7 +96,7 @@ jobs:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge short stability soak
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"

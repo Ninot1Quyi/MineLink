@@ -42,7 +42,7 @@ Current audit:
 | --- | --- | --- |
 | Gate 0: Repository, Install, and Baseline Harness | real-partial | Build, typecheck, tests, CI, mock e2e, and real NeoForge smoke exist; fresh user install and full release readiness remain incomplete. |
 | Gate 1: Real NeoForge Mod Runtime | real-partial | Real dedicated NeoForge e2e covers core protocol and smoke tools; persistence, full lifecycle, and complete runtime parity remain incomplete. |
-| Gate 2: server_agent Body and Guard Pipeline | real-partial | Real guard, queue, FakePlayer inventory, movement, mining, and owner quota evidence exists; restore/freeze/remove, cancellation, expiry, and full body parity remain incomplete. |
+| Gate 2: server_agent Body and Guard Pipeline | real-partial | Real guard, queue, FakePlayer inventory, movement, mining, owner quota, and same-process freeze/restore/remove evidence exists; persistent restore, timed lifecycle parity, cancellation breadth, expiry breadth, and full body parity remain incomplete. |
 | Gate 3: Limited Perception | real-partial | Real fixture evidence covers occlusion and selected shape classifications; generic raycast/block-shape visibility and long-running perception cache behavior remain incomplete. |
 | Gate 4: MCP Host and Gateway | real-partial | MCP stdio, Streamable HTTP, reconnect, catalog preflight, token/rate/session checks, and real HTTP gateway smoke exist; full hosted gateway operations remain incomplete. |
 | Gate 5: Agent RPC JSON, MCP Compatibility, and Local SDK | real-partial | Codex JSON-RPC replay and generic MCP dynamic tools are verified; Python helper parity, polling/subscription helpers, reconnect ergonomics, replay SDK, and semantic retries remain incomplete. |
@@ -64,8 +64,8 @@ Required:
 - `npm run build`, `npm run typecheck`, `npm test`, and `npm run ci` pass.
 - CI runs build, tests, mock `mine_tree`, `create_smoke`, `craft_smoke`,
   `furnace_smoke`, `craft_negative`, `guard_boundaries`,
-  `perception_shapes`, and `portal_coop`, plus real NeoForge smoke for those
-  scenarios, and uploads `.minelink-dev/` evidence.
+  `body_lifecycle`, `perception_shapes`, and `portal_coop`, plus real NeoForge
+  smoke for those scenarios, and uploads `.minelink-dev/` evidence.
 - `scripts/dev/build.sh` records Java/NeoForge readiness as valid JSON.
 - No GitHub token, admission token, Microsoft credential, EULA acceptance, or server secret is committed.
 
@@ -83,10 +83,11 @@ Current status:
   when available.
 - GitHub Actions now has a dedicated real NeoForge smoke workflow for
   `mine_tree`, `create_smoke`, `craft_smoke`, `furnace_smoke`,
-  `craft_negative`, `guard_boundaries`, `perception_shapes`, and
-  `portal_coop` on push, pull request, manual dispatch, and daily schedule;
-  full release acceptance still requires the later complete Create, social
-  runtime, install, security, and release-length soak gates.
+  `craft_negative`, `guard_boundaries`, `body_lifecycle`,
+  `perception_shapes`, and `portal_coop` on push, pull request, manual
+  dispatch, and daily schedule; full release acceptance still requires the
+  later complete Create, social runtime, install, security, and release-length
+  soak gates.
 
 ### Gate 1: Real NeoForge Mod Runtime
 
@@ -136,6 +137,7 @@ Evidence:
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh craft_smoke`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh furnace_smoke`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh guard_boundaries`.
+- `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh body_lifecycle`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh perception_shapes`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh portal_coop`.
 - GitHub Actions artifact from `.github/workflows/minecraft-neoforge.yml`.
@@ -199,13 +201,27 @@ Current status:
   `max_agents_per_owner=3` admission limit with `agent_quota_exceeded`; the
   three-agent portal cooperation replay proves exactly three same-owner agents
   can cooperate while a fourth same-owner birth is rejected server-side.
+- Mock runtime and real NeoForge runtime now cover the same-process
+  `body_lifecycle` replay through public MCP dynamic tools. `body.freeze`
+  reports `body_status=frozen`, cancels an active submitted action with
+  `body_frozen`, and preserves that failure on `action.status`; a frozen body
+  rejects world-changing `action.move` with `body_frozen`; `body.restore`
+  reports `restore_scope=same_process` and allows movement again; `body.remove`
+  reports `body_status=removed`, releases the owner active-body count, and
+  makes later `observe.self` return `agent_not_born`.
+- Current same-process lifecycle evidence is written by
+  `.minelink-dev/body-lifecycle-acceptance/mock-body_lifecycle/reports/body_lifecycle-result.json`,
+  `.minelink-dev/body-lifecycle-acceptance/neoforge-body_lifecycle/reports/body_lifecycle-result.json`,
+  `.minelink-dev/body-lifecycle-acceptance/soak-neoforge/soak-report.json`,
+  and `.minelink-dev/reports/artifacts/body-lifecycle/acceptance.mp4`.
 - The real NeoForge guard fixture also proves that a fixture-hidden
   `minecraft:diamond_ore` is absent from `observe.scene` while the intervening
   `minecraft:stone` wall and reachable `minecraft:white_bed` are visible.
 - This is not the full Gate 2 release surface yet. The remaining body lifecycle
-  manager, persistent restore/freeze/remove, timed mining start/stop/cancel
-  state, and complete body-state parity still require separate implementation
-  and evidence.
+  work is persistent restore after server restart, broader freeze/remove
+  recovery semantics across reconnects, timed mining start/stop/cancel state,
+  and complete body-state parity. Same-process `body.restore` must not be
+  counted as persistent recovery evidence.
 
 ### Gate 3: Limited Perception
 
@@ -641,11 +657,12 @@ Current status:
 - `scripts/dev/soak.sh` repeats selected e2e scenarios and writes
   `soak-report.json`, `process-cleanup.json`, and `queue-metrics.json`.
 - Fast CI runs a short mock soak for `mine_tree`, `furnace_smoke`,
-  `craft_negative`, `guard_boundaries`, `perception_shapes`, and
-  `portal_coop`.
+  `craft_negative`, `guard_boundaries`, `body_lifecycle`,
+  `perception_shapes`, and `portal_coop`.
 - The NeoForge workflow starts a real dedicated Minecraft server and runs a
   short real NeoForge soak for `furnace_smoke`, `craft_negative`,
-  `guard_boundaries`, `perception_shapes`, and `portal_coop`.
+  `guard_boundaries`, `body_lifecycle`, `perception_shapes`, and
+  `portal_coop`.
 - CI, Install Smoke, and NeoForge workflows run
   `scripts/dev/summarize-evidence.mjs` before artifact upload so PR reviewers
   can read `.minelink-dev/reports/ci-evidence-summary.md`, the install-smoke
@@ -683,6 +700,13 @@ Before a release tag, these must pass against mock and real runtime where applic
 - Transparent, decorative, fluid, partial-occluder, and opaque fixture blocks
   carry expected vision tags without exposing the hidden diamond ore.
 - Submitting too many concurrent actions returns `backpressure_queue_full`.
+- Freezing a body cancels active submitted actions with `body_frozen`.
+- A frozen body rejects world-changing actions while observation and lifecycle
+  tools remain available.
+- Restoring a frozen body is explicitly same-process and does not count as
+  persistent restart recovery.
+- Removing a body releases the owner quota and makes later self-observation
+  return `agent_not_born`.
 - Connected `tool_list` runtime failure is surfaced, not hidden by local fallback.
 - Connected `tool_query` is forwarded to the runtime catalog, and runtime-only
   extension tool execution is forwarded after agent birth.
@@ -706,9 +730,10 @@ The repository currently has an executable baseline for Gates 0, 3 partial,
 - `bash scripts/dev/e2e.sh craft_smoke`
 - `bash scripts/dev/e2e.sh craft_negative`
 - `bash scripts/dev/e2e.sh guard_boundaries`
+- `bash scripts/dev/e2e.sh body_lifecycle`
 - `bash scripts/dev/e2e.sh perception_shapes`
 - `bash scripts/dev/e2e.sh portal_coop`
-- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop`
+- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop`
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
 - `./gradlew --no-daemon build` in `mod/neoforge`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
@@ -718,9 +743,10 @@ The repository currently has an executable baseline for Gates 0, 3 partial,
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh furnace_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh guard_boundaries`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh body_lifecycle`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh perception_shapes`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh portal_coop`
-- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-catalog-furnace bash scripts/dev/e2e.sh furnace_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_MCP_TRANSPORT=http MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-catalog-http bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --work-dir .minelink-dev/soak/neoforge-catalog --scenarios create_smoke,portal_coop,guard_boundaries`
@@ -734,7 +760,7 @@ The repository currently has an executable baseline for Gates 0, 3 partial,
 
 Not yet accepted as full product:
 
-- Persistent/restorable server_agent lifecycle and human-player coexistence.
+- Persistent/restart-restorable server_agent lifecycle and human-player coexistence.
 - Complete Create adapter behavior beyond the current real powered-press smoke.
 - Production Gateway revocation, owner quota, and full audit hardening beyond
   the current token/rate-limit/session-cap baseline.
@@ -742,4 +768,6 @@ Not yet accepted as full product:
 - Multi-agent social runtime.
 - Director UI/service.
 - Installer.
+- Ona Platform Codex end-to-end task execution remains blocked while the
+  platform reports `Codex authentication failed` before repository commands run.
 - Long release-length soak/stability run on real Minecraft.

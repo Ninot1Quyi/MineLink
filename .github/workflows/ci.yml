@@ -32,9 +32,10 @@ jobs:
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
       - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop
+      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
       - name: Summarize MineLink evidence
         if: always()
         run: node scripts/dev/summarize-evidence.mjs --append-step-summary

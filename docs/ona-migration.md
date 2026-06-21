@@ -199,6 +199,14 @@ When `linear_issue` is a real key, the Ona environment must have
 sync script writes `.minelink-dev/reports/linear-sync.md` without exposing the
 key value.
 
+`LINEAR_API_KEY` does not authenticate the Codex LLM provider. If the Ona UI
+shows `Codex authentication failed: the LLM request was rejected as
+unauthenticated`, treat the environment as not started: no repository commands
+ran, no agent evidence exists, and no acceptance video can be published from
+that session. Fix the Ona account's Codex/OpenAI subscription binding, start a
+new Platform Codex session, and use the platform support bundle if retrying the
+fresh session still fails.
+
 Linear or GitHub issue webhooks are not proven enabled until a real issue
 creates an Ona Platform Codex session, writes Linear status from inside Ona,
 checks the acceptance MP4 through a separate Codex video verifier, and opens a
