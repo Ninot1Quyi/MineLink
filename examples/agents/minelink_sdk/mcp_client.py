@@ -4,6 +4,8 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 from typing import Any, Dict, Optional
 
 
@@ -13,9 +15,13 @@ JsonDict = Dict[str, Any]
 class MineLinkMcpClient:
     def __init__(self, host_command: Optional[str] = None, cwd: Optional[Path] = None) -> None:
         self.repo_root = cwd or Path(__file__).resolve().parents[3]
+        self.transport = os.environ.get("MINELINK_MCP_TRANSPORT", "stdio").lower()
         self.host_command = host_command or os.environ.get(
             "MINELINK_HOST_COMMAND", "node packages/host/dist/index.js mcp"
         )
+        self.http_url = os.environ.get("MINELINK_MCP_URL") or os.environ.get("MINELINK_MCP_HTTP_URL", "")
+        self.gateway_token = os.environ.get("MINELINK_GATEWAY_TOKEN", "")
+        self.session_id: Optional[str] = None
         self.proc: Optional[subprocess.Popen[str]] = None
         self.next_id = 1
 
@@ -27,6 +33,23 @@ class MineLinkMcpClient:
         self.close()
 
     def start(self) -> None:
+        if self.uses_http():
+            if not self.http_url:
+                raise RuntimeError("MINELINK_MCP_URL is required when MINELINK_MCP_TRANSPORT=http")
+            init = self.request(
+                "initialize",
+                {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": {"name": "minelink-python-example", "version": "0.1.0"},
+                },
+            )
+            server_info = (init.get("result") or {}).get("serverInfo", {})
+            if server_info.get("name") != "minelink-host" or not self.session_id:
+                raise RuntimeError(f"MCP HTTP initialize failed: {init}")
+            self.notify("notifications/initialized", {})
+            return
+
         if self.proc is not None:
             return
         self.proc = subprocess.Popen(
@@ -51,6 +74,16 @@ class MineLinkMcpClient:
         self.notify("notifications/initialized", {})
 
     def close(self) -> None:
+        if self.uses_http():
+            if self.session_id:
+                try:
+                    self.http_request(None, method="DELETE")
+                except Exception:
+                    pass
+                finally:
+                    self.session_id = None
+            return
+
         if self.proc is None:
             return
         try:
@@ -103,14 +136,47 @@ class MineLinkMcpClient:
     def request(self, method: str, params: JsonDict) -> JsonDict:
         request_id = self.next_id
         self.next_id += 1
-        self.write({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
+        payload = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
+        if self.uses_http():
+            return self.http_request(payload)
+        self.write(payload)
         while True:
             response = self.read()
             if response.get("id") == request_id:
                 return response
 
     def notify(self, method: str, params: JsonDict) -> None:
-        self.write({"jsonrpc": "2.0", "method": method, "params": params})
+        payload = {"jsonrpc": "2.0", "method": method, "params": params}
+        if self.uses_http():
+            self.http_request(payload)
+            return
+        self.write(payload)
+
+    def uses_http(self) -> bool:
+        return self.transport in {"http", "streamable-http", "gateway"}
+
+    def http_request(self, payload: Optional[JsonDict], method: str = "POST") -> JsonDict:
+        headers = {"accept": "application/json, text/event-stream"}
+        data = None
+        if payload is not None:
+            headers["content-type"] = "application/json"
+            data = json.dumps(payload).encode("utf-8")
+        if self.session_id:
+            headers["mcp-session-id"] = self.session_id
+            headers["mcp-protocol-version"] = "2025-11-25"
+        if self.gateway_token:
+            headers["authorization"] = f"Bearer {self.gateway_token}"
+
+        request = Request(self.http_url, data=data, headers=headers, method=method)
+        try:
+            with urlopen(request, timeout=30) as response:
+                self.session_id = response.headers.get("mcp-session-id", self.session_id)
+                body = response.read().decode("utf-8")
+        except HTTPError as error:
+            body = error.read().decode("utf-8")
+        if not body.strip():
+            return {}
+        return json.loads(body)
 
     def write(self, payload: JsonDict) -> None:
         if self.proc is None or self.proc.stdin is None:

@@ -209,6 +209,12 @@ Current status:
 - MCP stdio is implemented by `node packages/host/dist/index.js mcp`.
 - Streamable HTTP Gateway is implemented by `node packages/host/dist/index.js http --host 127.0.0.1 --port 8765`.
 - Automated tests cover HTTP health, MCP initialize/session negotiation, `tools/call`, reconnect, and connected-runtime tool catalog failure.
+- The Codex JSON-RPC e2e harness can run existing gameplay scenarios through
+  the Streamable HTTP Gateway with `MINELINK_MCP_TRANSPORT=http`; CI runs
+  `mine_tree` through that path and uploads the separate
+  `.minelink-dev/http-mine_tree` evidence. The real NeoForge workflow also runs
+  `mine_tree` through the HTTP Gateway and uploads
+  `.minelink-dev/neoforge-http-mine_tree` evidence.
 - The Gateway now has a basic admission and abuse-control layer: optional
   `MINELINK_GATEWAY_TOKEN` Bearer auth, refusal to bind a non-loopback host
   without a token unless explicitly overridden for controlled tests,
@@ -466,6 +472,7 @@ partial, and 11 dependency audit:
 - `npm test`
 - `npm run ci`
 - `bash scripts/dev/e2e.sh mine_tree`
+- `MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/http-mine_tree bash scripts/dev/e2e.sh mine_tree`
 - `bash scripts/dev/e2e.sh create_smoke`
 - `bash scripts/dev/e2e.sh craft_smoke`
 - `bash scripts/dev/e2e.sh craft_negative`
@@ -475,6 +482,7 @@ partial, and 11 dependency audit:
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
 - `./gradlew --no-daemon build` in `mod/neoforge`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/neoforge-http-mine_tree bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 bash scripts/dev/e2e.sh create_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh craft_negative`

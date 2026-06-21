@@ -39,6 +39,11 @@ jobs:
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
+      - name: NeoForge HTTP Gateway mine tree smoke
+        run: MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/neoforge-http-mine_tree bash scripts/dev/e2e.sh mine_tree
+        env:
+          MINELINK_RUNTIME: neoforge
+          MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge container and crafting smoke
         run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
         env:

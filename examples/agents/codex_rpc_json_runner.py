@@ -152,6 +152,7 @@ def main() -> None:
             "real_command_env": "MINELINK_CODEX_RPC_COMMAND",
             "replay_env": "MINELINK_CODEX_RPC_REPLAY",
         },
+        "mcp_transport": mcp_transport_report(),
         "connect": connect,
         "placements": state["placements"],
         "final_assertions": final_assertions,
@@ -164,6 +165,8 @@ def main() -> None:
             "server_stderr_log": f"{log_dir}/server.stderr.log",
             "host_log": f"{log_dir}/host.log",
             "agent_log": f"{log_dir}/agent.log",
+            "gateway_stdout_log": f"{log_dir}/gateway.stdout.log",
+            "gateway_stderr_log": f"{log_dir}/gateway.stderr.log",
             "action_trace": trace_path,
         },
     }
@@ -361,6 +364,7 @@ def run_portal_coop(
             "real_command_env": "MINELINK_CODEX_RPC_COMMAND",
             "replay_env": "MINELINK_CODEX_RPC_REPLAY",
         },
+        "mcp_transport": mcp_transport_report(),
         "connect": connect_results,
         "birth": birth_results,
         "quota_probe": quota_probe,
@@ -378,6 +382,8 @@ def run_portal_coop(
             "server_stderr_log": f"{log_dir}/server.stderr.log",
             "host_log": f"{log_dir}/host.log",
             "agent_log": f"{log_dir}/agent.log",
+            "gateway_stdout_log": f"{log_dir}/gateway.stdout.log",
+            "gateway_stderr_log": f"{log_dir}/gateway.stderr.log",
             "action_trace": trace_path,
         },
     }
@@ -399,6 +405,15 @@ def parse_json_stdout(stdout: str) -> JsonDict:
         except json.JSONDecodeError:
             continue
     raise RuntimeError(f"Codex RPC command did not emit a JSON object: {stdout}")
+
+
+def mcp_transport_report() -> JsonDict:
+    transport = os.environ.get("MINELINK_MCP_TRANSPORT", "stdio")
+    return {
+        "transport": transport,
+        "url": os.environ.get("MINELINK_MCP_URL") or os.environ.get("MINELINK_MCP_HTTP_URL"),
+        "gateway_token_configured": bool(os.environ.get("MINELINK_GATEWAY_TOKEN")),
+    }
 
 
 def validate_rpc_message(message: JsonDict, expected_id: str) -> None:

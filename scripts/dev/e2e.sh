@@ -85,6 +85,7 @@ export MINELINK_LOG_DIR="$work_dir/logs"
 export MINELINK_TRACE="$work_dir/replays/latest-action-trace.jsonl"
 
 server_pid=""
+gateway_pid=""
 kill_tree() {
   pid="$1"
   if command -v pgrep >/dev/null 2>&1; then
@@ -133,6 +134,8 @@ PY
   fi
   for log_file in \
     "$work_dir/logs/agent.log" \
+    "$work_dir/logs/gateway.stdout.log" \
+    "$work_dir/logs/gateway.stderr.log" \
     "$work_dir/logs/server.stdout.log" \
     "$work_dir/logs/server.stderr.log"; do
     if [ -f "$log_file" ]; then
@@ -143,6 +146,10 @@ PY
 }
 
 cleanup() {
+  if [ -n "$gateway_pid" ] && kill -0 "$gateway_pid" >/dev/null 2>&1; then
+    kill_tree "$gateway_pid"
+    wait "$gateway_pid" >/dev/null 2>&1 || true
+  fi
   if [ -n "$server_pid" ] && kill -0 "$server_pid" >/dev/null 2>&1; then
     kill_tree "$server_pid"
     wait "$server_pid" >/dev/null 2>&1 || true
@@ -168,6 +175,46 @@ MINELINK_RUNTIME="$runtime" bash scripts/dev/start-server.sh > "$work_dir/logs/s
 server_pid="$!"
 
 scripts/dev/wait-for-port.py 127.0.0.1 "$port" "$start_timeout"
+
+mcp_transport="${MINELINK_MCP_TRANSPORT:-stdio}"
+if [ "$mcp_transport" = "http" ] || [ "$mcp_transport" = "streamable-http" ] || [ "$mcp_transport" = "gateway" ]; then
+  export MINELINK_MCP_TRANSPORT="$mcp_transport"
+  if [ -z "${MINELINK_MCP_URL:-}" ] && [ -z "${MINELINK_MCP_HTTP_URL:-}" ]; then
+    gateway_host="${MINELINK_MCP_HOST:-127.0.0.1}"
+    gateway_port="${MINELINK_MCP_PORT:-}"
+    if [ -z "$gateway_port" ]; then
+      case "$port" in
+        ''|*[!0-9]*)
+          echo "MINELINK_PORT must be numeric when deriving an MCP Gateway port: $port" >&2
+          exit 2
+          ;;
+      esac
+      gateway_port=$((port + 10000))
+    fi
+    export MINELINK_MCP_URL="http://$gateway_host:$gateway_port/mcp"
+    export MINELINK_MCP_HTTP_URL="$MINELINK_MCP_URL"
+    node packages/host/dist/index.js http --host "$gateway_host" --port "$gateway_port" \
+      > "$work_dir/logs/gateway.stdout.log" \
+      2> "$work_dir/logs/gateway.stderr.log" &
+    gateway_pid="$!"
+    scripts/dev/wait-for-port.py "$gateway_host" "$gateway_port" 25
+    python3 - "$gateway_host" "$gateway_port" <<'PY'
+import json
+import sys
+from urllib.request import urlopen
+
+host, port = sys.argv[1], sys.argv[2]
+with urlopen(f"http://{host}:{port}/healthz", timeout=5) as response:
+    payload = json.loads(response.read().decode("utf-8"))
+if payload.get("ok") is not True or payload.get("transport") != "streamable-http":
+    raise SystemExit(f"unexpected gateway health payload: {payload}")
+PY
+  elif [ -z "${MINELINK_MCP_URL:-}" ]; then
+    export MINELINK_MCP_URL="$MINELINK_MCP_HTTP_URL"
+  else
+    export MINELINK_MCP_HTTP_URL="$MINELINK_MCP_URL"
+  fi
+fi
 
 scripts/dev/run-agent.sh "$scenario" > "$work_dir/logs/agent.log" 2>&1
 

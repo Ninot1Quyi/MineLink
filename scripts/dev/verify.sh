@@ -8,6 +8,7 @@ npm run typecheck
 npm test
 npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate
 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
+MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/http-mine_tree bash scripts/dev/e2e.sh mine_tree
 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
