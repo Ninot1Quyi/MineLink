@@ -347,11 +347,17 @@ The reproducible prewarmed image path is `.github/workflows/devcontainer-image.y
 plus `.devcontainer/Dockerfile`. GitHub Actions builds the image from a clean
 checkout and pushes `ghcr.io/ninot1quyi/minelink-devcontainer` with Node 22,
 Java 21, GitHub CLI, `ffmpeg`, npm cache, and the Gradle user-home cache. Branch
-builds publish immutable `sha-*` tags; `main` additionally publishes `main` and
-`latest`. This is a cache distribution mechanism only. It must not contain
-committed EULA files, secrets, admission tokens, Microsoft credentials, local
-`mod/neoforge/run` state, or a hand-uploaded local container snapshot. It also
-cannot be treated as proof that NeoForge generated workspace outputs are
+builds publish immutable `sha-*` tags plus sanitized branch tags; `main`
+additionally publishes `main` and `latest`. Immutable tags are the evidence
+anchor, while branch tags are only a moving cache source after registry access
+is verified. After publishing, the workflow runs
+`scripts/dev/check-devcontainer-image-access.sh` against the immutable `sha-*`
+tag with authenticated GHCR access and Docker runtime smoke. The same checker
+can be run with `--require-anonymous` when an unauthenticated Ona pull path is
+being evaluated. This is a cache distribution mechanism only. It must not
+contain committed EULA files, secrets, admission tokens, Microsoft credentials,
+local `mod/neoforge/run` state, or a hand-uploaded local container snapshot. It
+also cannot be treated as proof that NeoForge generated workspace outputs are
 reusable in Ona, because project-local `.gradle` and generated source/build
 directories are path- and checkout-sensitive. The default devcontainer should
 stay on the stable public Node 22 base image until a GHCR image tag and Ona pull

@@ -45,6 +45,7 @@ require_file ".github/workflows/install-smoke.yml"
 require_file "ona/ai-automations/minelink-agent-factory.yaml"
 require_file "scripts/dev/install-smoke.sh"
 require_file "scripts/dev/bootstrap-prebuild.sh"
+require_file "scripts/dev/check-devcontainer-image-access.sh"
 require_file "scripts/dev/check-video-review.mjs"
 require_file "scripts/dev/prepare-video-review-request.mjs"
 require_file "scripts/dev/render-acceptance-video.mjs"
@@ -109,8 +110,11 @@ require_text "ona/ai-automations/minelink-agent-factory.yaml" "video-review-requ
 require_text ".github/workflows/devcontainer-image.yml" "ghcr.io/ninot1quyi/minelink-devcontainer"
 require_text ".github/workflows/devcontainer-image.yml" "docker/build-push-action"
 require_text ".github/workflows/devcontainer-image.yml" "packages: write"
+require_text ".github/workflows/devcontainer-image.yml" "type=ref,event=branch"
 require_text ".github/workflows/devcontainer-image.yml" "MINELINK_PREWARM_GRADLE=1"
 require_text ".github/workflows/devcontainer-image.yml" "bootstrap-prebuild.sh"
+require_text ".github/workflows/devcontainer-image.yml" "check-devcontainer-image-access.sh"
+require_text ".github/workflows/devcontainer-image.yml" "--docker-smoke"
 require_text ".github/workflows/install-smoke.yml" "minelink-install-smoke-evidence"
 require_text ".github/workflows/install-smoke.yml" "scripts/dev/summarize-evidence.mjs"
 require_text ".github/workflows/ci.yml" "Summarize MineLink evidence"
@@ -145,6 +149,10 @@ require_text "scripts/dev/bootstrap-prebuild.sh" "LINEAR_API_KEY present"
 require_text "scripts/dev/bootstrap-prebuild.sh" "./gradlew --no-daemon build"
 require_text "scripts/dev/bootstrap-prebuild.sh" "mod/neoforge/run/eula.txt"
 require_text "scripts/dev/bootstrap-prebuild.sh" "online-mode=false"
+require_text "scripts/dev/check-devcontainer-image-access.sh" "anonymous pull access"
+require_text "scripts/dev/check-devcontainer-image-access.sh" "authenticated pull access"
+require_text "scripts/dev/check-devcontainer-image-access.sh" "docker_smoke"
+require_text "scripts/dev/check-devcontainer-image-access.sh" "does not prove Ona Platform Codex"
 require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink acceptance artifacts"
 require_text "scripts/dev/check-video-review.mjs" "Release decision: pass"
 require_text "scripts/dev/check-video-review.mjs" "Verifier: Ona Platform Codex"
@@ -214,6 +222,7 @@ PY
     ".devcontainer/Dockerfile" \
     ".github/workflows/devcontainer-image.yml" \
     "scripts/dev/bootstrap-prebuild.sh" \
+    "scripts/dev/check-devcontainer-image-access.sh" \
     "scripts/dev/check-video-review.mjs" \
     "scripts/dev/prepare-video-review-request.mjs" \
     "scripts/dev/render-acceptance-video.mjs" \

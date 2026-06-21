@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; a reproducible GHCR devcontainer image path is staged for cache prewarm, but it is not yet the default Ona image and Ona Platform Codex delivery is not fully proven end-to-end; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; a reproducible GHCR devcontainer image path now has a registry/Docker smoke checker for cache prewarm, but it is not yet the default Ona image and Ona Platform Codex delivery is not fully proven end-to-end; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -613,13 +613,24 @@ Current status:
 - `.github/workflows/devcontainer-image.yml` builds `.devcontainer/Dockerfile`
   and publishes `ghcr.io/ninot1quyi/minelink-devcontainer` with Node 22, Java
   21, GitHub CLI, `ffmpeg`, npm cache, and Gradle user-home cache. Branch
-  builds publish immutable `sha-*` tags; `main` additionally publishes `main`
-  and `latest`. This is a reproducible cache-prewarm path, not a hand-uploaded
+  builds publish immutable `sha-*` tags plus sanitized branch tags; `main`
+  additionally publishes `main` and `latest`. Immutable tags anchor evidence,
+  while branch tags are only moving cache sources after registry access has
+  been verified. This is a reproducible cache-prewarm path, not a hand-uploaded
   local container. It must not contain EULA files, tokens, secrets,
   `mod/neoforge/run` state, or local generated server output. Because NeoForge
   project-local `.gradle` and generated workspace outputs are
   checkout-sensitive, this image does not replace the Ona prebuild hard gate and
   must not become the default Ona image until GHCR pull access has been verified.
+- `scripts/dev/check-devcontainer-image-access.sh` verifies the GHCR manifest
+  path and optionally pulls/runs the published image with Docker to check Node,
+  npm, Python, Java, `ffmpeg`, npm cache, and Gradle module cache availability.
+  The devcontainer image workflow runs this checker with authenticated package
+  access and `--docker-smoke` after publishing the immutable `sha-*` tag, then
+  includes `.minelink-dev/reports/devcontainer-image-access.md` in the GitHub
+  Step Summary. This proves image pull/runtime readiness for that environment;
+  it does not prove anonymous Ona pull access, Ona Platform Codex execution,
+  Minecraft startup, or product install acceptance.
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
   fast verification, real NeoForge guard smoke, and acceptance artifact
   rendering plus video-review request preparation and a separate video-release

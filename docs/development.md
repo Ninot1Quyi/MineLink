@@ -51,13 +51,34 @@ gh workflow run devcontainer-image.yml
 The workflow `.github/workflows/devcontainer-image.yml` builds
 `.devcontainer/Dockerfile` and pushes
 `ghcr.io/ninot1quyi/minelink-devcontainer`. Branch builds publish immutable
-`sha-*` tags; `main` additionally publishes `main` and `latest`. The image
-warms npm cache and Gradle user-home cache from a clean checkout, but it is not
-a release artifact and is not product evidence. Do not bake EULA files, tokens,
-admission secrets, Microsoft credentials, local `mod/neoforge/run` state, or a
-hand-uploaded local container into it. NeoForge project-local `.gradle` state
-and generated workspace outputs are checkout-sensitive, so the image does not
-replace Ona's final prebuild bootstrap.
+`sha-*` tags and sanitized branch tags; `main` additionally publishes `main`
+and `latest`. Use immutable `sha-*` tags for evidence and branch tags only as
+the optional moving cache source for a specific work line after pull access is
+verified. The image warms npm cache and Gradle user-home cache from a clean
+checkout, but it is not a release artifact and is not product evidence. Do not
+bake EULA files, tokens, admission secrets, Microsoft credentials, local
+`mod/neoforge/run` state, or a hand-uploaded local container into it. NeoForge
+project-local `.gradle` state and generated workspace outputs are
+checkout-sensitive, so the image does not replace Ona's final prebuild
+bootstrap.
+
+The image workflow also runs the repository image access checker after the
+publish step:
+
+```bash
+bash scripts/dev/check-devcontainer-image-access.sh \
+  ghcr.io/ninot1quyi/minelink-devcontainer:sha-<short-sha> \
+  --require-authenticated \
+  --docker-smoke
+```
+
+The checker records anonymous GHCR manifest access, authenticated GHCR manifest
+access, and optional Docker pull/run evidence in
+`.minelink-dev/reports/devcontainer-image-access.md`. Use
+`--require-anonymous` before switching Ona to an unauthenticated GHCR image
+pull path. If Ona is configured with authenticated package access, keep that
+configuration documented in the task evidence and still require the normal
+Ona prebuild hard gate.
 
 Do not switch `.devcontainer/devcontainer.json` to the GHCR image in the same
 change that first introduces the image workflow. First publish a branch image,

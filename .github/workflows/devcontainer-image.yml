@@ -58,6 +58,7 @@ jobs:
         with:
           images: ghcr.io/ninot1quyi/minelink-devcontainer
           tags: |
+            type=ref,event=branch
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,format=short,prefix=sha-
@@ -76,6 +77,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Smoke published image pull
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          image="$(printf '%s\n' '${{ steps.meta.outputs.tags }}' | grep ':sha-' | head -n 1)"
+          if [ -z "$image" ]; then
+            echo "No sha-* image tag was produced by docker/metadata-action" >&2
+            exit 1
+          fi
+          bash scripts/dev/check-devcontainer-image-access.sh "$image" --require-authenticated --docker-smoke
+
       - name: Report image tags
         run: |
           {
@@ -84,6 +97,10 @@ jobs:
             echo "Published image tags:"
             echo
             echo '${{ steps.meta.outputs.tags }}' | sed 's/^/- `/' | sed 's/$/`/'
+            echo
+            echo "Image pull and runtime smoke:"
+            echo
+            cat .minelink-dev/reports/devcontainer-image-access.md
             echo
             echo "Ona must still run \`bash scripts/dev/bootstrap-prebuild.sh\` as a hard gate."
           } >> "$GITHUB_STEP_SUMMARY"
