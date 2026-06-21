@@ -40,6 +40,9 @@ const MAX_SOCIAL_EVENTS = 200;
 const MAX_NOTICE_ENTRIES = 200;
 const MAX_AGENTS_PER_OWNER = 3;
 const NOTICE_BOARD_TAG = "minelink:notice_board";
+const MAX_ACTION_QUEUE_DEPTH = 4;
+const SUBMITTED_ACTION_HOLD_MS = 250;
+const SUBMITTED_ACTION_TTL_MS = 5_000;
 const PLAYER_INVENTORY_SLOT_LIMIT = 36;
 const PLACEABLE_BLOCK_ITEMS = new Set([
   "create:shaft",
@@ -93,8 +96,19 @@ interface AgentState {
   lookedAtRef?: string;
   queueDepth: number;
   nextActionId: number;
+  actions: Map<string, ActionLifecycle>;
   chatTimestamps: number[];
   openContainer?: OpenContainerState;
+}
+
+interface ActionLifecycle {
+  actionId: string;
+  toolName: string;
+  lifecycleStatus: "queued" | "completed" | "cancelled" | "expired";
+  submittedAt: number;
+  updatedAt: number;
+  expiresAt: number;
+  queueReleased: boolean;
 }
 
 interface SocialEvent {
@@ -343,6 +357,7 @@ export class MockRuntimeServer {
       refs: new Map(),
       queueDepth: 0,
       nextActionId: 0,
+      actions: new Map(),
       chatTimestamps: []
     };
     this.agents.set(agentId, agent);
@@ -438,11 +453,17 @@ export class MockRuntimeServer {
         typeof args.placement_label === "string" ? args.placement_label : undefined
       );
     }
+    if (name === "action.status") {
+      return this.actionStatus(agentId, String(args.action_id ?? ""));
+    }
+    if (name === "action.cancel") {
+      return this.cancelAction(agentId, String(args.action_id ?? ""));
+    }
     if (name.startsWith("action.")) {
-      return this.executeAction(agentId, { kind: name.replace("action.", ""), ...args }, mode);
+      return this.executeAction(agentId, { kind: name.replace("action.", ""), tool_name: name, ...args }, mode);
     }
     if (name === "chat.say_local") {
-      return this.executeAction(agentId, { kind: "chat", ...args }, mode);
+      return this.executeAction(agentId, { kind: "chat", tool_name: "chat.say_local", ...args }, mode);
     }
     if (name === "notice.post") {
       return this.postNotice(agentId, args);
@@ -485,17 +506,39 @@ export class MockRuntimeServer {
   private executeAction(agentId: string, action: JsonObject, mode = "await_completion"): RuntimeResponse {
     const agent = this.agents.get(agentId);
     if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
-    if (agent.queueDepth >= 4) return runtimeFail("backpressure_queue_full", "Agent action queue is full.");
+    this.refreshActions(agent);
+    if (agent.queueDepth >= MAX_ACTION_QUEUE_DEPTH) return runtimeFail("backpressure_queue_full", "Agent action queue is full.");
 
     if (mode === "submit") {
       agent.queueDepth += 1;
       const actionId = `act_${agent.agentId.replace(/[^a-z0-9]/gi, "_")}_${++agent.nextActionId}`;
+      const now = Date.now();
+      const record: ActionLifecycle = {
+        actionId,
+        toolName: String(action.tool_name ?? `action.${String(action.kind ?? "unknown")}`),
+        lifecycleStatus: "queued",
+        submittedAt: now,
+        updatedAt: now,
+        expiresAt: now + SUBMITTED_ACTION_TTL_MS,
+        queueReleased: false
+      };
+      agent.actions.set(actionId, record);
       setTimeout(() => {
-        agent.queueDepth = Math.max(0, agent.queueDepth - 1);
+        const liveAgent = this.agents.get(agentId);
+        const liveRecord = liveAgent?.actions.get(actionId);
+        if (!liveAgent || !liveRecord || liveRecord.lifecycleStatus !== "queued") return;
+        liveRecord.lifecycleStatus = "completed";
+        liveRecord.updatedAt = Date.now();
+        this.releaseActionQueue(liveAgent, liveRecord);
         this.trace({ event: "agent.action_event", action_id: actionId, status: "completed" });
-      }, 250);
+      }, this.submittedActionHoldMs(action));
       this.trace({ event: "agent.action", action_id: actionId, status: "queued", agent_id: agent.agentId });
-      return { ok: true, status: "accepted", action_id: actionId };
+      return {
+        ok: true,
+        status: "accepted",
+        action_id: actionId,
+        result: this.actionPayload(agent, record, "accepted")
+      };
     }
 
     agent.queueDepth += 1;
@@ -511,6 +554,79 @@ export class MockRuntimeServer {
     } finally {
       agent.queueDepth -= 1;
     }
+  }
+
+  private submittedActionHoldMs(action: JsonObject): number {
+    const duration = Number(action.durationMs ?? 0);
+    if (!Number.isFinite(duration) || duration <= 0) return SUBMITTED_ACTION_HOLD_MS;
+    return Math.min(duration + SUBMITTED_ACTION_HOLD_MS, 60_000);
+  }
+
+  private actionStatus(agentId: string, actionId: string): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    if (!actionId) return runtimeFail("invalid_arguments", "action.status requires action_id.");
+    this.refreshActions(agent);
+    const record = agent.actions.get(actionId);
+    if (!record) return runtimeFail("unknown_action", `Unknown action handle ${actionId}.`);
+    return {
+      ok: true,
+      status: "completed",
+      result: this.actionPayload(agent, record, record.lifecycleStatus)
+    };
+  }
+
+  private cancelAction(agentId: string, actionId: string): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    if (!actionId) return runtimeFail("invalid_arguments", "action.cancel requires action_id.");
+    this.refreshActions(agent);
+    const record = agent.actions.get(actionId);
+    if (!record) return runtimeFail("unknown_action", `Unknown action handle ${actionId}.`);
+    if (record.lifecycleStatus !== "queued") {
+      return runtimeFail("action_already_finished", `Action ${actionId} is already ${record.lifecycleStatus}.`);
+    }
+    record.lifecycleStatus = "cancelled";
+    record.updatedAt = Date.now();
+    this.releaseActionQueue(agent, record);
+    this.trace({ event: "agent.action_event", action_id: actionId, status: "cancelled" });
+    return {
+      ok: true,
+      status: "completed",
+      result: this.actionPayload(agent, record, "cancelled")
+    };
+  }
+
+  private refreshActions(agent: AgentState): void {
+    const now = Date.now();
+    for (const record of agent.actions.values()) {
+      if (record.lifecycleStatus === "queued" && now >= record.expiresAt) {
+        record.lifecycleStatus = "expired";
+        record.updatedAt = now;
+        this.releaseActionQueue(agent, record);
+        this.trace({ event: "agent.action_event", action_id: record.actionId, status: "expired" });
+      }
+    }
+  }
+
+  private releaseActionQueue(agent: AgentState, record: ActionLifecycle): void {
+    if (record.queueReleased) return;
+    record.queueReleased = true;
+    agent.queueDepth = Math.max(0, agent.queueDepth - 1);
+  }
+
+  private actionPayload(agent: AgentState, record: ActionLifecycle, status: string): RuntimeResponse {
+    return {
+      action_id: record.actionId,
+      status,
+      lifecycle_status: record.lifecycleStatus,
+      tool_name: record.toolName,
+      queue_depth: agent.queueDepth,
+      max_queue_depth: MAX_ACTION_QUEUE_DEPTH,
+      submitted_at_ms: record.submittedAt,
+      updated_at_ms: record.updatedAt,
+      expires_at_ms: record.expiresAt
+    };
   }
 
   private move(agent: AgentState, action: JsonObject): RuntimeResponse {

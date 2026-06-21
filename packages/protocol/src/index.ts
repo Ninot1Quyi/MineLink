@@ -20,6 +20,8 @@ export const FAILURE_REASONS = [
   "blocked",
   "wrong_tool",
   "backpressure_queue_full",
+  "unknown_action",
+  "action_already_finished",
   "action_timeout",
   "runtime_unavailable",
   "unsupported_capability",
@@ -322,6 +324,24 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
       "unsupported_capability",
       "invalid_cursor"
     ]
+  },
+  {
+    name: "action.status",
+    summary: "Read a submitted action lifecycle record.",
+    description:
+      "Returns the lifecycle status for a submit-mode action handle owned by the active server_agent.",
+    tags: ["action", "lifecycle", "observe"],
+    input_schema: { type: "object", required: ["action_id"], properties: { action_id: { type: "string" } } },
+    failure_reasons: ["unknown_action", "invalid_arguments"]
+  },
+  {
+    name: "action.cancel",
+    summary: "Cancel a submitted action when it has not reached a terminal state.",
+    description:
+      "Cancels a queued submit-mode action handle owned by the active server_agent and releases queue capacity.",
+    tags: ["action", "lifecycle"],
+    input_schema: { type: "object", required: ["action_id"], properties: { action_id: { type: "string" } } },
+    failure_reasons: ["unknown_action", "action_already_finished", "invalid_arguments"]
   },
   {
     name: "container.open",

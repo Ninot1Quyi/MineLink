@@ -91,6 +91,7 @@ public final class MineLinkEndpointBootstrap {
     private static final String NOTICE_BOARD_TAG = "minelink:notice_board";
     private static final int MAX_ACTION_QUEUE_DEPTH = 4;
     private static final long SUBMITTED_ACTION_HOLD_MS = 1_000L;
+    private static final long SUBMITTED_ACTION_TTL_MS = 5_000L;
     private static final int MAX_SYNC_MINING_TICKS = 600;
     private static final int PLAYER_INVENTORY_SLOT_LIMIT = 36;
     private static final int CONTAINER_INVENTORY_SLOT_LIMIT = PLAYER_INVENTORY_SLOT_LIMIT;
@@ -340,11 +341,11 @@ public final class MineLinkEndpointBootstrap {
         if (!mode.equals("await_completion") && !mode.equals("submit")) {
             return failure(request, "invalid_arguments", "tool.execute mode must be await_completion or submit.");
         }
+        JsonObject arguments = objectValue(request, "arguments");
         if (mode.equals("submit") && queueableTool(name)) {
-            return submitQueuedAction(request, agent, name);
+            return submitQueuedAction(request, agent, name, arguments);
         }
 
-        JsonObject arguments = objectValue(request, "arguments");
         return switch (name) {
             case "observe.self" -> observeSelf(request, agent);
             case "observe.scene" -> observeScene(request, agent, arguments);
@@ -355,6 +356,8 @@ public final class MineLinkEndpointBootstrap {
             case "action.mine_visible_block" -> mineVisibleBlock(request, agent, arguments);
             case "action.use" -> use(request, agent, arguments);
             case "action.sleep" -> sleep(request, agent, arguments);
+            case "action.status" -> actionStatus(request, agent, arguments);
+            case "action.cancel" -> cancelAction(request, agent, arguments);
             case "block.place" -> placeBlock(request, agent, arguments);
             case "chat.say_local" -> sayLocal(request, agent, arguments);
             case "notice.post" -> postNotice(request, agent, arguments);
@@ -371,34 +374,75 @@ public final class MineLinkEndpointBootstrap {
         };
     }
 
-    private JsonObject submitQueuedAction(JsonObject request, AgentBody agent, String name) {
-        if (!agent.acceptQueuedAction()) {
+    private JsonObject submitQueuedAction(JsonObject request, AgentBody agent, String name, JsonObject arguments) {
+        ActionLifecycle action = agent.submitQueuedAction(name);
+        if (action == null) {
             return failure(request, "backpressure_queue_full", "Agent action queue is full.");
         }
-        String actionId = agent.nextActionId();
-        int queuedDepth = agent.queueDepth();
-        CompletableFuture.delayedExecutor(SUBMITTED_ACTION_HOLD_MS, TimeUnit.MILLISECONDS).execute(() ->
+        long holdMs = submittedActionHoldMs(arguments);
+        CompletableFuture.delayedExecutor(holdMs, TimeUnit.MILLISECONDS).execute(() ->
             server.execute(() -> {
                 AgentBody liveAgent = runtimeState.agent(agent.agentId);
                 if (liveAgent != null) {
-                    liveAgent.completeQueuedAction();
+                    liveAgent.completeQueuedAction(action.actionId);
                 }
             })
         );
 
-        JsonObject result = new JsonObject();
-        result.addProperty("action_id", actionId);
-        result.addProperty("status", "accepted");
-        result.addProperty("lifecycle_status", "queued");
-        result.addProperty("tool_name", name);
-        result.addProperty("queue_depth", queuedDepth);
-        result.addProperty("max_queue_depth", MAX_ACTION_QUEUE_DEPTH);
+        JsonObject result = actionPayload(agent, action, "accepted");
 
         JsonObject response = baseResponse(request, "tool.execute_result");
         response.addProperty("status", "accepted");
-        response.addProperty("action_id", actionId);
+        response.addProperty("action_id", action.actionId);
         response.add("result", result);
         return response;
+    }
+
+    private JsonObject actionStatus(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String actionId = stringValue(arguments, "action_id", "");
+        if (actionId.isBlank()) {
+            return failure(request, "invalid_arguments", "action.status requires action_id.");
+        }
+        agent.refreshActions();
+        ActionLifecycle action = agent.action(actionId);
+        if (action == null) {
+            return failure(request, "unknown_action", "Unknown action handle: " + actionId);
+        }
+        JsonObject response = toolCompleted(request);
+        response.add("result", actionPayload(agent, action, action.lifecycleStatus));
+        return response;
+    }
+
+    private JsonObject cancelAction(JsonObject request, AgentBody agent, JsonObject arguments) {
+        String actionId = stringValue(arguments, "action_id", "");
+        if (actionId.isBlank()) {
+            return failure(request, "invalid_arguments", "action.cancel requires action_id.");
+        }
+        agent.refreshActions();
+        ActionLifecycle action = agent.action(actionId);
+        if (action == null) {
+            return failure(request, "unknown_action", "Unknown action handle: " + actionId);
+        }
+        if (!agent.cancelAction(actionId)) {
+            return failure(request, "action_already_finished", "Action " + actionId + " is already " + action.lifecycleStatus + ".");
+        }
+        JsonObject response = toolCompleted(request);
+        response.add("result", actionPayload(agent, action, "cancelled"));
+        return response;
+    }
+
+    private JsonObject actionPayload(AgentBody agent, ActionLifecycle action, String status) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("action_id", action.actionId);
+        payload.addProperty("status", status);
+        payload.addProperty("lifecycle_status", action.lifecycleStatus);
+        payload.addProperty("tool_name", action.toolName);
+        payload.addProperty("queue_depth", agent.queueDepth());
+        payload.addProperty("max_queue_depth", MAX_ACTION_QUEUE_DEPTH);
+        payload.addProperty("submitted_at_ms", action.submittedAt);
+        payload.addProperty("updated_at_ms", action.updatedAt);
+        payload.addProperty("expires_at_ms", action.expiresAt);
+        return payload;
     }
 
     private static boolean queueableTool(String name) {
@@ -406,6 +450,14 @@ public final class MineLinkEndpointBootstrap {
             case "action.move", "action.look_at", "action.mine_visible_block", "action.use", "action.sleep", "chat.say_local" -> true;
             default -> false;
         };
+    }
+
+    private static long submittedActionHoldMs(JsonObject arguments) {
+        int durationMs = intValue(arguments, "durationMs", 0);
+        if (durationMs <= 0) {
+            return SUBMITTED_ACTION_HOLD_MS;
+        }
+        return Math.min((long) durationMs + SUBMITTED_ACTION_HOLD_MS, 60_000L);
     }
 
     private JsonObject observeSelf(JsonObject request, AgentBody agent) {
@@ -2750,6 +2802,24 @@ public final class MineLinkEndpointBootstrap {
                 List.of("target_ref comes from a recent observe.scene result", "target is a visible reachable bed")
             ),
             tool(
+                "action.status",
+                "Read a submitted action lifecycle record.",
+                "Returns the lifecycle status for a submit-mode action handle owned by the active server_agent.",
+                objectSchema(properties(prop("action_id", stringSchema())), "action_id"),
+                List.of("action", "lifecycle", "observe"),
+                List.of("unknown_action", "invalid_arguments"),
+                List.of()
+            ),
+            tool(
+                "action.cancel",
+                "Cancel a submitted action that has not reached a terminal state.",
+                "Cancels a queued submit-mode action handle owned by the active server_agent and releases queue capacity.",
+                objectSchema(properties(prop("action_id", stringSchema())), "action_id"),
+                List.of("action", "lifecycle"),
+                List.of("unknown_action", "action_already_finished", "invalid_arguments"),
+                List.of()
+            ),
+            tool(
                 "block.place",
                 "Place a block from inventory against a visible target.",
                 "Places only through server-side reach, visibility, inventory, and occupancy checks.",
@@ -3446,6 +3516,7 @@ public final class MineLinkEndpointBootstrap {
         }
 
         private static void seedGuardFixture(ServerLevel level, BlockPos base) {
+            level.setDayTime(1_000L);
             for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -2), base.offset(10, 4, 4))) {
                 if (pos.getY() >= base.getY()) {
                     level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
@@ -3523,6 +3594,7 @@ public final class MineLinkEndpointBootstrap {
         private final String fixtureName;
         private final Map<String, Integer> inventory = new LinkedHashMap<>();
         private final Map<String, BlockRef> refs = new LinkedHashMap<>();
+        private final Map<String, ActionLifecycle> actions = new LinkedHashMap<>();
         private final List<Long> chatTimestamps = new ArrayList<>();
         private OpenContainer openContainer;
         private int refSeq = 0;
@@ -3582,15 +3654,66 @@ public final class MineLinkEndpointBootstrap {
             return true;
         }
 
-        private boolean acceptQueuedAction() {
+        private ActionLifecycle submitQueuedAction(String toolName) {
+            refreshActions();
             if (queueDepth >= MAX_ACTION_QUEUE_DEPTH) {
-                return false;
+                return null;
             }
             queueDepth++;
+            long now = System.currentTimeMillis();
+            ActionLifecycle action = new ActionLifecycle(
+                nextActionId(),
+                toolName,
+                "queued",
+                now,
+                now,
+                now + SUBMITTED_ACTION_TTL_MS
+            );
+            actions.put(action.actionId, action);
+            return action;
+        }
+
+        private void completeQueuedAction(String actionId) {
+            ActionLifecycle action = actions.get(actionId);
+            if (action == null || !action.lifecycleStatus.equals("queued")) {
+                return;
+            }
+            action.lifecycleStatus = "completed";
+            action.updatedAt = System.currentTimeMillis();
+            releaseActionQueue(action);
+        }
+
+        private boolean cancelAction(String actionId) {
+            ActionLifecycle action = actions.get(actionId);
+            if (action == null || !action.lifecycleStatus.equals("queued")) {
+                return false;
+            }
+            action.lifecycleStatus = "cancelled";
+            action.updatedAt = System.currentTimeMillis();
+            releaseActionQueue(action);
             return true;
         }
 
-        private void completeQueuedAction() {
+        private ActionLifecycle action(String actionId) {
+            return actions.get(actionId);
+        }
+
+        private void refreshActions() {
+            long now = System.currentTimeMillis();
+            for (ActionLifecycle action : actions.values()) {
+                if (action.lifecycleStatus.equals("queued") && now >= action.expiresAt) {
+                    action.lifecycleStatus = "expired";
+                    action.updatedAt = now;
+                    releaseActionQueue(action);
+                }
+            }
+        }
+
+        private void releaseActionQueue(ActionLifecycle action) {
+            if (action.queueReleased) {
+                return;
+            }
+            action.queueReleased = true;
             queueDepth = Math.max(0, queueDepth - 1);
         }
 
@@ -3798,6 +3921,26 @@ public final class MineLinkEndpointBootstrap {
     private record BlockRef(BlockPos pos, String blockId, long expiresAtMs) {
         private boolean expired() {
             return System.currentTimeMillis() > expiresAtMs;
+        }
+    }
+
+    private static final class ActionLifecycle {
+        private final String actionId;
+        private final String toolName;
+        private final long submittedAt;
+        private final long expiresAt;
+        private String lifecycleStatus;
+        private long updatedAt;
+        private boolean queueReleased;
+
+        private ActionLifecycle(String actionId, String toolName, String lifecycleStatus, long submittedAt, long updatedAt, long expiresAt) {
+            this.actionId = actionId;
+            this.toolName = toolName;
+            this.lifecycleStatus = lifecycleStatus;
+            this.submittedAt = submittedAt;
+            this.updatedAt = updatedAt;
+            this.expiresAt = expiresAt;
+            this.queueReleased = false;
         }
     }
 

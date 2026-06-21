@@ -144,6 +144,7 @@ run_shell() {
 
 run_docs_checks() {
   run_cmd git diff --check
+  run_cmd bash scripts/dev/check-architecture-guard.sh --base "$base_ref"
   if [[ -d scripts/dev ]]; then
     run_shell "bash -n scripts/dev/*.sh"
   fi

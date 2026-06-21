@@ -164,7 +164,7 @@ describe("MockRuntimeServer", () => {
     client.close();
   });
 
-  it("applies backpressure to concurrent submit-mode actions", async () => {
+  it("tracks submitted action lifecycle and applies backpressure", async () => {
     const server = new MockRuntimeServer({ port: 25678 });
     servers.push(server);
     await server.start();
@@ -174,17 +174,90 @@ describe("MockRuntimeServer", () => {
     const birth = await request(client, { type: "agent.birth", seed_prompt: "test", body_type: "server_agent" });
     const agentId = String(birth.agent_id);
 
-    const responses = await Promise.all(
-      Array.from({ length: 8 }, () =>
-        request(client, {
+    const submitted = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.move",
+      mode: "submit",
+      arguments: { vector: [1, 0, 0], durationMs: 500 }
+    });
+    expect(submitted).toMatchObject({
+      ok: true,
+      status: "accepted",
+      result: {
+        lifecycle_status: "queued",
+        tool_name: "action.move"
+      }
+    });
+
+    const queued = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.status",
+      arguments: { action_id: submitted.action_id }
+    });
+    expect(queued).toMatchObject({ ok: true, result: { lifecycle_status: "queued" } });
+
+    const cancelled = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.cancel",
+      arguments: { action_id: submitted.action_id }
+    });
+    expect(cancelled).toMatchObject({ ok: true, result: { lifecycle_status: "cancelled" } });
+
+    const afterCancel = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.status",
+      arguments: { action_id: submitted.action_id }
+    });
+    expect(afterCancel).toMatchObject({ ok: true, result: { lifecycle_status: "cancelled" } });
+
+    const completing = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.move",
+      mode: "submit",
+      arguments: { vector: [1, 0, 0], durationMs: 10 }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const completed = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.status",
+      arguments: { action_id: completing.action_id }
+    });
+    expect(completed).toMatchObject({ ok: true, result: { lifecycle_status: "completed" } });
+    await expect(
+      request(client, {
+        type: "tool.execute",
+        agent_id: agentId,
+        name: "action.cancel",
+        arguments: { action_id: completing.action_id }
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "action_already_finished" });
+    await expect(
+      request(client, {
+        type: "tool.execute",
+        agent_id: agentId,
+        name: "action.status",
+        arguments: { action_id: "act_unknown" }
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "unknown_action" });
+
+    const responses: Array<Record<string, unknown>> = [];
+    for (let index = 0; index < 8; index++) {
+      responses.push(
+        await request(client, {
           type: "tool.execute",
           agent_id: agentId,
           name: "action.move",
           mode: "submit",
           arguments: { vector: [1, 0, 0], durationMs: 500 }
         })
-      )
-    );
+      );
+    }
 
     expect(responses.some((response) => response.reason === "backpressure_queue_full")).toBe(true);
     client.close();

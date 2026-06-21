@@ -125,6 +125,43 @@ describe("Agent SDK", () => {
     });
   });
 
+  it("wraps action status and cancel helpers", async () => {
+    const calls: Array<{ name: string; args: unknown; options: unknown }> = [];
+    const agent = new Agent(async (name, args, options) => {
+      calls.push({ name, args, options });
+      return {
+        ok: true,
+        status: "completed",
+        result: {
+          action_id: "act_1",
+          status: name === "action.cancel" ? "cancelled" : "queued",
+          lifecycle_status: name === "action.cancel" ? "cancelled" : "queued",
+          tool_name: "action.move",
+          queue_depth: name === "action.cancel" ? 0 : 1,
+          max_queue_depth: 4
+        }
+      };
+    });
+
+    await expect(agent.actionStatus("act_1")).resolves.toMatchObject({
+      ok: true,
+      actionId: "act_1",
+      lifecycleStatus: "queued",
+      toolName: "action.move"
+    });
+    await expect(agent.cancelAction("act_1")).resolves.toMatchObject({
+      ok: true,
+      actionId: "act_1",
+      lifecycleStatus: "cancelled",
+      queueDepth: 0
+    });
+
+    expect(calls).toEqual([
+      { name: "action.status", args: { action_id: "act_1" }, options: undefined },
+      { name: "action.cancel", args: { action_id: "act_1" }, options: undefined }
+    ]);
+  });
+
   it("rejects malformed submit responses that omit action_id", () => {
     expect(submittedActionFromResult({ ok: true, status: "accepted", result: { status: "accepted" } })).toMatchObject({
       ok: false,

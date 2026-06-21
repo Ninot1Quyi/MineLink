@@ -509,6 +509,8 @@ def resolve_templates(value: Any, state: JsonDict, global_state: Optional[JsonDi
         return find_inventory_empty_slot(state)
     if value == "${output_slot}":
         return find_output_slot(state)
+    if value.startswith("${submitted_action_id:") and value.endswith("}"):
+        return find_submitted_action_id(state, value.removeprefix("${submitted_action_id:").removesuffix("}"), global_state)
     if value.startswith("${visible_block:") and value.endswith("}"):
         return find_visible_block_ref(state, value.removeprefix("${visible_block:").removesuffix("}"))
     if value.startswith("${visible_block_tag:") and value.endswith("}"):
@@ -591,6 +593,17 @@ def find_output_slot(state: JsonDict) -> str:
     if not output:
         raise RuntimeError("No output slot is available in the current container snapshot")
     return str(output["slot_ref"])
+
+
+def find_submitted_action_id(state: JsonDict, tool_name: str, global_state: Optional[JsonDict] = None) -> str:
+    for record in reversed(tool_records(state, global_state)):
+        if record.get("name") != tool_name or is_tool_failure(record.get("result", {})):
+            continue
+        payload = tool_result_payload(record.get("result", {}))
+        action_id = payload.get("action_id")
+        if isinstance(action_id, str) and action_id:
+            return action_id
+    raise RuntimeError(f"No submitted action id is available for {tool_name}")
 
 
 def visible_blocks(state: JsonDict) -> Iterable[JsonDict]:
@@ -1297,7 +1310,21 @@ def public_state(state: JsonDict) -> JsonDict:
 def compact_result(result: Any) -> Any:
     if not isinstance(result, dict):
         return result
-    keys = ["ok", "status", "reason", "message", "id", "kind", "used", "moved", "taken", "recipe_id", "output"]
+    keys = [
+        "ok",
+        "status",
+        "lifecycle_status",
+        "action_id",
+        "reason",
+        "message",
+        "id",
+        "kind",
+        "used",
+        "moved",
+        "taken",
+        "recipe_id",
+        "output",
+    ]
     compact = {key: result[key] for key in keys if key in result}
     if compact:
         return compact

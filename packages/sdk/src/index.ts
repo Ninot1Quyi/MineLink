@@ -28,6 +28,26 @@ export interface SubmittedActionError {
 
 export type SubmittedAction = SubmittedActionOk | SubmittedActionError;
 
+export interface ActionStatusOk {
+  ok: true;
+  actionId: string;
+  lifecycleStatus: string;
+  status: string;
+  toolName?: string;
+  queueDepth?: number;
+  maxQueueDepth?: number;
+  raw: ToolResult;
+}
+
+export interface ActionStatusError {
+  ok: false;
+  reason: string;
+  message?: string;
+  raw: ToolResult;
+}
+
+export type ActionStatus = ActionStatusOk | ActionStatusError;
+
 export class Agent {
   readonly observe: ObserveApi;
   readonly body: BodyApi;
@@ -51,6 +71,14 @@ export class Agent {
 
   async submitToolExecute(name: string, args: JsonObject = {}): Promise<SubmittedAction> {
     return submitAction(this.execute, name, args);
+  }
+
+  actionStatus(actionId: string): Promise<ActionStatus> {
+    return actionStatus(this.execute, actionId);
+  }
+
+  cancelAction(actionId: string): Promise<ActionStatus> {
+    return cancelAction(this.execute, actionId);
   }
 }
 
@@ -216,6 +244,14 @@ export async function submitAction(
   return submittedActionFromResult(await execute(name, args, { mode: "submit" }));
 }
 
+export async function actionStatus(execute: MineLinkToolExecutor, actionId: string): Promise<ActionStatus> {
+  return actionStatusFromResult(await execute("action.status", { action_id: actionId }));
+}
+
+export async function cancelAction(execute: MineLinkToolExecutor, actionId: string): Promise<ActionStatus> {
+  return actionStatusFromResult(await execute("action.cancel", { action_id: actionId }));
+}
+
 export function submittedActionFromResult(raw: ToolResult): SubmittedAction {
   if (!raw.ok) {
     return {
@@ -242,6 +278,42 @@ export function submittedActionFromResult(raw: ToolResult): SubmittedAction {
     actionId,
     status: stringField(payload, "status") ?? "accepted",
     ...(stringField(payload, "lifecycle_status") ? { lifecycleStatus: stringField(payload, "lifecycle_status") } : {}),
+    ...(stringField(payload, "tool_name") ? { toolName: stringField(payload, "tool_name") } : {}),
+    ...(numberField(payload, "queue_depth") === undefined ? {} : { queueDepth: numberField(payload, "queue_depth") }),
+    ...(numberField(payload, "max_queue_depth") === undefined
+      ? {}
+      : { maxQueueDepth: numberField(payload, "max_queue_depth") }),
+    raw
+  };
+}
+
+export function actionStatusFromResult(raw: ToolResult): ActionStatus {
+  if (!raw.ok) {
+    return {
+      ok: false,
+      reason: String(raw.reason),
+      ...(typeof raw.message === "string" ? { message: raw.message } : {}),
+      raw
+    };
+  }
+
+  const payload = actionPayload(raw);
+  const actionId = stringField(payload, "action_id");
+  const lifecycleStatus = stringField(payload, "lifecycle_status");
+  if (!actionId || !lifecycleStatus) {
+    return {
+      ok: false,
+      reason: "malformed_action_status",
+      message: "MineLink action lifecycle response did not include action_id and lifecycle_status.",
+      raw
+    };
+  }
+
+  return {
+    ok: true,
+    actionId,
+    lifecycleStatus,
+    status: stringField(payload, "status") ?? lifecycleStatus,
     ...(stringField(payload, "tool_name") ? { toolName: stringField(payload, "tool_name") } : {}),
     ...(numberField(payload, "queue_depth") === undefined ? {} : { queueDepth: numberField(payload, "queue_depth") }),
     ...(numberField(payload, "max_queue_depth") === undefined

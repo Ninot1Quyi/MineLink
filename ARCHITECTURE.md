@@ -169,6 +169,26 @@ bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundar
 The script writes a summary to
 `.minelink-dev/reports/agent-task-summary.md` for PR evidence.
 
+## Architecture Maintenance Guard
+
+Architecture-sensitive changes must keep this file current. The guard is
+implemented by:
+
+```bash
+bash scripts/dev/check-architecture-guard.sh
+```
+
+The guard runs locally through `scripts/dev/verify-agent-task.sh` and in GitHub
+CI. It always checks that `AGENTS.md` and `ARCHITECTURE.md` retain the required
+context anchors. When protocol, host, SDK, mock runtime, NeoForge runtime,
+agent runner, replay, dev scripts, workflows, or package structure changes, it
+also requires `ARCHITECTURE.md` to change in the same branch unless a reviewed
+false-positive override is set with `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1`.
+
+The guard is intentionally lightweight. It does not prove the architecture is
+correct; it prevents silent architecture drift and makes context maintenance a
+normal part of CI.
+
 ## Current Product State
 
 MineLink is not product-complete. The current acceptance document records

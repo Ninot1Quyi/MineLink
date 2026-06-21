@@ -185,11 +185,14 @@ Current status:
   `container.take_output`, `craft.quick_craft` ingredient consumption,
   `block.place`, and `action.use`. The remaining internal inventory map is only
   a compatibility mirror rebuilt from the FakePlayer inventory.
-- The guard replay also exercises `mode=submit` for real NeoForge actions:
-  accepted action handles return `status=accepted`, `lifecycle_status=queued`,
-  and an `action_id`, while excess submissions return
-  `backpressure_queue_full` instead of allowing unbounded per-agent queue
-  growth.
+- The guard replay also exercises `mode=submit` for real NeoForge actions.
+  Accepted action handles return `status=accepted`, `lifecycle_status=queued`,
+  and an `action_id`; public `action.status` and `action.cancel` resolve only
+  the active server_agent's own handles; queued actions can be cancelled and
+  release queue capacity; short submitted actions can be observed as
+  `completed`; submitted actions that outlive their TTL can be observed as
+  `expired`; excess submissions return `backpressure_queue_full` instead of
+  allowing unbounded per-agent queue growth.
 - Mock runtime and real NeoForge runtime enforce the advertised
   `max_agents_per_owner=3` admission limit with `agent_quota_exceeded`; the
   three-agent portal cooperation replay proves exactly three same-owner agents
@@ -198,9 +201,9 @@ Current status:
   `minecraft:diamond_ore` is absent from `observe.scene` while the intervening
   `minecraft:stone` wall and reachable `minecraft:white_bed` are visible.
 - This is not the full Gate 2 release surface yet. The remaining body lifecycle
-  manager, persistent restore/freeze/remove, cancellation/expiry state
-  transitions, timed mining start/stop/cancel state, and complete body-state
-  parity still require separate implementation and evidence.
+  manager, persistent restore/freeze/remove, `running` and `failed` action
+  states, timed mining start/stop/cancel state, and complete body-state parity
+  still require separate implementation and evidence.
 
 ### Gate 3: Limited Perception
 

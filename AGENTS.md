@@ -21,6 +21,19 @@ change alters evidence or scope, update that document in the same commit.
 Use `docs/agent-workbench.md` for Ona/Codex parallel task boundaries, issue
 shape, and conditional verification.
 
+## Architecture Maintenance Guard
+
+- Treat `ARCHITECTURE.md` as the short, durable system map for future agents.
+- When a change alters public tools, protocol shape, runtime authority,
+  package/workflow structure, verification entry points, or parallel-agent
+  workflow, update `ARCHITECTURE.md` in the same branch.
+- `scripts/dev/check-architecture-guard.sh` and GitHub CI enforce this
+  maintenance rule for architecture-sensitive paths.
+- If the guard reports a false positive, prefer a small clarifying
+  architecture note over bypassing it. Use
+  `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1` only for reviewed cases where the
+  architecture map is truly unchanged.
+
 ## Anti-Mock Rules
 
 - Never claim full product completion from mock-only, replay-only, or smoke-only
