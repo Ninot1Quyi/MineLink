@@ -166,7 +166,7 @@ function findGithubIssue(issue) {
 
 function isOpenState(issue) {
   const type = String(issue.state?.type ?? "").toLowerCase();
-  return !["completed", "canceled"].includes(type);
+  return !["completed", "canceled", "duplicate"].includes(type);
 }
 
 function isBaseCandidate(issue) {
