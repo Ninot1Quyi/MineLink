@@ -57,12 +57,12 @@ Trace-driven acceptance artifacts can be rendered with:
 node scripts/dev/render-acceptance-video.mjs --require-mp4
 ```
 
-The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and,
-when `ffmpeg` is available, `.minelink-dev/reports/artifacts/acceptance.mp4`.
-Use `--task-requirements` to embed the bounded task contract. For tasks labeled
-`video-required`, a separate Ona Platform Codex verifier must compare the task
-requirements with the rendered summary/MP4, record the current summary and MP4
-SHA-256 hashes, and write:
+The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and
+`.minelink-dev/reports/artifacts/acceptance.mp4`; `--require-mp4` makes missing
+`ffmpeg` support fail the command. Use `--task-requirements` to embed the
+bounded task contract. For tasks labeled `video-required`, a separate Ona
+Platform Codex verifier must compare the task requirements with the rendered
+summary/MP4, record the current summary and MP4 SHA-256 hashes, and write:
 
 ```text
 .minelink-dev/reports/artifacts/video-review.md
@@ -116,7 +116,7 @@ bash scripts/dev/e2e.sh portal_coop
 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,body_lifecycle,portal_coop
 node packages/host/dist/index.js http --port 8765
 node scripts/dev/summarize-evidence.mjs
-node scripts/dev/render-acceptance-video.mjs
+node scripts/dev/render-acceptance-video.mjs --require-mp4
 ```
 
 ## Harness Modes
@@ -308,6 +308,7 @@ CI is split into two layers:
   server smoke for `create_smoke`, `mine_tree`, HTTP `mine_tree`,
   `craft_smoke`, `furnace_smoke`, `craft_negative`, `guard_boundaries`,
   `body_lifecycle`, `perception_shapes`, and `portal_coop`, then runs a short
-  real NeoForge stability soak on push, pull request, `workflow_dispatch`, and
-  a daily schedule. Keep long Create worlds and release-length soak tests on a
-  future self-hosted runner profile.
+  real NeoForge stability soak, installs `ffmpeg`, and requires a trace-driven
+  acceptance MP4 before artifact upload on push, pull request,
+  `workflow_dispatch`, and a daily schedule. Keep long Create worlds and
+  release-length soak tests on a future self-hosted runner profile.

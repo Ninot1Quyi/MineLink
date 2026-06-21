@@ -65,7 +65,8 @@ Required:
 - CI runs build, tests, mock `mine_tree`, `create_smoke`, `craft_smoke`,
   `furnace_smoke`, `craft_negative`, `guard_boundaries`,
   `body_lifecycle`, `perception_shapes`, and `portal_coop`, plus real NeoForge
-  smoke for those scenarios, and uploads `.minelink-dev/` evidence.
+  smoke for those scenarios, renders a required trace-driven acceptance MP4,
+  and uploads `.minelink-dev/` evidence.
 - `scripts/dev/build.sh` records Java/NeoForge readiness as valid JSON.
 - No GitHub token, admission token, Microsoft credential, EULA acceptance, or server secret is committed.
 
@@ -609,8 +610,9 @@ Current status:
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.
 - `scripts/dev/render-acceptance-video.mjs` generates a trace-driven
-  `.minelink-dev/reports/artifacts/acceptance-summary.md` and, when `ffmpeg` is
-  available, `.minelink-dev/reports/artifacts/acceptance.mp4`.
+  `.minelink-dev/reports/artifacts/acceptance-summary.md` and
+  `.minelink-dev/reports/artifacts/acceptance.mp4`; the real NeoForge GitHub
+  workflow installs `ffmpeg` and runs the renderer with `--require-mp4`.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   separate Ona Platform Codex verifier writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
