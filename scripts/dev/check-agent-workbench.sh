@@ -32,41 +32,60 @@ require_file "AGENTS.md"
 require_file "ARCHITECTURE.md"
 require_file "docs/agent-workbench.md"
 require_file "docs/ona-migration.md"
+require_file "docs/linear-ona-agent-factory.md"
 require_file "docs/agent-task-queue.md"
 require_file "docs/github-labels.md"
+require_file ".ona/automations.yaml"
 require_file ".devcontainer/devcontainer.json"
 require_file ".github/ISSUE_TEMPLATE/agent-task.yml"
 require_file ".github/pull_request_template.md"
 require_file ".github/workflows/install-smoke.yml"
+require_file "ona/ai-automations/minelink-agent-factory.yaml"
 require_file "scripts/dev/install-smoke.sh"
+require_file "scripts/dev/render-acceptance-video.mjs"
 require_file "scripts/dev/summarize-evidence.mjs"
 require_file "scripts/dev/verify-agent-task.sh"
 
 require_text "AGENTS.md" "docs/agent-workbench.md"
+require_text "AGENTS.md" "docs/linear-ona-agent-factory.md"
 require_text "AGENTS.md" "Architecture Maintenance Guard"
 require_text "AGENTS.md" "Product Completion Rule"
 require_text "ARCHITECTURE.md" "Parallel Development Model"
+require_text "ARCHITECTURE.md" "AI-Native Delivery Model"
 require_text "ARCHITECTURE.md" "Architecture Maintenance Guard"
 require_text "docs/agent-workbench.md" "one environment = one task = one branch = one PR"
+require_text "docs/agent-workbench.md" "ona/ai-automations/minelink-agent-factory.yaml"
 require_text "docs/agent-workbench.md" "docs/agent-task-queue.md"
 require_text "docs/ona-migration.md" "Ona Environment Contract"
+require_text "docs/ona-migration.md" "Ona AI automation is the target execution surface"
 require_text "docs/ona-migration.md" "Secrets Policy"
 require_text "docs/ona-migration.md" "Validation Matrix"
+require_text "docs/linear-ona-agent-factory.md" "Ona AI automation"
+require_text "docs/linear-ona-agent-factory.md" "Acceptance video"
 require_text "docs/agent-task-queue.md" "Ready Tasks"
 require_text "docs/agent-task-queue.md" "scripts/dev/install-smoke.sh"
 require_text "docs/github-labels.md" "agent-ready"
+require_text "docs/github-labels.md" "agent:ona"
+require_text "docs/github-labels.md" "video-required"
 require_text "docs/github-labels.md" "needs-acceptance-evidence"
 require_text "docs/github-labels.md" "mock-only"
 require_text "docs/github-labels.md" "smoke-only"
 require_text "docs/github-labels.md" "real-partial"
 require_text "docs/github-labels.md" "product-accepted"
+require_text ".ona/automations.yaml" "render-acceptance-evidence"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "agent-ready"
+require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "agent:ona"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "needs-acceptance-evidence"
+require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "Acceptance video required"
+require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "Linked Linear issue"
 require_text ".github/pull_request_template.md" "Acceptance Gate"
 require_text ".github/pull_request_template.md" "Mock/Smoke Assumption Reduced"
 require_text ".github/pull_request_template.md" "Validation"
 require_text ".github/pull_request_template.md" "Evidence Paths"
+require_text ".github/pull_request_template.md" "Acceptance video artifact"
 require_text ".github/pull_request_template.md" "Remaining Product Gaps"
+require_text "ona/ai-automations/minelink-agent-factory.yaml" "minelink-agent-factory"
+require_text "ona/ai-automations/minelink-agent-factory.yaml" "Ona agent execution environment"
 require_text ".github/workflows/install-smoke.yml" "minelink-install-smoke-evidence"
 require_text ".github/workflows/install-smoke.yml" "scripts/dev/summarize-evidence.mjs"
 require_text ".github/workflows/ci.yml" "Summarize MineLink evidence"
@@ -79,6 +98,7 @@ require_text ".devcontainer/devcontainer.json" "ghcr.io/devcontainers/features/j
 require_text ".devcontainer/devcontainer.json" "python3 --version"
 require_text "scripts/dev/install-smoke.sh" "fresh clone"
 require_text "scripts/dev/install-smoke.sh" "dirty-local-non-acceptance"
+require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink acceptance artifacts"
 require_text "scripts/dev/summarize-evidence.mjs" "Acceptance Boundary"
 require_text "scripts/dev/summarize-evidence.mjs" "GITHUB_STEP_SUMMARY"
 require_text "scripts/dev/verify-agent-task.sh" "install   fresh clone"
@@ -128,13 +148,17 @@ PY
     "ARCHITECTURE.md" \
     "docs/agent-workbench.md" \
     "docs/ona-migration.md" \
+    "docs/linear-ona-agent-factory.md" \
     "docs/agent-task-queue.md" \
     "docs/github-labels.md" \
+    ".ona/automations.yaml" \
     ".devcontainer/devcontainer.json" \
     ".github/ISSUE_TEMPLATE/agent-task.yml" \
     ".github/pull_request_template.md" \
     ".github/workflows/install-smoke.yml" \
+    "ona/ai-automations/minelink-agent-factory.yaml" \
     "scripts/dev/install-smoke.sh" \
+    "scripts/dev/render-acceptance-video.mjs" \
     "scripts/dev/summarize-evidence.mjs" \
     "scripts/dev/verify-agent-task.sh"; do
     if [[ -f "$file" ]]; then

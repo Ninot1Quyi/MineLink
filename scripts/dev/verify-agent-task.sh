@@ -255,6 +255,8 @@ esac
   echo "## Evidence Paths"
   echo
   echo "- \`.minelink-dev/reports/agent-task-summary.md\`"
+  echo "- \`.minelink-dev/reports/artifacts/acceptance-summary.md\` when acceptance artifacts are rendered"
+  echo "- \`.minelink-dev/reports/artifacts/acceptance.mp4\` when ffmpeg is available or video is required"
   echo "- \`.minelink-dev/<scenario>/reports/<scenario>-result.json\` when e2e scenarios ran"
   echo "- \`.minelink-dev/soak/<runtime>/soak-report.json\` when soak scenarios ran"
 } > "$summary_path"

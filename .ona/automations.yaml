@@ -1,0 +1,29 @@
+tasks:
+  verify-docs:
+    name: Verify MineLink docs and agent workbench
+    command: |
+      bash scripts/dev/verify-agent-task.sh --scope docs
+    triggeredBy:
+      - postDevcontainerStart
+
+  verify-fast:
+    name: Run MineLink fast verification
+    command: |
+      bash scripts/dev/verify-agent-task.sh --scope fast
+    triggeredBy:
+      - manual
+
+  verify-neoforge-guard:
+    name: Run MineLink real NeoForge guard smoke
+    command: |
+      MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
+    triggeredBy:
+      - manual
+
+  render-acceptance-evidence:
+    name: Render MineLink acceptance evidence artifacts
+    command: |
+      node scripts/dev/summarize-evidence.mjs
+      node scripts/dev/render-acceptance-video.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)"
+    triggeredBy:
+      - manual

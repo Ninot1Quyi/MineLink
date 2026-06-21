@@ -581,6 +581,13 @@ Current status:
 - `.github/workflows/install-smoke.yml` runs the same fresh-clone proof for
   install/workbench/bootstrap changes and uploads
   `minelink-install-smoke-evidence`.
+- `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
+  fast verification, real NeoForge guard smoke, and acceptance artifact
+  rendering. `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona
+  AI automation spec for task-to-PR agent work.
+- `scripts/dev/render-acceptance-video.mjs` generates a trace-driven
+  `.minelink-dev/reports/artifacts/acceptance-summary.md` and, when `ffmpeg` is
+  available, `.minelink-dev/reports/artifacts/acceptance.mp4`.
 - Ona CLI bootstrap has been exercised against the MineLink cloud environment:
   `ona environment start`, `ona environment exec`, and
   `ona environment devcontainer rebuild` reached `/workspaces/MineLink` on
@@ -591,7 +598,9 @@ Current status:
   Ona rebuilds.
 - This is real bootstrap evidence only. It does not prove server-admin mod
   installation, agent-user MCP configuration, LAN setup, cross-platform
-  packaging, or real NeoForge install acceptance.
+  packaging, Linear webhook enablement, GitHub issue-to-Ona dispatch,
+  acceptance MP4 availability in every environment, or real NeoForge install
+  acceptance.
 
 ### Gate 11: Security, Stability, and Release
 

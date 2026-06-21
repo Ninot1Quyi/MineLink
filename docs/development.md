@@ -51,8 +51,29 @@ GitHub Actions, the CI, Install Smoke, and Minecraft NeoForge Smoke workflows
 also append the same content to the run's Step Summary before uploading
 artifacts.
 
+Trace-driven acceptance artifacts can be rendered with:
+
+```bash
+node scripts/dev/render-acceptance-video.mjs
+```
+
+The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and,
+when `ffmpeg` is available, `.minelink-dev/reports/artifacts/acceptance.mp4`.
+Use `--require-mp4` for tasks labeled `video-required`.
+
+Ona agent-factory work should use Ona AI automation rather than manual SSH:
+
+```bash
+ona automations validate .ona/automations.yaml
+ona ai automation create ona/ai-automations/minelink-agent-factory.yaml
+```
+
+Use `docs/linear-ona-agent-factory.md` for the Linear/GitHub task contract,
+status model, board setup, and pilot `ona ai automation start` command.
+
 Ona/Codex cloud worktrees should also read:
 
+- `docs/linear-ona-agent-factory.md`
 - `docs/ona-migration.md`
 - `docs/agent-task-queue.md`
 - `.github/pull_request_template.md`
@@ -78,6 +99,7 @@ bash scripts/dev/e2e.sh portal_coop
 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,portal_coop
 node packages/host/dist/index.js http --port 8765
 node scripts/dev/summarize-evidence.mjs
+node scripts/dev/render-acceptance-video.mjs
 ```
 
 ## Harness Modes

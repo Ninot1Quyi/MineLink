@@ -6,6 +6,10 @@ Current status before this PR:
 
 Expected status after this PR:
 
+Linked Linear issue:
+
+Linked GitHub issue:
+
 ## Mock/Smoke Assumption Reduced
 
 Describe the assumption this PR converts toward real product behavior:
@@ -29,8 +33,13 @@ Forbidden changes respected:
 - `.minelink-dev/reports/agent-task-summary.md`
 - `.minelink-dev/reports/architecture-guard.md`
 - `.minelink-dev/reports/agent-workbench-guard.md`
+- `.minelink-dev/reports/ci-evidence-summary.md`
+- `.minelink-dev/reports/artifacts/acceptance-summary.md`
+- `.minelink-dev/reports/artifacts/acceptance.mp4`
 - `.minelink-dev/<scenario>/reports/<scenario>-result.json`
 - GitHub Actions run:
+
+Acceptance video artifact:
 
 ## Remaining Product Gaps
 

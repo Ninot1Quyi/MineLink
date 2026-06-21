@@ -14,7 +14,8 @@ one environment = one task = one branch = one PR
 The local Codex thread remains the integration and acceptance owner. Cloud
 agents should take narrow tasks with explicit write scopes and validation.
 Use `docs/ona-migration.md` for the migration runbook and
-`docs/agent-task-queue.md` for ready tasks.
+`docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona agent factory.
+Use `docs/agent-task-queue.md` for ready tasks.
 
 ## Task Classes
 
@@ -35,12 +36,16 @@ sets are disjoint and a human or lead agent is integrating.
 
 Every agent-ready issue or PR must state:
 
+- Task: the one-sentence outcome.
 - Scope: exact modules or files the agent may change.
 - Forbidden: assertions, boundaries, or files the agent must not weaken.
 - Acceptance gate: which gate in `docs/minelink-acceptance.md` is affected.
 - Mock/smoke reduction: which assumption is being replaced by real behavior.
 - Validation: exact commands to run.
 - Evidence: report paths and CI links to paste into the PR.
+- Acceptance video required: yes/no and the expected artifact path.
+- Linked GitHub issue and linked Linear issue, when applicable.
+- Expected PR title and branch convention.
 - Remaining gaps: what this task does not complete.
 
 ## Default Verification
@@ -80,6 +85,10 @@ Use automation to reduce agent memory load:
   worktree is created.
 - `install-smoke.sh` clones the committed ref into a separate checkout, runs
   `npm ci`, and records install evidence under `.minelink-dev/install-smoke/`.
+- `.ona/automations.yaml` provides Ona-native environment tasks for docs, fast,
+  NeoForge guard, and acceptance artifact commands.
+- `ona/ai-automations/minelink-agent-factory.yaml` is the Ona AI automation
+  spec for task-to-PR agent work.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,
   runtime, or NeoForge checks.
 - `check-agent-workbench.sh` verifies that Ona migration docs, task queue,
@@ -88,6 +97,8 @@ Use automation to reduce agent memory load:
 - GitHub CI runs the fast contract suite on pushes and PRs.
 - `summarize-evidence.mjs` writes `.minelink-dev/reports/ci-evidence-summary.md`
   and appends the same evidence index to the GitHub Step Summary.
+- `render-acceptance-video.mjs` writes trace-driven acceptance artifact
+  summaries and optional MP4 files under `.minelink-dev/reports/artifacts/`.
 - The install smoke workflow uploads `minelink-install-smoke-evidence` for
   install/workbench/bootstrap changes.
 - The heavy NeoForge workflow is skipped for docs-only and workbench-only
@@ -127,6 +138,8 @@ Validation:
 Evidence paths:
 - `.minelink-dev/reports/agent-task-summary.md`
 - `.minelink-dev/reports/ci-evidence-summary.md`
+- `.minelink-dev/reports/artifacts/acceptance-summary.md`
+- `.minelink-dev/reports/artifacts/acceptance.mp4`, if `video-required` or `ffmpeg` is available
 - `.minelink-dev/install-smoke/install-smoke-report.md`, for install/bootstrap tasks
 - `.minelink-dev/<scenario>/reports/<scenario>-result.json`
 

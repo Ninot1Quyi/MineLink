@@ -24,6 +24,7 @@ Every environment must start from a clean branch and read these files first:
 - `ARCHITECTURE.md`
 - `docs/minelink-acceptance.md`
 - `docs/agent-workbench.md`
+- `docs/linear-ona-agent-factory.md`
 - `docs/agent-task-queue.md`
 
 Use `.devcontainer/devcontainer.json` for bootstrap. It uses the prebuilt
@@ -38,12 +39,16 @@ GitHub Actions also accepts `codex/**` for local Codex worktrees.
 
 Only tasks with `agent-ready` scope are suitable for Ona. Each task must define:
 
+- Task: the concrete requested outcome.
 - Scope: exact files or directories the agent may change.
 - Forbidden changes: assertions, boundaries, or files that must not be weakened.
 - Acceptance gate: the gate in `docs/minelink-acceptance.md`.
 - Mock/smoke reduction: the assumption being converted toward real behavior.
 - Validation: exact commands.
 - Evidence: report paths and GitHub Action URLs.
+- Acceptance video required: yes/no and expected artifact paths.
+- Linked GitHub issue and linked Linear issue.
+- Expected PR title and branch convention.
 - Remaining gaps: what the task does not complete.
 
 Use `.github/ISSUE_TEMPLATE/agent-task.yml` for new tasks and
@@ -88,6 +93,13 @@ The guard commands also write:
 .minelink-dev/reports/agent-workbench-guard.md
 ```
 
+Acceptance artifact generation writes:
+
+```text
+.minelink-dev/reports/artifacts/acceptance-summary.md
+.minelink-dev/reports/artifacts/acceptance.mp4
+```
+
 ## Automatic Guards
 
 MineLink uses automation to reduce agent memory load:
@@ -102,6 +114,12 @@ MineLink uses automation to reduce agent memory load:
 - `scripts/dev/summarize-evidence.mjs` aggregates scenario, soak, install, and
   stability reports into a Markdown index without changing workflow pass/fail
   semantics.
+- `scripts/dev/render-acceptance-video.mjs` turns existing reports into a
+  trace-driven acceptance summary and optional MP4 artifact.
+- `.ona/automations.yaml` defines Ona-native environment tasks.
+- `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona AI
+  automation that should be started by manual pilot, GitHub dispatch, or Linear
+  webhook integration.
 - `.github/workflows/ci.yml` runs both guards on every push and PR.
 - `.github/workflows/install-smoke.yml` uploads
   `minelink-install-smoke-evidence` for install/workbench/bootstrap changes.
@@ -142,6 +160,18 @@ has authorized EULA acceptance for development testing. Do not commit generated
 EULA files.
 
 ## Automation Readiness
+
+Ona AI automation is the target execution surface. `ona environment ssh` is only
+for debugging and readback. A valid pilot starts
+`ona/ai-automations/minelink-agent-factory.yaml` through:
+
+```bash
+ona ai automation create ona/ai-automations/minelink-agent-factory.yaml
+ona ai automation start <automation-id> --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb --param task_id=gh-45 --param issue_url=https://github.com/Ninot1Quyi/MineLink/issues/45 --param linear_issue=none --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 --param branch=codex/gh-45-short-task --param pr_title="Advance MineLink task gh-45" --param acceptance_gate="Gate 2" --param validation_scope=docs --param scenarios=none --wait
+```
+
+Linear or GitHub issue webhooks are not proven enabled until a real issue
+creates an Ona execution and a draft PR without manual SSH.
 
 Scheduled or bulk Ona automation should wait until all of these are true:
 

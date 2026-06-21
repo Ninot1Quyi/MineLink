@@ -7,7 +7,10 @@ Use these labels to keep Ona/Codex work bounded and reviewable.
 | Label | Purpose |
 | --- | --- |
 | `agent-ready` | Issue has scope, forbidden changes, validation, evidence, and remaining gaps. |
+| `agent:ona` | Task should be handled by Ona AI automation, not manual SSH. |
 | `needs-acceptance-evidence` | PR or issue cannot close until report paths and CI links are attached. |
+| `real-neoforge-required` | Real NeoForge evidence is required before review can accept the claim. |
+| `video-required` | Acceptance summary and MP4 artifact are required, or the PR must explain why MP4 could not render. |
 | `runtime-single-owner` | Work touches conflict-heavy runtime paths and should not run in parallel. |
 | `docs-architecture` | Documentation, architecture, workbench, templates, or runbooks. |
 | `ci-reporting` | GitHub Actions, artifacts, verification scripts, or report summaries. |
@@ -29,6 +32,23 @@ Use these labels to keep Ona/Codex work bounded and reviewable.
 | `gate-10-packaging` | Install and product packaging. |
 | `gate-11-release` | Security, stability, and release. |
 
+Short aliases for Linear/GitHub sync:
+
+| Label | Gate |
+| --- | --- |
+| `gate:0` | Gate 0 |
+| `gate:1` | Gate 1 |
+| `gate:2` | Gate 2 |
+| `gate:3` | Gate 3 |
+| `gate:4` | Gate 4 |
+| `gate:5` | Gate 5 |
+| `gate:6` | Gate 6 |
+| `gate:7` | Gate 7 |
+| `gate:8` | Gate 8 |
+| `gate:9` | Gate 9 |
+| `gate:10` | Gate 10 |
+| `gate:11` | Gate 11 |
+
 ## Status Labels
 
 | Label | Meaning |
@@ -37,6 +57,8 @@ Use these labels to keep Ona/Codex work bounded and reviewable.
 | `smoke-only` | Evidence is a narrow smoke path only. |
 | `real-partial` | Real NeoForge evidence exists but required scope remains incomplete. |
 | `product-accepted` | Gate requirement is fully accepted with repeatable real evidence. |
+| `blocked` | Agent cannot continue without a concrete dependency or human decision. |
+| `needs-human-review` | Agent run finished and a human must review evidence and remaining gaps. |
 
 Do not apply `product-accepted` unless `docs/minelink-acceptance.md` has the
 same status and evidence.

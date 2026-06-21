@@ -1,0 +1,89 @@
+name: minelink-agent-factory
+description: >
+  MineLink issue-to-PR agent factory. Start this automation from a GitHub or
+  Linear task that already satisfies the MineLink agent task contract.
+triggers:
+  - context:
+      projects:
+        projectIds:
+          - 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb
+    manual: {}
+  - context:
+      repositories:
+        environmentClassId: 019ee0f5-7408-757f-a642-68328c4ae81d
+        repositoryUrls:
+          repoUrls:
+            - https://github.com/Ninot1Quyi/MineLink.git
+    pullRequest:
+      events:
+        - PULL_REQUEST_EVENT_OPENED
+        - PULL_REQUEST_EVENT_UPDATED
+action:
+  limits:
+    maxParallel: 2
+    maxTotal: 6
+  steps:
+    - agent:
+        prompt: |
+          You are working on MineLink through the Ona agent execution environment,
+          not a manual SSH shell. Read AGENTS.md, ARCHITECTURE.md,
+          docs/minelink-acceptance.md, docs/agent-workbench.md, and
+          docs/linear-ona-agent-factory.md before editing.
+
+          Task id: {{ .Parameters.task_id }}
+          Source issue: {{ .Parameters.issue_url }}
+          Linked Linear issue: {{ .Parameters.linear_issue }}
+          Linked GitHub issue: {{ .Parameters.github_issue }}
+          Target branch: {{ .Parameters.branch }}
+          Acceptance gate: {{ .Parameters.acceptance_gate }}
+          Validation scope: {{ .Parameters.validation_scope }}
+          Scenarios: {{ .Parameters.scenarios }}
+
+          Implement only the scoped task described by the issue. Preserve
+          MineLink anti-mock boundaries: do not weaken assertions, do not add
+          oracle tools, do not replace real Minecraft behavior with synthetic
+          output, and do not claim product acceptance from mock or smoke evidence.
+          Commit messages, PR text, comments, and code comments must be English.
+    - task:
+        command: >
+          bash scripts/dev/verify-agent-task.sh --scope {{ .Parameters.validation_scope }} --scenarios {{ .Parameters.scenarios }}
+    - task:
+        command: >
+          node scripts/dev/summarize-evidence.mjs &&
+          node scripts/dev/render-acceptance-video.mjs
+          --task-id {{ .Parameters.task_id }}
+          --branch {{ .Parameters.branch }}
+          --pr-url {{ .Parameters.issue_url }}
+    - pullRequest:
+        branch: "{{ .Parameters.branch }}"
+        description: |
+          ## Linked Work
+
+          - Linear: {{ .Parameters.linear_issue }}
+          - GitHub: {{ .Parameters.github_issue }}
+
+          ## MineLink Delivery Evidence
+
+          - Agent task id: {{ .Parameters.task_id }}
+          - Acceptance gate: {{ .Parameters.acceptance_gate }}
+          - Validation scope: {{ .Parameters.validation_scope }}
+          - Evidence summary: `.minelink-dev/reports/ci-evidence-summary.md`
+          - Agent verifier: `.minelink-dev/reports/agent-task-summary.md`
+          - Acceptance video summary: `.minelink-dev/reports/artifacts/acceptance-summary.md`
+          - Acceptance video: `.minelink-dev/reports/artifacts/acceptance.mp4` when ffmpeg is available
+
+          This PR must still be reviewed against `docs/minelink-acceptance.md`.
+          Mock, replay, smoke, or short-soak evidence does not imply full product
+          completion.
+        draft: true
+        title: "{{ .Parameters.pr_title }}"
+    - report:
+        outputs:
+          - key: minelink_validation_passed
+            title: MineLink validation passed
+            boolean: {}
+            prompt: Did the MineLink validation command complete successfully?
+          - key: real_neoforge_ran
+            title: Real NeoForge ran
+            boolean: {}
+            prompt: Did this task run real NeoForge evidence, not only mock or smoke replay?

@@ -23,6 +23,8 @@ shape, and conditional verification.
 Use `docs/ona-migration.md`, `docs/agent-task-queue.md`, and
 `docs/github-labels.md` for Ona migration, ready task selection, and GitHub
 triage labels.
+Use `docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona agent ->
+PR/CI/evidence delivery workflow.
 
 ## Architecture Maintenance Guard
 
@@ -41,6 +43,9 @@ triage labels.
 - `scripts/dev/summarize-evidence.mjs` and GitHub Step Summary entries are
   evidence indexes only. They make reports easier to review; they do not change
   workflow pass/fail semantics or acceptance gate status.
+- `scripts/dev/render-acceptance-video.mjs` produces trace-driven acceptance
+  summaries and optional MP4 artifacts. These artifacts are review evidence, not
+  client GUI proof and not gate-status upgrades.
 - If the guard reports a false positive, prefer a small clarifying
   architecture note over bypassing it. Use
   `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1` only for reviewed cases where the
@@ -188,6 +193,9 @@ Reports must distinguish:
 - Use Codex native subagents for independent CI monitoring, verification, review,
   or disjoint implementation slices when that improves throughput. The main
   agent still owns final integration and claims.
+- Use Ona AI automation for agent-factory work. `ona environment ssh` is only a
+  debugging surface and must not be described as the final Ona agent execution
+  flow.
 - Do not leak GitHub tokens, admission tokens, Microsoft credentials,
   OpenAI/API keys, EULA files, or server secrets.
 

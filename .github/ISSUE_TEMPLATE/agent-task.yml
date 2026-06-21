@@ -3,6 +3,7 @@ description: Bounded MineLink work item for Ona/Codex cloud worktrees
 title: "[agent-task] "
 labels:
   - agent-ready
+  - agent:ona
   - needs-acceptance-evidence
 body:
   - type: markdown
@@ -27,6 +28,14 @@ body:
         - Gate 9: Frontier Society and Director
         - Gate 10: Install and Product Packaging
         - Gate 11: Security, Stability, and Release
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: One-sentence outcome the agent should deliver.
+      placeholder: Make Gate 6 quick crafting use the native server result slot for shaped recipes.
     validations:
       required: true
   - type: textarea
@@ -75,7 +84,43 @@ body:
       description: Report paths, action URLs, and logs that must be pasted into the PR.
       value: |
         - .minelink-dev/reports/agent-task-summary.md
+        - .minelink-dev/reports/artifacts/acceptance-summary.md
+        - .minelink-dev/reports/artifacts/acceptance.mp4 when video-required
         - .minelink-dev/<scenario>/reports/<scenario>-result.json
+    validations:
+      required: true
+  - type: dropdown
+    id: acceptance_video_required
+    attributes:
+      label: Acceptance video required
+      description: Whether this task must render acceptance artifacts.
+      options:
+        - "yes"
+        - "no"
+    validations:
+      required: true
+  - type: input
+    id: linked_github_issue
+    attributes:
+      label: Linked GitHub issue
+      description: GitHub issue URL, or this issue URL if self-contained.
+      placeholder: https://github.com/Ninot1Quyi/MineLink/issues/45
+    validations:
+      required: true
+  - type: input
+    id: linked_linear_issue
+    attributes:
+      label: Linked Linear issue
+      description: Linear issue key or URL. Use none when there is no Linear issue.
+      placeholder: LIN-123
+    validations:
+      required: true
+  - type: input
+    id: expected_pr
+    attributes:
+      label: Expected PR title and branch convention
+      description: Include the draft PR title and branch name.
+      placeholder: Advance Gate 6 native crafting; codex/gh-45-native-crafting
     validations:
       required: true
   - type: textarea
