@@ -725,9 +725,11 @@ Current status:
   snapshotting. This is the current accepted Ona prebuild baseline evidence.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the evidence check for Ona
   Platform Codex readbacks, and `scripts/dev/run-agent-factory-stage.mjs` is
-  the Ona finalizer wrapper. The checked-in Ona AI automation runs sequentially
-  and routes each stage through that wrapper. Missing implementation or
-  verifier readback writes `platform-codex-evidence.md` plus an
+  the Ona finalizer wrapper. The checked-in Ona AI automation now enters once
+  through `scripts/dev/run-agent-factory-stage.mjs --stage all`; the wrapper
+  still runs the guarded stage list sequentially and writes per-stage reports.
+  Missing implementation or verifier readback writes
+  `platform-codex-evidence.md` plus an
   `agent-factory-stage-<stage>.md` blocked report and exits 0 so the Ona
   execution can terminate with readable evidence instead of lingering in a
   failed Codex task loop. The wrapper still skips validation, video release,
@@ -795,12 +797,11 @@ Current status:
   that a 120-second readback window can time out before the guarded finalizer
   reaches its terminal phase. Direct Ona readback later showed that execution
   completed with `failedActionCount=1`, which is expected until Platform Codex
-  implementation evidence exists. The dispatcher readback window is now 240
-  seconds, and the watcher now skips started/In Progress/In Review issues and,
-  after a successful non-dry-run dispatch, writes an `In Progress` Linear status
-  plus a dispatch-boundary comment. That prevents schedule spam while preserving
-  the fail-closed Platform Codex readback guard for validation, video release,
-  PR, and product acceptance.
+  implementation evidence exists. The watcher now skips started/In Progress/In
+  Review issues and, after a successful non-dry-run dispatch, writes an
+  `In Progress` Linear status plus a dispatch-boundary comment. That prevents
+  schedule spam while preserving the fail-closed Platform Codex readback guard
+  for validation, video release, PR, and product acceptance.
   GitHub Actions run `27920695755` proved the Linear status writeback path:
   `NIN-8` was updated from `Ready for Agent/unstarted` to `In Progress`, with
   comment `78d49cc3-6bb6-4fd4-b0d9-61d708fdc6d5`, after dispatching Ona
@@ -814,6 +815,14 @@ Current status:
   Follow-up run `27920953104` proved duplicate prevention: `NIN-8` was skipped
   with `reason=active_state_In_Progress`, `Candidate count: 0`, and
   `Dispatched count: 0`.
+  GitHub Actions run `27921207270` then proved the GitHub dispatcher can start
+  the updated guarded finalizer, but its 240-second CI readback timed out while
+  the Ona execution was still running. Direct Ona readback showed execution
+  `019eec8e-b2d5-7d05-8197-ce41b7f8ec48` finished about 4m43s after start with
+  `WORKFLOW_EXECUTION_PHASE_COMPLETED` and `failedActionCount=0`. The
+  dispatcher readback window is now 600 seconds, and the Ona AI automation uses
+  a single `--stage all` task to reduce repeated task scheduling overhead while
+  preserving per-stage fail-closed evidence reports.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

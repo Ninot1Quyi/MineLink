@@ -87,7 +87,7 @@ jobs:
             --comment
             --require-ona
             --wait-ona-execution
-            --ona-execution-timeout-seconds 240
+            --ona-execution-timeout-seconds 600
             --ona-execution-poll-seconds 5
           )
           if [ -n "$issue_number" ]; then
@@ -157,7 +157,7 @@ jobs:
             --require-key
             --require-ona
             --wait-ona-execution
-            --ona-execution-timeout-seconds 240
+            --ona-execution-timeout-seconds 600
             --ona-execution-poll-seconds 5
           )
           if [ -n "$issue" ]; then

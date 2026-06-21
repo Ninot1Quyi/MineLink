@@ -287,16 +287,17 @@ to that manual trigger by `.github/workflows/agent-factory-dispatch.yml`.
 After native Ona repository/Linear webhooks are available in the organization,
 add those triggers without changing the downstream evidence requirements.
 
-The finalizer is intentionally sequential (`maxParallel: 1`) and every
-downstream side-effect step is routed through:
+The finalizer is intentionally sequential (`maxParallel: 1`) and uses one Ona
+task step to avoid repeated Ona/Codex scheduling overhead:
 
 ```bash
-node scripts/dev/run-agent-factory-stage.mjs --stage <stage>
+node scripts/dev/run-agent-factory-stage.mjs --stage all
 ```
 
-That wrapper calls `scripts/dev/check-platform-codex-evidence.mjs
---implementation` or `--implementation --verifier` as required for the stage.
-If the accepted readback is missing, it writes
+That wrapper runs the guarded stage list internally and each stage calls
+`scripts/dev/check-platform-codex-evidence.mjs --implementation` or
+`--implementation --verifier` as required. If the accepted readback is missing,
+it writes
 `.minelink-dev/reports/platform-codex-evidence.md` and
 `.minelink-dev/reports/agent-factory-stage-<stage>.md`, skips side effects, and
 exits 0. Exiting 0 here is deliberate: it lets Ona terminate the automation
@@ -409,13 +410,14 @@ automation, and draft PR evidence:
   `019eeb54-6320-7a1c-ab91-be9544a5eb82`,
   `019eeb62-6201-70c9-8bfc-77e334213155`, and
   `019eebd9-8f2b-717b-8a71-f8275561edb3`. The current accepted CI refresh
-  baseline is `019eec03-390c-7b19-a819-e7e774e67a14` from GitHub Actions run
-  `27917523419`; it completed with `PREBUILD_PHASE_COMPLETED:100`, a
-  7.76 GB snapshot, and a 13m43s workflow duration after the path-filtered,
-  timeout-bounded refresh changes. Older overlapping or stale refresh prebuilds,
-  including `019eeb05-69dc-75d4-9ffa-a6769945ae50` and
-  `019eebf6-2c0c-7b40-8d59-7516ada89b62`, were cancelled and are not accepted as
-  the ready baseline.
+  baseline is `019eec3a-85b2-75e7-a5f3-db79a7a2ce2c` from GitHub Actions run
+  `27919007816`; it completed with `PREBUILD_PHASE_COMPLETED:100`, a
+  7.75 GB snapshot, and about 15m10s observed end-to-end time. Older
+  overlapping or stale refresh prebuilds, including
+  `019eeb05-69dc-75d4-9ffa-a6769945ae50`,
+  `019eebf6-2c0c-7b40-8d59-7516ada89b62`, and
+  `019eec1c-2959-79b0-a2a0-bf598dae41db`, were cancelled or failed and are not
+  accepted as the ready baseline.
 - Linear setup readback on 2026-06-21 ran
   `npm run agent-factory:setup-linear -- --require-key` and created the
   `MineLink` project at
@@ -445,10 +447,10 @@ automation and produce chain evidence but cannot prove the
 implementation-session edge.
 The guarded finalizer now stops all later side effects when the Platform Codex
 implementation readback is missing.
-The finalizer stages now run through `scripts/dev/run-agent-factory-stage.mjs`;
-missing implementation or verifier evidence writes blocked stage reports and
-exits 0 so Ona can close the automation instead of leaving a failed Codex task
-running.
+The finalizer now enters through
+`scripts/dev/run-agent-factory-stage.mjs --stage all`; missing implementation
+or verifier evidence writes blocked stage reports and exits 0 so Ona can close
+the automation instead of leaving a failed Codex task running.
 The repository dispatcher now waits briefly for the Ona automation execution
 readback in CI, so the artifacts can distinguish `queued`, `running`,
 `completed`, and `completed_with_failed_actions` instead of flattening every
@@ -466,8 +468,9 @@ hazard: `NIN-8` remained `agent-ready`, so the watcher started another Ona
 execution `019eec73-6138-7929-ae90-06039b6a90d3`. The 120-second artifact
 readback timed out, but direct Ona readback later showed the execution completed
 with `failedActionCount=1`, matching the fail-closed Platform Codex evidence
-guard. The dispatcher readback window is now 240 seconds so those terminal
-guarded-finalizer results are captured in CI artifacts. The watcher also treats
+guard. The dispatcher readback window was raised to 600 seconds after run
+`27921207270` showed a guarded finalizer execution completing after about
+4m43s while the 240-second CI readback had already timed out. The watcher also treats
 started/In Progress/In Review issues as active and marks a successfully
 dispatched Linear issue `In Progress` with a comment before the next schedule,
 preventing repeated environments for the same unresolved task.

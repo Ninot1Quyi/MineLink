@@ -18,6 +18,17 @@ const defaults = {
   outputDir: ".minelink-dev/reports",
 };
 const videoReviewRequestArtifact = ".minelink-dev/reports/artifacts/video-review-request.md";
+const allStages = [
+  "initial-report",
+  "sync-in-progress",
+  "validate",
+  "summarize",
+  "prepare-video",
+  "check-video-release",
+  "sync-in-review",
+  "create-pr",
+  "final-report",
+];
 
 const args = { ...defaults };
 
@@ -41,7 +52,11 @@ for (let index = 2; index < process.argv.length; index += 1) {
 
 Runs one MineLink Ona finalizer stage. Missing Ona Platform Codex evidence is
 recorded as a blocked stage and exits 0 so Ona automation terminates with a
-readable report instead of staying in a long-running failed task loop.`);
+readable report instead of staying in a long-running failed task loop.
+
+Use --stage all to run every guarded finalizer stage inside one Ona task. This
+keeps the evidence gates per stage while avoiding repeated Ona/Codex task
+scheduling overhead.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -56,6 +71,36 @@ function sanitize(text) {
     .replace(/(ghp_)[A-Za-z0-9_]+/g, "$1[redacted]")
     .slice(0, 6000)
     .trim();
+}
+
+function selfInvocationArgs(stage) {
+  return [
+    "scripts/dev/run-agent-factory-stage.mjs",
+    "--stage",
+    stage,
+    "--task-id",
+    args.taskId,
+    "--github-issue",
+    args.githubIssue || "none",
+    "--linear-issue",
+    args.linearIssue || "none",
+    "--ona-project",
+    args.onaProject || "",
+    "--ona-automation",
+    args.onaAutomation || "",
+    "--branch",
+    args.branch || "",
+    "--pr-title",
+    args.prTitle || "",
+    "--acceptance-gate",
+    args.acceptanceGate || "unspecified",
+    "--validation-scope",
+    args.validationScope || "docs",
+    "--scenarios",
+    args.scenarios || "none",
+    "--output-dir",
+    args.outputDir,
+  ];
 }
 
 function run(command, commandArgs) {
@@ -184,6 +229,27 @@ const commonSyncArgs = [
   "--require-key",
   "--require-update",
 ];
+
+if (args.stage === "all") {
+  const operations = [];
+  const errors = [];
+  for (const stage of allStages) {
+    const stageResult = run(process.execPath, selfInvocationArgs(stage));
+    operations.push(`Ran guarded stage ${stage} with exit ${stageResult.status ?? 1}.`);
+    if (stageResult.status !== 0) {
+      errors.push(`Stage ${stage} exited ${stageResult.status ?? 1}: ${sanitize(stageResult.stderr || stageResult.stdout)}`);
+    }
+  }
+  await writeStageReport("all", {
+    result: errors.length === 0 ? "completed_guarded_stages" : "blocked",
+    operations,
+    errors,
+    output:
+      "The all stage is a scheduling wrapper only. Inspect agent-factory-stage-<stage>.md and agent-factory-chain.md for accepted or blocked gate evidence.",
+  });
+  console.log(`Agent factory stage all wrote ${stageReportPath("all")}`);
+  process.exit(errors.length === 0 ? 0 : 1);
+}
 
 switch (args.stage) {
   case "initial-report": {

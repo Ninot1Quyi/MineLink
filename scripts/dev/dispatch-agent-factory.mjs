@@ -32,7 +32,7 @@ let requireOna = false;
 let allowBlocked = false;
 let comment = false;
 let waitOnaExecution = process.env.MINELINK_WAIT_ONA_EXECUTION === "1";
-let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 240);
+let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 600);
 let onaExecutionPollSeconds = Number(process.env.MINELINK_ONA_EXECUTION_POLL_SECONDS ?? 5);
 
 for (let index = 2; index < process.argv.length; index += 1) {
