@@ -21,6 +21,7 @@ Use `docs/ona-migration.md` for the migration runbook and
 | Class | Parallel Safety | Typical Scope | Required Validation |
 | --- | --- | --- | --- |
 | Docs/architecture | high | `*.md`, `.github/ISSUE_TEMPLATE`, `.devcontainer` | `bash scripts/dev/verify-agent-task.sh --scope docs` |
+| Install/bootstrap | high | `.devcontainer`, package lock, install docs, install workflow | `bash scripts/dev/verify-agent-task.sh --scope install` |
 | CI/reporting | medium | `.github/workflows`, `scripts/dev`, report summarizers | `bash scripts/dev/verify-agent-task.sh --scope fast` |
 | Host/Gateway | medium | `packages/host`, protocol forwarding tests | fast plus `mine_tree` HTTP e2e |
 | SDK/helpers | medium | `packages/sdk`, examples docs | fast plus relevant mock e2e |
@@ -58,6 +59,7 @@ bash scripts/dev/verify-agent-task.sh --scope docs
 bash scripts/dev/verify-agent-task.sh --scope fast
 bash scripts/dev/verify-agent-task.sh --scope runtime --scenarios craft_smoke,craft_negative
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
+bash scripts/dev/verify-agent-task.sh --scope install
 bash scripts/dev/verify-agent-task.sh --scope all
 ```
 
@@ -75,11 +77,16 @@ Use automation to reduce agent memory load:
 
 - Devcontainer bootstrap runs `npm ci` automatically when a cloud worktree is
   created.
+- `install-smoke.sh` clones the committed ref into a separate checkout, runs
+  `npm ci`, and records install evidence under `.minelink-dev/install-smoke/`.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,
   runtime, or NeoForge checks.
 - `check-agent-workbench.sh` verifies that Ona migration docs, task queue,
-  issue template, PR template, and devcontainer entry points stay present.
+  issue template, PR template, devcontainer, and install smoke entry points
+  stay present.
 - GitHub CI runs the fast contract suite on pushes and PRs.
+- The install smoke workflow uploads `minelink-install-smoke-evidence` for
+  install/workbench/bootstrap changes.
 - The heavy NeoForge workflow is skipped for docs-only and workbench-only
   changes, but still runs for code, runtime, scripts, and workflow changes.
 - The real NeoForge workflow also runs on a daily schedule and manual dispatch.
@@ -116,6 +123,7 @@ Validation:
 
 Evidence paths:
 - `.minelink-dev/reports/agent-task-summary.md`
+- `.minelink-dev/install-smoke/install-smoke-report.md`, for install/bootstrap tasks
 - `.minelink-dev/<scenario>/reports/<scenario>-result.json`
 
 Remaining product gaps:

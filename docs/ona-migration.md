@@ -53,6 +53,7 @@ Use `.github/ISSUE_TEMPLATE/agent-task.yml` for new tasks and
 | Task Class | Default Command | Required Escalation |
 | --- | --- | --- |
 | Docs/workbench | `bash scripts/dev/verify-agent-task.sh --scope docs` | none |
+| Install/bootstrap | `bash scripts/dev/verify-agent-task.sh --scope install` | real NeoForge install for server/LAN packaging claims |
 | CI/scripts | `bash scripts/dev/verify-agent-task.sh --scope fast` | runtime if scenario behavior changes |
 | Host/Gateway | `bash scripts/dev/verify-agent-task.sh --scope runtime --scenarios mine_tree` | HTTP e2e for transport changes |
 | SDK/protocol helpers | `bash scripts/dev/verify-agent-task.sh --scope runtime --scenarios guard_boundaries` | real NeoForge if game semantics change |
@@ -63,6 +64,13 @@ The default command writes:
 
 ```text
 .minelink-dev/reports/agent-task-summary.md
+```
+
+Install/bootstrap tasks also write:
+
+```text
+.minelink-dev/install-smoke/install-smoke-report.md
+.minelink-dev/install-smoke/install-smoke.log
 ```
 
 The guard commands also write:
@@ -81,7 +89,11 @@ MineLink uses automation to reduce agent memory load:
 - `scripts/dev/check-agent-workbench.sh` keeps the Ona/agent entry points,
   templates, and task queue present.
 - `scripts/dev/verify-agent-task.sh` runs both guards before tests.
+- `scripts/dev/install-smoke.sh` clones the committed ref into a separate
+  checkout and proves `npm ci` plus fast verification from a clean install.
 - `.github/workflows/ci.yml` runs both guards on every push and PR.
+- `.github/workflows/install-smoke.yml` uploads
+  `minelink-install-smoke-evidence` for install/workbench/bootstrap changes.
 - `.github/workflows/minecraft-neoforge.yml` runs real NeoForge smoke on code,
   script, workflow, and runtime changes.
 

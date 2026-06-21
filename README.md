@@ -26,6 +26,7 @@ branch, and one PR with evidence from `bash scripts/dev/verify-agent-task.sh`.
 
 ```bash
 npm install
+bash scripts/dev/install-smoke.sh --scope fast
 bash scripts/dev/e2e.sh mine_tree
 bash scripts/dev/e2e.sh create_smoke
 bash scripts/dev/e2e.sh craft_smoke
@@ -50,6 +51,10 @@ The soak harness writes stability evidence under `.minelink-dev/soak/<runtime>/`
 - `soak-report.json`
 - `process-cleanup.json`
 - `queue-metrics.json`
+
+The install smoke harness proves a committed fresh clone can bootstrap with
+`npm ci` and pass the fast verifier. It writes evidence under
+`.minelink-dev/install-smoke/` and refuses dirty source worktrees by default.
 
 ## MCP Host and Gateway
 

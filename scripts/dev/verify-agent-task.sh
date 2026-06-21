@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       cat <<'USAGE'
-Usage: bash scripts/dev/verify-agent-task.sh [--scope auto|docs|fast|runtime|neoforge|all] [--scenarios a,b] [--base ref]
+Usage: bash scripts/dev/verify-agent-task.sh [--scope auto|docs|fast|runtime|neoforge|install|all] [--scenarios a,b] [--base ref]
 
 Conditional verification entry point for Ona/Codex worktree tasks.
 
@@ -32,6 +32,7 @@ Scopes:
   fast      build, typecheck, unit tests
   runtime   fast plus selected mock e2e scenarios
   neoforge  selected real NeoForge e2e scenarios
+  install   fresh clone, npm ci, and fast verification for committed HEAD
   all       fast, selected mock e2e, and selected real NeoForge e2e
   auto      classify the current diff and choose docs, fast, runtime, or neoforge
 USAGE
@@ -77,32 +78,34 @@ needs_fast=false
 needs_runtime=false
 needs_neoforge=false
 
-for file in "${changed[@]}"; do
-  case "$file" in
-    AGENTS.md|ARCHITECTURE.md|README.md|SECURITY.md|docs/*.md|docs/**/*.md|.devcontainer/*|.github/ISSUE_TEMPLATE/*|.github/pull_request_template.md|.github/PULL_REQUEST_TEMPLATE/*)
-      ;;
-    .github/workflows/*|scripts/dev/*)
-      is_docs_only=false
-      needs_fast=true
-      needs_runtime=true
-      ;;
-    mod/neoforge/*|mod/neoforge/**)
-      is_docs_only=false
-      needs_fast=true
-      needs_runtime=true
-      needs_neoforge=true
-      ;;
-    packages/*/src/*|packages/*/src/**|examples/agents/*|examples/codex-rpc/*|package.json|package-lock.json|tsconfig.json)
-      is_docs_only=false
-      needs_fast=true
-      needs_runtime=true
-      ;;
-    *)
-      is_docs_only=false
-      needs_fast=true
-      ;;
-  esac
-done
+if [[ ${#changed[@]} -gt 0 ]]; then
+  for file in "${changed[@]}"; do
+    case "$file" in
+      AGENTS.md|ARCHITECTURE.md|README.md|SECURITY.md|docs/*.md|docs/**/*.md|.devcontainer/*|.github/ISSUE_TEMPLATE/*|.github/pull_request_template.md|.github/PULL_REQUEST_TEMPLATE/*)
+        ;;
+      .github/workflows/*|scripts/dev/*)
+        is_docs_only=false
+        needs_fast=true
+        needs_runtime=true
+        ;;
+      mod/neoforge/*|mod/neoforge/**)
+        is_docs_only=false
+        needs_fast=true
+        needs_runtime=true
+        needs_neoforge=true
+        ;;
+      packages/*/src/*|packages/*/src/**|examples/agents/*|examples/codex-rpc/*|package.json|package-lock.json|tsconfig.json)
+        is_docs_only=false
+        needs_fast=true
+        needs_runtime=true
+        ;;
+      *)
+        is_docs_only=false
+        needs_fast=true
+        ;;
+    esac
+  done
+fi
 
 if [[ "$scope" == "auto" ]]; then
   if [[ ${#changed[@]} -eq 0 || "$is_docs_only" == "true" ]]; then
@@ -190,6 +193,10 @@ run_neoforge_scenarios() {
   done
 }
 
+run_install_checks() {
+  run_cmd bash scripts/dev/install-smoke.sh --scope fast
+}
+
 case "$scope" in
   docs)
     run_docs_checks
@@ -204,6 +211,9 @@ case "$scope" in
   neoforge)
     run_fast_checks
     run_neoforge_scenarios "$scenarios"
+    ;;
+  install)
+    run_install_checks
     ;;
   all)
     run_fast_checks

@@ -12,9 +12,13 @@ Status: `agent-ready`
 Scope:
 
 - `.devcontainer/devcontainer.json`
+- `.github/workflows/install-smoke.yml`
 - `README.md`
 - `docs/development.md`
+- `docs/minelink-acceptance.md`
 - `docs/ona-migration.md`
+- `scripts/dev/install-smoke.sh`
+- `scripts/dev/verify-agent-task.sh`
 
 Forbidden:
 
@@ -27,20 +31,20 @@ Validation:
 
 ```bash
 bash scripts/dev/verify-agent-task.sh --scope docs
-npm ci
-npm run build
-npm run typecheck
-npm test
+bash scripts/dev/install-smoke.sh --scope fast
 ```
 
 Evidence:
 
 - `.minelink-dev/reports/agent-task-summary.md`
-- Terminal output proving fresh dependency install and fast checks.
+- `.minelink-dev/install-smoke/install-smoke-report.md`
+- `.minelink-dev/install-smoke/install-smoke.log`
+- GitHub Actions artifact `minelink-install-smoke-evidence` when run remotely.
 
 Remaining gaps:
 
-- Real NeoForge install proof remains a separate Gate 10 task.
+- Server admin install, agent user MCP setup, LAN install, cross-platform
+  packaging, and real NeoForge install proof remain separate Gate 10 tasks.
 
 ### CI Artifact Summary for PR Review
 

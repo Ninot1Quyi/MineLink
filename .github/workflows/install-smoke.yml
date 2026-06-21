@@ -1,0 +1,61 @@
+name: Install Smoke
+
+on:
+  push:
+    branches: ["main", "codex/**", "ona/**", "agent/**"]
+    paths:
+      - ".devcontainer/**"
+      - ".github/workflows/install-smoke.yml"
+      - "AGENTS.md"
+      - "ARCHITECTURE.md"
+      - "README.md"
+      - "docs/agent-task-queue.md"
+      - "docs/agent-workbench.md"
+      - "docs/development.md"
+      - "docs/minelink-acceptance.md"
+      - "docs/ona-migration.md"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/dev/check-agent-workbench.sh"
+      - "scripts/dev/check-architecture-guard.sh"
+      - "scripts/dev/install-smoke.sh"
+      - "scripts/dev/verify-agent-task.sh"
+  pull_request:
+    paths:
+      - ".devcontainer/**"
+      - ".github/workflows/install-smoke.yml"
+      - "AGENTS.md"
+      - "ARCHITECTURE.md"
+      - "README.md"
+      - "docs/agent-task-queue.md"
+      - "docs/agent-workbench.md"
+      - "docs/development.md"
+      - "docs/minelink-acceptance.md"
+      - "docs/ona-migration.md"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/dev/check-agent-workbench.sh"
+      - "scripts/dev/check-architecture-guard.sh"
+      - "scripts/dev/install-smoke.sh"
+      - "scripts/dev/verify-agent-task.sh"
+  workflow_dispatch:
+
+jobs:
+  install-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: bash scripts/dev/install-smoke.sh --scope fast
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minelink-install-smoke-evidence
+          path: .minelink-dev/install-smoke/
+          include-hidden-files: true

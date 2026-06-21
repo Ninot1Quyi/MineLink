@@ -163,6 +163,7 @@ The script classifies the current diff and runs the smallest useful check:
 - fast: build, typecheck, unit tests.
 - runtime: fast checks plus selected mock e2e scenarios.
 - neoforge: selected real NeoForge e2e scenarios.
+- install: fresh committed checkout clone, `npm ci`, and fast verifier.
 - all: full fast path plus real NeoForge smoke.
 
 Use explicit scopes when the task carries product-risk:
@@ -170,6 +171,7 @@ Use explicit scopes when the task carries product-risk:
 ```bash
 bash scripts/dev/verify-agent-task.sh --scope runtime
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
+bash scripts/dev/verify-agent-task.sh --scope install
 ```
 
 The script writes a summary to
@@ -203,12 +205,26 @@ bash scripts/dev/check-agent-workbench.sh
 
 It runs locally through `scripts/dev/verify-agent-task.sh` and in GitHub CI. It
 keeps the Ona migration runbook, ready task queue, label taxonomy, PR template,
-issue template, devcontainer, and verification entry point present with required
-anchors.
+issue template, devcontainer, install smoke workflow, and verification entry
+points present with required anchors.
+
+The install smoke verifier is:
+
+```bash
+bash scripts/dev/install-smoke.sh --scope fast
+```
+
+It clones the committed ref into a separate checkout, runs `npm ci`, runs the
+fast agent-task verifier, and records the sanitized source remote, source
+commit, dirty-source decision, environment versions, command exit codes, and
+report paths under `.minelink-dev/install-smoke/`. Dirty-source runs are local
+debugging only, not acceptance evidence. The paired GitHub workflow uploads
+`minelink-install-smoke-evidence` for install/workbench/bootstrap changes.
 
 ## Current Product State
 
 MineLink is not product-complete. The current acceptance document records
-real-partial evidence across many gates, but Gates 9 and 10 are still missing
-and no gate is currently `product-accepted`. Treat each implementation as a
-measured conversion from mock/smoke evidence toward real product behavior.
+real-partial evidence across many gates, including fresh-clone bootstrap
+evidence for Gate 10, but Gate 9 is still missing and no gate is currently
+`product-accepted`. Treat each implementation as a measured conversion from
+mock/smoke evidence toward real product behavior.

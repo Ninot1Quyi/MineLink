@@ -18,10 +18,22 @@ specific gate:
 bash scripts/dev/verify-agent-task.sh --scope docs
 bash scripts/dev/verify-agent-task.sh --scope runtime --scenarios craft_smoke,craft_negative
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
+bash scripts/dev/verify-agent-task.sh --scope install
 ```
 
 The script writes `.minelink-dev/reports/agent-task-summary.md`, which should
 be pasted into PRs together with scenario report paths.
+
+Install and Ona bootstrap changes should also run:
+
+```bash
+bash scripts/dev/install-smoke.sh --scope fast
+```
+
+The install smoke script refuses a dirty source worktree by default because it
+proves a fresh clone of a committed ref. Its report is written to
+`.minelink-dev/install-smoke/install-smoke-report.md` and records the source
+commit, environment versions, command exit codes, and copied verifier summary.
 
 Ona/Codex cloud worktrees should also read:
 
@@ -40,6 +52,7 @@ The docs scope runs both repository guards:
 npm install
 npm run build
 npm test
+bash scripts/dev/install-smoke.sh --scope fast
 bash scripts/dev/e2e.sh mine_tree
 bash scripts/dev/e2e.sh create_smoke
 bash scripts/dev/e2e.sh craft_smoke

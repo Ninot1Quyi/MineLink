@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | missing | Developer scripts exist, but fresh server/user/LAN installer flows and cross-platform packaging evidence are not accepted yet. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is now scriptable through `scripts/dev/install-smoke.sh` and CI artifact collection; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -562,10 +562,26 @@ Required:
 
 Evidence:
 
-- Fresh clone install test.
+- Fresh clone install test through `scripts/dev/install-smoke.sh`.
 - Fresh server install test.
 - MCP config snippet.
 - Cross-platform path notes.
+
+Current status:
+
+- `scripts/dev/install-smoke.sh` clones the committed ref into a separate
+  checkout, runs `npm ci`, runs `bash scripts/dev/verify-agent-task.sh --scope
+  fast --base HEAD`, and writes
+  `.minelink-dev/install-smoke/install-smoke-report.md`.
+- The report records the sanitized remote, source ref and commit, dirty-source
+  decision, Node/npm/Git/Java/OS versions, exact command exit codes, log path,
+  and copied agent-task summary when available.
+- `.github/workflows/install-smoke.yml` runs the same fresh-clone proof for
+  install/workbench/bootstrap changes and uploads
+  `minelink-install-smoke-evidence`.
+- This is real bootstrap evidence only. It does not prove server-admin mod
+  installation, agent-user MCP configuration, LAN setup, cross-platform
+  packaging, or real NeoForge install acceptance.
 
 ### Gate 11: Security, Stability, and Release
 

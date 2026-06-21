@@ -23,7 +23,7 @@ require_text() {
     failures+=("Missing file for text check: $file")
     return
   fi
-  if ! grep -Fq "$text" "$file"; then
+  if ! grep -Fq -- "$text" "$file"; then
     failures+=("$file must contain: $text")
   fi
 }
@@ -37,6 +37,8 @@ require_file "docs/github-labels.md"
 require_file ".devcontainer/devcontainer.json"
 require_file ".github/ISSUE_TEMPLATE/agent-task.yml"
 require_file ".github/pull_request_template.md"
+require_file ".github/workflows/install-smoke.yml"
+require_file "scripts/dev/install-smoke.sh"
 require_file "scripts/dev/verify-agent-task.sh"
 
 require_text "AGENTS.md" "docs/agent-workbench.md"
@@ -50,6 +52,7 @@ require_text "docs/ona-migration.md" "Ona Environment Contract"
 require_text "docs/ona-migration.md" "Secrets Policy"
 require_text "docs/ona-migration.md" "Validation Matrix"
 require_text "docs/agent-task-queue.md" "Ready Tasks"
+require_text "docs/agent-task-queue.md" "scripts/dev/install-smoke.sh"
 require_text "docs/github-labels.md" "agent-ready"
 require_text "docs/github-labels.md" "needs-acceptance-evidence"
 require_text "docs/github-labels.md" "mock-only"
@@ -63,8 +66,12 @@ require_text ".github/pull_request_template.md" "Mock/Smoke Assumption Reduced"
 require_text ".github/pull_request_template.md" "Validation"
 require_text ".github/pull_request_template.md" "Evidence Paths"
 require_text ".github/pull_request_template.md" "Remaining Product Gaps"
+require_text ".github/workflows/install-smoke.yml" "minelink-install-smoke-evidence"
 require_text ".devcontainer/devcontainer.json" "postCreateCommand"
 require_text ".devcontainer/devcontainer.json" "postAttachCommand"
+require_text "scripts/dev/install-smoke.sh" "fresh clone"
+require_text "scripts/dev/install-smoke.sh" "dirty-local-non-acceptance"
+require_text "scripts/dev/verify-agent-task.sh" "install   fresh clone"
 
 python3 - <<'PY' || failures+=("docs/agent-task-queue.md has an agent-ready task missing Scope, Forbidden, Validation, Evidence, or Remaining gaps.")
 from pathlib import Path
@@ -102,6 +109,8 @@ PY
     ".devcontainer/devcontainer.json" \
     ".github/ISSUE_TEMPLATE/agent-task.yml" \
     ".github/pull_request_template.md" \
+    ".github/workflows/install-smoke.yml" \
+    "scripts/dev/install-smoke.sh" \
     "scripts/dev/verify-agent-task.sh"; do
     if [[ -f "$file" ]]; then
       echo "- present: \`$file\`"

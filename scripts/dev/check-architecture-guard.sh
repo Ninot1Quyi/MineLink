@@ -54,7 +54,7 @@ require_text() {
     failures+=("Missing required architecture context file: $file")
     return
   fi
-  if ! grep -Fq "$text" "$file"; then
+  if ! grep -Fq -- "$text" "$file"; then
     failures+=("$file must contain: $text")
   fi
 }
@@ -68,17 +68,19 @@ architecture_changed=false
 sensitive_changed=false
 sensitive_files=()
 
-for file in "${changed[@]}"; do
-  if [[ "$file" == "ARCHITECTURE.md" ]]; then
-    architecture_changed=true
-  fi
-  case "$file" in
-    mod/neoforge/*|packages/protocol/*|packages/host/*|packages/sdk/*|packages/mock-runtime/*|examples/agents/*|examples/codex-rpc/*|scripts/dev/*|.github/workflows/*|package.json|package-lock.json|tsconfig.json)
-      sensitive_changed=true
-      sensitive_files+=("$file")
-      ;;
-  esac
-done
+if [[ ${#changed[@]} -gt 0 ]]; then
+  for file in "${changed[@]}"; do
+    if [[ "$file" == "ARCHITECTURE.md" ]]; then
+      architecture_changed=true
+    fi
+    case "$file" in
+      mod/neoforge/*|packages/protocol/*|packages/host/*|packages/sdk/*|packages/mock-runtime/*|examples/agents/*|examples/codex-rpc/*|scripts/dev/*|.github/workflows/*|package.json|package-lock.json|tsconfig.json)
+        sensitive_changed=true
+        sensitive_files+=("$file")
+        ;;
+    esac
+  done
+fi
 
 failures=()
 

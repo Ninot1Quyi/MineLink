@@ -35,6 +35,9 @@ triage labels.
 - `scripts/dev/check-agent-workbench.sh` and GitHub CI enforce the Ona/agent
   workbench entry points, PR template, issue template, task queue, and label
   map.
+- `scripts/dev/install-smoke.sh` and `.github/workflows/install-smoke.yml`
+  enforce committed fresh-clone bootstrap evidence for install/workbench
+  changes. Treat dirty-source runs as local debugging, not acceptance evidence.
 - If the guard reports a false positive, prefer a small clarifying
   architecture note over bypassing it. Use
   `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1` only for reviewed cases where the
@@ -117,6 +120,11 @@ Use the smallest proof that can validate the current claim, then escalate:
 3. Real NeoForge e2e for the changed product claim.
 4. Short real soak for important or stateful behavior.
 5. Remote GitHub CI as final confirmation.
+
+For install or Ona bootstrap changes, run `bash scripts/dev/install-smoke.sh
+--scope fast` after the change is committed. This proves a fresh clone of the
+committed ref can run `npm ci` and the fast verifier; it does not prove server
+admin, LAN, or cross-platform packaging acceptance.
 
 Do not claim real game capability unless real NeoForge has run for that path.
 If real NeoForge cannot run, say so and keep the status below product accepted.
