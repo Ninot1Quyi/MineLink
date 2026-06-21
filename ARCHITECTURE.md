@@ -229,7 +229,11 @@ implementation handoff. Failed or timed-out refreshes also run
 Ona exposes them before the transient environment is removed. The workflow
 captures logs at stopping/snapshotting entry and treats a snapshotting phase
 longer than `MINELINK_ONA_SNAPSHOT_STALE_MINUTES` as a stale refresh to cancel
-and retry rather than letting CI wait for the full prebuild timeout.
+and retry rather than letting CI wait for the full prebuild timeout. The tracked
+default stale window is 15 minutes, based on the latest successful MineLink
+prebuilds completing in roughly 13-17 minutes end to end. Early successful log
+captures are preserved if a later cancellation makes the transient environment
+unavailable.
 `report-agent-factory-chain.mjs` consumes that preflight JSON when present so
 the chain report can name missing secret/context repair actions on the blocked
 dispatcher edge.

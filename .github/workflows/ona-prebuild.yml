@@ -50,7 +50,7 @@ jobs:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
           MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
           MINELINK_ONA_PREBUILD_TIMEOUT: ${{ github.event.inputs.prebuild_timeout || '2h' }}
-          MINELINK_ONA_SNAPSHOT_STALE_MINUTES: ${{ vars.MINELINK_ONA_SNAPSHOT_STALE_MINUTES || '25' }}
+          MINELINK_ONA_SNAPSHOT_STALE_MINUTES: ${{ vars.MINELINK_ONA_SNAPSHOT_STALE_MINUTES || '15' }}
         run: |
           mkdir -p .minelink-dev/reports
           phase_history=".minelink-dev/reports/ona-prebuild-phase-history.jsonl"

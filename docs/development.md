@@ -128,9 +128,10 @@ startup, bootstrap execution, stopping, or snapshotting instead of guessed from
 the UI. On failure or timeout it attempts to capture raw environment logs and
 the prebuild log URL under `.minelink-dev/reports/ona-prebuild-log-capture.md`
 before the transient prebuild environment is removed. It captures logs as soon
-as the prebuild enters stopping or snapshotting, and cancels a refresh that
-stays in snapshotting longer than `MINELINK_ONA_SNAPSHOT_STALE_MINUTES`
-(default: 25) so CI does not wait for the full two-hour prebuild timeout.
+as the prebuild enters stopping or snapshotting, preserves any successful early
+log capture if later cancellation removes the transient environment, and cancels
+a refresh that stays in snapshotting longer than `MINELINK_ONA_SNAPSHOT_STALE_MINUTES`
+(default: 15) so CI does not wait for the full two-hour prebuild timeout.
 
 CI and PR review evidence can be summarized with:
 

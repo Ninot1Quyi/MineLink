@@ -52,13 +52,24 @@ env_result="skipped"
 url_result="skipped"
 
 if [[ -n "$environment_id" ]] && command -v ona >/dev/null 2>&1; then
+  env_log_tmp="$(mktemp "$out_dir/ona-prebuild-environment.XXXXXX")"
+  env_stderr_tmp="$(mktemp "$out_dir/ona-prebuild-environment-stderr.XXXXXX")"
   if ona environment logs "$environment_id" \
     --raw \
     --include-system-logs \
-    --timeout 45s > "$env_log" 2> "$env_stderr"; then
+    --timeout 45s > "$env_log_tmp" 2> "$env_stderr_tmp"; then
+    mv "$env_log_tmp" "$env_log"
+    mv "$env_stderr_tmp" "$env_stderr"
     env_result="captured"
   else
-    env_result="failed"
+    mv "$env_stderr_tmp" "$env_stderr"
+    rm -f "$env_log_tmp"
+    if [[ -s "$env_log" ]]; then
+      env_result="failed: kept previous capture"
+    else
+      : > "$env_log"
+      env_result="failed"
+    fi
   fi
 elif [[ -z "$environment_id" ]]; then
   env_result="skipped: missing environment id"
@@ -68,12 +79,23 @@ fi
 
 auth_token="${ONA_TOKEN:-${GITPOD_TOKEN:-}}"
 if [[ -n "$log_url" && -n "$auth_token" ]]; then
+  url_log_tmp="$(mktemp "$out_dir/ona-prebuild-log-url.XXXXXX")"
+  url_stderr_tmp="$(mktemp "$out_dir/ona-prebuild-log-url-stderr.XXXXXX")"
   if curl -fsSL \
     -H "Authorization: Bearer $auth_token" \
-    "$log_url" > "$url_log" 2> "$url_stderr"; then
+    "$log_url" > "$url_log_tmp" 2> "$url_stderr_tmp"; then
+    mv "$url_log_tmp" "$url_log"
+    mv "$url_stderr_tmp" "$url_stderr"
     url_result="captured"
   else
-    url_result="failed"
+    mv "$url_stderr_tmp" "$url_stderr"
+    rm -f "$url_log_tmp"
+    if [[ -s "$url_log" ]]; then
+      url_result="failed: kept previous capture"
+    else
+      : > "$url_log"
+      url_result="failed"
+    fi
   fi
 elif [[ -z "$log_url" ]]; then
   url_result="skipped: missing log URL"

@@ -652,10 +652,18 @@ Current status:
   resulting `ona-prebuild-log-capture.md` records whether raw environment logs
   or the authenticated prebuild log URL were preserved before the transient Ona
   environment was removed. The workflow captures logs when stopping or
-  snapshotting starts and cancels snapshotting refreshes that exceed
-  `MINELINK_ONA_SNAPSHOT_STALE_MINUTES` (25 minutes by default), so stuck
+  snapshotting starts, keeps any successful early log capture if later
+  cancellation makes the transient environment unavailable, and cancels
+  snapshotting refreshes that exceed
+  `MINELINK_ONA_SNAPSHOT_STALE_MINUTES` (15 minutes by default), so stuck
   platform snapshot saves become explicit evidence instead of hanging CI for
   the full prebuild timeout.
+- 2026-06-21 run `27915819949` / prebuild
+  `019eebc5-23ae-754f-b0bf-6cec6de45668` showed the environment startup and
+  bootstrap path were not the blocker: phase evidence recorded `running` for
+  about 3m01s, `stopping` for about 1m02s, then `snapshotting` for about 13m06s
+  with 0% snapshot progress before manual cancellation. This is prebuild
+  stability evidence, not an accepted baseline.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
   Ona Platform Codex readbacks. The checked-in Ona AI automation runs
   sequentially and requires implementation readback before Linear status sync,
