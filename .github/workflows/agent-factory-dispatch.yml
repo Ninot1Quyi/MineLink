@@ -47,9 +47,10 @@ jobs:
           node-version: "22"
       - name: Install Ona CLI
         run: |
-          curl -o ona -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')" 
-          chmod +x ona
-          sudo mv ona /usr/local/bin/ona
+          tmp_ona="$(mktemp)"
+          curl -o "$tmp_ona" -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')" 
+          chmod +x "$tmp_ona"
+          sudo mv "$tmp_ona" /usr/local/bin/ona
       - name: Authenticate Ona CLI when token is available
         env:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
@@ -103,9 +104,10 @@ jobs:
           node-version: "22"
       - name: Install Ona CLI
         run: |
-          curl -o ona -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')" 
-          chmod +x ona
-          sudo mv ona /usr/local/bin/ona
+          tmp_ona="$(mktemp)"
+          curl -o "$tmp_ona" -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')" 
+          chmod +x "$tmp_ona"
+          sudo mv "$tmp_ona" /usr/local/bin/ona
       - name: Authenticate Ona CLI when token is available
         env:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
