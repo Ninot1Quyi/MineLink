@@ -218,6 +218,13 @@ by `scripts/dev/dispatch-agent-factory.mjs`,
 `scripts/dev/check-agent-factory-secrets.mjs` is the secret-safe preflight for
 this bridge: it checks GitHub secret presence, local/runner `LINEAR_API_KEY`
 presence, and Ona CLI active-context status without printing credential values.
+
+Ona prebuild readiness is a parallel environment-baseline gate, not a required
+per-task chain step. `.github/workflows/ona-prebuild.yml` refreshes that
+baseline only for environment-sensitive changes or manual dispatch, records
+phase polling history through `scripts/dev/summarize-ona-prebuild-phases.mjs`,
+and uploads the summary so slow refreshes can be attributed before a Codex
+implementation handoff.
 `report-agent-factory-chain.mjs` consumes that preflight JSON when present so
 the chain report can name missing secret/context repair actions on the blocked
 dispatcher edge.
