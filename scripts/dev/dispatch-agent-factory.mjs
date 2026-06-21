@@ -41,7 +41,6 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--github-issue-body") args.githubIssueBody = readValue();
   else if (arg === "--github-issue-labels") args.githubIssueLabels = readValue();
   else if (arg === "--linear-issue") args.linearIssue = readValue();
-  else if (arg === "--linear-issue") args.linearIssue = readValue();
   else if (arg === "--acceptance-gate") args.acceptanceGate = readValue();
   else if (arg === "--branch") args.branch = readValue();
   else if (arg === "--pr-title") args.prTitle = readValue();
@@ -114,7 +113,7 @@ function parseSection(body, names) {
   const wanted = Array.isArray(names) ? names : [names];
   const escaped = wanted.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const re = new RegExp(
-    `^##\\s+(${escaped.join("|")})\\s*\\n([\\s\\S]*?)(?=^##\\s+|(?![\\s\\S]))`,
+    `^#{2,3}\\s+(${escaped.join("|")})\\s*\\n([\\s\\S]*?)(?=^#{2,3}\\s+|(?![\\s\\S]))`,
     "im",
   );
   return body.match(re)?.[2]?.trim() ?? "";

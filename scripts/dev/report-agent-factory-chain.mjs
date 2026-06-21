@@ -251,22 +251,22 @@ const globalBlocker = args.blocker || codexBlocker;
 
 const nodes = [
   mkNode("github_issue", "GitHub issue published", issueStatus, [
-    args.githubIssue && `GitHub: ${linkOrText(args.githubIssue)}`,
+    hasValue(args.githubIssue) && `GitHub: ${linkOrText(args.githubIssue)}`,
   ]),
   mkNode("issue_contract", "Issue contract validated", taskContractStatus, [
-    args.githubIssue && "agent-ready issue template",
-    args.linearIssue && `Linear: ${linkOrText(args.linearIssue)}`,
+    hasValue(args.githubIssue) && "agent-ready issue template",
+    hasValue(args.linearIssue) && `Linear: ${linkOrText(args.linearIssue)}`,
   ], taskContractStatus === "blocked" ? globalBlocker : ""),
   mkNode("github_dispatcher", "GitHub Actions dispatcher", dispatcherStatus, [
-    args.githubDispatcherUrl && `Dispatcher: ${args.githubDispatcherUrl}`,
+    hasValue(args.githubDispatcherUrl) && `Dispatcher: ${args.githubDispatcherUrl}`,
   ], dispatcherStatus === "blocked" ? globalBlocker : ""),
   mkNode("ona_automation", "Ona automation execution queued", automationStatus, [
-    args.onaAutomation && `Automation: ${args.onaAutomation}`,
-    args.onaAutomationExecution && `Execution: ${args.onaAutomationExecution}`,
+    hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
+    hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
   ], automationStatus === "blocked" ? globalBlocker : ""),
   mkNode("ona_prebuild", "Ona project prebuild ready", prebuildStatus, [
-    args.onaProject && `Ona project: ${args.onaProject}`,
-    args.onaPrebuild && `Ona prebuild: ${args.onaPrebuild}`,
+    hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
+    hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
   ], prebuildStatus === "blocked" ? globalBlocker : ""),
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
     args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
@@ -306,19 +306,20 @@ const nodeStatus = Object.fromEntries(nodes.map((node) => [node.id, node.status]
 const edgeStatus = (targetStatus) => targetStatus;
 const rawEdges = [
   mkEdge("github_issue", "issue_contract", edgeStatus(nodeStatus.issue_contract), [
-    args.githubIssue && "GitHub issue body and labels are dispatchable.",
-    args.linearIssue && "Linked Linear issue is present.",
+    hasValue(args.githubIssue) && taskContractStatus !== "blocked" && "GitHub issue body and labels are dispatchable.",
+    hasValue(args.githubIssue) && taskContractStatus === "blocked" && "GitHub issue body and labels were checked.",
+    hasValue(args.linearIssue) && "Linked Linear issue is present.",
   ]),
   mkEdge("issue_contract", "github_dispatcher", edgeStatus(nodeStatus.github_dispatcher), [
-    args.githubDispatcherUrl && `Dispatcher: ${args.githubDispatcherUrl}`,
+    hasValue(args.githubDispatcherUrl) && `Dispatcher: ${args.githubDispatcherUrl}`,
   ]),
   mkEdge("github_dispatcher", "ona_automation", edgeStatus(nodeStatus.ona_automation), [
-    args.onaAutomation && `Automation: ${args.onaAutomation}`,
-    args.onaAutomationExecution && `Execution: ${args.onaAutomationExecution}`,
+    hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
+    hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
   ]),
   mkEdge("ona_automation", "ona_prebuild", edgeStatus(nodeStatus.ona_prebuild), [
-    args.onaProject && `Ona project: ${args.onaProject}`,
-    args.onaPrebuild && `Ona prebuild: ${args.onaPrebuild}`,
+    hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
+    hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
   ]),
   mkEdge("ona_prebuild", "implementation_codex", edgeStatus(nodeStatus.implementation_codex), [
     args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
