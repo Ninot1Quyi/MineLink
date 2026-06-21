@@ -651,7 +651,11 @@ Current status:
   `scripts/dev/capture-ona-prebuild-logs.sh` before failing the workflow. The
   resulting `ona-prebuild-log-capture.md` records whether raw environment logs
   or the authenticated prebuild log URL were preserved before the transient Ona
-  environment was removed.
+  environment was removed. The workflow captures logs when stopping or
+  snapshotting starts and cancels snapshotting refreshes that exceed
+  `MINELINK_ONA_SNAPSHOT_STALE_MINUTES` (25 minutes by default), so stuck
+  platform snapshot saves become explicit evidence instead of hanging CI for
+  the full prebuild timeout.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
   Ona Platform Codex readbacks. The checked-in Ona AI automation runs
   sequentially and requires implementation readback before Linear status sync,

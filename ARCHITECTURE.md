@@ -226,7 +226,10 @@ phase polling history through `scripts/dev/summarize-ona-prebuild-phases.mjs`,
 and uploads the summary so slow refreshes can be attributed before a Codex
 implementation handoff. Failed or timed-out refreshes also run
 `scripts/dev/capture-ona-prebuild-logs.sh` to preserve raw bootstrap logs when
-Ona exposes them before the transient environment is removed.
+Ona exposes them before the transient environment is removed. The workflow
+captures logs at stopping/snapshotting entry and treats a snapshotting phase
+longer than `MINELINK_ONA_SNAPSHOT_STALE_MINUTES` as a stale refresh to cancel
+and retry rather than letting CI wait for the full prebuild timeout.
 `report-agent-factory-chain.mjs` consumes that preflight JSON when present so
 the chain report can name missing secret/context repair actions on the blocked
 dispatcher edge.

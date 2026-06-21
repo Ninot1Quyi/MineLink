@@ -50,6 +50,7 @@ jobs:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
           MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
           MINELINK_ONA_PREBUILD_TIMEOUT: ${{ github.event.inputs.prebuild_timeout || '2h' }}
+          MINELINK_ONA_SNAPSHOT_STALE_MINUTES: ${{ vars.MINELINK_ONA_SNAPSHOT_STALE_MINUTES || '25' }}
         run: |
           mkdir -p .minelink-dev/reports
           phase_history=".minelink-dev/reports/ona-prebuild-phase-history.jsonl"
@@ -101,6 +102,8 @@ jobs:
           )"
 
           deadline=$((SECONDS + 7200))
+          snapshot_started_at=0
+          snapshot_stale_seconds=$((MINELINK_ONA_SNAPSHOT_STALE_MINUTES * 60))
           while true; do
             ona prebuild get "$prebuild_id" --format json | tee .minelink-dev/reports/ona-prebuild-status.json
             phase="$(
@@ -123,6 +126,13 @@ jobs:
               '
             )"
             echo "Ona prebuild $prebuild_id status: $phase"
+            case "$phase" in
+              PREBUILD_PHASE_STOPPING:*|PREBUILD_PHASE_SNAPSHOTTING:*)
+                if [ ! -f .minelink-dev/reports/ona-prebuild-log-capture.md ]; then
+                  bash scripts/dev/capture-ona-prebuild-logs.sh || true
+                fi
+                ;;
+            esac
             if node -e 'const fs = require("node:fs"); const records = JSON.parse(fs.readFileSync(".minelink-dev/reports/ona-prebuild-status.json", "utf8")); process.exit(records?.[0]?.status?.failureMessage ? 0 : 1);' \
               && [ ! -f .minelink-dev/reports/ona-prebuild-log-capture.md ]; then
               bash scripts/dev/capture-ona-prebuild-logs.sh || true
@@ -130,6 +140,17 @@ jobs:
             case "$phase" in
               PREBUILD_PHASE_COMPLETED:100)
                 break
+                ;;
+              PREBUILD_PHASE_SNAPSHOTTING:*)
+                if [ "$snapshot_started_at" -eq 0 ]; then
+                  snapshot_started_at=$SECONDS
+                elif [ "$snapshot_stale_seconds" -gt 0 ] && [ $((SECONDS - snapshot_started_at)) -ge "$snapshot_stale_seconds" ]; then
+                  bash scripts/dev/capture-ona-prebuild-logs.sh || true
+                  node scripts/dev/summarize-ona-prebuild-phases.mjs || true
+                  echo "Ona prebuild $prebuild_id stayed in snapshotting for at least ${MINELINK_ONA_SNAPSHOT_STALE_MINUTES} minutes; cancelling stale refresh" >&2
+                  ona prebuild cancel "$prebuild_id" || true
+                  exit 1
+                fi
                 ;;
               PREBUILD_PHASE_FAILED:*|PREBUILD_PHASE_CANCELLED:*)
                 bash scripts/dev/capture-ona-prebuild-logs.sh || true
