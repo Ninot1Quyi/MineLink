@@ -93,9 +93,9 @@ Use automation to reduce agent memory load:
 - `.ona/automations.yaml` provides Ona-native environment tasks for docs, fast,
   NeoForge guard, and acceptance artifact commands.
 - `ona/ai-automations/minelink-agent-factory.yaml` is the Ona CLI finalizer for
-  Linear sync, verification, evidence summaries, video-release gating, and PR
-  creation after Ona Platform Codex does the bounded work and a separate Codex
-  verifier reviews the MP4.
+  Linear sync, verification, evidence summaries, video-review request
+  preparation, video-release gating, and PR creation after Ona Platform Codex
+  does the bounded work and a separate Codex verifier reviews the MP4.
 - `sync-linear-status.mjs` lets Ona write Linear status/comments/evidence links
   through `LINEAR_API_KEY` without exposing the key in logs.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,

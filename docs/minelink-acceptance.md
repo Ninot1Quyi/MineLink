@@ -608,12 +608,13 @@ Current status:
   `minelink-install-smoke-evidence`.
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
   fast verification, real NeoForge guard smoke, and acceptance artifact
-  rendering plus a separate video-release check.
+  rendering plus video-review request preparation and a separate video-release
+  check.
   `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
   finalizer for Linear status sync, verification, evidence summaries, video
-  release gating, and PR creation after the implementation work is performed by
-  Ona Platform Codex and the MP4 is reviewed by a separate Platform Codex
-  verifier.
+  review request preparation, release gating, and PR creation after the
+  implementation work is performed by Ona Platform Codex and the MP4 is
+  reviewed by a separate Platform Codex verifier.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

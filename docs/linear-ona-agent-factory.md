@@ -26,10 +26,10 @@ automation are debugging or validation surfaces only; they are not accepted as
 final MineLink agent execution evidence.
 
 The checked-in Ona CLI automation is a process runner: it syncs Linear status,
-runs validation, summarizes evidence, checks the dedicated video-review report,
-and opens or updates the review PR. It does not replace the Ona Platform Codex
-agent session, and it does not re-render the MP4 after the verifier has reviewed
-it.
+runs validation, summarizes evidence, prepares the video-review request, checks
+the dedicated video-review report, and opens or updates the review PR. It does
+not replace the Ona Platform Codex agent session, and it does not re-render the
+MP4 after the verifier has reviewed it.
 
 ## Status Model
 
@@ -202,8 +202,9 @@ The spec intentionally does not contain a generic `agent` step. Start the
 implementation and video-verifier work in the Ona Platform UI with the Codex
 agent option selected. The implementation Codex session must run validation and
 render the acceptance MP4; the separate verifier Codex session must inspect
-that MP4 and write `video-review.md`; the CLI automation then checks the
-existing artifacts and finalizes status/PR output. If
+that MP4 and write `video-review.md`; the CLI automation then regenerates the
+hash-based `video-review-request.md` without re-rendering the MP4, checks the
+existing artifacts, and finalizes status/PR output. If
 `.minelink-dev/reports/artifacts/video-review.md` is missing or does not
 declare `Verifier: Ona Platform Codex`, the automation must fail before release.
 

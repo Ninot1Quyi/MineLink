@@ -32,6 +32,9 @@ action:
           node scripts/dev/summarize-evidence.mjs
     - task:
         command: >
+          node scripts/dev/prepare-video-review-request.mjs --require-mp4
+    - task:
+        command: >
           node scripts/dev/check-video-review.mjs --require-mp4
     - task:
         command: >
@@ -58,6 +61,7 @@ action:
           - Agent verifier: `.minelink-dev/reports/agent-task-summary.md`
           - Acceptance video summary: `.minelink-dev/reports/artifacts/acceptance-summary.md`
           - Acceptance video: `.minelink-dev/reports/artifacts/acceptance.mp4`
+          - Video review request: `.minelink-dev/reports/artifacts/video-review-request.md`
           - Dedicated Codex video review: `.minelink-dev/reports/artifacts/video-review.md`
           - Video release gate: `.minelink-dev/reports/artifacts/video-release-gate.md`
 
