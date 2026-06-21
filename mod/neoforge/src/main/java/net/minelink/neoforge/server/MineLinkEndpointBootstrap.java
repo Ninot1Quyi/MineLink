@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.recipebook.PlaceRecipe;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -49,6 +50,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.entity.MoverType;
@@ -2253,6 +2255,7 @@ public final class MineLinkEndpointBootstrap {
         payload.addProperty("body_ui", "headless_server_agent");
         payload.addProperty("input_source_area", "inventory");
         payload.addProperty("grid_destination_area", "container");
+        payload.addProperty("recipe_placement", "minecraft.recipebook.PlaceRecipe");
         payload.addProperty("output_source", "native_crafting_result_slot");
         payload.addProperty("result_slot_class", resultSlot.getClass().getName());
         payload.addProperty("server_slot_hooks", true);
@@ -2285,6 +2288,10 @@ public final class MineLinkEndpointBootstrap {
         if (!recipe.value().canCraftInDimensions(3, 3)) {
             return Optional.empty();
         }
+        List<PlacedIngredient> placements = recipeGridPlacements(recipe);
+        if (placements.isEmpty()) {
+            return Optional.empty();
+        }
         Map<String, Integer> available = new LinkedHashMap<>(inventoryCounts(agent));
         Map<String, Integer> consumed = new LinkedHashMap<>();
         ItemStack output = ItemStack.EMPTY;
@@ -2298,13 +2305,10 @@ public final class MineLinkEndpointBootstrap {
             for (int slot = 0; slot < 9; slot++) {
                 grid.add(ItemStack.EMPTY);
             }
-            int gridIndex = 0;
-            for (var ingredient : recipe.value().getIngredients()) {
-                if (gridIndex >= grid.size()) {
-                    return Optional.empty();
-                }
+            for (PlacedIngredient placement : placements) {
+                int gridIndex = placement.gridIndex();
+                Ingredient ingredient = placement.ingredient();
                 if (ingredient.isEmpty()) {
-                    gridIndex++;
                     continue;
                 }
                 Optional<ItemStack> selected = selectIngredient(ingredient, available);
@@ -2324,7 +2328,6 @@ public final class MineLinkEndpointBootstrap {
                 } else {
                     return Optional.empty();
                 }
-                gridIndex++;
             }
 
             CraftingInput input = CraftingInput.of(3, 3, grid);
@@ -2344,6 +2347,20 @@ public final class MineLinkEndpointBootstrap {
             }
         }
         return Optional.of(new CraftPlan(consumed, stagedGrid, count, output));
+    }
+
+    private List<PlacedIngredient> recipeGridPlacements(RecipeHolder<CraftingRecipe> recipe) {
+        List<PlacedIngredient> placements = new ArrayList<>();
+        new PlaceRecipe<Ingredient>() {
+            @Override
+            public void addItemToSlot(Ingredient ingredient, int menuSlot, int maxAmount, int x, int y) {
+                int gridIndex = menuSlot - CRAFTING_GRID_SLOT_START;
+                if (gridIndex >= 0 && gridIndex < 9) {
+                    placements.add(new PlacedIngredient(gridIndex, ingredient));
+                }
+            }
+        }.placeRecipe(3, 3, CraftingMenu.RESULT_SLOT, recipe, recipe.value().getIngredients().iterator(), 1);
+        return placements;
     }
 
     private Optional<ItemStack> selectIngredient(net.minecraft.world.item.crafting.Ingredient ingredient, Map<String, Integer> available) {
@@ -3712,5 +3729,8 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private record CraftPlan(Map<String, Integer> consumed, List<ItemStack> grid, int plannedCrafts, ItemStack plannedOutput) {
+    }
+
+    private record PlacedIngredient(int gridIndex, Ingredient ingredient) {
     }
 }

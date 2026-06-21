@@ -46,7 +46,7 @@ Current audit:
 | Gate 3: Limited Perception | real-partial | Real fixture evidence covers occlusion and selected shape classifications; generic raycast/block-shape visibility and long-running perception cache behavior remain incomplete. |
 | Gate 4: MCP Host and Gateway | real-partial | MCP stdio, Streamable HTTP, reconnect, catalog preflight, token/rate/session checks, and real HTTP gateway smoke exist; full hosted gateway operations remain incomplete. |
 | Gate 5: Agent RPC JSON, MCP Compatibility, and Local SDK | real-partial | Codex JSON-RPC replay and generic MCP dynamic tools are verified; Python helper parity, polling/subscription helpers, reconnect ergonomics, replay SDK, and semantic retries remain incomplete. |
-| Gate 6: Container and Crafting | real-partial | Real chest, crafting table, furnace, native `useItemOn` container entry, server `Slot.safeTake/safeInsert` transfer evidence, slot refs, recipe registry, native oak-planks `ResultSlot` evidence, repeated oak-planks result takes, and FakePlayer inventory evidence exists; full server menu click parity, shaped/modded recipe breadth, and remainder parity remain incomplete. |
+| Gate 6: Container and Crafting | real-partial | Real chest, crafting table, furnace, native `useItemOn` container entry, server `Slot.safeTake/safeInsert` transfer evidence, slot refs, recipe registry, native oak-planks `ResultSlot` evidence, repeated oak-planks result takes, vanilla `PlaceRecipe` shaped stick placement, and FakePlayer inventory evidence exists; full server menu click parity, broader shaped/modded recipe breadth, and remainder parity remain incomplete. |
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
@@ -406,8 +406,16 @@ Current status:
   `craft.quick_craft(count=2)`: the report records `planned_result_takes=2`,
   a native crafting grid stack of two `minecraft:oak_log`, two successful
   `ResultSlot`-backed `container.take_output` calls, the first take refreshing
-  the output slot with one oak log still in the grid, and final FakePlayer
-  inventory containing eight `minecraft:oak_planks`.
+  the output slot with one oak log still in the grid, and an intermediate
+  FakePlayer inventory observation containing eight `minecraft:oak_planks`
+  before the shaped stick recipe consumes two planks.
+- Real NeoForge `craft_smoke` now also covers a shaped vanilla recipe after
+  the repeated planks path: `minecraft:stick` is staged through Minecraft's
+  `net.minecraft.recipebook.PlaceRecipe` placement logic, the native crafting
+  grid records `minecraft:oak_planks` at grid indexes 1 and 4, the output is
+  taken through `net.minecraft.world.inventory.ResultSlot`, and final
+  FakePlayer inventory contains the shaped `minecraft:stick` output plus the
+  remaining planks.
 - The real report records `native_interaction.menu_opened=false` and
   `native_interaction.menu_source=constructed_server_crafting_menu_after_use_item_on`
   for the headless crafting-table path: the visible/reachable block interaction
@@ -418,10 +426,10 @@ Current status:
   output remains observable, proving the failed take did not consume the native
   result slot output.
 - This is not the full Gate 6 release surface yet. The native repeated
-  crafting evidence currently covers only the oak-log to oak-planks fixture.
-  Shaped recipe breadth, modded recipe breadth, container-click parity,
-  remainder item handling, and broader inventory-full edge cases still need
-  separate implementation and real evidence.
+  crafting evidence currently covers oak-log to oak-planks and one vanilla
+  shaped stick recipe. Broader shaped recipe breadth, modded recipe breadth,
+  container-click parity, remainder item handling, and broader inventory-full
+  edge cases still need separate implementation and real evidence.
 
 ### Gate 7: Create Adapter
 

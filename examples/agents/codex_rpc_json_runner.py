@@ -206,7 +206,7 @@ def scenario_objective(scenario: str) -> str:
     objectives = {
         "mine_tree": "Use MineLink MCP tools to create a server_agent body, mine one visible oak log, and prove it is in inventory.",
         "create_smoke": "Use MineLink MCP tools to take Create materials from a chest, place one Create component, use a wrench, press an iron ingot into an iron sheet through a powered Create depot and mechanical press, and pick the sheet up with an empty hand.",
-        "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
+        "craft_smoke": "Use MineLink MCP tools to move oak logs from a chest, craft repeated oak planks, craft shaped sticks through the crafting table, and prove the outputs are in inventory.",
         "furnace_smoke": "Use MineLink MCP tools to move raw iron and coal from a chest into a reachable furnace, wait for vanilla furnace processing, and take the iron ingot output.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, movement-collision, and sleep-limited actions.",

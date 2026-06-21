@@ -29,6 +29,11 @@ type NoticeBoardValidation =
 type SlotValidation = { ok: true; slot: SlotBinding } | ({ ok: false } & RuntimeResponse);
 type ContainerKind = "chest" | "crafting_table" | "furnace";
 type SlotArea = "container" | "inventory" | "output";
+type MockCraftRecipe = {
+  input: ItemStack[];
+  output: ItemStack;
+  grid: Array<ItemStack & { grid_index: number }>;
+};
 
 const LOCAL_CHAT_RADIUS = 16;
 const MAX_SOCIAL_EVENTS = 200;
@@ -1072,6 +1077,12 @@ export class MockRuntimeServer {
         input: [{ item: "minecraft:oak_log", count: 1 }],
         output: { item: "minecraft:oak_planks", count: 4 },
         craftable: this.inventoryCount(agent, "minecraft:oak_log") >= 1
+      },
+      {
+        recipe_id: "minecraft:stick",
+        input: [{ item: "minecraft:oak_planks", count: 2 }],
+        output: { item: "minecraft:stick", count: 4 },
+        craftable: this.inventoryCount(agent, "minecraft:oak_planks") >= 2
       }
     ].filter((recipe) => !query || recipe.recipe_id.includes(query) || recipe.output.item.includes(query));
 
@@ -1081,38 +1092,48 @@ export class MockRuntimeServer {
   private quickCraft(agentId: string, recipeId: string, requestedCount: number): RuntimeResponse {
     const agent = this.agents.get(agentId);
     if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
-    if (recipeId !== "minecraft:oak_planks") return runtimeFail("invalid_recipe", `Unknown or unavailable recipe ${recipeId}.`);
+    const recipe = this.mockCraftRecipe(recipeId);
+    if (!recipe) return runtimeFail("invalid_recipe", `Unknown or unavailable recipe ${recipeId}.`);
     if (!this.hasReachableCraftingStation(agent)) {
       return runtimeFail("station_too_far", "Open a reachable crafting station before quick crafting.");
     }
 
     const count = Math.max(1, Math.floor(requestedCount || 1));
-    const neededLogs = count;
     if (agent.openContainer?.output) {
       return runtimeFail("inventory_full", "Take the current crafting output before crafting again.");
     }
-    if (this.inventoryCount(agent, "minecraft:oak_log") < neededLogs) {
-      return runtimeFail("missing_material", "minecraft:oak_log is required for minecraft:oak_planks.", {
-        required: [{ item: "minecraft:oak_log", count: neededLogs }],
-        available: this.inventoryCount(agent, "minecraft:oak_log")
+    const consumed = Object.fromEntries(recipe.input.map((stack) => [stack.item, stack.count * count]));
+    const missing = recipe.input.find((stack) => this.inventoryCount(agent, stack.item) < stack.count * count);
+    if (missing) {
+      return runtimeFail("missing_material", `${missing.item} is required for ${recipeId}.`, {
+        required: recipe.input.map((stack) => ({ item: stack.item, count: stack.count * count })),
+        available: this.inventoryCount(agent, missing.item)
       });
     }
-    this.removeFromInventory(agent, "minecraft:oak_log", neededLogs);
-    const output = { item: "minecraft:oak_planks", count: 4 };
-    const plannedOutput = { item: "minecraft:oak_planks", count: count * 4 };
+    for (const stack of recipe.input) {
+      this.removeFromInventory(agent, stack.item, stack.count * count);
+    }
+    const output = { item: recipe.output.item, count: recipe.output.count };
+    const plannedOutput = { item: recipe.output.item, count: recipe.output.count * count };
     const craftingTransfer = {
       method: "crafting_menu.safe_take_safe_insert_grid",
       body_ui: "headless_server_agent",
       input_source_area: "inventory",
       grid_destination_area: "container",
+      recipe_placement: "minecraft.recipebook.PlaceRecipe",
       output_source: "native_crafting_result_slot",
       result_slot_class: "net.minecraft.world.inventory.ResultSlot",
       server_slot_hooks: true,
       menu_type: agent.openContainer!.nativeInteraction.menu_type,
       planned_result_takes: count,
       planned_output: plannedOutput,
-      consumed: { "minecraft:oak_log": neededLogs },
-      grid: [{ grid_index: 0, item: "minecraft:oak_log", count: neededLogs, destination_slot_class: "net.minecraft.world.inventory.Slot" }]
+      consumed,
+      grid: recipe.grid.map((stack) => ({
+        grid_index: stack.grid_index,
+        item: stack.item,
+        count: stack.count * count,
+        destination_slot_class: "net.minecraft.world.inventory.Slot"
+      }))
     };
     agent.openContainer!.output = output;
     agent.openContainer!.pendingResultTakes = count;
@@ -1121,7 +1142,7 @@ export class MockRuntimeServer {
       event: "craft.quick_craft",
       agent_id: agent.agentId,
       recipe_id: recipeId,
-      consumed: { item: "minecraft:oak_log", count: neededLogs },
+      consumed,
       output,
       planned_output: plannedOutput,
       crafting_transfer: craftingTransfer
@@ -1138,6 +1159,27 @@ export class MockRuntimeServer {
         container: this.containerSnapshot(agent)
       }
     };
+  }
+
+  private mockCraftRecipe(recipeId: string): MockCraftRecipe | null {
+    if (recipeId === "minecraft:oak_planks") {
+      return {
+        input: [{ item: "minecraft:oak_log", count: 1 }],
+        output: { item: "minecraft:oak_planks", count: 4 },
+        grid: [{ grid_index: 0, item: "minecraft:oak_log", count: 1 }]
+      };
+    }
+    if (recipeId === "minecraft:stick") {
+      return {
+        input: [{ item: "minecraft:oak_planks", count: 2 }],
+        output: { item: "minecraft:stick", count: 4 },
+        grid: [
+          { grid_index: 1, item: "minecraft:oak_planks", count: 1 },
+          { grid_index: 4, item: "minecraft:oak_planks", count: 1 }
+        ]
+      };
+    }
+    return null;
   }
 
   private containerSnapshot(agent: AgentState): RuntimeResponse {

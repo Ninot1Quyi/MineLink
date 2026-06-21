@@ -761,6 +761,7 @@ describe("MockRuntimeServer", () => {
           output_source: "native_crafting_result_slot",
           result_slot_class: "net.minecraft.world.inventory.ResultSlot",
           server_slot_hooks: true,
+          recipe_placement: "minecraft.recipebook.PlaceRecipe",
           planned_result_takes: 2,
           planned_output: { item: "minecraft:oak_planks", count: 8 },
           body_ui: "headless_server_agent"
@@ -817,13 +818,73 @@ describe("MockRuntimeServer", () => {
       }
     });
 
+    const plankInventory = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "observe.inventory",
+      arguments: {}
+    });
+    expect(countItem(plankInventory, "minecraft:oak_planks")).toBe(8);
+
+    const stickRecipes = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "craft.list_available",
+      arguments: { query: "stick" }
+    });
+    expect(stickRecipes).toMatchObject({
+      ok: true,
+      recipes: [{ recipe_id: "minecraft:stick", craftable: true }]
+    });
+
+    const stickCraft = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "craft.quick_craft",
+      arguments: { recipe_id: "minecraft:stick", count: 1 }
+    });
+    expect(stickCraft).toMatchObject({
+      ok: true,
+      result: {
+        output: { item: "minecraft:stick", count: 4 },
+        crafting_transfer: {
+          recipe_placement: "minecraft.recipebook.PlaceRecipe",
+          planned_result_takes: 1,
+          planned_output: { item: "minecraft:stick", count: 4 },
+          consumed: { "minecraft:oak_planks": 2 },
+          grid: [
+            { grid_index: 1, item: "minecraft:oak_planks", count: 1 },
+            { grid_index: 4, item: "minecraft:oak_planks", count: 1 }
+          ]
+        }
+      }
+    });
+    const stickOutputSlot = (stickCraft.result as { container: ContainerSnapshot }).container.output_slot!;
+    const stickTake = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.take_output",
+      arguments: { slot_ref: stickOutputSlot.slot_ref }
+    });
+    expect(stickTake).toMatchObject({
+      ok: true,
+      result: {
+        taken: { item: "minecraft:stick", count: 4 },
+        slot_transfer: {
+          source_slot_class: "net.minecraft.world.inventory.ResultSlot",
+          server_slot_hooks: true
+        }
+      }
+    });
+
     const inventory = await request(client, {
       type: "tool.execute",
       agent_id: agentId,
       name: "observe.inventory",
       arguments: {}
     });
-    expect(countItem(inventory, "minecraft:oak_planks")).toBe(8);
+    expect(countItem(inventory, "minecraft:oak_planks")).toBe(6);
+    expect(countItem(inventory, "minecraft:stick")).toBe(4);
     client.close();
   });
 
