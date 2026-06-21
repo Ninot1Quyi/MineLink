@@ -19,6 +19,9 @@ let dryRun = false;
 let requireKey = false;
 let requireOna = false;
 let allowBlocked = false;
+let waitOnaExecution = process.env.MINELINK_WAIT_ONA_EXECUTION === "1";
+let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 120);
+let onaExecutionPollSeconds = Number(process.env.MINELINK_ONA_EXECUTION_POLL_SECONDS ?? 5);
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -30,6 +33,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-automation") args.onaAutomation = readValue();
   else if (arg === "--ona-project") args.onaProject = readValue();
   else if (arg === "--output") args.output = readValue();
+  else if (arg === "--wait-ona-execution") waitOnaExecution = true;
+  else if (arg === "--ona-execution-timeout-seconds") onaExecutionTimeoutSeconds = Number(readValue());
+  else if (arg === "--ona-execution-poll-seconds") onaExecutionPollSeconds = Number(readValue());
   else if (arg === "--dry-run") dryRun = true;
   else if (arg === "--require-key") requireKey = true;
   else if (arg === "--require-ona") requireOna = true;
@@ -53,6 +59,14 @@ if (!Number.isFinite(args.limit) || args.limit < 1 || args.limit > 250) {
 }
 if (!Number.isFinite(args.maxStarts) || args.maxStarts < 0 || args.maxStarts > 10) {
   console.error("--max-starts must be between 0 and 10");
+  process.exit(2);
+}
+if (!Number.isFinite(onaExecutionTimeoutSeconds) || onaExecutionTimeoutSeconds < 0) {
+  console.error("--ona-execution-timeout-seconds must be a non-negative number");
+  process.exit(2);
+}
+if (!Number.isFinite(onaExecutionPollSeconds) || onaExecutionPollSeconds < 1) {
+  console.error("--ona-execution-poll-seconds must be at least 1");
   process.exit(2);
 }
 
@@ -266,6 +280,19 @@ try {
     if (dryRun) commandArgs.push("--dry-run");
     if (requireOna) commandArgs.push("--require-ona");
     if (allowBlocked) commandArgs.push("--allow-blocked");
+    if (waitOnaExecution) {
+      commandArgs.push(
+        "--wait-ona-execution",
+        "--ona-execution-timeout-seconds",
+        String(onaExecutionTimeoutSeconds),
+        "--ona-execution-poll-seconds",
+        String(onaExecutionPollSeconds),
+        "--ona-execution-output",
+        `.minelink-dev/reports/ona-automation-execution-${issue.identifier}.md`,
+        "--ona-execution-json-output",
+        `.minelink-dev/reports/ona-automation-execution-${issue.identifier}.json`,
+      );
+    }
     const result = run("node", commandArgs);
     const dispatchReport = `.minelink-dev/reports/agent-factory-dispatch-${issue.identifier}.md`;
     report.dispatched.push({

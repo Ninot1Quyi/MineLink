@@ -246,6 +246,14 @@ the chain report can name missing secret/context repair actions on the blocked
 dispatcher edge.
 The dispatcher keeps the Ona automation parameter map at 10 entries or fewer;
 larger maps are rejected by the Ona automation API before the factory can start.
+After a successful `ona ai automation start`, the dispatcher can also perform a
+bounded `ona ai automation executions get` readback and write
+`.minelink-dev/reports/ona-automation-execution.md` plus JSON. That readback
+records the execution phase, session id when exposed, and `failedActionCount`.
+An execution that completes with failed actions proves the repository bridge
+reached Ona and the guarded finalizer ran, but it is still only partial chain
+evidence; the next accepted edge remains the separate Ona Platform Codex
+implementation-session readback.
 
 The final flow should use the Ona Platform Codex agent option for implementation
 and the separate video-verifier pass, not the default Ona Agent and not manual

@@ -118,12 +118,21 @@ scripts/dev/dispatch-agent-factory.mjs
 
 It triggers on `issues` events and manual dispatch. The dispatcher validates the
 task contract, checks `agent-ready` and `agent:ona`, starts the Ona automation
-through `ona ai automation start`, writes
+through `ona ai automation start`, optionally performs a bounded
+`ona ai automation executions get` readback, writes
 `.minelink-dev/reports/agent-factory-dispatch.md`, regenerates
 `.minelink-dev/reports/agent-factory-chain.md`, and comments on the GitHub
 issue. It requires `ONA_TOKEN` in GitHub secrets to start Ona from CI; missing
 Ona authentication is recorded as a blocked edge instead of being treated as a
 MineLink validation failure.
+
+When readback is enabled, the dispatcher also writes
+`.minelink-dev/reports/ona-automation-execution.md` and JSON with the Ona
+execution phase, failed action count, exposed session id, and polling attempts.
+If the execution finishes with failed actions, that is treated as partial bridge
+evidence: the dispatcher reached Ona and the guarded finalizer ran, but the
+chain must still stop at the missing Ona Platform Codex implementation readback
+instead of pretending the task was implemented.
 
 Before debugging a failed dispatcher run, run the secret-safe preflight:
 
@@ -430,6 +439,10 @@ start that Codex option automatically, the dispatchers can queue the automation
 and produce chain evidence but cannot prove the implementation-session edge.
 The guarded finalizer now stops all later side effects when the Platform Codex
 implementation readback is missing.
+The repository dispatcher now waits briefly for the Ona automation execution
+readback in CI, so the artifacts can distinguish `queued`, `running`,
+`completed`, and `completed_with_failed_actions` instead of flattening every
+successful start into `queued`.
 
 The next factory slice must prove a full platform run: Linear task dispatch or
 manual launch -> Ona Platform Codex implementation session -> validation

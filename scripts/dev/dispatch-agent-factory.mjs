@@ -22,6 +22,8 @@ const defaults = {
   output: ".minelink-dev/reports/agent-factory-dispatch.md",
   chainOutput: ".minelink-dev/reports/agent-factory-chain.md",
   chainJsonOutput: ".minelink-dev/reports/agent-factory-chain.json",
+  onaExecutionOutput: ".minelink-dev/reports/ona-automation-execution.md",
+  onaExecutionJsonOutput: ".minelink-dev/reports/ona-automation-execution.json",
 };
 
 const args = { ...defaults };
@@ -29,6 +31,9 @@ let dryRun = false;
 let requireOna = false;
 let allowBlocked = false;
 let comment = false;
+let waitOnaExecution = process.env.MINELINK_WAIT_ONA_EXECUTION === "1";
+let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 120);
+let onaExecutionPollSeconds = Number(process.env.MINELINK_ONA_EXECUTION_POLL_SECONDS ?? 5);
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -51,6 +56,11 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--chain-output") args.chainOutput = readValue();
   else if (arg === "--chain-json-output") args.chainJsonOutput = readValue();
+  else if (arg === "--ona-execution-output") args.onaExecutionOutput = readValue();
+  else if (arg === "--ona-execution-json-output") args.onaExecutionJsonOutput = readValue();
+  else if (arg === "--wait-ona-execution") waitOnaExecution = true;
+  else if (arg === "--ona-execution-timeout-seconds") onaExecutionTimeoutSeconds = Number(readValue());
+  else if (arg === "--ona-execution-poll-seconds") onaExecutionPollSeconds = Number(readValue());
   else if (arg === "--dry-run") dryRun = true;
   else if (arg === "--require-ona") requireOna = true;
   else if (arg === "--allow-blocked") allowBlocked = true;
@@ -232,13 +242,147 @@ for (const names of requiredSections) {
 }
 if (!args.onaAutomation) failures.push("No Ona automation id was supplied.");
 if (!args.onaProject) failures.push("No Ona project id was supplied.");
+if (!Number.isFinite(onaExecutionTimeoutSeconds) || onaExecutionTimeoutSeconds < 0) {
+  failures.push("--ona-execution-timeout-seconds must be a non-negative number.");
+}
+if (!Number.isFinite(onaExecutionPollSeconds) || onaExecutionPollSeconds < 1) {
+  failures.push("--ona-execution-poll-seconds must be at least 1.");
+}
 
 let dispatchStatus = failures.length > 0 ? "blocked" : "passed";
 let onaStatus = "missing";
 let onaExecution = "";
+let onaExecutionReport = null;
 let commandOutput = "";
 let commandError = "";
 let exitCode = failures.length > 0 ? 1 : 0;
+
+function parseJsonRecord(text) {
+  try {
+    const payload = JSON.parse(text);
+    return Array.isArray(payload) ? payload[0] ?? null : payload;
+  } catch {
+    return null;
+  }
+}
+
+function executionPhase(execution) {
+  return execution?.status?.phase ?? execution?.phase ?? "unknown";
+}
+
+function executionFinished(execution) {
+  const phase = executionPhase(execution);
+  return Boolean(execution?.metadata?.finishedAt) || /(COMPLETED|FAILED|CANCELLED|CANCELED|EXPIRED|TIMED_OUT|ERROR)$/i.test(phase);
+}
+
+function executionFailedActionCount(execution) {
+  const value = Number(execution?.status?.failedActionCount ?? execution?.failedActionCount ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function classifyExecution(execution, readbackResult) {
+  if (readbackResult === "timed_out") return "timed_out";
+  if (readbackResult === "readback_failed") return "readback_failed";
+  if (!execution) return "missing";
+  if (!executionFinished(execution)) return "running";
+  if (executionFailedActionCount(execution) > 0) return "completed_with_failed_actions";
+  return "completed";
+}
+
+function chainStatusFromExecutionResult(result) {
+  if (result === "completed") return "passed";
+  if (["running", "timed_out", "completed_with_failed_actions"].includes(result)) return "partial";
+  if (result === "missing") return "missing";
+  return "blocked";
+}
+
+function executionSessionId(execution) {
+  return execution?.spec?.session ?? execution?.sessionID ?? execution?.sessionId ?? execution?.metadata?.sessionID ?? "";
+}
+
+async function sleep(seconds) {
+  await new Promise((resolve) => {
+    setTimeout(resolve, Math.max(1, seconds) * 1000);
+  });
+}
+
+async function readOnaExecution(executionId) {
+  if (!executionId) {
+    return { result: "missing", execution: null, readbacks: [], error: "" };
+  }
+  const deadline = Date.now() + onaExecutionTimeoutSeconds * 1000;
+  const readbacks = [];
+  let lastExecution = null;
+  let lastError = "";
+
+  do {
+    const result = run("ona", ["ai", "automation", "executions", "get", executionId, "--format", "json"]);
+    if (result.status !== 0) {
+      lastError = sanitizeOutput(result.stderr || result.stdout);
+      return { result: "readback_failed", execution: lastExecution, readbacks, error: lastError };
+    }
+
+    lastExecution = parseJsonRecord(result.stdout);
+    const observed = {
+      observedAt: new Date().toISOString(),
+      phase: executionPhase(lastExecution),
+      failedActionCount: executionFailedActionCount(lastExecution),
+      finishedAt: lastExecution?.metadata?.finishedAt ?? "",
+    };
+    readbacks.push(observed);
+
+    if (executionFinished(lastExecution)) {
+      return { result: classifyExecution(lastExecution, "completed"), execution: lastExecution, readbacks, error: "" };
+    }
+
+    if (Date.now() >= deadline) {
+      return { result: "timed_out", execution: lastExecution, readbacks, error: "" };
+    }
+
+    await sleep(onaExecutionPollSeconds);
+  } while (true);
+}
+
+async function writeOnaExecutionReport(report) {
+  if (!report) return;
+  await fs.mkdir(path.dirname(args.onaExecutionJsonOutput), { recursive: true });
+  await fs.writeFile(args.onaExecutionJsonOutput, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await fs.mkdir(path.dirname(args.onaExecutionOutput), { recursive: true });
+  const lines = [
+    "# MineLink Ona Automation Execution",
+    "",
+    `- Result: \`${report.result}\``,
+    `- Chain status: \`${report.chainStatus}\``,
+    `- Automation: \`${report.automationId || "none"}\``,
+    `- Project: \`${report.projectId || "none"}\``,
+    `- Execution: \`${report.executionId || "none"}\``,
+    `- Session: \`${report.sessionId || "none"}\``,
+    `- Phase: \`${report.phase || "unknown"}\``,
+    `- Failed action count: \`${report.failedActionCount}\``,
+    `- Started: \`${report.startedAt || "unknown"}\``,
+    `- Finished: \`${report.finishedAt || "unknown"}\``,
+    `- Readback attempts: \`${report.readbacks.length}\``,
+    "",
+    "## Readbacks",
+    "",
+    ...(report.readbacks.length === 0
+      ? ["- none"]
+      : report.readbacks.map(
+          (readback) =>
+            `- \`${readback.observedAt}\` phase=\`${readback.phase}\` failedActionCount=\`${readback.failedActionCount}\` finishedAt=\`${readback.finishedAt || "none"}\``,
+        )),
+    "",
+    "## Error",
+    "",
+    report.error ? ["```text", report.error, "```"].join("\n") : "- none",
+    "",
+    "## Boundary",
+    "",
+    "- This proves the repository dispatcher can read back the Ona automation execution. It does not prove the required Ona Platform Codex implementation session unless the separate readback artifact is present.",
+    "",
+  ];
+  await fs.writeFile(args.onaExecutionOutput, lines.join("\n"), "utf8");
+}
 
 if (failures.length === 0) {
   const command = [
@@ -280,6 +424,28 @@ if (failures.length === 0) {
     onaExecution = combined.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? "";
     if (result.status === 0) {
       onaStatus = onaExecution ? "partial" : "passed";
+      if (onaExecution && waitOnaExecution) {
+        const readback = await readOnaExecution(onaExecution);
+        const execution = readback.execution;
+        const readbackResult = classifyExecution(execution, readback.result);
+        const chainStatus = chainStatusFromExecutionResult(readbackResult);
+        onaStatus = chainStatus;
+        onaExecutionReport = {
+          result: readbackResult,
+          chainStatus,
+          automationId: args.onaAutomation,
+          projectId: args.onaProject,
+          executionId: onaExecution,
+          sessionId: executionSessionId(execution),
+          phase: executionPhase(execution),
+          failedActionCount: executionFailedActionCount(execution),
+          startedAt: execution?.metadata?.startedAt ?? execution?.metadata?.createdAt ?? "",
+          finishedAt: execution?.metadata?.finishedAt ?? "",
+          readbacks: readback.readbacks,
+          error: readback.error,
+        };
+        await writeOnaExecutionReport(onaExecutionReport);
+      }
     } else {
       onaStatus = "blocked";
       dispatchStatus = "blocked";
@@ -312,6 +478,8 @@ const chainArgs = [
   onaStatus,
   "--ona-automation-execution",
   onaExecution,
+  "--ona-automation-execution-report",
+  args.onaExecutionJsonOutput,
   "--branch",
   branch,
   "--acceptance-gate",
@@ -327,6 +495,7 @@ if (failures.length > 0) {
 run("node", chainArgs);
 
 await fs.mkdir(path.dirname(args.output), { recursive: true });
+const dispatchResult = failures.length === 0 ? (onaExecutionReport ? onaExecutionReport.chainStatus : "queued") : "blocked";
 const lines = [
   "# MineLink Agent Factory Dispatch",
   "",
@@ -343,7 +512,8 @@ const lines = [
   `- Ona automation: \`${args.onaAutomation || "none"}\``,
   `- Ona project: \`${args.onaProject || "none"}\``,
   `- Ona execution: \`${onaExecution || "none"}\``,
-  `- Result: \`${failures.length === 0 ? "queued" : "blocked"}\``,
+  `- Ona execution result: \`${onaExecutionReport?.result ?? (onaExecution ? "not-waited" : "none")}\``,
+  `- Result: \`${dispatchResult}\``,
   "",
   "## Failures",
   "",
@@ -361,6 +531,8 @@ const lines = [
   "",
   `- \`${args.chainOutput}\``,
   `- \`${args.chainJsonOutput}\``,
+  `- \`${args.onaExecutionOutput}\``,
+  `- \`${args.onaExecutionJsonOutput}\``,
   "",
   "## Boundary",
   "",
@@ -373,11 +545,13 @@ if (comment && issue.number) {
   const commentBody = [
     "MineLink agent-factory dispatcher result:",
     "",
-    `- Result: \`${failures.length === 0 ? "queued" : "blocked"}\``,
+    `- Result: \`${dispatchResult}\``,
     `- Ona automation: \`${args.onaAutomation || "none"}\``,
     `- Ona execution: \`${onaExecution || "none"}\``,
+    `- Ona execution result: \`${onaExecutionReport?.result ?? (onaExecution ? "not-waited" : "none")}\``,
     `- Branch: \`${branch}\``,
     `- Chain report: \`${args.chainOutput}\``,
+    `- Execution report: \`${args.onaExecutionOutput}\``,
     "",
     failures.length === 0
       ? "Next blocking edge is expected to be Ona Platform Codex implementation session evidence unless the platform exposes an accepted programmatic Codex launch."

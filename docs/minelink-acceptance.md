@@ -759,8 +759,14 @@ Current status:
   polling fallback. It uses `scripts/dev/dispatch-agent-factory.mjs` and
   `scripts/dev/watch-linear-agent-tasks.mjs` to start the shared Ona
   automation, then `scripts/dev/report-agent-factory-chain.mjs` records the
-  issue-to-PR nodes, edges, first blocker, and remaining percentage. This is
-  delivery-chain evidence only and does not prove Minecraft product behavior.
+  issue-to-PR nodes, edges, first blocker, and remaining percentage. The
+  dispatcher can now wait briefly for `ona ai automation executions get` and
+  preserve `.minelink-dev/reports/ona-automation-execution.md` plus JSON with
+  the execution phase, exposed session id, failed action count, and readback
+  attempts. `completed_with_failed_actions` is partial bridge evidence only:
+  it proves the guarded Ona finalizer ran and failed closed, not that Ona
+  Platform Codex implemented the task. This is delivery-chain evidence only and
+  does not prove Minecraft product behavior.
 - `scripts/dev/setup-linear-agent-factory.mjs` is the repeatable Linear setup
   entry point for the `MineLink` project, required agent-factory labels, and
   workflow states. Local readback on 2026-06-21 created the Linear project

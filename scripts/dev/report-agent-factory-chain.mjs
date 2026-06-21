@@ -17,6 +17,7 @@ const defaults = {
   onaAutomation: process.env.MINELINK_ONA_AUTOMATION ?? "",
   onaAutomationExecution: process.env.MINELINK_ONA_AUTOMATION_EXECUTION ?? "",
   onaAutomationStatus: process.env.MINELINK_ONA_AUTOMATION_STATUS ?? "",
+  onaAutomationExecutionReport: ".minelink-dev/reports/ona-automation-execution.json",
   onaPrebuild: process.env.MINELINK_ONA_PREBUILD ?? "",
   onaPrebuildStatus: process.env.MINELINK_ONA_PREBUILD_STATUS ?? "",
   onaImplementationAgent: process.env.MINELINK_ONA_IMPLEMENTATION_AGENT ?? "",
@@ -74,6 +75,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-automation") args.onaAutomation = readValue();
   else if (arg === "--ona-automation-execution") args.onaAutomationExecution = readValue();
   else if (arg === "--ona-automation-status") args.onaAutomationStatus = readValue();
+  else if (arg === "--ona-automation-execution-report") args.onaAutomationExecutionReport = readValue();
   else if (arg === "--ona-prebuild") args.onaPrebuild = readValue();
   else if (arg === "--ona-prebuild-status") args.onaPrebuildStatus = readValue();
   else if (arg === "--ona-implementation-agent") args.onaImplementationAgent = readValue();
@@ -360,6 +362,7 @@ const releaseInfo = await fileInfo(args.videoReleaseGate);
 const prReportInfo = await fileInfo(args.prReport);
 const linearSyncInfo = await fileInfo(args.linearSyncReport);
 const secretPreflightInfo = await fileInfo(args.secretPreflight);
+const automationExecutionReportInfo = await fileInfo(args.onaAutomationExecutionReport);
 const implementationReadbackInfo = await fileInfo(args.onaImplementationReadback);
 const verifierReadbackInfo = await fileInfo(args.onaVerifierReadback);
 const releaseText = await readText(args.videoReleaseGate);
@@ -369,6 +372,7 @@ const linearSyncText = await readText(args.linearSyncReport);
 const implementationReadbackText = await readText(args.onaImplementationReadback);
 const verifierReadbackText = await readText(args.onaVerifierReadback);
 const secretPreflight = await readJson(args.secretPreflight);
+const automationExecutionReport = await readJson(args.onaAutomationExecutionReport);
 const secretPreflightActions = Array.isArray(secretPreflight?.nextActions)
   ? secretPreflight.nextActions.filter(Boolean)
   : [];
@@ -385,6 +389,34 @@ const autoPrebuildBlocker = typeof autoPrebuild?.blocker === "string" ? autoPreb
 if (!hasValue(args.prUrl)) {
   args.prUrl = markerValue(prReportText, "PR URL");
 }
+if (!hasValue(args.onaAutomationExecution) && hasValue(automationExecutionReport?.executionId)) {
+  args.onaAutomationExecution = automationExecutionReport.executionId;
+}
+
+function statusFromAutomationExecutionReport(report) {
+  const result = String(report?.result ?? "").trim().toLowerCase();
+  if (result === "completed") return "passed";
+  if (["running", "timed_out", "completed_with_failed_actions"].includes(result)) return "partial";
+  if (result === "missing" || result === "") return "missing";
+  return "blocked";
+}
+
+const automationExecutionStatus = statusFromAutomationExecutionReport(automationExecutionReport);
+const automationExecutionEvidence = automationExecutionReportInfo
+  ? [
+      `${args.onaAutomationExecutionReport} (${automationExecutionReport?.result ?? "unknown"})`,
+      automationExecutionReport?.phase && `Execution phase: ${automationExecutionReport.phase}`,
+      Number.isFinite(Number(automationExecutionReport?.failedActionCount)) &&
+        `failedActionCount: ${Number(automationExecutionReport.failedActionCount)}`,
+      hasValue(automationExecutionReport?.sessionId) && `Automation session: ${automationExecutionReport.sessionId}`,
+    ].filter(Boolean)
+  : [];
+const automationExecutionWarning =
+  automationExecutionReport?.result === "completed_with_failed_actions"
+    ? "Ona automation execution finished with failed actions; the guarded finalizer stopped before downstream side effects."
+    : automationExecutionReport?.result === "timed_out"
+      ? "Ona automation execution readback timed out before a terminal phase."
+      : "";
 
 const issueStatus = hasValue(args.githubIssue) ? "passed" : hasValue(args.linearIssue) ? "partial" : "missing";
 const taskContractStatus = normalizeStatus(args.issueContractStatus) !== "missing"
@@ -399,7 +431,9 @@ const dispatcherStatus = normalizeStatus(args.githubDispatcherStatus) !== "missi
     : "missing";
 const automationStatus = normalizeStatus(args.onaAutomationStatus) !== "missing"
   ? normalizeStatus(args.onaAutomationStatus)
-  : hasValue(args.onaAutomationExecution)
+  : automationExecutionStatus !== "missing"
+    ? automationExecutionStatus
+    : hasValue(args.onaAutomationExecution)
     ? "partial"
     : hasValue(args.onaAutomation)
       ? "partial"
@@ -486,9 +520,10 @@ const nodes = [
     hasValue(args.githubDispatcherUrl) && `Dispatcher: ${args.githubDispatcherUrl}`,
     secretPreflightInfo && `${args.secretPreflight}${secretPreflight?.result ? ` (${secretPreflight.result})` : ""}`,
   ], dispatcherStatus === "blocked" ? globalBlocker : ""),
-  mkNode("ona_automation", "Ona automation execution queued", automationStatus, [
+  mkNode("ona_automation", "Ona automation execution", automationStatus, [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
+    ...automationExecutionEvidence,
   ], automationStatus === "blocked" ? globalBlocker : ""),
   mkNode("ona_prebuild", "Ona project prebuild ready", prebuildStatus, [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
@@ -562,6 +597,7 @@ const rawEdges = [
   mkEdge("github_dispatcher", "ona_automation", edgeStatus(nodeStatus.ona_automation), [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
+    ...automationExecutionEvidence,
   ]),
   mkEdge("ona_prebuild", "implementation_codex", prebuildHandoffStatus, [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
@@ -571,6 +607,7 @@ const rawEdges = [
   mkEdge("ona_automation", "implementation_codex", automationHandoffStatus, [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
+    ...automationExecutionEvidence,
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
     implementationReadbackInfo && args.onaImplementationReadback,
@@ -622,6 +659,9 @@ const nextActions = [];
 if (autoPrebuildWarnings.length > 0) {
   nextActions.push(...autoPrebuildWarnings.map((warning) => `Investigate Ona prebuild warning: ${warning}`));
 }
+if (automationExecutionWarning) {
+  nextActions.push(`Inspect Ona automation execution readback: ${automationExecutionWarning}`);
+}
 if (firstBlockedEdge?.to === "issue_contract") {
   nextActions.push("Fix the GitHub/Linear task contract so it has agent-ready labels, scope, forbidden changes, validation, evidence, video requirement, and remaining gaps.");
 } else if (firstBlockedEdge?.to === "github_dispatcher") {
@@ -640,7 +680,11 @@ if (firstBlockedEdge?.to === "issue_contract") {
   nextActions.push("Trigger the Ona prebuild refresh only when the environment baseline is missing or environment-sensitive files changed, then wait for a completed baseline before Codex handoff.");
   if (prebuildBlocker) nextActions.push(prebuildBlocker);
 } else if (firstBlockedEdge?.to === "implementation_codex") {
-  nextActions.push("Repair or expose programmatic Ona Platform Codex launch/authentication, start a fresh Codex implementation session, and capture the session id plus logs.");
+  if (automationExecutionReport?.result === "completed_with_failed_actions") {
+    nextActions.push("The dispatcher reached Ona and the guarded finalizer failed closed. Start or repair the Ona Platform Codex implementation session and write the accepted implementation readback.");
+  } else {
+    nextActions.push("Repair or expose programmatic Ona Platform Codex launch/authentication, start a fresh Codex implementation session, and capture the session id plus logs.");
+  }
 } else if (firstBlockedEdge?.to === "branch_commit") {
   nextActions.push("Wait for the Ona Platform Codex implementation session to create the bounded branch/commit, or mark the task blocked with the session evidence.");
 } else if (firstBlockedEdge?.to === "validation") {
@@ -684,7 +728,16 @@ const report = {
   firstBlockedEdge,
   nodes,
   edges,
-  warnings: autoPrebuildWarnings,
+  warnings: [...autoPrebuildWarnings, automationExecutionWarning].filter(Boolean),
+  automationExecution: automationExecutionReportInfo
+    ? {
+        path: args.onaAutomationExecutionReport,
+        result: automationExecutionReport?.result ?? "unknown",
+        phase: automationExecutionReport?.phase ?? "unknown",
+        failedActionCount: automationExecutionReport?.failedActionCount ?? null,
+        sessionId: automationExecutionReport?.sessionId ?? "",
+      }
+    : null,
   nextActions,
   secretPreflight: secretPreflightInfo
     ? {
@@ -718,7 +771,9 @@ const lines = [
   "",
   "## Warnings",
   "",
-  ...(autoPrebuildWarnings.length > 0 ? autoPrebuildWarnings.map((warning) => `- ${escapeMd(warning)}`) : ["- none"]),
+  ...([...autoPrebuildWarnings, automationExecutionWarning].filter(Boolean).length > 0
+    ? [...autoPrebuildWarnings, automationExecutionWarning].filter(Boolean).map((warning) => `- ${escapeMd(warning)}`)
+    : ["- none"]),
   "",
   "## Nodes",
   "",
