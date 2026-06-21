@@ -1,18 +1,10 @@
 {
   "name": "MineLink Agent Worktree",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "image": "ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering",
   "remoteUser": "node",
   "containerEnv": {
     "GRADLE_USER_HOME": "/home/node/.gradle",
-    "MINELINK_DEVCONTAINER_IMAGE": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm"
-  },
-  "features": {
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "21",
-      "installMaven": false,
-      "installGradle": false
-    },
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "MINELINK_DEVCONTAINER_IMAGE": "ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering"
   },
   "postCreateCommand": "bash scripts/dev/bootstrap-prebuild.sh",
   "postAttachCommand": "git status --short --branch && bash scripts/dev/verify-agent-task.sh --scope docs",

@@ -49,6 +49,7 @@ scripts/dev/                            build, server, e2e, soak, verification
 .github/
   workflows/                            CI and real NeoForge smoke automation
     devcontainer-image.yml              GHCR prewarmed devcontainer image build
+    agent-factory-dispatch.yml          GitHub/Linear -> Ona dispatch
   ISSUE_TEMPLATE/                       agent-ready task templates
   pull_request_template.md              required PR evidence template
 .devcontainer/                          cloud worktree bootstrap
@@ -193,6 +194,8 @@ MineLink product work is fed by a repo-native delivery factory:
 
 ```text
 Linear or GitHub task
+  -> GitHub Actions dispatcher or Linear watcher
+  -> Ona automation queue
   -> Ona Platform Codex agent
   -> branch
   -> validation automation
@@ -208,6 +211,10 @@ fields, Linear board setup, GitHub issue mapping, and manual pilot commands.
 The Ona CLI finalizer/validation automation spec is
 `ona/ai-automations/minelink-agent-factory.yaml`. The local Ona environment
 automation file is `.ona/automations.yaml`.
+The source dispatcher is `.github/workflows/agent-factory-dispatch.yml`, backed
+by `scripts/dev/dispatch-agent-factory.mjs`,
+`scripts/dev/watch-linear-agent-tasks.mjs`, and
+`scripts/dev/report-agent-factory-chain.mjs`.
 
 The final flow should use the Ona Platform Codex agent option for implementation
 and the separate video-verifier pass, not the default Ona Agent and not manual
@@ -218,6 +225,11 @@ from existing artifacts and then checks the existing artifact hashes. Linear
 status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
+If Ona repository webhooks are unavailable for the account, the GitHub Actions
+dispatcher and scheduled Linear watcher are the active automation bridge. If
+Ona Platform Codex cannot be started automatically or rejects LLM
+authentication, the chain report must stop at that edge and record the blocker
+instead of falling back to generic Ona Agent evidence.
 If Linear or GitHub webhook dispatch cannot be verified in the current
 environment, the repo must say so and keep the gap visible instead of
 pretending automation is enabled.
@@ -303,8 +315,9 @@ It runs locally through `scripts/dev/verify-agent-task.sh` and in GitHub CI. It
 keeps the Ona migration runbook, ready task queue, label taxonomy, PR template,
 issue template, devcontainer, install smoke workflow, and verification entry
 points present with required anchors. The devcontainer guard also protects the
-fast Ona bootstrap contract: prebuilt Node 22 image, Java 21 feature, and
-image or OS provided `python3` instead of a pinned source-built Python feature.
+fast Ona bootstrap contract: MineLink GHCR cache-prewarmed image, Java 21,
+GitHub CLI, `ffmpeg`, and image or OS provided `python3` instead of a pinned
+source-built Python feature.
 
 The install smoke verifier is:
 
@@ -349,8 +362,8 @@ checkout and pushes `ghcr.io/ninot1quyi/minelink-devcontainer` with Node 22,
 Java 21, GitHub CLI, `ffmpeg`, npm cache, and the Gradle user-home cache. Branch
 builds publish immutable `sha-*` tags plus sanitized branch tags; `main`
 additionally publishes `main` and `latest`. Immutable tags are the evidence
-anchor, while branch tags are only a moving cache source after registry access
-is verified. After publishing, the workflow runs
+anchor, while branch tags are the moving cache source for the matching work
+line. After publishing, the workflow runs
 `scripts/dev/check-devcontainer-image-access.sh` against the immutable `sha-*`
 tag with authenticated GHCR access and Docker runtime smoke. The same checker
 can be run with `--require-anonymous` when an unauthenticated Ona pull path is
@@ -359,11 +372,13 @@ contain committed EULA files, secrets, admission tokens, Microsoft credentials,
 local `mod/neoforge/run` state, or a hand-uploaded local container snapshot. It
 also cannot be treated as proof that NeoForge generated workspace outputs are
 reusable in Ona, because project-local `.gradle` and generated source/build
-directories are path- and checkout-sensitive. The default devcontainer should
-stay on the stable public Node 22 base image until a GHCR image tag and Ona pull
-access have both been verified. Ona prebuilds must still run
+directories are path- and checkout-sensitive. The default devcontainer uses the
+`codex-minelink-mvp-engineering` GHCR branch tag after registry access and
+Docker runtime smoke are proven. Ona prebuilds must still run
 `scripts/dev/bootstrap-prebuild.sh` with `prebuildRequiresSuccess: true` as the
-final hard gate before an agent environment is accepted.
+final hard gate before an agent environment is accepted. If Ona pull/start or
+the post-publish Docker smoke fails, record the failure and fix the image or
+temporarily return to the public Node 22 base image.
 
 Acceptance video artifacts are generated by:
 

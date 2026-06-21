@@ -36,10 +36,14 @@ proves a fresh clone of a committed ref. Its report is written to
 commit, environment versions, command exit codes, and copied verifier summary.
 
 Ona worktrees should rebuild from `.devcontainer/devcontainer.json`. The
-default devcontainer intentionally keeps using the published Node 22
-devcontainer base image until the MineLink GHCR image has been built and pull
-access has been verified in Ona. It retains the Java 21 feature as an explicit
-contract and uses image or OS provided `python3`; do not add a pinned Python
+default devcontainer uses the MineLink GHCR cache-prewarmed image:
+
+```text
+ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering
+```
+
+The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, image or OS provided
+`python3`, npm cache, and Gradle user-home cache. Do not add a pinned Python
 feature that forces source compilation during cloud rebuilds.
 
 The prewarmed image is built by GitHub Actions:
@@ -52,15 +56,14 @@ The workflow `.github/workflows/devcontainer-image.yml` builds
 `.devcontainer/Dockerfile` and pushes
 `ghcr.io/ninot1quyi/minelink-devcontainer`. Branch builds publish immutable
 `sha-*` tags and sanitized branch tags; `main` additionally publishes `main`
-and `latest`. Use immutable `sha-*` tags for evidence and branch tags only as
-the optional moving cache source for a specific work line after pull access is
-verified. The image warms npm cache and Gradle user-home cache from a clean
-checkout, but it is not a release artifact and is not product evidence. Do not
-bake EULA files, tokens, admission secrets, Microsoft credentials, local
-`mod/neoforge/run` state, or a hand-uploaded local container into it. NeoForge
-project-local `.gradle` state and generated workspace outputs are
-checkout-sensitive, so the image does not replace Ona's final prebuild
-bootstrap.
+and `latest`. Use immutable `sha-*` tags for evidence and branch tags as the
+moving cache source for a specific work line. The image warms npm cache and
+Gradle user-home cache from a clean checkout, but it is not a release artifact
+and is not product evidence. Do not bake EULA files, tokens, admission secrets,
+Microsoft credentials, local `mod/neoforge/run` state, or a hand-uploaded local
+container into it. NeoForge project-local `.gradle` state and generated
+workspace outputs are checkout-sensitive, so the image does not replace Ona's
+final prebuild bootstrap.
 
 The image workflow also runs the repository image access checker after the
 publish step:
@@ -75,15 +78,16 @@ bash scripts/dev/check-devcontainer-image-access.sh \
 The checker records anonymous GHCR manifest access, authenticated GHCR manifest
 access, and optional Docker pull/run evidence in
 `.minelink-dev/reports/devcontainer-image-access.md`. Use
-`--require-anonymous` before switching Ona to an unauthenticated GHCR image
-pull path. If Ona is configured with authenticated package access, keep that
-configuration documented in the task evidence and still require the normal
-Ona prebuild hard gate.
+`--require-anonymous` when auditing unauthenticated GHCR pull access. If Ona is
+configured with authenticated package access, keep that configuration
+documented in the task evidence and still require the normal Ona prebuild hard
+gate.
 
-Do not switch `.devcontainer/devcontainer.json` to the GHCR image in the same
-change that first introduces the image workflow. First publish a branch image,
-verify the GHCR pull path and Ona registry access, then switch the default
-image in a follow-up change.
+The default devcontainer may stay on the GHCR branch tag only while the
+Devcontainer Image workflow keeps passing Docker smoke and Ona prebuilds keep
+passing `bootstrap-prebuild`. If either path fails, fix the image or temporarily
+return to the public Node 22 base image with the failure recorded in
+`docs/minelink-acceptance.md`.
 
 Ona prebuilds use two bootstrap entry points:
 
@@ -98,15 +102,16 @@ instead of leaving agents with a snapshot that skipped MineLink setup. The
 devcontainer `postCreateCommand` calls the same script for normal environment
 creation and local devcontainer rebuilds.
 
-This prebuild bootstrap installs OS tools, verifies Node/npm/Python/Java/ffmpeg,
-runs `npm ci`, `npm run build`, `npm run typecheck`, and runs
-`mod/neoforge/./gradlew --no-daemon build` to warm Gradle, Minecraft, and
-NeoForge caches before a Codex agent opens the environment. It only logs whether
-`LINEAR_API_KEY` is present; it never prints the value. Because the repository
-owner has authorized development EULA acceptance for these private
-Ona/devcontainer environments, the bootstrap also writes ignored local
-`mod/neoforge/run/eula.txt` and `server.properties` files so NeoForge can start
-without another setup step. It does not start a Minecraft server.
+This prebuild bootstrap skips `apt-get` when the prewarmed image already has the
+required OS tools, verifies Node/npm/Python/Java/ffmpeg, runs `npm ci`, `npm run
+build`, `npm run typecheck`, and runs `mod/neoforge/./gradlew --no-daemon build`
+to warm Gradle, Minecraft, and NeoForge caches before a Codex agent opens the
+environment. It only logs whether `LINEAR_API_KEY` is present; it never prints
+the value. Because the repository owner has authorized development EULA
+acceptance for these private Ona/devcontainer environments, the bootstrap also
+writes ignored local `mod/neoforge/run/eula.txt` and `server.properties` files
+so NeoForge can start without another setup step. It does not start a Minecraft
+server.
 
 When the GHCR image is present, the same bootstrap should report warm npm and
 Gradle cache paths, then still run the final `npm ci`, TypeScript checks,

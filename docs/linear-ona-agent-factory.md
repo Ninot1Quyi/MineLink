@@ -31,6 +31,26 @@ the dedicated video-review report, and opens or updates the review PR. It does
 not replace the Ona Platform Codex agent session, and it does not re-render the
 MP4 after the verifier has reviewed it.
 
+The repository has two source dispatchers into that same downstream flow:
+
+```text
+GitHub issue event
+  -> .github/workflows/agent-factory-dispatch.yml
+  -> scripts/dev/dispatch-agent-factory.mjs
+  -> ona ai automation start
+
+Linear polling fallback
+  -> .github/workflows/agent-factory-dispatch.yml schedule/manual
+  -> scripts/dev/watch-linear-agent-tasks.mjs
+  -> scripts/dev/dispatch-agent-factory.mjs
+  -> ona ai automation start
+```
+
+Both paths generate `.minelink-dev/reports/agent-factory-chain.md`, which lists
+the end-to-end nodes, edges, evidence, first blocking edge, and remaining chain
+percentage. That report is automation-chain evidence only; it does not upgrade
+MineLink acceptance gates.
+
 ## Status Model
 
 Use these statuses for the Linear board and GitHub issue/PR comments:
@@ -89,6 +109,22 @@ codex/gh-45-short-task
 Use `.github/ISSUE_TEMPLATE/agent-task.yml` for GitHub tasks. The issue is ready
 only when it has `agent-ready` and all required fields are filled.
 
+GitHub Actions owns the repository-side issue dispatcher:
+
+```text
+.github/workflows/agent-factory-dispatch.yml
+scripts/dev/dispatch-agent-factory.mjs
+```
+
+It triggers on `issues` events and manual dispatch. The dispatcher validates the
+task contract, checks `agent-ready` and `agent:ona`, starts the Ona automation
+through `ona ai automation start`, writes
+`.minelink-dev/reports/agent-factory-dispatch.md`, regenerates
+`.minelink-dev/reports/agent-factory-chain.md`, and comments on the GitHub
+issue. It requires `ONA_TOKEN` in GitHub secrets to start Ona from CI; missing
+Ona authentication is recorded as a blocked edge instead of being treated as a
+MineLink validation failure.
+
 Manual pilot command:
 
 ```bash
@@ -140,9 +176,24 @@ Each card should show or link:
 - Blocker or remaining gaps.
 
 Linear webhook integration is not enabled by this repository alone. Until an
-organization-level Linear webhook or app is configured, create a matching
-GitHub issue from the Linear card and start the Ona automation with the Linear
-issue key in `--param linear_issue=LIN-123`.
+organization-level Linear webhook or app is configured, use the repository
+Linear watcher:
+
+```bash
+node scripts/dev/watch-linear-agent-tasks.mjs --max-starts 1
+```
+
+The GitHub Actions `Agent Factory Dispatch` workflow also runs this watcher on
+a schedule and through manual dispatch with `source=linear`. The watcher uses
+`LINEAR_API_KEY`, finds open MineLink issues labeled `agent-ready` and
+`agent:ona`, extracts the linked GitHub issue when present, and dispatches the
+same Ona automation as the GitHub issue path. This is a polling fallback, not
+proof that a native Linear webhook to Ona has been enabled.
+
+Current Ona repository webhooks are not assumed to be available. If
+`ona webhook list` or `ona webhook create` returns an enterprise-only error,
+keep the GitHub Actions dispatcher and Linear watcher as the active trigger
+path and record the webhook path as blocked.
 
 ## Linear API Status Sync
 
@@ -193,10 +244,10 @@ Create or update the remote Ona automation from the spec:
 ona ai automation create ona/ai-automations/minelink-agent-factory.yaml
 ```
 
-The checked-in spec uses a manual trigger because the current Ona CLI rejects
-pull-request triggers unless an Ona webhook or integration already exists.
-After that integration is configured, add a repository trigger in Ona UI or in
-an organization-specific automation spec.
+The checked-in spec uses a manual trigger. Repository issue events are converted
+to that manual trigger by `.github/workflows/agent-factory-dispatch.yml`.
+After native Ona repository/Linear webhooks are available in the organization,
+add those triggers without changing the downstream evidence requirements.
 
 The spec intentionally does not contain a generic `agent` step. Start the
 implementation and video-verifier work in the Ona Platform UI with the Codex
@@ -265,6 +316,12 @@ surface but fails with `Codex authentication failed: the LLM request was
 rejected as unauthenticated` before command execution. Until the Ona account's
 Codex/OpenAI subscription binding is fixed and a new Codex session runs
 validation, the factory is not end-to-end accepted.
+
+Additional current blocker: The Ona CLI automation example exposes a generic
+`agent` step, but the accepted MineLink path requires the Ona Platform Codex
+agent option. Until Ona exposes a repository-configurable or API-visible way to
+start that Codex option automatically, the dispatchers can queue the automation
+and produce chain evidence but cannot prove the implementation-session edge.
 
 The next factory slice must prove a full platform run: Linear task dispatch or
 manual launch -> Ona Platform Codex implementation session -> validation

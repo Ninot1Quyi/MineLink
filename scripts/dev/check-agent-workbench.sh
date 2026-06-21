@@ -42,16 +42,20 @@ require_file ".github/ISSUE_TEMPLATE/agent-task.yml"
 require_file ".github/pull_request_template.md"
 require_file ".github/workflows/devcontainer-image.yml"
 require_file ".github/workflows/install-smoke.yml"
+require_file ".github/workflows/agent-factory-dispatch.yml"
 require_file "ona/ai-automations/minelink-agent-factory.yaml"
 require_file "scripts/dev/install-smoke.sh"
 require_file "scripts/dev/bootstrap-prebuild.sh"
 require_file "scripts/dev/check-devcontainer-image-access.sh"
+require_file "scripts/dev/dispatch-agent-factory.mjs"
 require_file "scripts/dev/check-video-review.mjs"
 require_file "scripts/dev/prepare-video-review-request.mjs"
 require_file "scripts/dev/render-acceptance-video.mjs"
+require_file "scripts/dev/report-agent-factory-chain.mjs"
 require_file "scripts/dev/summarize-evidence.mjs"
 require_file "scripts/dev/sync-linear-status.mjs"
 require_file "scripts/dev/verify-agent-task.sh"
+require_file "scripts/dev/watch-linear-agent-tasks.mjs"
 
 require_text "AGENTS.md" "docs/agent-workbench.md"
 require_text "AGENTS.md" "docs/linear-ona-agent-factory.md"
@@ -85,6 +89,7 @@ require_text "docs/github-labels.md" "smoke-only"
 require_text "docs/github-labels.md" "real-partial"
 require_text "docs/github-labels.md" "product-accepted"
 require_text ".ona/automations.yaml" "render-acceptance-evidence"
+require_text ".ona/automations.yaml" "report-agent-factory-chain"
 require_text ".ona/automations.yaml" "prepare-video-review"
 require_text ".ona/automations.yaml" "sync-linear-status"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "agent-ready"
@@ -106,6 +111,7 @@ require_text "ona/ai-automations/minelink-agent-factory.yaml" "minelink-agent-fa
 require_text "ona/ai-automations/minelink-agent-factory.yaml" "Ona Platform Codex agent"
 require_text "ona/ai-automations/minelink-agent-factory.yaml" "check-video-review.mjs"
 require_text "ona/ai-automations/minelink-agent-factory.yaml" "prepare-video-review-request.mjs"
+require_text "ona/ai-automations/minelink-agent-factory.yaml" "report-agent-factory-chain.mjs"
 require_text "ona/ai-automations/minelink-agent-factory.yaml" "video-review-request.md"
 require_text ".github/workflows/devcontainer-image.yml" "ghcr.io/ninot1quyi/minelink-devcontainer"
 require_text ".github/workflows/devcontainer-image.yml" "docker/build-push-action"
@@ -115,6 +121,11 @@ require_text ".github/workflows/devcontainer-image.yml" "MINELINK_PREWARM_GRADLE
 require_text ".github/workflows/devcontainer-image.yml" "bootstrap-prebuild.sh"
 require_text ".github/workflows/devcontainer-image.yml" "check-devcontainer-image-access.sh"
 require_text ".github/workflows/devcontainer-image.yml" "--docker-smoke"
+require_text ".github/workflows/agent-factory-dispatch.yml" "issues:"
+require_text ".github/workflows/agent-factory-dispatch.yml" "watch-linear-agent-tasks.mjs"
+require_text ".github/workflows/agent-factory-dispatch.yml" "dispatch-agent-factory.mjs"
+require_text ".github/workflows/agent-factory-dispatch.yml" "secrets.ONA_TOKEN"
+require_text ".github/workflows/agent-factory-dispatch.yml" "secrets.LINEAR_API_KEY"
 require_text ".github/workflows/install-smoke.yml" "minelink-install-smoke-evidence"
 require_text ".github/workflows/install-smoke.yml" "scripts/dev/summarize-evidence.mjs"
 require_text ".github/workflows/ci.yml" "Summarize MineLink evidence"
@@ -123,10 +134,9 @@ require_text ".github/workflows/install-smoke.yml" "Summarize MineLink evidence"
 require_text ".devcontainer/devcontainer.json" "postCreateCommand"
 require_text ".devcontainer/devcontainer.json" "postAttachCommand"
 require_text ".devcontainer/devcontainer.json" "scripts/dev/bootstrap-prebuild.sh"
-require_text ".devcontainer/devcontainer.json" "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm"
+require_text ".devcontainer/devcontainer.json" "ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering"
 require_text ".devcontainer/devcontainer.json" "remoteUser"
 require_text ".devcontainer/devcontainer.json" "GRADLE_USER_HOME"
-require_text ".devcontainer/devcontainer.json" "ghcr.io/devcontainers/features/java:1"
 require_text ".devcontainer/Dockerfile" "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm"
 require_text ".devcontainer/Dockerfile" "eclipse-temurin:21-jdk"
 require_text ".devcontainer/Dockerfile" "MINELINK_PREWARM_GRADLE"
@@ -145,6 +155,7 @@ require_text "scripts/dev/install-smoke.sh" "dirty-local-non-acceptance"
 require_text "scripts/dev/bootstrap-prebuild.sh" "MINELINK_PREBUILD_SKIP_GRADLE"
 require_text "scripts/dev/bootstrap-prebuild.sh" "MINELINK_DEVCONTAINER_IMAGE"
 require_text "scripts/dev/bootstrap-prebuild.sh" "report_cache_state"
+require_text "scripts/dev/bootstrap-prebuild.sh" "required OS tools already present"
 require_text "scripts/dev/bootstrap-prebuild.sh" "LINEAR_API_KEY present"
 require_text "scripts/dev/bootstrap-prebuild.sh" "./gradlew --no-daemon build"
 require_text "scripts/dev/bootstrap-prebuild.sh" "mod/neoforge/run/eula.txt"
@@ -153,7 +164,10 @@ require_text "scripts/dev/check-devcontainer-image-access.sh" "anonymous pull ac
 require_text "scripts/dev/check-devcontainer-image-access.sh" "authenticated pull access"
 require_text "scripts/dev/check-devcontainer-image-access.sh" "docker_smoke"
 require_text "scripts/dev/check-devcontainer-image-access.sh" "does not prove Ona Platform Codex"
+require_text "scripts/dev/dispatch-agent-factory.mjs" "does not replace the required Ona Platform Codex"
 require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink acceptance artifacts"
+require_text "scripts/dev/report-agent-factory-chain.mjs" "automation-chain evidence only"
+require_text "scripts/dev/report-agent-factory-chain.mjs" "First Blocking Edge"
 require_text "scripts/dev/check-video-review.mjs" "Release decision: pass"
 require_text "scripts/dev/check-video-review.mjs" "Verifier: Ona Platform Codex"
 require_text "scripts/dev/check-video-review.mjs" "Summary sha256"
@@ -163,6 +177,7 @@ require_text "scripts/dev/summarize-evidence.mjs" "Acceptance Boundary"
 require_text "scripts/dev/summarize-evidence.mjs" "GITHUB_STEP_SUMMARY"
 require_text "scripts/dev/sync-linear-status.mjs" "LINEAR_API_KEY"
 require_text "scripts/dev/verify-agent-task.sh" "install   fresh clone"
+require_text "scripts/dev/watch-linear-agent-tasks.mjs" "polling/CI entrypoint"
 
 python3 - <<'PY' || failures+=(".devcontainer/devcontainer.json must not pin the Python feature to a source-built version in Ona.")
 from pathlib import Path
@@ -217,17 +232,21 @@ PY
     ".github/ISSUE_TEMPLATE/agent-task.yml" \
     ".github/pull_request_template.md" \
     ".github/workflows/install-smoke.yml" \
+    ".github/workflows/agent-factory-dispatch.yml" \
     "ona/ai-automations/minelink-agent-factory.yaml" \
     "scripts/dev/install-smoke.sh" \
     ".devcontainer/Dockerfile" \
     ".github/workflows/devcontainer-image.yml" \
     "scripts/dev/bootstrap-prebuild.sh" \
     "scripts/dev/check-devcontainer-image-access.sh" \
+    "scripts/dev/dispatch-agent-factory.mjs" \
     "scripts/dev/check-video-review.mjs" \
     "scripts/dev/prepare-video-review-request.mjs" \
     "scripts/dev/render-acceptance-video.mjs" \
+    "scripts/dev/report-agent-factory-chain.mjs" \
     "scripts/dev/summarize-evidence.mjs" \
     "scripts/dev/sync-linear-status.mjs" \
+    "scripts/dev/watch-linear-agent-tasks.mjs" \
     "scripts/dev/verify-agent-task.sh"; do
     if [[ -f "$file" ]]; then
       echo "- present: \`$file\`"

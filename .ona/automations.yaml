@@ -31,9 +31,17 @@ tasks:
   render-acceptance-evidence:
     name: Render MineLink acceptance evidence artifacts
     command: |
+      node scripts/dev/report-agent-factory-chain.mjs
       node scripts/dev/summarize-evidence.mjs
       node scripts/dev/render-acceptance-video.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --require-mp4
       node scripts/dev/prepare-video-review-request.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --require-mp4
+    triggeredBy:
+      - manual
+
+  report-agent-factory-chain:
+    name: Report MineLink issue-to-PR factory chain status
+    command: |
+      node scripts/dev/report-agent-factory-chain.mjs
     triggeredBy:
       - manual
 

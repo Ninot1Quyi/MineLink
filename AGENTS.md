@@ -25,6 +25,11 @@ Use `docs/ona-migration.md`, `docs/agent-task-queue.md`, and
 triage labels.
 Use `docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona Platform
 Codex -> validation/PR/CI/evidence delivery workflow.
+Use `.github/workflows/agent-factory-dispatch.yml`,
+`scripts/dev/dispatch-agent-factory.mjs`,
+`scripts/dev/watch-linear-agent-tasks.mjs`, and
+`scripts/dev/report-agent-factory-chain.mjs` for the GitHub/Linear issue to
+Ona automation bridge and full-chain status reports.
 
 ## Architecture Maintenance Guard
 
@@ -46,6 +51,9 @@ Codex -> validation/PR/CI/evidence delivery workflow.
 - `scripts/dev/render-acceptance-video.mjs` produces trace-driven acceptance
   summaries and optional MP4 artifacts. These artifacts are review evidence, not
   client GUI proof and not gate-status upgrades.
+- `scripts/dev/report-agent-factory-chain.mjs` records issue-to-PR automation
+  nodes, edges, first blocker, and remaining percentage. It is delivery-chain
+  evidence only, not product acceptance evidence.
 - If the guard reports a false positive, prefer a small clarifying
   architecture note over bypassing it. Use
   `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1` only for reviewed cases where the
@@ -135,9 +143,11 @@ committed ref can run `npm ci` and the fast verifier; it does not prove server
 admin, LAN, or cross-platform packaging acceptance.
 
 Keep Ona bootstrap fast and reproducible: `.devcontainer/devcontainer.json`
-must use the prebuilt Node 22 image, Java 21 feature, and image or OS provided
-`python3`. Do not pin a Python feature version that source-builds during Ona
-rebuilds.
+must use the MineLink GHCR cache-prewarmed image with Node 22, Java 21, GitHub
+CLI, `ffmpeg`, and image or OS provided `python3`. Do not pin a Python feature
+version that source-builds during Ona rebuilds. Keep
+`scripts/dev/bootstrap-prebuild.sh` as the final hard gate even when the image
+is warm.
 
 Do not claim real game capability unless real NeoForge has run for that path.
 If real NeoForge cannot run, say so and keep the status below product accepted.
@@ -197,6 +207,10 @@ Reports must distinguish:
   Ona Agent mode, `ona environment ssh`, and the checked-in Ona CLI automation
   are debugging, synchronization, validation, or artifact surfaces only and
   must not be described as final MineLink agent execution evidence.
+- For AI-native factory work, use the GitHub Actions dispatcher or Linear
+  watcher to start the checked-in Ona automation. If the chain cannot
+  automatically start the Ona Platform Codex option, record that edge as
+  blocked; do not substitute generic Ona Agent evidence.
 - Video-required tasks must produce `acceptance.mp4`, then a separate Ona
   Platform Codex verifier must compare the task requirements against the
   summary/video and write `video-review.md`. `check-video-review.mjs` must pass

@@ -20,6 +20,20 @@ install_os_packages() {
     return
   fi
 
+  local missing=()
+  for command_name in curl ffmpeg git; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      missing+=("$command_name")
+    fi
+  done
+
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    log "required OS tools already present; skipping apt-get install"
+    return
+  fi
+
+  log "missing OS tools: ${missing[*]}; installing bootstrap packages"
+
   local sudo_cmd=()
   if [[ "$(id -u)" -ne 0 ]]; then
     sudo_cmd=(sudo)

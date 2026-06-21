@@ -85,9 +85,10 @@ Paste that summary into PRs together with any scenario report paths.
 
 Use automation to reduce agent memory load:
 
-- Devcontainer bootstrap uses a prebuilt Node 22 image, Java 21 feature,
-  image-provided `python3`, and runs `npm ci` automatically when a cloud
-  worktree is created.
+- Devcontainer bootstrap uses the MineLink GHCR cache-prewarmed image with Node
+  22, Java 21, GitHub CLI, `ffmpeg`, image-provided `python3`, npm cache, and
+  Gradle user-home cache. It still runs `scripts/dev/bootstrap-prebuild.sh`
+  automatically when a cloud worktree is created.
 - `install-smoke.sh` clones the committed ref into a separate checkout, runs
   `npm ci`, and records install evidence under `.minelink-dev/install-smoke/`.
 - `.ona/automations.yaml` provides Ona-native environment tasks for docs, fast,
@@ -96,6 +97,13 @@ Use automation to reduce agent memory load:
   Linear sync, verification, evidence summaries, video-review request
   preparation, video-release gating, and PR creation after Ona Platform Codex
   does the bounded work and a separate Codex verifier reviews the MP4.
+- `.github/workflows/agent-factory-dispatch.yml` is the GitHub/Linear source
+  dispatcher. It validates agent-ready GitHub issues, polls Linear as a
+  fallback source, starts the shared Ona automation, and uploads dispatch plus
+  chain reports.
+- `dispatch-agent-factory.mjs`, `watch-linear-agent-tasks.mjs`, and
+  `report-agent-factory-chain.mjs` keep the full issue-to-PR automation chain
+  visible as nodes, edges, blockers, and remaining percentage.
 - `sync-linear-status.mjs` lets Ona write Linear status/comments/evidence links
   through `LINEAR_API_KEY` without exposing the key in logs.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,

@@ -16,6 +16,19 @@ action:
   steps:
     - task:
         command: >
+          node scripts/dev/report-agent-factory-chain.mjs
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --issue-contract-status passed
+          --github-dispatcher-status passed
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --ona-automation-status partial
+          --branch "{{ .Parameters.branch }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+    - task:
+        command: >
           node scripts/dev/sync-linear-status.mjs
           --issue "{{ .Parameters.linear_issue }}"
           --status "In Progress"

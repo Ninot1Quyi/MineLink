@@ -1,0 +1,144 @@
+name: Agent Factory Dispatch
+
+on:
+  issues:
+    types: [opened, edited, labeled, reopened]
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Dispatch source
+        required: true
+        default: github
+        type: choice
+        options:
+          - github
+          - linear
+      issue_number:
+        description: GitHub issue number for source=github
+        required: false
+      linear_issue:
+        description: Linear issue key for source=linear
+        required: false
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: agent-factory-dispatch-${{ github.event.issue.number || github.event.inputs.issue_number || github.event.inputs.linear_issue || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  github-issue:
+    name: Dispatch GitHub issue to Ona
+    if: >-
+      ${{
+        github.event_name == 'issues' ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.source == 'github')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Ona CLI
+        run: |
+          curl -o ona -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')" 
+          chmod +x ona
+          sudo mv ona /usr/local/bin/ona
+      - name: Authenticate Ona CLI when token is available
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+        run: |
+          if [ -n "${ONA_TOKEN:-}" ]; then
+            ona login
+          else
+            echo "ONA_TOKEN is missing; dispatcher will report the Ona start edge as blocked."
+          fi
+      - name: Dispatch agent task
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MINELINK_ONA_AUTOMATION_ID: ${{ vars.MINELINK_ONA_AUTOMATION_ID || '019ee9f6-9adb-7c93-aaa6-c26337d2278b' }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+        run: |
+          issue_number="${{ github.event.issue.number || github.event.inputs.issue_number }}"
+          args=(
+            scripts/dev/dispatch-agent-factory.mjs
+            --source github
+            --event-json "$GITHUB_EVENT_PATH"
+            --ona-automation "$MINELINK_ONA_AUTOMATION_ID"
+            --ona-project "$MINELINK_ONA_PROJECT_ID"
+            --comment
+            --require-ona
+          )
+          if [ -n "$issue_number" ]; then
+            args+=(--github-issue-number "$issue_number")
+          fi
+          node "${args[@]}"
+      - name: Upload dispatch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-agent-factory-dispatch
+          path: .minelink-dev/reports/
+          include-hidden-files: true
+
+  linear-watch:
+    name: Watch Linear tasks and dispatch to Ona
+    if: >-
+      ${{
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.source == 'linear')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Ona CLI
+        run: |
+          curl -o ona -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')" 
+          chmod +x ona
+          sudo mv ona /usr/local/bin/ona
+      - name: Authenticate Ona CLI when token is available
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+        run: |
+          if [ -n "${ONA_TOKEN:-}" ]; then
+            ona login
+          else
+            echo "ONA_TOKEN is missing; Linear watcher will report the Ona start edge as blocked."
+          fi
+      - name: Watch Linear and dispatch one task
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          MINELINK_ONA_AUTOMATION_ID: ${{ vars.MINELINK_ONA_AUTOMATION_ID || '019ee9f6-9adb-7c93-aaa6-c26337d2278b' }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+        run: |
+          issue="${{ github.event.inputs.linear_issue }}"
+          args=(
+            scripts/dev/watch-linear-agent-tasks.mjs
+            --max-starts 1
+            --ona-automation "$MINELINK_ONA_AUTOMATION_ID"
+            --ona-project "$MINELINK_ONA_PROJECT_ID"
+            --require-key
+            --require-ona
+          )
+          if [ -n "$issue" ]; then
+            args+=(--issue "$issue")
+          fi
+          node "${args[@]}"
+      - name: Upload watch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-linear-watch-dispatch
+          path: .minelink-dev/reports/
+          include-hidden-files: true

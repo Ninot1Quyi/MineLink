@@ -30,13 +30,18 @@ Every environment must start from a clean branch and read these files first:
 - `docs/agent-task-queue.md`
 
 Use `.devcontainer/devcontainer.json` for bootstrap. The default file uses the
-published public Node 22 devcontainer image, Java 21 feature, image or OS
-provided `python3`, GitHub CLI, runs `npm ci`, installs `ffmpeg` for required
-MP4 artifacts, and performs a docs-scope verification on attach. The separate
-MineLink GHCR image is a cache-prewarmed candidate; verify it with
-`scripts/dev/check-devcontainer-image-access.sh` and Ona pull access before
-switching the default devcontainer to that image. Do not pin the Python feature
-to a source-built version for Ona worktrees.
+MineLink GHCR cache-prewarmed image for the project work line:
+
+```text
+ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering
+```
+
+The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, image or OS provided
+`python3`, npm cache, and Gradle user-home cache. It still runs
+`scripts/dev/bootstrap-prebuild.sh` as the final setup and verification gate.
+If Docker smoke or Ona prebuild readback fails, record the failure and fix the
+image or temporarily return to the public Node 22 base image. Do not pin the
+Python feature to a source-built version for Ona worktrees.
 
 OpenAI subscription binding and Codex model selection belong to the Ona
 Platform account/session. Do not add OpenAI API keys, proxy credentials, or
