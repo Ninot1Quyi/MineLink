@@ -356,7 +356,13 @@ Current status:
   distance rather than exposing a global timeline.
 - Public social event payloads expose coarse visibility cues only, such as
   `visibility` and `distance_band`; exact source coordinates, event radius, and
-  observer distance remain runtime-internal.
+  observer distance remain runtime-internal. The replay assertions now verify
+  that those coarse fields are present while position/radius/recipient internals
+  are absent.
+- The portal cooperation replay also asserts that all three builders contribute
+  successful `block.place` actions and that portal ignition reports
+  `activated: "minecraft:nether_portal"` rather than relying only on a generic
+  successful `action.use` call.
 - This is not full Gate 8 acceptance yet. Human chat interaction, persisted A2A
   social events, notice boards, distance-limited social discovery, and rate
   limited agent-to-agent messaging still require separate implementation and

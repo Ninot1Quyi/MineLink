@@ -634,6 +634,65 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "matching_calls": len(matches),
             "observed_reasons": observed_reasons,
         }
+    if kind == "tool_result_contains":
+        name = str(assertion.get("tool_name", ""))
+        path = assertion_path(assertion.get("path", []))
+        expected = assertion.get("expected")
+        agent = assertion.get("agent")
+        min_count = int(assertion.get("min_count", 1))
+        observed = []
+        matches = []
+        for record in tool_records(state, global_state):
+            if name and record.get("name") != name:
+                continue
+            if agent is not None and record.get("agent") != agent:
+                continue
+            if is_tool_failure(record.get("result", {})):
+                continue
+            payload = tool_result_payload(record.get("result", {}))
+            actual = nested_value(payload, path)
+            observed.append({"agent": record.get("agent"), "value": actual})
+            if actual == expected:
+                matches.append(record)
+        return {
+            "name": assertion.get("name", f"tool_result_contains_{name}_{'.'.join(path)}"),
+            "kind": kind,
+            "passed": len(matches) >= min_count,
+            "tool_name": name,
+            "agent": agent,
+            "path": path,
+            "expected": expected,
+            "expected_min_count": min_count,
+            "matching_calls": len(matches),
+            "observed": observed,
+        }
+    if kind == "tool_call_agent_count":
+        name = str(assertion.get("tool_name", ""))
+        minimums = assertion.get("min_per_agent", {})
+        if not isinstance(minimums, dict):
+            minimums = {}
+        counts: Dict[str, int] = {}
+        for record in tool_records(state, global_state):
+            if name and record.get("name") != name:
+                continue
+            if is_tool_failure(record.get("result", {})):
+                continue
+            agent = str(record.get("agent", ""))
+            counts[agent] = counts.get(agent, 0) + 1
+        missing = {
+            agent: {"expected_min": int(expected), "actual": counts.get(agent, 0)}
+            for agent, expected in minimums.items()
+            if counts.get(agent, 0) < int(expected)
+        }
+        return {
+            "name": assertion.get("name", f"tool_call_agent_count_{name}"),
+            "kind": kind,
+            "passed": not missing,
+            "tool_name": name,
+            "expected_min_per_agent": minimums,
+            "actual_per_agent": counts,
+            "missing": missing,
+        }
     if kind == "move_collided":
         name = str(assertion.get("tool_name", "action.move"))
         observed = []
@@ -762,6 +821,53 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "message_contains": message_contains,
             "matching_events": len(matches),
             "observed_messages": [event.get("message") for event in events if isinstance(event, dict)],
+        }
+    if kind == "event_payload_limited":
+        assertion_state = assertion_agent_state(assertion, state, global_state)
+        message_contains = str(assertion.get("message_contains", ""))
+        source_agent = assertion.get("source_agent")
+        required_fields = [str(field) for field in assertion.get("required_fields", ["visibility", "distance_band"])]
+        forbidden_fields = [
+            str(field)
+            for field in assertion.get("forbidden_fields", ["position", "radius", "observer_distance", "recipients"])
+        ]
+        source_agent_id = None
+        if source_agent and global_state:
+            agent_info = (global_state.get("agents") or {}).get(source_agent, {})
+            if isinstance(agent_info, dict):
+                source_agent_id = agent_info.get("agent_id")
+        events_payload = assertion_state.get("last_events") or {}
+        events = events_payload.get("events", []) if isinstance(events_payload, dict) else []
+        matching_events = [
+            event
+            for event in events
+            if isinstance(event, dict)
+            and (not message_contains or message_contains in str(event.get("message", "")))
+            and (source_agent_id is None or event.get("source_agent_id") == source_agent_id)
+        ]
+        events_with_required = [
+            event for event in matching_events if all(field in event for field in required_fields)
+        ]
+        leaked_fields = sorted(
+            {
+                field
+                for event in matching_events
+                for field in forbidden_fields
+                if field in event
+            }
+        )
+        return {
+            "name": assertion.get("name", "event_payload_limited"),
+            "kind": kind,
+            "passed": bool(events_with_required) and not leaked_fields,
+            "agent": assertion.get("agent"),
+            "source_agent": source_agent,
+            "message_contains": message_contains,
+            "required_fields": required_fields,
+            "forbidden_fields": forbidden_fields,
+            "matching_events": len(matching_events),
+            "events_with_required_fields": len(events_with_required),
+            "leaked_fields": leaked_fields,
         }
     if kind == "create_component_semantics":
         expected_kinds = [str(item) for item in assertion.get("kinds", [])]
@@ -916,6 +1022,23 @@ def tool_result_payload(result: Any) -> JsonDict:
         merged.update(nested)
         return merged
     return result
+
+
+def assertion_path(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, str):
+        return [part for part in value.split(".") if part]
+    return []
+
+
+def nested_value(value: Any, path: Iterable[str]) -> Any:
+    current = value
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return None
+        current = current[key]
+    return current
 
 
 def numeric_value(value: Any) -> Optional[float]:
