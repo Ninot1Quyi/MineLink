@@ -172,6 +172,8 @@ ona ai automation start <automation-id> --project 019ee8ed-9e1b-7cd8-9b1b-af0c8e
 
 Linear or GitHub issue webhooks are not proven enabled until a real issue
 creates an Ona execution and a draft PR without manual SSH.
+The checked-in Ona AI automation uses a manual trigger because Ona rejects PR
+triggers until a webhook or integration is configured in the organization.
 
 Scheduled or bulk Ona automation should wait until all of these are true:
 

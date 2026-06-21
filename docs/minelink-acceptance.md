@@ -599,8 +599,8 @@ Current status:
 - This is real bootstrap evidence only. It does not prove server-admin mod
   installation, agent-user MCP configuration, LAN setup, cross-platform
   packaging, Linear webhook enablement, GitHub issue-to-Ona dispatch,
-  acceptance MP4 availability in every environment, or real NeoForge install
-  acceptance.
+  Ona webhook or PR-trigger setup, acceptance MP4 availability in every
+  environment, or real NeoForge install acceptance.
 
 ### Gate 11: Security, Stability, and Release
 

@@ -8,16 +8,6 @@ triggers:
         projectIds:
           - 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb
     manual: {}
-  - context:
-      repositories:
-        environmentClassId: 019ee0f5-7408-757f-a642-68328c4ae81d
-        repositoryUrls:
-          repoUrls:
-            - https://github.com/Ninot1Quyi/MineLink.git
-    pullRequest:
-      events:
-        - PULL_REQUEST_EVENT_OPENED
-        - PULL_REQUEST_EVENT_UPDATED
 action:
   limits:
     maxParallel: 2

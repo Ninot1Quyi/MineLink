@@ -146,6 +146,11 @@ Create or update the remote Ona automation from the spec:
 ona ai automation create ona/ai-automations/minelink-agent-factory.yaml
 ```
 
+The checked-in spec uses a manual trigger because the current Ona CLI rejects
+pull-request triggers unless an Ona webhook or integration already exists.
+After that integration is configured, add a repository trigger in Ona UI or in
+an organization-specific automation spec.
+
 For local environment tasks, Ona discovers:
 
 ```text
@@ -195,7 +200,8 @@ created.
 - Linear webhook creation and status sync are documented but not enabled by
   this repository alone.
 - GitHub issue-to-Ona dispatch still needs a secret-backed dispatcher or an Ona
-  UI automation bound to this repository.
+  webhook/integration. The manual Ona automation can be created from the repo
+  spec, but issue/PR triggers are not enabled by the repository alone.
 - Acceptance video is a trace visualization. Real Minecraft GUI capture remains
   future observer-client work.
 - Agent output still needs human review before a gate can become
