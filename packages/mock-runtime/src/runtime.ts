@@ -147,6 +147,7 @@ interface OpenContainerState {
     menu_opened: boolean;
     body_ui: "headless_server_agent";
     menu_type: string;
+    menu_source: string;
   };
 }
 
@@ -879,7 +880,8 @@ export class MockRuntimeServer {
         interaction_result: "success",
         menu_opened: false,
         body_ui: "headless_server_agent",
-        menu_type: `mock.${block.container.kind}`
+        menu_type: `mock.${block.container.kind}`,
+        menu_source: "mock_server_menu"
       }
     };
     this.trace({
@@ -1014,14 +1016,21 @@ export class MockRuntimeServer {
 
   private outputTransferPayload(open: OpenContainerState, taken: ItemStack): JsonObject {
     const furnaceOutput = open.kind === "furnace";
+    const craftingOutput = open.kind === "crafting_table";
+    const nativeOutput = furnaceOutput || craftingOutput;
     return {
-      method: furnaceOutput ? "slot.safe_take_inventory_safe_insert" : "synthetic_output_inventory_safe_insert",
+      method: nativeOutput ? "slot.safe_take_inventory_safe_insert" : "synthetic_output_inventory_safe_insert",
       body_ui: "headless_server_agent",
       source_area: "output",
-      source_slot_class: furnaceOutput ? "net.minecraft.world.inventory.FurnaceResultSlot" : "minelink.synthetic_crafting_output",
+      source_slot_kind: furnaceOutput ? "furnace_result_slot" : craftingOutput ? "crafting_result_slot" : "synthetic_output",
+      source_slot_class: furnaceOutput
+        ? "net.minecraft.world.inventory.FurnaceResultSlot"
+        : craftingOutput
+          ? "net.minecraft.world.inventory.ResultSlot"
+          : "minelink.synthetic_crafting_output",
       destination_area: "inventory",
       destination_slot_class: "net.minecraft.world.inventory.Slot",
-      server_slot_hooks: furnaceOutput,
+      server_slot_hooks: nativeOutput,
       inventory_insert_method: "slot.safe_insert",
       taken: { item: taken.item, count: taken.count }
     };
@@ -1034,6 +1043,9 @@ export class MockRuntimeServer {
     }
     if (open.kind === "furnace" && slot.area === "output" && slot.index === 2) {
       return "net.minecraft.world.inventory.FurnaceResultSlot";
+    }
+    if (open.kind === "crafting_table" && slot.area === "output" && slot.index === 0) {
+      return "net.minecraft.world.inventory.ResultSlot";
     }
     return "net.minecraft.world.inventory.Slot";
   }
@@ -1066,6 +1078,9 @@ export class MockRuntimeServer {
     }
 
     const count = Math.max(1, Math.floor(requestedCount || 1));
+    if (count !== 1) {
+      return runtimeFail("unsupported_capability", "Native quick_craft currently stages one craft per output take.");
+    }
     const neededLogs = count;
     if (agent.openContainer?.output) {
       return runtimeFail("inventory_full", "Take the current crafting output before crafting again.");
@@ -1078,18 +1093,31 @@ export class MockRuntimeServer {
     }
     this.removeFromInventory(agent, "minecraft:oak_log", neededLogs);
     const output = { item: "minecraft:oak_planks", count: count * 4 };
+    const craftingTransfer = {
+      method: "crafting_menu.safe_take_safe_insert_grid",
+      body_ui: "headless_server_agent",
+      input_source_area: "inventory",
+      grid_destination_area: "container",
+      output_source: "native_crafting_result_slot",
+      result_slot_class: "net.minecraft.world.inventory.ResultSlot",
+      server_slot_hooks: true,
+      menu_type: agent.openContainer!.nativeInteraction.menu_type,
+      consumed: { "minecraft:oak_log": neededLogs },
+      grid: [{ grid_index: 0, item: "minecraft:oak_log", count: neededLogs, destination_slot_class: "net.minecraft.world.inventory.Slot" }]
+    };
     agent.openContainer!.output = output;
     this.trace({
       event: "craft.quick_craft",
       agent_id: agent.agentId,
       recipe_id: recipeId,
       consumed: { item: "minecraft:oak_log", count: neededLogs },
-      output
+      output,
+      crafting_transfer: craftingTransfer
     });
     return {
       ok: true,
       status: "completed",
-      result: { recipe_id: recipeId, output, container: this.containerSnapshot(agent) }
+      result: { recipe_id: recipeId, output, crafting_transfer: craftingTransfer, container: this.containerSnapshot(agent) }
     };
   }
 

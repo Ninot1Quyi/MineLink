@@ -753,6 +753,18 @@ describe("MockRuntimeServer", () => {
     });
     const craftSnapshot = (craft.result as { container: ContainerSnapshot }).container;
     expect(craftSnapshot.output_slot).toMatchObject({ item: "minecraft:oak_planks", count: 4 });
+    expect(craft).toMatchObject({
+      ok: true,
+      result: {
+        crafting_transfer: {
+          method: "crafting_menu.safe_take_safe_insert_grid",
+          output_source: "native_crafting_result_slot",
+          result_slot_class: "net.minecraft.world.inventory.ResultSlot",
+          server_slot_hooks: true,
+          body_ui: "headless_server_agent"
+        }
+      }
+    });
 
     const duplicateCraft = await request(client, {
       type: "tool.execute",
@@ -774,8 +786,10 @@ describe("MockRuntimeServer", () => {
       result: {
         taken: { item: "minecraft:oak_planks", count: 4 },
         slot_transfer: {
-          method: "synthetic_output_inventory_safe_insert",
-          source_slot_class: "minelink.synthetic_crafting_output",
+          method: "slot.safe_take_inventory_safe_insert",
+          source_slot_kind: "crafting_result_slot",
+          source_slot_class: "net.minecraft.world.inventory.ResultSlot",
+          server_slot_hooks: true,
           inventory_insert_method: "slot.safe_insert",
           body_ui: "headless_server_agent"
         }

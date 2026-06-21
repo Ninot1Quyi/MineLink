@@ -375,7 +375,7 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
     description: "Takes output through server output-slot hooks when the opened container exposes them.",
     tags: ["container", "craft"],
     input_schema: { type: "object", properties: { slot_ref: { type: "string" } } },
-    failure_reasons: ["container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments"]
+    failure_reasons: ["container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments", "blocked"]
   },
   {
     name: "craft.list_available",
@@ -398,7 +398,7 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
         count: { type: "number", minimum: 1 }
       }
     },
-    failure_reasons: ["station_too_far", "missing_material", "invalid_recipe", "inventory_full"]
+    failure_reasons: ["station_too_far", "missing_material", "invalid_recipe", "inventory_full", "blocked", "unsupported_capability"]
   },
   {
     name: "create.inspect_component",

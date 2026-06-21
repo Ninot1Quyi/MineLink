@@ -53,7 +53,11 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player.BedSleepingProblem;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.FurnaceMenu;
+import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.level.Level;
@@ -87,6 +91,8 @@ public final class MineLinkEndpointBootstrap {
     private static final int MAX_SYNC_MINING_TICKS = 600;
     private static final int PLAYER_INVENTORY_SLOT_LIMIT = 36;
     private static final int CONTAINER_INVENTORY_SLOT_LIMIT = PLAYER_INVENTORY_SLOT_LIMIT;
+    private static final int CRAFTING_GRID_SLOT_START = 1;
+    private static final int CRAFTING_GRID_SLOT_END = 10;
 
     private final MinecraftServer server;
     private final RuntimeState runtimeState = new RuntimeState();
@@ -931,7 +937,14 @@ public final class MineLinkEndpointBootstrap {
         }
         var openedMenu = agent.entity.containerMenu;
         boolean menuOpened = openedMenu != previousMenu && openedMenu != agent.entity.inventoryMenu;
-        String menuType = menuOpened ? openedMenu.getClass().getName() : "";
+        AbstractContainerMenu nativeMenu = menuOpened ? openedMenu : null;
+        if (nativeMenu == null && kind.equals("crafting_table")) {
+            nativeMenu = new CraftingMenu(-1, agent.entity.getInventory(), ContainerLevelAccess.create(level, blockRef.pos));
+        }
+        String menuType = nativeMenu == null ? "" : nativeMenu.getClass().getName();
+        String menuSource = nativeMenu == null
+            ? "none"
+            : menuOpened ? "server_player_container_menu" : "constructed_server_crafting_menu_after_use_item_on";
 
         agent.openContainer = new OpenContainer(
             "container:" + agent.agentId + ":" + (++agent.containerSeq),
@@ -942,7 +955,9 @@ public final class MineLinkEndpointBootstrap {
             true,
             interactionResult.name().toLowerCase(),
             menuOpened,
-            menuType
+            menuType,
+            menuSource,
+            nativeMenu
         );
         JsonObject response = toolCompleted(request);
         response.add("result", containerSnapshot(agent));
@@ -1098,7 +1113,7 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject result = new JsonObject();
         result.add("taken", taken);
-        result.add("slot_transfer", outputTransferPayload(outputSlot, takenStack));
+        result.add("slot_transfer", outputTransferPayload(agent.openContainer, outputSlot, takenStack));
         result.add("inventory", inventoryPayload(agent));
 
         JsonObject response = toolCompleted(request);
@@ -1143,11 +1158,11 @@ public final class MineLinkEndpointBootstrap {
         if (!hasReachableCraftingStation(agent)) {
             return failure(request, "station_too_far", "Open a reachable crafting table before quick crafting.");
         }
-        if (!agent.openContainer.output.isEmpty()) {
-            return failure(request, "inventory_full", "Take the current crafting output before crafting again.");
-        }
         String recipeId = stringValue(arguments, "recipe_id", "");
         int count = Math.min(Math.max(intValue(arguments, "count", 1), 1), 64);
+        if (count != 1) {
+            return failure(request, "unsupported_capability", "Native quick_craft currently stages one craft per output take.");
+        }
         ResourceLocation recipeLocation;
         try {
             recipeLocation = ResourceLocation.parse(recipeId);
@@ -1165,17 +1180,42 @@ public final class MineLinkEndpointBootstrap {
             return failure(request, "missing_material", "Current agent inventory cannot satisfy the requested recipe.");
         }
 
-        for (Map.Entry<String, Integer> entry : plan.get().consumed.entrySet()) {
-            if (!removeFromPlayerInventory(agent, entry.getKey(), entry.getValue())) {
-                return failure(request, "missing_material", "Current agent inventory cannot satisfy the requested recipe.");
-            }
+        CraftingMenu craftingMenu = craftingMenu(agent.openContainer);
+        if (craftingMenu == null) {
+            return failure(request, "blocked", "The opened crafting station did not expose a native CraftingMenu.");
+        }
+        Slot resultSlot = craftingResultSlot(agent.openContainer);
+        if (resultSlot == null) {
+            return failure(request, "blocked", "The opened crafting station did not expose a native result slot.");
+        }
+        if (!resultSlot.getItem().isEmpty()) {
+            return failure(request, "inventory_full", "Take the current crafting output before crafting again.");
+        }
+        if (!craftingGridIsEmpty(craftingMenu)) {
+            return failure(request, "inventory_full", "Clear the current crafting grid before crafting again.");
+        }
+        JsonObject gridFailure = fillNativeCraftingGrid(request, agent, craftingMenu, plan.get());
+        if (gridFailure != null) {
+            return gridFailure;
+        }
+        try {
+            craftingMenu.finishPlacingRecipe(recipe);
+        } catch (RuntimeException error) {
+            MineLinkMod.LOGGER.warn("Native crafting menu failed to refresh result slot for {}", recipeId, error);
+            returnCraftingGridToInventory(agent, craftingMenu);
+            return failure(request, "blocked", "Native crafting menu rejected refreshing the result slot.");
+        }
+        ItemStack nativeOutput = resultSlot.getItem().copy();
+        if (nativeOutput.isEmpty()) {
+            returnCraftingGridToInventory(agent, craftingMenu);
+            return failure(request, "invalid_recipe", "Native crafting menu did not produce an output for the requested recipe.");
         }
         syncInventoryMirrorFromPlayer(agent);
-        agent.openContainer.output = plan.get().output;
 
         JsonObject result = new JsonObject();
         result.addProperty("recipe_id", recipeId);
-        result.add("output", stackPayload(plan.get().output));
+        result.add("output", stackPayload(nativeOutput));
+        result.add("crafting_transfer", craftingTransferPayload(agent.openContainer, resultSlot, plan.get()));
         result.add("container", containerSnapshot(agent));
 
         JsonObject response = toolCompleted(request);
@@ -1579,6 +1619,17 @@ public final class MineLinkEndpointBootstrap {
         return -1;
     }
 
+    private static int firstPlayerSlotMatching(AgentBody agent, ItemStack wanted) {
+        int size = playerInventorySize(agent);
+        for (int slot = 0; slot < size; slot++) {
+            ItemStack stack = agent.entity.getInventory().getItem(slot);
+            if (!stack.isEmpty() && ItemStack.isSameItemSameComponents(stack, wanted)) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
     private static int firstEmptyPlayerSlot(AgentBody agent, int startInclusive, int endExclusive) {
         int end = Math.min(endExclusive, playerInventorySize(agent));
         for (int slot = Math.max(0, startInclusive); slot < end; slot++) {
@@ -1798,10 +1849,19 @@ public final class MineLinkEndpointBootstrap {
         nativeInteraction.addProperty("menu_opened", open.nativeMenuOpened);
         nativeInteraction.addProperty("body_ui", "headless_server_agent");
         nativeInteraction.addProperty("menu_type", open.nativeMenuType);
+        nativeInteraction.addProperty("menu_source", open.nativeMenuSource);
         snapshot.add("native_interaction", nativeInteraction);
 
         JsonArray slots = new JsonArray();
-        if (open.container != null) {
+        CraftingMenu craftingMenu = craftingMenu(open);
+        if (craftingMenu != null) {
+            for (int index = 0; index < 9; index++) {
+                Slot menuSlot = craftingGridSlot(open, index);
+                if (menuSlot != null) {
+                    slots.add(slotPayload(agent, "container", index, menuSlot.getItem()));
+                }
+            }
+        } else if (open.container != null) {
             for (int index = 0; index < open.container.getContainerSize(); index++) {
                 if (open.kind.equals("furnace") && index == 2) {
                     continue;
@@ -1863,6 +1923,9 @@ public final class MineLinkEndpointBootstrap {
             }
             return new Slot(agent.entity.getInventory(), slot.index, 0, 0);
         }
+        if (slot.area.equals("container") && open.kind.equals("crafting_table")) {
+            return craftingGridSlot(open, slot.index);
+        }
         if (slot.area.equals("container") && open.container != null && slot.index >= 0 && slot.index < open.container.getContainerSize()) {
             if (open.kind.equals("furnace")) {
                 return furnaceMenuSlot(agent, open, slot.index);
@@ -1871,6 +1934,9 @@ public final class MineLinkEndpointBootstrap {
         }
         if (slot.area.equals("output") && open.kind.equals("furnace") && open.container != null && slot.index == 2) {
             return furnaceMenuSlot(agent, open, 2);
+        }
+        if (slot.area.equals("output") && open.kind.equals("crafting_table") && slot.index == CraftingMenu.RESULT_SLOT) {
+            return craftingResultSlot(open);
         }
         return null;
     }
@@ -1882,6 +1948,28 @@ public final class MineLinkEndpointBootstrap {
         FurnaceMenu menu = new FurnaceMenu(-1, agent.entity.getInventory(), open.container, new SimpleContainerData(4));
         var menuSlot = menu.findSlot(open.container, containerSlot);
         return menuSlot.isPresent() ? menu.slots.get(menuSlot.getAsInt()) : null;
+    }
+
+    private CraftingMenu craftingMenu(OpenContainer open) {
+        return open != null && open.nativeMenu instanceof CraftingMenu menu ? menu : null;
+    }
+
+    private Slot craftingGridSlot(OpenContainer open, int gridIndex) {
+        CraftingMenu menu = craftingMenu(open);
+        int menuIndex = CRAFTING_GRID_SLOT_START + gridIndex;
+        if (menu == null || menuIndex < CRAFTING_GRID_SLOT_START || menuIndex >= CRAFTING_GRID_SLOT_END || menuIndex >= menu.slots.size()) {
+            return null;
+        }
+        return menu.slots.get(menuIndex);
+    }
+
+    private Slot craftingResultSlot(OpenContainer open) {
+        CraftingMenu menu = craftingMenu(open);
+        if (menu == null || menu.slots.size() <= CraftingMenu.RESULT_SLOT) {
+            return null;
+        }
+        Slot slot = menu.slots.get(CraftingMenu.RESULT_SLOT);
+        return slot instanceof ResultSlot ? slot : null;
     }
 
     private JsonObject slotTransferPayload(String method, SlotRef source, SlotRef destination, Slot sourceSlot, Slot destinationSlot, ItemStack moved) {
@@ -1899,11 +1987,19 @@ public final class MineLinkEndpointBootstrap {
         return payload;
     }
 
-    private JsonObject outputTransferPayload(Slot outputSlot, ItemStack taken) {
+    private JsonObject outputTransferPayload(OpenContainer open, Slot outputSlot, ItemStack taken) {
+        String sourceKind = "synthetic_output";
+        if (outputSlot != null && open != null && open.kind.equals("crafting_table")) {
+            sourceKind = "crafting_result_slot";
+        } else if (outputSlot != null && open != null && open.kind.equals("furnace")) {
+            sourceKind = "furnace_result_slot";
+        }
+
         JsonObject payload = new JsonObject();
         payload.addProperty("method", outputSlot == null ? "synthetic_output_inventory_safe_insert" : "slot.safe_take_inventory_safe_insert");
         payload.addProperty("body_ui", "headless_server_agent");
         payload.addProperty("source_area", "output");
+        payload.addProperty("source_slot_kind", sourceKind);
         payload.addProperty("source_slot_class", outputSlot == null ? "minelink.synthetic_crafting_output" : outputSlot.getClass().getName());
         payload.addProperty("destination_area", "inventory");
         payload.addProperty("destination_slot_class", Slot.class.getName());
@@ -1982,6 +2078,10 @@ public final class MineLinkEndpointBootstrap {
         if (open.kind.equals("furnace") && open.container != null && open.container.getContainerSize() > 2) {
             return open.container.getItem(2).copy();
         }
+        Slot resultSlot = craftingResultSlot(open);
+        if (resultSlot != null) {
+            return resultSlot.getItem().copy();
+        }
         return open.output.copy();
     }
 
@@ -1989,6 +2089,11 @@ public final class MineLinkEndpointBootstrap {
         if (open.kind.equals("furnace") && open.container != null && open.container.getContainerSize() > 2) {
             open.container.setItem(2, stack);
             open.container.setChanged();
+            return;
+        }
+        Slot resultSlot = craftingResultSlot(open);
+        if (resultSlot != null) {
+            resultSlot.set(stack);
             return;
         }
         open.output = stack;
@@ -2046,6 +2151,103 @@ public final class MineLinkEndpointBootstrap {
         return inventory;
     }
 
+    private boolean craftingGridIsEmpty(CraftingMenu menu) {
+        for (int gridIndex = 0; gridIndex < 9; gridIndex++) {
+            Slot slot = menu.slots.get(CRAFTING_GRID_SLOT_START + gridIndex);
+            if (!slot.getItem().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private JsonObject fillNativeCraftingGrid(JsonObject request, AgentBody agent, CraftingMenu menu, CraftPlan plan) {
+        for (int gridIndex = 0; gridIndex < plan.grid.size(); gridIndex++) {
+            ItemStack ingredient = plan.grid.get(gridIndex);
+            if (ingredient.isEmpty()) {
+                continue;
+            }
+            int sourceIndex = firstPlayerSlotMatching(agent, ingredient);
+            if (sourceIndex < 0) {
+                returnCraftingGridToInventory(agent, menu);
+                return failure(request, "missing_material", "Current agent inventory cannot satisfy the requested recipe.");
+            }
+            Slot sourceSlot = new Slot(agent.entity.getInventory(), sourceIndex, 0, 0);
+            if (!sourceSlot.mayPickup(agent.entity)) {
+                returnCraftingGridToInventory(agent, menu);
+                return failure(request, "blocked", "Server slot rules rejected taking an ingredient from inventory.");
+            }
+            Slot destinationSlot = menu.slots.get(CRAFTING_GRID_SLOT_START + gridIndex);
+            if (!destinationSlot.mayPlace(ingredient)) {
+                returnCraftingGridToInventory(agent, menu);
+                return failure(request, "blocked", "Server slot rules rejected placing an ingredient into the crafting grid.");
+            }
+            ItemStack taken = sourceSlot.safeTake(ingredient.getCount(), ingredient.getCount(), agent.entity);
+            if (taken.isEmpty()) {
+                returnCraftingGridToInventory(agent, menu);
+                return failure(request, "blocked", "Server slot rules rejected taking an ingredient from inventory.");
+            }
+            ItemStack remaining = destinationSlot.safeInsert(taken, taken.getCount());
+            if (!remaining.isEmpty()) {
+                addToPlayerInventoryThroughSlotHooks(agent, remaining);
+                returnCraftingGridToInventory(agent, menu);
+                return failure(request, "blocked", "Server slot rules rejected inserting an ingredient into the crafting grid.");
+            }
+            sourceSlot.setChanged();
+            destinationSlot.setChanged();
+        }
+        syncInventoryMirrorFromPlayer(agent);
+        return null;
+    }
+
+    private void returnCraftingGridToInventory(AgentBody agent, CraftingMenu menu) {
+        for (int gridIndex = 0; gridIndex < 9; gridIndex++) {
+            Slot gridSlot = menu.slots.get(CRAFTING_GRID_SLOT_START + gridIndex);
+            ItemStack stack = gridSlot.getItem().copy();
+            if (stack.isEmpty()) {
+                continue;
+            }
+            ItemStack taken = gridSlot.safeTake(stack.getCount(), stack.getCount(), agent.entity);
+            if (!taken.isEmpty()) {
+                addToPlayerInventoryThroughSlotHooks(agent, taken);
+            }
+            gridSlot.setChanged();
+        }
+        syncInventoryMirrorFromPlayer(agent);
+    }
+
+    private JsonObject craftingTransferPayload(OpenContainer open, Slot resultSlot, CraftPlan plan) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("method", "crafting_menu.safe_take_safe_insert_grid");
+        payload.addProperty("body_ui", "headless_server_agent");
+        payload.addProperty("input_source_area", "inventory");
+        payload.addProperty("grid_destination_area", "container");
+        payload.addProperty("output_source", "native_crafting_result_slot");
+        payload.addProperty("result_slot_class", resultSlot.getClass().getName());
+        payload.addProperty("server_slot_hooks", true);
+        payload.addProperty("menu_type", open.nativeMenuType);
+
+        JsonObject consumed = new JsonObject();
+        for (Map.Entry<String, Integer> entry : plan.consumed.entrySet()) {
+            consumed.addProperty(entry.getKey(), entry.getValue());
+        }
+        payload.add("consumed", consumed);
+
+        JsonArray grid = new JsonArray();
+        for (int index = 0; index < plan.grid.size(); index++) {
+            ItemStack stack = plan.grid.get(index);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            JsonObject entry = stackPayload(stack);
+            entry.addProperty("grid_index", index);
+            entry.addProperty("destination_slot_class", Slot.class.getName());
+            grid.add(entry);
+        }
+        payload.add("grid", grid);
+        return payload;
+    }
+
     private Optional<CraftPlan> craftPlan(RecipeHolder<CraftingRecipe> recipe, int count, AgentBody agent) {
         if (!recipe.value().canCraftInDimensions(3, 3)) {
             return Optional.empty();
@@ -2053,6 +2255,10 @@ public final class MineLinkEndpointBootstrap {
         Map<String, Integer> available = new LinkedHashMap<>(inventoryCounts(agent));
         Map<String, Integer> consumed = new LinkedHashMap<>();
         ItemStack output = ItemStack.EMPTY;
+        List<ItemStack> stagedGrid = new ArrayList<>();
+        for (int slot = 0; slot < 9; slot++) {
+            stagedGrid.add(ItemStack.EMPTY);
+        }
 
         for (int craftIndex = 0; craftIndex < count; craftIndex++) {
             List<ItemStack> grid = new ArrayList<>();
@@ -2061,7 +2267,11 @@ public final class MineLinkEndpointBootstrap {
             }
             int gridIndex = 0;
             for (var ingredient : recipe.value().getIngredients()) {
+                if (gridIndex >= grid.size()) {
+                    return Optional.empty();
+                }
                 if (ingredient.isEmpty()) {
+                    gridIndex++;
                     continue;
                 }
                 Optional<ItemStack> selected = selectIngredient(ingredient, available);
@@ -2071,10 +2281,12 @@ public final class MineLinkEndpointBootstrap {
                 ItemStack stack = selected.get();
                 available.merge(stackItemId(stack), -1, Integer::sum);
                 consumed.merge(stackItemId(stack), 1, Integer::sum);
-                if (gridIndex >= grid.size()) {
-                    return Optional.empty();
+                ItemStack one = stack.copyWithCount(1);
+                grid.set(gridIndex, one);
+                if (craftIndex == 0) {
+                    stagedGrid.set(gridIndex, one.copy());
                 }
-                grid.set(gridIndex++, stack.copyWithCount(1));
+                gridIndex++;
             }
 
             CraftingInput input = CraftingInput.of(3, 3, grid);
@@ -2093,7 +2305,7 @@ public final class MineLinkEndpointBootstrap {
                 return Optional.empty();
             }
         }
-        return Optional.of(new CraftPlan(consumed, output));
+        return Optional.of(new CraftPlan(consumed, stagedGrid));
     }
 
     private Optional<ItemStack> selectIngredient(net.minecraft.world.item.crafting.Ingredient ingredient, Map<String, Integer> available) {
@@ -2430,7 +2642,7 @@ public final class MineLinkEndpointBootstrap {
                 "Takes output through server output-slot hooks when the opened container exposes them.",
                 objectSchema(properties(prop("slot_ref", stringSchema()))),
                 List.of("container", "craft"),
-                List.of("container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments"),
+                List.of("container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments", "blocked"),
                 List.of()
             ),
             tool(
@@ -2454,7 +2666,7 @@ public final class MineLinkEndpointBootstrap {
                     prop("count", numberSchema(1, null, null))
                 ), "recipe_id", "count"),
                 List.of("craft", "recipe"),
-                List.of("station_too_far", "missing_material", "invalid_recipe", "inventory_full"),
+                List.of("station_too_far", "missing_material", "invalid_recipe", "inventory_full", "blocked", "unsupported_capability"),
                 List.of()
             ),
             tool(
@@ -3426,6 +3638,8 @@ public final class MineLinkEndpointBootstrap {
         private final String nativeInteractionResult;
         private final boolean nativeMenuOpened;
         private final String nativeMenuType;
+        private final String nativeMenuSource;
+        private final AbstractContainerMenu nativeMenu;
         private final Map<String, SlotRef> slotRefs = new LinkedHashMap<>();
         private ItemStack output = ItemStack.EMPTY;
 
@@ -3438,7 +3652,9 @@ public final class MineLinkEndpointBootstrap {
             boolean serverContainerAvailable,
             String nativeInteractionResult,
             boolean nativeMenuOpened,
-            String nativeMenuType
+            String nativeMenuType,
+            String nativeMenuSource,
+            AbstractContainerMenu nativeMenu
         ) {
             this.containerId = containerId;
             this.kind = kind;
@@ -3449,12 +3665,14 @@ public final class MineLinkEndpointBootstrap {
             this.nativeInteractionResult = nativeInteractionResult;
             this.nativeMenuOpened = nativeMenuOpened;
             this.nativeMenuType = nativeMenuType;
+            this.nativeMenuSource = nativeMenuSource;
+            this.nativeMenu = nativeMenu;
         }
     }
 
     private record SlotRef(String containerId, String area, int index) {
     }
 
-    private record CraftPlan(Map<String, Integer> consumed, ItemStack output) {
+    private record CraftPlan(Map<String, Integer> consumed, List<ItemStack> grid) {
     }
 }
