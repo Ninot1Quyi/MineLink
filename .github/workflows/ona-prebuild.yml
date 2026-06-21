@@ -65,6 +65,67 @@ jobs:
             timeout "${MINELINK_ONA_CLI_TIMEOUT_SECONDS}s" ona "$@"
           }
 
+          fail_or_use_existing_baseline() {
+            local reason="$1"
+            local summary_path=".minelink-dev/reports/ona-prebuild.md"
+            node scripts/dev/summarize-ona-prebuild-phases.mjs || true
+
+            if [ -n "${completed_baseline_id:-}" ]; then
+              {
+                echo "# MineLink Ona Prebuild"
+                echo
+                echo "- Result: partial"
+                echo "- Refresh result: failed"
+                echo "- Refresh blocker: $reason"
+                echo "- Project: \`$MINELINK_ONA_PROJECT_ID\`"
+                echo "- Refresh prebuild: \`${prebuild_id:-unknown}\`"
+                echo "- Existing completed baseline: \`$completed_baseline_id\`"
+                echo "- Branch: \`${GITHUB_REF_NAME:-unknown}\`"
+                echo "- Commit: \`${GITHUB_SHA:-unknown}\`"
+                echo "- Existing baseline detail: \`.minelink-dev/reports/ona-prebuild-existing-baseline.json\`"
+                echo "- Pre-refresh list: \`.minelink-dev/reports/ona-prebuild-before.json\`"
+                echo "- Trigger output: \`.minelink-dev/reports/ona-prebuild-trigger.json\`"
+                echo "- Final refresh status: \`.minelink-dev/reports/ona-prebuild-status.json\`"
+                echo "- Phase history: \`.minelink-dev/reports/ona-prebuild-phase-history.jsonl\`"
+                echo "- Phase summary: \`.minelink-dev/reports/ona-prebuild-phase-summary.md\`"
+                echo "- Log capture: \`.minelink-dev/reports/ona-prebuild-log-capture.md\`"
+                echo
+                echo "The failed refresh did not create a new accepted baseline."
+                echo "The existing completed project baseline remains usable for task environments; follow-up work must still retry or inspect the failed refresh before claiming a newer baseline."
+                echo
+                if [ -f .minelink-dev/reports/ona-prebuild-phase-summary.md ]; then
+                  cat .minelink-dev/reports/ona-prebuild-phase-summary.md
+                fi
+              } > "$summary_path"
+              echo "::warning title=Ona prebuild refresh partial::$reason; existing completed baseline $completed_baseline_id remains usable"
+              echo "Ona prebuild refresh failed: $reason; existing completed baseline $completed_baseline_id remains usable" >&2
+              exit 0
+            fi
+
+            {
+              echo "# MineLink Ona Prebuild"
+              echo
+              echo "- Result: failed"
+              echo "- Blocker: $reason"
+              echo "- Project: \`$MINELINK_ONA_PROJECT_ID\`"
+              echo "- Refresh prebuild: \`${prebuild_id:-unknown}\`"
+              echo "- Branch: \`${GITHUB_REF_NAME:-unknown}\`"
+              echo "- Commit: \`${GITHUB_SHA:-unknown}\`"
+              echo "- Pre-refresh list: \`.minelink-dev/reports/ona-prebuild-before.json\`"
+              echo "- Trigger output: \`.minelink-dev/reports/ona-prebuild-trigger.json\`"
+              echo "- Final refresh status: \`.minelink-dev/reports/ona-prebuild-status.json\`"
+              echo "- Phase history: \`.minelink-dev/reports/ona-prebuild-phase-history.jsonl\`"
+              echo "- Phase summary: \`.minelink-dev/reports/ona-prebuild-phase-summary.md\`"
+              echo "- Log capture: \`.minelink-dev/reports/ona-prebuild-log-capture.md\`"
+              echo
+              if [ -f .minelink-dev/reports/ona-prebuild-phase-summary.md ]; then
+                cat .minelink-dev/reports/ona-prebuild-phase-summary.md
+              fi
+            } > "$summary_path"
+            echo "::error title=Ona prebuild refresh failed::$reason; no completed baseline is available"
+            exit 1
+          }
+
           if [ -z "${ONA_TOKEN:-}" ]; then
             {
               echo "# MineLink Ona Prebuild"
@@ -77,16 +138,39 @@ jobs:
 
           run_ona login
 
+          run_ona prebuild list --project-id "$MINELINK_ONA_PROJECT_ID" --format json \
+            | tee .minelink-dev/reports/ona-prebuild-before.json
+          completed_baseline_id="$(
+            node - .minelink-dev/reports/ona-prebuild-before.json .minelink-dev/reports/ona-prebuild-existing-baseline.json <<'NODE'
+          const fs = require("node:fs");
+          const [listPath, outPath] = process.argv.slice(2);
+          const records = JSON.parse(fs.readFileSync(listPath, "utf8"));
+          const parseTime = (value) => {
+            const ms = Date.parse(value ?? "");
+            return Number.isFinite(ms) ? ms : 0;
+          };
+          const completed = records
+            .filter((item) => item?.status?.phase === "PREBUILD_PHASE_COMPLETED")
+            .filter((item) => Number(item?.status?.snapshotCompletionPercentage ?? 100) >= 100)
+            .sort(
+              (left, right) =>
+                parseTime(right?.metadata?.updatedAt ?? right?.metadata?.createdAt) -
+                parseTime(left?.metadata?.updatedAt ?? left?.metadata?.createdAt),
+            );
+          const baseline = completed[0] ?? null;
+          fs.writeFileSync(outPath, `${JSON.stringify(baseline ?? {}, null, 2)}\n`);
+          if (baseline?.id) process.stdout.write(baseline.id);
+          NODE
+          )"
           active_ids="$(
-            run_ona prebuild list --project-id "$MINELINK_ONA_PROJECT_ID" --format json \
-              | node -e '
-                  const fs = require("node:fs");
-                  const records = JSON.parse(fs.readFileSync(0, "utf8"));
-                  const active = new Set(["PREBUILD_PHASE_CREATING", "PREBUILD_PHASE_PENDING", "PREBUILD_PHASE_RUNNING", "PREBUILD_PHASE_STARTING", "PREBUILD_PHASE_SNAPSHOTTING"]);
-                  for (const item of records) {
-                    if (active.has(item?.status?.phase)) console.log(item.id);
-                  }
-                '
+            node -e '
+              const fs = require("node:fs");
+              const records = JSON.parse(fs.readFileSync(".minelink-dev/reports/ona-prebuild-before.json", "utf8"));
+              const active = new Set(["PREBUILD_PHASE_CREATING", "PREBUILD_PHASE_PENDING", "PREBUILD_PHASE_RUNNING", "PREBUILD_PHASE_STARTING", "PREBUILD_PHASE_SNAPSHOTTING"]);
+              for (const item of records) {
+                if (active.has(item?.status?.phase)) console.log(item.id);
+              }
+            '
           )"
           if [ -n "$active_ids" ]; then
             while IFS= read -r prebuild_id; do
@@ -119,7 +203,7 @@ jobs:
               node scripts/dev/summarize-ona-prebuild-phases.mjs || true
               echo "Ona prebuild $prebuild_id status poll failed or exceeded ${MINELINK_ONA_CLI_TIMEOUT_SECONDS}s; cancelling stale refresh" >&2
               run_ona prebuild cancel "$prebuild_id" || true
-              exit 1
+              fail_or_use_existing_baseline "status poll failed or exceeded ${MINELINK_ONA_CLI_TIMEOUT_SECONDS}s"
             fi
             phase="$(
               node -e '
@@ -164,21 +248,21 @@ jobs:
                   node scripts/dev/summarize-ona-prebuild-phases.mjs || true
                   echo "Ona prebuild $prebuild_id stayed in snapshotting for at least ${MINELINK_ONA_SNAPSHOT_STALE_MINUTES} minutes; cancelling stale refresh" >&2
                   run_ona prebuild cancel "$prebuild_id" || true
-                  exit 1
+                  fail_or_use_existing_baseline "snapshotting stayed stale for at least ${MINELINK_ONA_SNAPSHOT_STALE_MINUTES} minutes"
                 fi
                 ;;
               PREBUILD_PHASE_FAILED:*|PREBUILD_PHASE_CANCELLED:*)
                 bash scripts/dev/capture-ona-prebuild-logs.sh || true
                 node scripts/dev/summarize-ona-prebuild-phases.mjs || true
                 echo "Ona prebuild $prebuild_id failed with status $phase" >&2
-                exit 1
+                fail_or_use_existing_baseline "refresh ended with status $phase"
                 ;;
             esac
             if [ "$SECONDS" -ge "$deadline" ]; then
               bash scripts/dev/capture-ona-prebuild-logs.sh || true
               node scripts/dev/summarize-ona-prebuild-phases.mjs || true
               echo "Timed out waiting for Ona prebuild $prebuild_id to complete" >&2
-              exit 1
+              fail_or_use_existing_baseline "timed out waiting for completion"
             fi
             sleep 30
           done

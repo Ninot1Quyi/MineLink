@@ -643,8 +643,13 @@ Current status:
   stale project prebuilds, triggers a fresh Ona prebuild with a default 45-minute
   platform timeout, wraps individual Ona CLI calls in a short timeout, polls
   `ona prebuild get` until completion, writes phase-history and phase-duration
-  summary artifacts, and uploads `minelink-ona-prebuild` evidence. Local
-  readback on 2026-06-21 showed completed baselines
+  summary artifacts, and uploads `minelink-ona-prebuild` evidence. It records
+  the pre-refresh prebuild list and latest completed baseline before triggering
+  a new refresh. If a new refresh fails or stalls after that point, the report is
+  `partial` and the workflow exits successfully only when a completed baseline
+  already exists; the failed refresh is not accepted as a new baseline. If no
+  completed baseline exists, the workflow fails closed. Local readback on
+  2026-06-21 showed completed baselines
   `019eeb54-6320-7a1c-ab91-be9544a5eb82`,
   `019eeb62-6201-70c9-8bfc-77e334213155`, and
   `019eebd9-8f2b-717b-8a71-f8275561edb3`. The current accepted CI refresh
@@ -697,6 +702,18 @@ Current status:
   `PREBUILD_PHASE_COMPLETED:100` with snapshot size `7756316672` bytes. This
   proves the manual/path-filtered CI refresh path can complete with timeout,
   phase history, artifact upload, and stale-refresh cancellation logic enabled.
+- 2026-06-21 run `27918199396` / prebuild
+  `019eec1c-2959-79b0-a2a0-bf598dae41db` failed on commit
+  `dccd70d2992b88e8e2880eda12a6c271c4616c1e` after the workflow adopted the
+  GHCR prewarmed devcontainer image. The Devcontainer Image workflow for the
+  same commit built and pushed the image in about 5m20s and completed the Docker
+  smoke pull/runtime check in about 36s. Ona logs then showed the prebuilt
+  devcontainer was used, container startup took about 42s, MineLink prebuild
+  tasks finished, and snapshot preparation took about 0.36s. The failing phase
+  was platform snapshot storage: the refresh stayed at
+  `PREBUILD_PHASE_SNAPSHOTTING:0` for about 15m10s before stale-refresh
+  cancellation. This is negative prebuild refresh evidence; the accepted
+  baseline remains `019eec03-390c-7b19-a819-e7e774e67a14`.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
   Ona Platform Codex readbacks. The checked-in Ona AI automation runs
   sequentially and requires implementation readback before Linear status sync,

@@ -132,6 +132,12 @@ as the prebuild enters stopping or snapshotting, preserves any successful early
 log capture if later cancellation removes the transient environment, and cancels
 a refresh that stays in snapshotting longer than `MINELINK_ONA_SNAPSHOT_STALE_MINUTES`
 (default: 15) so CI does not wait for the full two-hour prebuild timeout.
+The workflow reads the current completed baseline before triggering a refresh.
+If the refresh later stalls or fails but a completed baseline already exists,
+the artifact is marked `partial`: the failed refresh is not accepted as a new
+baseline, but the existing environment baseline can still be used while the
+refresh is retried or investigated. Without an existing completed baseline, the
+workflow fails closed.
 
 CI and PR review evidence can be summarized with:
 

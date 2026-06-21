@@ -302,17 +302,23 @@ manual dispatches and environment-sensitive changes on
 `codex/minelink-mvp-engineering` cancel active stale project prebuilds, trigger
 a new Ona prebuild, poll it with `ona prebuild get` until
 `PREBUILD_PHASE_COMPLETED` with 100% snapshot completion, and upload
-`minelink-ona-prebuild` evidence. Ordinary product-code commits should not
-force prebuild refresh; the workflow intentionally does not auto-refresh on
-package or ordinary source changes because new Codex environments can update
-source code with git while reusing the prepared toolchain, dependency, Gradle,
-and Minecraft cache baseline. Before Codex handoff, the report must require a
-completed Ona
-prebuild baseline for the agent project. A newer background prebuild refresh may
-produce a warning, but it must not block handoff while a completed baseline
-remains usable. Manual overlapping prebuild clicks are discouraged because they
-create redundant active snapshots; when that happens, cancel stale active
-prebuilds and keep the latest completed baseline as the usable environment.
+`minelink-ona-prebuild` evidence. The workflow records the pre-refresh prebuild
+list and latest completed baseline before it starts a new refresh. If the new
+refresh later fails, times out, or stays in snapshotting, the workflow writes a
+`partial` report and exits successfully only when a completed baseline already
+exists; without a completed baseline it fails closed. The `partial` result does
+not accept the new refresh. It only means the project still has a reusable
+environment baseline while the failed refresh is investigated or retried.
+Ordinary product-code commits should not force prebuild refresh; the workflow
+intentionally does not auto-refresh on package or ordinary source changes
+because new Codex environments can update source code with git while reusing
+the prepared toolchain, dependency, Gradle, and Minecraft cache baseline.
+Before Codex handoff, the report must require a completed Ona prebuild baseline
+for the agent project. A newer background prebuild refresh may produce a
+warning, but it must not block handoff while a completed baseline remains
+usable. Manual overlapping prebuild clicks are discouraged because they create
+redundant active snapshots; when that happens, cancel stale active prebuilds
+and keep the latest completed baseline as the usable environment.
 If Linear or GitHub webhook dispatch cannot be verified in the current
 environment, the repo must say so and keep the gap visible instead of
 pretending automation is enabled.
