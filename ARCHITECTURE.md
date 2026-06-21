@@ -69,6 +69,22 @@ scripts/dev/                            build, server, e2e, soak, verification
 - `examples/agents/codex_rpc_json_runner.py` drives public MCP tools from
   Codex-style JSON-RPC decisions. It must not call runtime internals.
 
+## Action Lifecycle
+
+Submit-mode actions are public MCP action handles, not a bypass around tool
+guards. The runtime records the requested tool arguments, exposes
+`accepted/queued/running/completed/failed/cancelled/expired` through
+`action.status`, and releases per-agent queue capacity only when the handle
+reaches a terminal state.
+
+When a submitted action finishes, the NeoForge runtime must call the same
+server-side tool implementation used by `await_completion`: visibility,
+observed-ref TTL, reachability, material, inventory, vanilla/NeoForge hooks,
+and permission checks still decide success or failure. Failed submitted actions
+must preserve the public tool failure reason. Mock runtime behavior may mirror
+this lifecycle contract for fast replay, but real Gate 2 evidence requires a
+NeoForge report.
+
 ## Layering Rules
 
 Allowed dependency direction:

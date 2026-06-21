@@ -42,6 +42,7 @@ const MAX_AGENTS_PER_OWNER = 3;
 const NOTICE_BOARD_TAG = "minelink:notice_board";
 const MAX_ACTION_QUEUE_DEPTH = 4;
 const SUBMITTED_ACTION_HOLD_MS = 250;
+const SUBMITTED_ACTION_START_DELAY_MS = 250;
 const SUBMITTED_ACTION_TTL_MS = 5_000;
 const PLAYER_INVENTORY_SLOT_LIMIT = 36;
 const PLACEABLE_BLOCK_ITEMS = new Set([
@@ -104,11 +105,15 @@ interface AgentState {
 interface ActionLifecycle {
   actionId: string;
   toolName: string;
-  lifecycleStatus: "queued" | "completed" | "cancelled" | "expired";
+  lifecycleStatus: "queued" | "running" | "completed" | "failed" | "cancelled" | "expired";
+  action: JsonObject;
   submittedAt: number;
   updatedAt: number;
   expiresAt: number;
   queueReleased: boolean;
+  result?: RuntimeResponse;
+  failureReason?: string;
+  failureMessage?: string;
 }
 
 interface SocialEvent {
@@ -517,21 +522,17 @@ export class MockRuntimeServer {
         actionId,
         toolName: String(action.tool_name ?? `action.${String(action.kind ?? "unknown")}`),
         lifecycleStatus: "queued",
+        action: { ...action },
         submittedAt: now,
         updatedAt: now,
         expiresAt: now + SUBMITTED_ACTION_TTL_MS,
         queueReleased: false
       };
       agent.actions.set(actionId, record);
-      setTimeout(() => {
-        const liveAgent = this.agents.get(agentId);
-        const liveRecord = liveAgent?.actions.get(actionId);
-        if (!liveAgent || !liveRecord || liveRecord.lifecycleStatus !== "queued") return;
-        liveRecord.lifecycleStatus = "completed";
-        liveRecord.updatedAt = Date.now();
-        this.releaseActionQueue(liveAgent, liveRecord);
-        this.trace({ event: "agent.action_event", action_id: actionId, status: "completed" });
-      }, this.submittedActionHoldMs(action));
+      const holdMs = this.submittedActionHoldMs(action);
+      const startDelayMs = Math.min(Math.max(1, holdMs - 1), SUBMITTED_ACTION_START_DELAY_MS);
+      setTimeout(() => this.startSubmittedAction(agentId, actionId), startDelayMs);
+      setTimeout(() => this.finishSubmittedAction(agentId, actionId), holdMs);
       this.trace({ event: "agent.action", action_id: actionId, status: "queued", agent_id: agent.agentId });
       return {
         ok: true,
@@ -543,14 +544,7 @@ export class MockRuntimeServer {
 
     agent.queueDepth += 1;
     try {
-      const kind = String(action.kind ?? "");
-      if (kind === "move") return this.move(agent, action);
-      if (kind === "look_at") return this.lookAt(agent, action);
-      if (kind === "mine_visible_block") return this.mineVisibleBlock(agent, action);
-      if (kind === "use") return this.use(agent, action);
-      if (kind === "sleep") return this.sleep(agent, action);
-      if (kind === "chat") return this.chat(agent, action);
-      return runtimeFail("unsupported_capability", `Unsupported action kind ${kind}`);
+      return this.executeActionNow(agent, action);
     } finally {
       agent.queueDepth -= 1;
     }
@@ -560,6 +554,55 @@ export class MockRuntimeServer {
     const duration = Number(action.durationMs ?? 0);
     if (!Number.isFinite(duration) || duration <= 0) return SUBMITTED_ACTION_HOLD_MS;
     return Math.min(duration + SUBMITTED_ACTION_HOLD_MS, 60_000);
+  }
+
+  private startSubmittedAction(agentId: string, actionId: string): void {
+    const agent = this.agents.get(agentId);
+    if (!agent) return;
+    this.refreshActions(agent);
+    const record = agent.actions.get(actionId);
+    if (!record || record.lifecycleStatus !== "queued") return;
+    record.lifecycleStatus = "running";
+    record.updatedAt = Date.now();
+    this.trace({ event: "agent.action_event", action_id: actionId, status: "running" });
+  }
+
+  private finishSubmittedAction(agentId: string, actionId: string): void {
+    const agent = this.agents.get(agentId);
+    if (!agent) return;
+    this.refreshActions(agent);
+    const record = agent.actions.get(actionId);
+    if (!record || !this.activeAction(record)) return;
+    if (record.lifecycleStatus === "queued") {
+      record.lifecycleStatus = "running";
+      record.updatedAt = Date.now();
+    }
+    const result = this.executeActionNow(agent, record.action);
+    if (result.ok === false) {
+      record.lifecycleStatus = "failed";
+      record.failureReason = String(result.reason ?? "failed");
+      record.failureMessage = String(result.message ?? record.failureReason);
+      record.updatedAt = Date.now();
+      this.releaseActionQueue(agent, record);
+      this.trace({ event: "agent.action_event", action_id: actionId, status: "failed", reason: record.failureReason });
+      return;
+    }
+    record.lifecycleStatus = "completed";
+    record.result = (result.result as RuntimeResponse | undefined) ?? result;
+    record.updatedAt = Date.now();
+    this.releaseActionQueue(agent, record);
+    this.trace({ event: "agent.action_event", action_id: actionId, status: "completed" });
+  }
+
+  private executeActionNow(agent: AgentState, action: JsonObject): RuntimeResponse {
+    const kind = String(action.kind ?? "");
+    if (kind === "move") return this.move(agent, action);
+    if (kind === "look_at") return this.lookAt(agent, action);
+    if (kind === "mine_visible_block") return this.mineVisibleBlock(agent, action);
+    if (kind === "use") return this.use(agent, action);
+    if (kind === "sleep") return this.sleep(agent, action);
+    if (kind === "chat") return this.chat(agent, action);
+    return runtimeFail("unsupported_capability", `Unsupported action kind ${kind}`);
   }
 
   private actionStatus(agentId: string, actionId: string): RuntimeResponse {
@@ -583,7 +626,7 @@ export class MockRuntimeServer {
     this.refreshActions(agent);
     const record = agent.actions.get(actionId);
     if (!record) return runtimeFail("unknown_action", `Unknown action handle ${actionId}.`);
-    if (record.lifecycleStatus !== "queued") {
+    if (!this.activeAction(record)) {
       return runtimeFail("action_already_finished", `Action ${actionId} is already ${record.lifecycleStatus}.`);
     }
     record.lifecycleStatus = "cancelled";
@@ -600,7 +643,7 @@ export class MockRuntimeServer {
   private refreshActions(agent: AgentState): void {
     const now = Date.now();
     for (const record of agent.actions.values()) {
-      if (record.lifecycleStatus === "queued" && now >= record.expiresAt) {
+      if (this.activeAction(record) && now >= record.expiresAt) {
         record.lifecycleStatus = "expired";
         record.updatedAt = now;
         this.releaseActionQueue(agent, record);
@@ -615,8 +658,12 @@ export class MockRuntimeServer {
     agent.queueDepth = Math.max(0, agent.queueDepth - 1);
   }
 
+  private activeAction(record: ActionLifecycle): boolean {
+    return record.lifecycleStatus === "queued" || record.lifecycleStatus === "running";
+  }
+
   private actionPayload(agent: AgentState, record: ActionLifecycle, status: string): RuntimeResponse {
-    return {
+    const payload: RuntimeResponse = {
       action_id: record.actionId,
       status,
       lifecycle_status: record.lifecycleStatus,
@@ -627,6 +674,10 @@ export class MockRuntimeServer {
       updated_at_ms: record.updatedAt,
       expires_at_ms: record.expiresAt
     };
+    if (record.failureReason) payload.failure_reason = record.failureReason;
+    if (record.failureMessage) payload.failure_message = record.failureMessage;
+    if (record.result) payload.action_result = record.result;
+    return payload;
   }
 
   private move(agent: AgentState, action: JsonObject): RuntimeResponse {

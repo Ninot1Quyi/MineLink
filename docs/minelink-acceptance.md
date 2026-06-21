@@ -188,11 +188,13 @@ Current status:
 - The guard replay also exercises `mode=submit` for real NeoForge actions.
   Accepted action handles return `status=accepted`, `lifecycle_status=queued`,
   and an `action_id`; public `action.status` and `action.cancel` resolve only
-  the active server_agent's own handles; queued actions can be cancelled and
-  release queue capacity; short submitted actions can be observed as
-  `completed`; submitted actions that outlive their TTL can be observed as
-  `expired`; excess submissions return `backpressure_queue_full` instead of
-  allowing unbounded per-agent queue growth.
+  the active server_agent's own handles; queued or running actions can be
+  cancelled and release queue capacity; submitted actions are scheduled through
+  `queued -> running -> completed/failed/cancelled/expired`; failed submitted
+  actions preserve the public tool failure reason; submitted actions that
+  outlive their TTL can be observed as `expired`; excess submissions return
+  `backpressure_queue_full` instead of allowing unbounded per-agent queue
+  growth.
 - Mock runtime and real NeoForge runtime enforce the advertised
   `max_agents_per_owner=3` admission limit with `agent_quota_exceeded`; the
   three-agent portal cooperation replay proves exactly three same-owner agents
@@ -201,9 +203,9 @@ Current status:
   `minecraft:diamond_ore` is absent from `observe.scene` while the intervening
   `minecraft:stone` wall and reachable `minecraft:white_bed` are visible.
 - This is not the full Gate 2 release surface yet. The remaining body lifecycle
-  manager, persistent restore/freeze/remove, `running` and `failed` action
-  states, timed mining start/stop/cancel state, and complete body-state parity
-  still require separate implementation and evidence.
+  manager, persistent restore/freeze/remove, timed mining start/stop/cancel
+  state, and complete body-state parity still require separate implementation
+  and evidence.
 
 ### Gate 3: Limited Perception
 

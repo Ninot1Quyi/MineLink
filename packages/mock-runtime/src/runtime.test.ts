@@ -214,6 +214,48 @@ describe("MockRuntimeServer", () => {
     });
     expect(afterCancel).toMatchObject({ ok: true, result: { lifecycle_status: "cancelled" } });
 
+    const runningHandle = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.move",
+      mode: "submit",
+      arguments: { vector: [1, 0, 0], durationMs: 3000 }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const running = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.status",
+      arguments: { action_id: runningHandle.action_id }
+    });
+    expect(running).toMatchObject({ ok: true, result: { lifecycle_status: "running" } });
+    const cancelledRunning = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.cancel",
+      arguments: { action_id: runningHandle.action_id }
+    });
+    expect(cancelledRunning).toMatchObject({ ok: true, result: { lifecycle_status: "cancelled" } });
+
+    const failing = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.move",
+      mode: "submit",
+      arguments: { vector: [1, 0], durationMs: 10 }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const failed = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "action.status",
+      arguments: { action_id: failing.action_id }
+    });
+    expect(failed).toMatchObject({
+      ok: true,
+      result: { lifecycle_status: "failed", failure_reason: "invalid_arguments" }
+    });
+
     const completing = await request(client, {
       type: "tool.execute",
       agent_id: agentId,
