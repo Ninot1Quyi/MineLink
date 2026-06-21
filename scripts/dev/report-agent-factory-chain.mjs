@@ -249,22 +249,16 @@ function queryOnaPrebuild(projectId) {
 
   const sorted = newestFirst(prebuilds);
   const now = Date.now();
+  const latest = sorted[0];
+  const latestStatus = latest?.status ?? {};
   const completed = sorted.find((prebuild) => {
     const status = prebuild?.status ?? {};
     return status.phase === "PREBUILD_PHASE_COMPLETED" && Number(status.snapshotCompletionPercentage ?? 0) >= 100;
   });
-  const active = sorted.find((prebuild) => activePrebuildPhases.has(prebuild?.status?.phase));
+  const active = activePrebuildPhases.has(latestStatus.phase) ? latest : null;
   const staleActive = active && now - prebuildUpdatedMs(active) >= prebuildStaleMs ? active : null;
-  if (completed) {
+  if (latestStatus.phase === "PREBUILD_PHASE_COMPLETED" && Number(latestStatus.snapshotCompletionPercentage ?? 0) >= 100) {
     const status = completed.status ?? {};
-    const warningEvidence =
-      active && prebuildCreatedMs(active) > prebuildCreatedMs(completed)
-        ? [
-            staleActive
-              ? `${describePrebuild(active)}; using completed prebuild ${completed.id} for readiness evidence.`
-              : `Newer ${describePrebuild(active)}; using completed prebuild ${completed.id} until the newer snapshot completes.`,
-          ]
-        : [];
     return {
       id: completed.id,
       status: "passed",
@@ -273,25 +267,31 @@ function queryOnaPrebuild(projectId) {
         status.snapshotSizeBytes ? `snapshot ${status.snapshotSizeBytes} bytes` : "",
         status.completionTime ? `completed ${status.completionTime}` : "",
       ].filter(Boolean),
-      warnings: warningEvidence,
     };
   }
 
   if (active) {
+    const fallbackEvidence =
+      completed && prebuildCreatedMs(active) > prebuildCreatedMs(completed)
+        ? [`Older completed prebuild ${completed.id} exists, but latest prebuild must complete before Node G can pass.`]
+        : [];
     return {
       id: active.id,
-      status: "partial",
-      evidence: [describePrebuild(active)],
+      status: staleActive ? "blocked" : "partial",
+      evidence: [describePrebuild(active), ...fallbackEvidence],
+      blocker: staleActive
+        ? "Latest Ona prebuild is stale and has not produced a completed snapshot for new Codex environments."
+        : "",
       warnings: staleActive ? [`${describePrebuild(active)}; inspect or cancel this stale prebuild.`] : [],
     };
   }
 
-  const failed = sorted.find((prebuild) => failedPrebuildPhases.has(prebuild?.status?.phase));
-  if (failed) {
+  if (failedPrebuildPhases.has(latestStatus.phase)) {
     return {
-      id: failed.id,
+      id: latest.id,
       status: "blocked",
-      evidence: [`Latest available Ona prebuild evidence is ${failed.status?.phase}`],
+      evidence: [`Latest Ona prebuild evidence is ${latestStatus.phase}`],
+      blocker: "Latest Ona prebuild did not complete successfully.",
     };
   }
 
@@ -324,6 +324,7 @@ if (normalizeStatus(args.onaPrebuildStatus) === "missing" && autoPrebuild?.statu
 }
 const autoPrebuildEvidence = Array.isArray(autoPrebuild?.evidence) ? autoPrebuild.evidence : [];
 const autoPrebuildWarnings = Array.isArray(autoPrebuild?.warnings) ? autoPrebuild.warnings : [];
+const autoPrebuildBlocker = typeof autoPrebuild?.blocker === "string" ? autoPrebuild.blocker : "";
 
 const issueStatus = hasValue(args.githubIssue) ? "passed" : hasValue(args.linearIssue) ? "partial" : "missing";
 const taskContractStatus = normalizeStatus(args.issueContractStatus) !== "missing"
@@ -392,6 +393,10 @@ const codexBlocker = codexAuthFailed
     ? "No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Current public docs describe starting Codex from the environment conversation menu, not from the checked-in automation YAML."
     : "";
 const globalBlocker = args.blocker || codexBlocker;
+const prebuildBlocker =
+  prebuildStatus === "blocked"
+    ? autoPrebuildBlocker || args.blocker || "Latest Ona prebuild has not produced a completed snapshot for new Codex environments."
+    : "";
 
 const nodes = [
   mkNode("github_issue", "GitHub issue published", issueStatus, [
@@ -413,7 +418,7 @@ const nodes = [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
     ...autoPrebuildEvidence,
-  ], prebuildStatus === "blocked" ? globalBlocker : ""),
+  ], prebuildBlocker),
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
     args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
   ], codexBlocker),
@@ -467,7 +472,7 @@ const rawEdges = [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
     ...autoPrebuildEvidence,
-  ]),
+  ], prebuildBlocker),
   mkEdge("ona_prebuild", "implementation_codex", edgeStatus(nodeStatus.implementation_codex), [
     args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
   ], codexBlocker),
@@ -530,6 +535,7 @@ if (firstBlockedEdge?.to === "issue_contract") {
   nextActions.push("Provide ONA_TOKEN/Ona CLI authentication, start the Ona automation, and capture the automation execution id.");
 } else if (firstBlockedEdge?.to === "ona_prebuild") {
   nextActions.push("Run or inspect the Ona prebuild and attach its id, logs, and result to this report.");
+  if (prebuildBlocker) nextActions.push(prebuildBlocker);
 } else if (firstBlockedEdge?.to === "implementation_codex") {
   nextActions.push("Repair or expose programmatic Ona Platform Codex launch/authentication, start a fresh Codex implementation session, and capture the session id plus logs.");
 } else if (firstBlockedEdge?.to === "branch_commit") {
@@ -549,7 +555,7 @@ if (firstBlockedEdge?.to === "issue_contract") {
 } else if (firstBlockedEdge?.to === "status_writeback") {
   nextActions.push("Write the final evidence summary back to GitHub and Linear without printing secrets.");
 }
-if (globalBlocker && !nextActions.includes(globalBlocker)) {
+if (globalBlocker && firstBlockedEdge?.to !== "ona_prebuild" && !nextActions.includes(globalBlocker)) {
   nextActions.push(globalBlocker);
 }
 if (nextActions.length === 0) {
