@@ -312,7 +312,7 @@ const rawEdges = [
   ]),
   mkEdge("issue_contract", "github_dispatcher", edgeStatus(nodeStatus.github_dispatcher), [
     hasValue(args.githubDispatcherUrl) && `Dispatcher: ${args.githubDispatcherUrl}`,
-  ]),
+  ], dispatcherStatus === "blocked" ? globalBlocker : ""),
   mkEdge("github_dispatcher", "ona_automation", edgeStatus(nodeStatus.ona_automation), [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
