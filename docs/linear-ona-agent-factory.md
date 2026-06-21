@@ -391,9 +391,11 @@ automation, and draft PR evidence:
 - Ona prebuild readback on 2026-06-21 showed completed baselines
   `019eeb54-6320-7a1c-ab91-be9544a5eb82`,
   `019eeb62-6201-70c9-8bfc-77e334213155`, and
-  `019eebd9-8f2b-717b-8a71-f8275561edb3`. The newest completed snapshot was
-  about 6.22 GB and completed in about 11 minutes after the checkout-local
-  Gradle/build output pruning. Older overlapping or stale refresh prebuilds,
+  `019eebd9-8f2b-717b-8a71-f8275561edb3`. The current accepted CI refresh
+  baseline is `019eec03-390c-7b19-a819-e7e774e67a14` from GitHub Actions run
+  `27917523419`; it completed with `PREBUILD_PHASE_COMPLETED:100`, a
+  7.76 GB snapshot, and a 13m43s workflow duration after the path-filtered,
+  timeout-bounded refresh changes. Older overlapping or stale refresh prebuilds,
   including `019eeb05-69dc-75d4-9ffa-a6769945ae50` and
   `019eebf6-2c0c-7b40-8d59-7516ada89b62`, were cancelled and are not accepted as
   the ready baseline.

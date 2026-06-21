@@ -644,8 +644,10 @@ Current status:
   readback on 2026-06-21 showed completed baselines
   `019eeb54-6320-7a1c-ab91-be9544a5eb82`,
   `019eeb62-6201-70c9-8bfc-77e334213155`, and
-  `019eebd9-8f2b-717b-8a71-f8275561edb3`; the newest completed snapshot was
-  about 6.22 GB and completed in about 11 minutes. Overlapping manual prebuilds
+  `019eebd9-8f2b-717b-8a71-f8275561edb3`. The current accepted CI refresh
+  baseline is `019eec03-390c-7b19-a819-e7e774e67a14` from run
+  `27917523419`; it completed with `PREBUILD_PHASE_COMPLETED:100`, a
+  7.76 GB snapshot, and a 13m43s workflow duration. Overlapping manual prebuilds
   that were later cancelled, including
   `019eeb05-69dc-75d4-9ffa-a6769945ae50`, are not accepted as usable baseline
   evidence.
@@ -682,7 +684,16 @@ Current status:
   prebuild tasks completing before snapshot preparation. The prebuild then
   remained in `PREBUILD_PHASE_SNAPSHOTTING` and was cancelled as a stale
   refresh. This is negative stability evidence; the usable baseline remains
-  `019eebd9-8f2b-717b-8a71-f8275561edb3`.
+  `019eebd9-8f2b-717b-8a71-f8275561edb3` until a newer completed refresh is
+  read back.
+- 2026-06-21 run `27917523419` / prebuild
+  `019eec03-390c-7b19-a819-e7e774e67a14` passed on commit
+  `c7f538f1c141e833045300ebb1678641d47331d2`. The workflow completed in
+  13m43s, the prebuild status completed at
+  `2026-06-21T21:21:43.275840005Z`, and `ona prebuild get` reported
+  `PREBUILD_PHASE_COMPLETED:100` with snapshot size `7756316672` bytes. This
+  proves the manual/path-filtered CI refresh path can complete with timeout,
+  phase history, artifact upload, and stale-refresh cancellation logic enabled.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
   Ona Platform Codex readbacks. The checked-in Ona AI automation runs
   sequentially and requires implementation readback before Linear status sync,
@@ -695,8 +706,7 @@ Current status:
   the default image and uses `scripts/dev/bootstrap-prebuild.sh --light` for
   normal `postCreateCommand` startup. The full Node/TypeScript and NeoForge
   Gradle warmup remains the Ona prebuild hard gate, not a per-task startup cost.
-  This change still needs a fresh Ona prebuild readback before it can be counted
-  as platform-side bootstrap evidence.
+  Run `27917523419` is the current fresh Ona prebuild readback for this path.
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
   fast verification, real NeoForge guard smoke, and acceptance artifact
   rendering plus video-review request preparation and a separate video-release
