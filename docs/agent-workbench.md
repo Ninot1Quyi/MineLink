@@ -75,16 +75,19 @@ Paste that summary into PRs together with any scenario report paths.
 
 Use automation to reduce agent memory load:
 
-- Devcontainer bootstrap runs `npm ci` automatically when a cloud worktree is
-  created.
+- Devcontainer bootstrap uses a prebuilt Node 22 image, Java 21 feature,
+  image-provided `python3`, and runs `npm ci` automatically when a cloud
+  worktree is created.
 - `install-smoke.sh` clones the committed ref into a separate checkout, runs
   `npm ci`, and records install evidence under `.minelink-dev/install-smoke/`.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,
   runtime, or NeoForge checks.
 - `check-agent-workbench.sh` verifies that Ona migration docs, task queue,
   issue template, PR template, devcontainer, and install smoke entry points
-  stay present.
+  stay present, and blocks Python feature pins that slow Ona rebuilds.
 - GitHub CI runs the fast contract suite on pushes and PRs.
+- `summarize-evidence.mjs` writes `.minelink-dev/reports/ci-evidence-summary.md`
+  and appends the same evidence index to the GitHub Step Summary.
 - The install smoke workflow uploads `minelink-install-smoke-evidence` for
   install/workbench/bootstrap changes.
 - The heavy NeoForge workflow is skipped for docs-only and workbench-only
@@ -123,6 +126,7 @@ Validation:
 
 Evidence paths:
 - `.minelink-dev/reports/agent-task-summary.md`
+- `.minelink-dev/reports/ci-evidence-summary.md`
 - `.minelink-dev/install-smoke/install-smoke-report.md`, for install/bootstrap tasks
 - `.minelink-dev/<scenario>/reports/<scenario>-result.json`
 
@@ -137,7 +141,7 @@ Keep this queue narrow and update it after each accepted slice:
    queued, completed, cancelled, expired evidence. Completed in the current
    branch; next Gate 2 work is persistent body lifecycle plus `running` and
    `failed` states.
-2. Gate 10 install: fresh clone plus devcontainer proof for mock CI and
+2. Gate 10 install: fresh clone plus Ona/devcontainer proof for mock CI and
    documented NeoForge smoke.
 3. Gate 11 stability: longer real NeoForge soak profile with process and queue
    metrics.

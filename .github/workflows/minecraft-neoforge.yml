@@ -95,6 +95,9 @@ jobs:
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
+      - name: Summarize MineLink evidence
+        if: always()
+        run: node scripts/dev/summarize-evidence.mjs --append-step-summary
       - uses: actions/upload-artifact@v4
         if: always()
         with:

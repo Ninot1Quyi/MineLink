@@ -48,35 +48,46 @@ Remaining gaps:
 
 ### CI Artifact Summary for PR Review
 
-Status: `agent-ready`
+Status: `automation-ready`
 
 Scope:
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/minecraft-neoforge.yml`
+- `.github/workflows/install-smoke.yml`
 - `scripts/dev/**`
 - `docs/development.md`
+- `docs/agent-workbench.md`
 
 Forbidden:
 
 - Do not skip existing e2e scenarios.
 - Do not remove artifact uploads.
 - Do not mark skipped NeoForge as product evidence.
+- Do not make the summary step replace failing test/e2e/soak assertions.
 
 Validation:
 
 ```bash
-bash scripts/dev/verify-agent-task.sh --scope fast
+bash scripts/dev/verify-agent-task.sh --scope runtime --scenarios mine_tree,guard_boundaries
+MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,guard_boundaries
+node scripts/dev/summarize-evidence.mjs
 ```
 
 Evidence:
 
 - `.minelink-dev/reports/agent-task-summary.md`
+- `.minelink-dev/reports/ci-evidence-summary.md`
+- `.minelink-dev/soak/mock/soak-report.json`
+- `.minelink-dev/soak/mock/process-cleanup.json`
+- `.minelink-dev/soak/mock/queue-metrics.json`
 - GitHub Actions URL showing summary/artifact behavior.
 
 Remaining gaps:
 
 - Full release reporting and long soak dashboards are Gate 11 work.
+- The summary is an evidence index only; acceptance status still comes from
+  `docs/minelink-acceptance.md`.
 
 ### Gate 11: Longer Real NeoForge Soak Profile
 

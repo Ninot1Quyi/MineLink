@@ -19,6 +19,7 @@ on:
       - "scripts/dev/check-agent-workbench.sh"
       - "scripts/dev/check-architecture-guard.sh"
       - "scripts/dev/install-smoke.sh"
+      - "scripts/dev/summarize-evidence.mjs"
       - "scripts/dev/verify-agent-task.sh"
   pull_request:
     paths:
@@ -37,6 +38,7 @@ on:
       - "scripts/dev/check-agent-workbench.sh"
       - "scripts/dev/check-architecture-guard.sh"
       - "scripts/dev/install-smoke.sh"
+      - "scripts/dev/summarize-evidence.mjs"
       - "scripts/dev/verify-agent-task.sh"
   workflow_dispatch:
 
@@ -53,6 +55,9 @@ jobs:
           node-version: "22"
           cache: "npm"
       - run: bash scripts/dev/install-smoke.sh --scope fast
+      - name: Summarize MineLink evidence
+        if: always()
+        run: node scripts/dev/summarize-evidence.mjs --output .minelink-dev/install-smoke/ci-evidence-summary.md --append-step-summary
       - uses: actions/upload-artifact@v4
         if: always()
         with:

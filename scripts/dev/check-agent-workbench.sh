@@ -39,6 +39,7 @@ require_file ".github/ISSUE_TEMPLATE/agent-task.yml"
 require_file ".github/pull_request_template.md"
 require_file ".github/workflows/install-smoke.yml"
 require_file "scripts/dev/install-smoke.sh"
+require_file "scripts/dev/summarize-evidence.mjs"
 require_file "scripts/dev/verify-agent-task.sh"
 
 require_text "AGENTS.md" "docs/agent-workbench.md"
@@ -67,11 +68,34 @@ require_text ".github/pull_request_template.md" "Validation"
 require_text ".github/pull_request_template.md" "Evidence Paths"
 require_text ".github/pull_request_template.md" "Remaining Product Gaps"
 require_text ".github/workflows/install-smoke.yml" "minelink-install-smoke-evidence"
+require_text ".github/workflows/install-smoke.yml" "scripts/dev/summarize-evidence.mjs"
+require_text ".github/workflows/ci.yml" "Summarize MineLink evidence"
+require_text ".github/workflows/minecraft-neoforge.yml" "Summarize MineLink evidence"
+require_text ".github/workflows/install-smoke.yml" "Summarize MineLink evidence"
 require_text ".devcontainer/devcontainer.json" "postCreateCommand"
 require_text ".devcontainer/devcontainer.json" "postAttachCommand"
+require_text ".devcontainer/devcontainer.json" "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm"
+require_text ".devcontainer/devcontainer.json" "ghcr.io/devcontainers/features/java:1"
+require_text ".devcontainer/devcontainer.json" "python3 --version"
 require_text "scripts/dev/install-smoke.sh" "fresh clone"
 require_text "scripts/dev/install-smoke.sh" "dirty-local-non-acceptance"
+require_text "scripts/dev/summarize-evidence.mjs" "Acceptance Boundary"
+require_text "scripts/dev/summarize-evidence.mjs" "GITHUB_STEP_SUMMARY"
 require_text "scripts/dev/verify-agent-task.sh" "install   fresh clone"
+
+python3 - <<'PY' || failures+=(".devcontainer/devcontainer.json must not pin the Python feature to a source-built version in Ona.")
+from pathlib import Path
+import json
+import sys
+
+data = json.loads(Path(".devcontainer/devcontainer.json").read_text())
+features = data.get("features", {})
+python_feature = features.get("ghcr.io/devcontainers/features/python:1")
+if isinstance(python_feature, dict) and python_feature.get("version") not in (None, "os-provided"):
+    print("Pinned Python feature versions can source-build during Ona rebuilds.", file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+PY
 
 python3 - <<'PY' || failures+=("docs/agent-task-queue.md has an agent-ready task missing Scope, Forbidden, Validation, Evidence, or Remaining gaps.")
 from pathlib import Path
@@ -111,6 +135,7 @@ PY
     ".github/pull_request_template.md" \
     ".github/workflows/install-smoke.yml" \
     "scripts/dev/install-smoke.sh" \
+    "scripts/dev/summarize-evidence.mjs" \
     "scripts/dev/verify-agent-task.sh"; do
     if [[ -f "$file" ]]; then
       echo "- present: \`$file\`"

@@ -7,12 +7,9 @@
       "installMaven": false,
       "installGradle": false
     },
-    "ghcr.io/devcontainers/features/python:1": {
-      "version": "3.12"
-    },
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  "postCreateCommand": "npm ci",
+  "postCreateCommand": "npm ci && node --version && npm --version && python3 --version && java -version",
   "postAttachCommand": "git status --short --branch && bash scripts/dev/verify-agent-task.sh --scope docs",
   "customizations": {
     "vscode": {

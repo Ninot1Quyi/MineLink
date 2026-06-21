@@ -35,6 +35,22 @@ proves a fresh clone of a committed ref. Its report is written to
 `.minelink-dev/install-smoke/install-smoke-report.md` and records the source
 commit, environment versions, command exit codes, and copied verifier summary.
 
+Ona worktrees should rebuild from `.devcontainer/devcontainer.json`. The
+devcontainer intentionally uses the prebuilt Node 22 image, Java 21 feature,
+and image or OS provided `python3`; do not add a pinned Python feature that
+forces source compilation during cloud rebuilds.
+
+CI and PR review evidence can be summarized with:
+
+```bash
+node scripts/dev/summarize-evidence.mjs
+```
+
+The summary is written to `.minelink-dev/reports/ci-evidence-summary.md`. In
+GitHub Actions, the CI, Install Smoke, and Minecraft NeoForge Smoke workflows
+also append the same content to the run's Step Summary before uploading
+artifacts.
+
 Ona/Codex cloud worktrees should also read:
 
 - `docs/ona-migration.md`
@@ -61,6 +77,7 @@ bash scripts/dev/e2e.sh guard_boundaries
 bash scripts/dev/e2e.sh portal_coop
 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,craft_negative,guard_boundaries,portal_coop
 node packages/host/dist/index.js http --port 8765
+node scripts/dev/summarize-evidence.mjs
 ```
 
 ## Harness Modes
@@ -209,6 +226,14 @@ non-loopback host, set `MINELINK_GATEWAY_TOKEN` and send
       soak-report.json
       process-cleanup.json
       queue-metrics.json
+  reports/
+    agent-task-summary.md
+    architecture-guard.md
+    agent-workbench-guard.md
+    ci-evidence-summary.md
+  install-smoke/
+    install-smoke-report.md
+    ci-evidence-summary.md
 ```
 
 ## GitHub Workflow
@@ -225,7 +250,9 @@ CI is split into two layers:
 
 - `.github/workflows/ci.yml` runs fast contract, TypeScript, mock runtime, and
   JSON-RPC replay gates plus architecture/workbench guards and a short mock
-  stability soak on every push/PR.
+  stability soak on every push/PR. It appends
+  `.minelink-dev/reports/ci-evidence-summary.md` to the GitHub Step Summary
+  before artifact upload.
 - `.github/workflows/minecraft-neoforge.yml` runs a real NeoForge dedicated
   server smoke for `create_smoke`, `mine_tree`, HTTP `mine_tree`,
   `craft_smoke`, `furnace_smoke`, `craft_negative`, `guard_boundaries`,

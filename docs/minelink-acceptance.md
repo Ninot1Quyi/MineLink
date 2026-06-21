@@ -579,6 +579,14 @@ Current status:
 - `.github/workflows/install-smoke.yml` runs the same fresh-clone proof for
   install/workbench/bootstrap changes and uploads
   `minelink-install-smoke-evidence`.
+- Ona CLI bootstrap has been exercised against the MineLink cloud environment:
+  `ona environment start`, `ona environment exec`, and
+  `ona environment devcontainer rebuild` reached `/workspaces/MineLink` on
+  branch `codex/minelink-mvp-engineering` and produced Node 22.16.0, npm 10.9.2,
+  Python 3.12.13, and Java 21.0.11 inside the remote devcontainer. The first
+  rebuild exposed a slow pinned-Python feature path, so the devcontainer and
+  workbench guard now keep Python on the image or OS-provided path for future
+  Ona rebuilds.
 - This is real bootstrap evidence only. It does not prove server-admin mod
   installation, agent-user MCP configuration, LAN setup, cross-platform
   packaging, or real NeoForge install acceptance.
@@ -611,6 +619,10 @@ Current status:
 - The NeoForge workflow starts a real dedicated Minecraft server and runs a
   short real NeoForge soak for `furnace_smoke`, `craft_negative`,
   `guard_boundaries`, `perception_shapes`, and `portal_coop`.
+- CI, Install Smoke, and NeoForge workflows run
+  `scripts/dev/summarize-evidence.mjs` before artifact upload so PR reviewers
+  can read `.minelink-dev/reports/ci-evidence-summary.md`, the install-smoke
+  summary, and the GitHub Step Summary without manually traversing every report.
 - Host tests cover Gateway token admission, public-bind startup refusal without
   a token, fixed-window rate limiting, and active MCP session caps.
 - Runtime tests and the real `portal_coop` smoke cover the server-side

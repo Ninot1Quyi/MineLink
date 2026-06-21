@@ -38,6 +38,9 @@ triage labels.
 - `scripts/dev/install-smoke.sh` and `.github/workflows/install-smoke.yml`
   enforce committed fresh-clone bootstrap evidence for install/workbench
   changes. Treat dirty-source runs as local debugging, not acceptance evidence.
+- `scripts/dev/summarize-evidence.mjs` and GitHub Step Summary entries are
+  evidence indexes only. They make reports easier to review; they do not change
+  workflow pass/fail semantics or acceptance gate status.
 - If the guard reports a false positive, prefer a small clarifying
   architecture note over bypassing it. Use
   `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1` only for reviewed cases where the
@@ -125,6 +128,11 @@ For install or Ona bootstrap changes, run `bash scripts/dev/install-smoke.sh
 --scope fast` after the change is committed. This proves a fresh clone of the
 committed ref can run `npm ci` and the fast verifier; it does not prove server
 admin, LAN, or cross-platform packaging acceptance.
+
+Keep Ona bootstrap fast and reproducible: `.devcontainer/devcontainer.json`
+must use the prebuilt Node 22 image, Java 21 feature, and image or OS provided
+`python3`. Do not pin a Python feature version that source-builds during Ona
+rebuilds.
 
 Do not claim real game capability unless real NeoForge has run for that path.
 If real NeoForge cannot run, say so and keep the status below product accepted.

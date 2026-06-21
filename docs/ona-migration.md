@@ -26,9 +26,10 @@ Every environment must start from a clean branch and read these files first:
 - `docs/agent-workbench.md`
 - `docs/agent-task-queue.md`
 
-Use `.devcontainer/devcontainer.json` for bootstrap. It installs Node 22,
-Java 21, Python, GitHub CLI, runs `npm ci`, and performs a docs-scope
-verification on attach.
+Use `.devcontainer/devcontainer.json` for bootstrap. It uses the prebuilt
+Node 22 image, Java 21 feature, image or OS provided `python3`, GitHub CLI,
+runs `npm ci`, and performs a docs-scope verification on attach. Do not pin the
+Python feature to a source-built version for Ona worktrees.
 
 Use `ona/<task-name>` or `agent/<task-name>` branches for Ona-managed tasks.
 GitHub Actions also accepts `codex/**` for local Codex worktrees.
@@ -73,6 +74,13 @@ Install/bootstrap tasks also write:
 .minelink-dev/install-smoke/install-smoke.log
 ```
 
+CI, Install Smoke, and real NeoForge workflows also write an evidence index:
+
+```text
+.minelink-dev/reports/ci-evidence-summary.md
+.minelink-dev/install-smoke/ci-evidence-summary.md
+```
+
 The guard commands also write:
 
 ```text
@@ -87,10 +95,13 @@ MineLink uses automation to reduce agent memory load:
 - `scripts/dev/check-architecture-guard.sh` prevents architecture-sensitive
   drift without a matching `ARCHITECTURE.md` update.
 - `scripts/dev/check-agent-workbench.sh` keeps the Ona/agent entry points,
-  templates, and task queue present.
+  templates, task queue, and fast devcontainer bootstrap contract present.
 - `scripts/dev/verify-agent-task.sh` runs both guards before tests.
 - `scripts/dev/install-smoke.sh` clones the committed ref into a separate
   checkout and proves `npm ci` plus fast verification from a clean install.
+- `scripts/dev/summarize-evidence.mjs` aggregates scenario, soak, install, and
+  stability reports into a Markdown index without changing workflow pass/fail
+  semantics.
 - `.github/workflows/ci.yml` runs both guards on every push and PR.
 - `.github/workflows/install-smoke.yml` uploads
   `minelink-install-smoke-evidence` for install/workbench/bootstrap changes.
@@ -107,8 +118,10 @@ iteration, then check GitHub Actions after push:
 
 - Fast CI workflow: `.github/workflows/ci.yml`
 - Real Minecraft workflow: `.github/workflows/minecraft-neoforge.yml`
+- Install smoke workflow: `.github/workflows/install-smoke.yml`
 - Evidence artifacts: `minelink-dev-evidence` and
-  `minelink-neoforge-smoke-evidence`
+  `minelink-neoforge-smoke-evidence`; install/bootstrap runs also upload
+  `minelink-install-smoke-evidence`
 
 Use the GitHub connector when available. If a local `gh` token is not already
 configured, do not paste secrets into shell history just to fetch logs.

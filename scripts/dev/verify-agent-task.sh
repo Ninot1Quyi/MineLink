@@ -151,6 +151,7 @@ run_docs_checks() {
   run_cmd bash scripts/dev/check-agent-workbench.sh
   if [[ -d scripts/dev ]]; then
     run_shell "bash -n scripts/dev/*.sh"
+    run_shell "for file in scripts/dev/*.mjs; do [[ -e \"\$file\" ]] || continue; node --check \"\$file\"; done"
   fi
 }
 

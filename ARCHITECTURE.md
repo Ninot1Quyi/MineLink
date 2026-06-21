@@ -177,6 +177,19 @@ bash scripts/dev/verify-agent-task.sh --scope install
 The script writes a summary to
 `.minelink-dev/reports/agent-task-summary.md` for PR evidence.
 
+Workflow evidence is indexed by:
+
+```bash
+node scripts/dev/summarize-evidence.mjs
+```
+
+The index summarizes scenario reports, soak reports, process cleanup, queue
+metrics, and install smoke output under
+`.minelink-dev/reports/ci-evidence-summary.md` or the install-smoke artifact
+directory. GitHub workflows append the same Markdown to `$GITHUB_STEP_SUMMARY`
+before artifact upload. This is an evidence index only; it does not change gate
+status or workflow pass/fail semantics.
+
 ## Architecture Maintenance Guard
 
 Architecture-sensitive changes must keep this file current. The guard is
@@ -206,7 +219,9 @@ bash scripts/dev/check-agent-workbench.sh
 It runs locally through `scripts/dev/verify-agent-task.sh` and in GitHub CI. It
 keeps the Ona migration runbook, ready task queue, label taxonomy, PR template,
 issue template, devcontainer, install smoke workflow, and verification entry
-points present with required anchors.
+points present with required anchors. The devcontainer guard also protects the
+fast Ona bootstrap contract: prebuilt Node 22 image, Java 21 feature, and
+image or OS provided `python3` instead of a pinned source-built Python feature.
 
 The install smoke verifier is:
 
