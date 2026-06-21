@@ -638,8 +638,9 @@ Current status:
   environment-sensitive changes to `codex/minelink-mvp-engineering`, not on
   ordinary product-code commits. The workflow cancels active stale project
   prebuilds, triggers a fresh Ona prebuild, polls `ona prebuild get` until
-  completion, and uploads `minelink-ona-prebuild` evidence. Local readback on
-  2026-06-21 showed completed baselines
+  completion, writes phase-history and phase-duration summary artifacts, and
+  uploads `minelink-ona-prebuild` evidence. Local readback on 2026-06-21 showed
+  completed baselines
   `019eeb54-6320-7a1c-ab91-be9544a5eb82` and
   `019eeb62-6201-70c9-8bfc-77e334213155`; the newest completed snapshot was
   about 7.75 GB and completed in about 13 minutes. Overlapping manual prebuilds

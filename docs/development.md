@@ -122,6 +122,10 @@ When the GHCR image is present, the same bootstrap should report warm npm and
 Gradle cache paths, then still run the final `npm ci`, TypeScript checks,
 NeoForge Gradle build, dev-only EULA/server property generation, and docs
 verification. A fast cache hit is useful only if the hard gate still passes.
+The Ona prebuild workflow also records phase polling history and a Markdown
+phase-duration summary so slow refreshes can be attributed to environment
+startup, bootstrap execution, stopping, or snapshotting instead of guessed from
+the UI.
 
 CI and PR review evidence can be summarized with:
 

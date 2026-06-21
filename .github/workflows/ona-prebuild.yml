@@ -52,6 +52,9 @@ jobs:
           MINELINK_ONA_PREBUILD_TIMEOUT: ${{ github.event.inputs.prebuild_timeout || '2h' }}
         run: |
           mkdir -p .minelink-dev/reports
+          phase_history=".minelink-dev/reports/ona-prebuild-phase-history.jsonl"
+          : > "$phase_history"
+          export MINELINK_ONA_PHASE_HISTORY="$phase_history"
           if [ -z "${ONA_TOKEN:-}" ]; then
             {
               echo "# MineLink Ona Prebuild"
@@ -107,6 +110,15 @@ jobs:
                 const status = records?.[0]?.status ?? {};
                 const phase = status.phase ?? "unknown";
                 const pct = Number(status.snapshotCompletionPercentage ?? 0);
+                const record = {
+                  observedAt: new Date().toISOString(),
+                  phase,
+                  snapshotCompletionPercentage: pct,
+                  statusVersion: status.statusVersion ?? null,
+                  completionTime: status.completionTime ?? null,
+                  environmentId: status.environmentId ?? null
+                };
+                fs.appendFileSync(process.env.MINELINK_ONA_PHASE_HISTORY, `${JSON.stringify(record)}\n`);
                 console.log(`${phase}:${pct}`);
               '
             )"
@@ -116,16 +128,20 @@ jobs:
                 break
                 ;;
               PREBUILD_PHASE_FAILED:*|PREBUILD_PHASE_CANCELLED:*)
+                node scripts/dev/summarize-ona-prebuild-phases.mjs || true
                 echo "Ona prebuild $prebuild_id failed with status $phase" >&2
                 exit 1
                 ;;
             esac
             if [ "$SECONDS" -ge "$deadline" ]; then
+              node scripts/dev/summarize-ona-prebuild-phases.mjs || true
               echo "Timed out waiting for Ona prebuild $prebuild_id to complete" >&2
               exit 1
             fi
             sleep 30
           done
+
+          node scripts/dev/summarize-ona-prebuild-phases.mjs
 
           {
             echo "# MineLink Ona Prebuild"
@@ -137,6 +153,10 @@ jobs:
             echo "- Commit: \`${GITHUB_SHA:-unknown}\`"
             echo "- Trigger output: \`.minelink-dev/reports/ona-prebuild-trigger.json\`"
             echo "- Final status: \`.minelink-dev/reports/ona-prebuild-status.json\`"
+            echo "- Phase history: \`.minelink-dev/reports/ona-prebuild-phase-history.jsonl\`"
+            echo "- Phase summary: \`.minelink-dev/reports/ona-prebuild-phase-summary.md\`"
+            echo
+            cat .minelink-dev/reports/ona-prebuild-phase-summary.md
           } > .minelink-dev/reports/ona-prebuild.md
 
       - name: Upload Ona prebuild evidence
