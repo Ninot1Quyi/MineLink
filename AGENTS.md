@@ -11,12 +11,15 @@ claim is: external agents use public MCP tools to operate a bounded
 
 Before planning or implementing non-trivial MineLink work, read:
 
+- `ARCHITECTURE.md`
 - `docs/minelink-acceptance.md`
 - `docs/minelink-plan.md`
 - `docs/minelink-mod-mcp-architecture.md`
 
 Use `docs/minelink-acceptance.md` as the source of truth for gate status. If a
 change alters evidence or scope, update that document in the same commit.
+Use `docs/agent-workbench.md` for Ona/Codex parallel task boundaries, issue
+shape, and conditional verification.
 
 ## Anti-Mock Rules
 
@@ -102,6 +105,7 @@ If real NeoForge cannot run, say so and keep the status below product accepted.
 For the current development harness, common commands include:
 
 ```bash
+bash scripts/dev/verify-agent-task.sh
 npm run build
 npm run typecheck
 npm test
@@ -140,6 +144,9 @@ Reports must distinguish:
 - Commit and push meaningful completed slices promptly.
 - Commit messages, PR text, issue comments, and durable code comments must be in
   English.
+- Use one cloud worktree per bounded task: one environment, one branch, one PR.
+- Every parallel agent task must declare scope, forbidden changes, validation
+  commands, evidence paths, and remaining gaps.
 - Commit messages should explain why the change was made, not just what changed.
 - When a GitHub issue is fixed or partially advanced, comment with the commit,
   evidence, and remaining scope.

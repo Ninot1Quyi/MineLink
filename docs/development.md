@@ -1,5 +1,28 @@
 # MineLink Development Guide
 
+## Agent-Friendly Entry Point
+
+Use this command as the default verification entry point for Ona/Codex worktree
+tasks:
+
+```bash
+bash scripts/dev/verify-agent-task.sh
+```
+
+It classifies the current diff and runs the smallest useful validation scope:
+docs-only checks, fast build/typecheck/tests, selected mock e2e, or selected
+real NeoForge e2e. Override the automatic scope when the issue requires a
+specific gate:
+
+```bash
+bash scripts/dev/verify-agent-task.sh --scope docs
+bash scripts/dev/verify-agent-task.sh --scope runtime --scenarios craft_smoke,craft_negative
+bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
+```
+
+The script writes `.minelink-dev/reports/agent-task-summary.md`, which should
+be pasted into PRs together with scenario report paths.
+
 ## Local Commands
 
 ```bash

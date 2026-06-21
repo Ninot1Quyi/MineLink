@@ -3,7 +3,21 @@ name: Minecraft NeoForge Smoke
 on:
   push:
     branches: ["main", "codex/**"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "AGENTS.md"
+      - "ARCHITECTURE.md"
+      - ".devcontainer/**"
+      - ".github/ISSUE_TEMPLATE/**"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "AGENTS.md"
+      - "ARCHITECTURE.md"
+      - ".devcontainer/**"
+      - ".github/ISSUE_TEMPLATE/**"
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"

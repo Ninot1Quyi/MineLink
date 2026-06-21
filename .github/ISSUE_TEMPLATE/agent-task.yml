@@ -1,0 +1,87 @@
+name: Agent Task
+description: Bounded MineLink work item for Ona/Codex cloud worktrees
+title: "[agent-task] "
+labels:
+  - agent-ready
+  - needs-acceptance-evidence
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use one environment, one branch, and one PR for this task. Do not claim product completion from mock, replay, or smoke evidence.
+  - type: dropdown
+    id: gate
+    attributes:
+      label: Acceptance gate
+      description: Which gate in docs/minelink-acceptance.md does this task advance?
+      options:
+        - Gate 0: Repository, Install, and Baseline Harness
+        - Gate 1: Real NeoForge Mod Runtime
+        - Gate 2: server_agent Body and Guard Pipeline
+        - Gate 3: Limited Perception
+        - Gate 4: MCP Host and Gateway
+        - Gate 5: Agent RPC JSON, MCP Compatibility, and Local SDK
+        - Gate 6: Container and Crafting
+        - Gate 7: Create Adapter
+        - Gate 8: Multi-agent, A2A, and Social Runtime
+        - Gate 9: Frontier Society and Director
+        - Gate 10: Install and Product Packaging
+        - Gate 11: Security, Stability, and Release
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Exact files, packages, or modules the agent may change.
+      placeholder: |
+        Allowed:
+        - packages/sdk/**
+        - docs/development.md
+    validations:
+      required: true
+  - type: textarea
+    id: forbidden
+    attributes:
+      label: Forbidden changes
+      description: Boundaries, assertions, or files this task must not weaken.
+      placeholder: |
+        - Do not weaken replay assertions.
+        - Do not add synthetic output paths.
+        - Do not edit MineLinkEndpointBootstrap.java.
+    validations:
+      required: true
+  - type: textarea
+    id: mock_reduction
+    attributes:
+      label: Mock or smoke assumption reduced
+      description: State what assumption this work converts toward real product behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Required validation
+      description: Commands that must pass before opening or updating the PR.
+      value: |
+        - [ ] bash scripts/dev/verify-agent-task.sh
+        - [ ] real NeoForge e2e if game behavior changes
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required evidence
+      description: Report paths, action URLs, and logs that must be pasted into the PR.
+      value: |
+        - .minelink-dev/reports/agent-task-summary.md
+        - .minelink-dev/<scenario>/reports/<scenario>-result.json
+    validations:
+      required: true
+  - type: textarea
+    id: remaining_gaps
+    attributes:
+      label: Remaining gaps
+      description: What this task explicitly does not complete.
+    validations:
+      required: true
