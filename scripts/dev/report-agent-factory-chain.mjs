@@ -44,7 +44,9 @@ const args = { ...defaults };
 let codexAuthFailed = false;
 const activePrebuildPhases = new Set([
   "PREBUILD_PHASE_CREATING",
+  "PREBUILD_PHASE_PENDING",
   "PREBUILD_PHASE_RUNNING",
+  "PREBUILD_PHASE_STARTING",
   "PREBUILD_PHASE_SNAPSHOTTING",
 ]);
 const failedPrebuildPhases = new Set(["PREBUILD_PHASE_FAILED", "PREBUILD_PHASE_CANCELLED"]);
@@ -455,6 +457,15 @@ const nodes = [
 
 const nodeStatus = Object.fromEntries(nodes.map((node) => [node.id, node.status]));
 const edgeStatus = (targetStatus) => targetStatus;
+const prebuildHandoffStatus = nodeStatus.ona_prebuild === "passed" ? nodeStatus.implementation_codex : "blocked";
+const prebuildHandoffBlocker =
+  nodeStatus.ona_prebuild === "passed"
+    ? codexBlocker
+    : prebuildBlocker || "Latest Ona prebuild is not completed; Codex handoff must wait for the prepared environment.";
+const automationHandoffStatus =
+  nodeStatus.ona_automation === "passed" || nodeStatus.ona_automation === "partial"
+    ? nodeStatus.implementation_codex
+    : "blocked";
 const rawEdges = [
   mkEdge("github_issue", "issue_contract", edgeStatus(nodeStatus.issue_contract), [
     hasValue(args.githubIssue) && taskContractStatus !== "blocked" && "GitHub issue body and labels are dispatchable.",
@@ -468,14 +479,17 @@ const rawEdges = [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
   ]),
-  mkEdge("ona_automation", "ona_prebuild", edgeStatus(nodeStatus.ona_prebuild), [
+  mkEdge("ona_prebuild", "implementation_codex", prebuildHandoffStatus, [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
     ...autoPrebuildEvidence,
-  ], prebuildBlocker),
-  mkEdge("ona_prebuild", "implementation_codex", edgeStatus(nodeStatus.implementation_codex), [
     args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
-  ], codexBlocker),
+  ], prebuildHandoffBlocker),
+  mkEdge("ona_automation", "implementation_codex", automationHandoffStatus, [
+    hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
+    hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
+    args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
+  ], nodeStatus.ona_automation === "blocked" ? globalBlocker : codexBlocker),
   mkEdge("implementation_codex", "branch_commit", implementationStatus === "passed" ? nodeStatus.branch_commit : "blocked", [
     `Branch: ${args.branch}`,
     `Commit: ${args.commit}`,
@@ -533,8 +547,8 @@ if (firstBlockedEdge?.to === "issue_contract") {
   }
 } else if (firstBlockedEdge?.to === "ona_automation") {
   nextActions.push("Provide ONA_TOKEN/Ona CLI authentication, start the Ona automation, and capture the automation execution id.");
-} else if (firstBlockedEdge?.to === "ona_prebuild") {
-  nextActions.push("Run or inspect the Ona prebuild and attach its id, logs, and result to this report.");
+} else if (firstBlockedEdge?.from === "ona_prebuild" && firstBlockedEdge?.to === "implementation_codex") {
+  nextActions.push("Wait for the automatic Ona prebuild pipeline to produce the latest completed snapshot before Codex handoff.");
   if (prebuildBlocker) nextActions.push(prebuildBlocker);
 } else if (firstBlockedEdge?.to === "implementation_codex") {
   nextActions.push("Repair or expose programmatic Ona Platform Codex launch/authentication, start a fresh Codex implementation session, and capture the session id plus logs.");
@@ -555,7 +569,11 @@ if (firstBlockedEdge?.to === "issue_contract") {
 } else if (firstBlockedEdge?.to === "status_writeback") {
   nextActions.push("Write the final evidence summary back to GitHub and Linear without printing secrets.");
 }
-if (globalBlocker && firstBlockedEdge?.to !== "ona_prebuild" && !nextActions.includes(globalBlocker)) {
+if (
+  globalBlocker &&
+  !(firstBlockedEdge?.from === "ona_prebuild" && firstBlockedEdge?.to === "implementation_codex") &&
+  !nextActions.includes(globalBlocker)
+) {
   nextActions.push(globalBlocker);
 }
 if (nextActions.length === 0) {

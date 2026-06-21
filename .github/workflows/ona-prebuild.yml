@@ -1,0 +1,95 @@
+name: Ona Prebuild
+
+on:
+  push:
+    branches:
+      - codex/minelink-mvp-engineering
+  workflow_dispatch:
+    inputs:
+      prebuild_timeout:
+        description: Ona prebuild timeout
+        required: false
+        default: 2h
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ona-prebuild-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trigger:
+    name: Trigger latest Ona prebuild
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ona CLI
+        run: |
+          tmp_ona="$(mktemp)"
+          curl -o "$tmp_ona" -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')"
+          chmod +x "$tmp_ona"
+          sudo mv "$tmp_ona" /usr/local/bin/ona
+
+      - name: Trigger and follow Ona prebuild
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+          MINELINK_ONA_PREBUILD_TIMEOUT: ${{ github.event.inputs.prebuild_timeout || '2h' }}
+        run: |
+          mkdir -p .minelink-dev/reports
+          if [ -z "${ONA_TOKEN:-}" ]; then
+            {
+              echo "# MineLink Ona Prebuild"
+              echo
+              echo "- Result: failed"
+              echo "- Blocker: ONA_TOKEN is not available to the workflow runner."
+            } > .minelink-dev/reports/ona-prebuild.md
+            exit 1
+          fi
+
+          ona login
+
+          active_ids="$(
+            ona prebuild list --project-id "$MINELINK_ONA_PROJECT_ID" --format json \
+              | node -e '
+                  const fs = require("node:fs");
+                  const records = JSON.parse(fs.readFileSync(0, "utf8"));
+                  const active = new Set(["PREBUILD_PHASE_CREATING", "PREBUILD_PHASE_PENDING", "PREBUILD_PHASE_RUNNING", "PREBUILD_PHASE_STARTING", "PREBUILD_PHASE_SNAPSHOTTING"]);
+                  for (const item of records) {
+                    if (active.has(item?.status?.phase)) console.log(item.id);
+                  }
+                '
+          )"
+          if [ -n "$active_ids" ]; then
+            while IFS= read -r prebuild_id; do
+              [ -n "$prebuild_id" ] || continue
+              echo "Cancelling stale active Ona prebuild $prebuild_id"
+              ona prebuild cancel "$prebuild_id" || true
+            done <<< "$active_ids"
+          fi
+
+          ona prebuild trigger "$MINELINK_ONA_PROJECT_ID" \
+            --prebuild-timeout "$MINELINK_ONA_PREBUILD_TIMEOUT" \
+            --follow \
+            --format json | tee .minelink-dev/reports/ona-prebuild-trigger.json
+
+          {
+            echo "# MineLink Ona Prebuild"
+            echo
+            echo "- Result: passed"
+            echo "- Project: \`$MINELINK_ONA_PROJECT_ID\`"
+            echo "- Branch: \`${GITHUB_REF_NAME:-unknown}\`"
+            echo "- Commit: \`${GITHUB_SHA:-unknown}\`"
+            echo "- Trigger output: \`.minelink-dev/reports/ona-prebuild-trigger.json\`"
+          } > .minelink-dev/reports/ona-prebuild.md
+
+      - name: Upload Ona prebuild evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-ona-prebuild
+          path: .minelink-dev/reports/
+          include-hidden-files: true

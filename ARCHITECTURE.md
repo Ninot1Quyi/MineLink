@@ -250,9 +250,17 @@ blocked edge is `ready prebuild -> readable Platform Codex task session`, not
 for that bridge. Its first blocked edge must carry the actionable blocker text
 directly on the edge row, because later nodes can have valid local evidence
 without the external chain having reached them.
-The report must require the latest Ona prebuild for the agent project to reach
-`PREBUILD_PHASE_COMPLETED` before Node G can pass. Older completed snapshots are
-diagnostic fallback evidence only; they do not prove that a newly started Codex
+The report models Ona prebuild as a parallel environment-readiness gate, not as
+a child step of the issue dispatcher. The dispatcher can queue the task while
+the project prebuild pipeline independently keeps the latest environment ready.
+`.github/workflows/ona-prebuild.yml` is the CI fallback for that pipeline:
+pushes to `codex/minelink-mvp-engineering` cancel active stale project
+prebuilds, trigger a new Ona prebuild, follow it to completion, and upload
+`minelink-ona-prebuild` evidence. This keeps environment readiness automatic
+instead of making each Codex task configure its own runtime on startup.
+Before Codex handoff, the report must require the latest Ona prebuild for the
+agent project to reach `PREBUILD_PHASE_COMPLETED`; older completed snapshots are
+diagnostic fallback evidence only and do not prove that a newly started Codex
 task will get the current fully prepared environment.
 If Linear or GitHub webhook dispatch cannot be verified in the current
 environment, the repo must say so and keep the gap visible instead of

@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports, but Ona prebuild readback and automatic Ona Platform Codex implementation/verifier sessions are not fully proven end-to-end; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has an Ona prebuild trigger/follow fallback for `codex/minelink-mvp-engineering`, but automatic Ona Platform Codex implementation/verifier sessions are not fully proven end-to-end; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -630,6 +630,12 @@ Current status:
   Step Summary. This proves image pull/runtime readiness for that environment;
   it does not prove Ona Platform Codex execution, Minecraft startup, or product
   install acceptance.
+- `.github/workflows/ona-prebuild.yml` is the CI fallback for automatic
+  environment readiness. Pushes to `codex/minelink-mvp-engineering` cancel
+  active stale project prebuilds, trigger a fresh Ona prebuild, follow it to
+  completion, and upload `minelink-ona-prebuild` evidence. This keeps prebuild
+  freshness parallel to issue dispatch instead of making each Codex task perform
+  setup before starting implementation.
 - `.devcontainer/devcontainer.json` now uses
   `ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering` as
   the default image and relies on `scripts/dev/bootstrap-prebuild.sh` as the
