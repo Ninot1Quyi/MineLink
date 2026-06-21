@@ -326,8 +326,11 @@ bash scripts/dev/bootstrap-prebuild.sh
 The bootstrap installs required OS tools such as `ffmpeg`, verifies Node, npm,
 Python, Java 21, `gh`, and sanitized Linear secret presence, runs `npm ci`,
 builds and typechecks the TypeScript workspace, and runs the NeoForge Gradle
-build to warm Gradle, Minecraft, and NeoForge dependency caches. It does not
-accept the Minecraft EULA, start a long-running Minecraft server, or write
+build to warm Gradle, Minecraft, and NeoForge dependency caches. Because the
+repository owner has authorized development EULA acceptance for these private
+Ona/devcontainer environments, it also writes ignored local files under
+`mod/neoforge/run/`: `eula.txt` with `eula=true` and `server.properties` with
+`online-mode=false`. It does not start a long-running Minecraft server or write
 secret values. Set `MINELINK_PREBUILD_SKIP_GRADLE=1` only when debugging a
 broken prebuild where the Gradle cache warmup must be bypassed temporarily.
 

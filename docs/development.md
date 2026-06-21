@@ -50,8 +50,11 @@ This prebuild bootstrap installs OS tools, verifies Node/npm/Python/Java/ffmpeg,
 runs `npm ci`, `npm run build`, `npm run typecheck`, and runs
 `mod/neoforge/./gradlew --no-daemon build` to warm Gradle, Minecraft, and
 NeoForge caches before a Codex agent opens the environment. It only logs whether
-`LINEAR_API_KEY` is present; it never prints the value. It does not start a
-Minecraft server or write EULA files.
+`LINEAR_API_KEY` is present; it never prints the value. Because the repository
+owner has authorized development EULA acceptance for these private
+Ona/devcontainer environments, the bootstrap also writes ignored local
+`mod/neoforge/run/eula.txt` and `server.properties` files so NeoForge can start
+without another setup step. It does not start a Minecraft server.
 
 CI and PR review evidence can be summarized with:
 

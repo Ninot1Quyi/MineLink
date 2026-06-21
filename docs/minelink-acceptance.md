@@ -596,8 +596,10 @@ Current status:
   point. It installs OS tools, verifies Node/npm/Python/Java/ffmpeg, runs
   TypeScript build/typecheck, and runs the NeoForge Gradle build so Java,
   Gradle, Minecraft, and NeoForge dependencies are cached before Codex agents
-  start work. It does not accept the Minecraft EULA, start the server, or print
-  secret values.
+  start work. For these owner-authorized private development environments it
+  writes ignored local `mod/neoforge/run/eula.txt` and `server.properties` files
+  so the real server can start without another setup step. It does not start the
+  server or print secret values.
 - The report records the sanitized remote, source ref and commit, dirty-source
   decision, Node/npm/Git/Java/OS versions, exact command exit codes, log path,
   and copied agent-task summary when available.
