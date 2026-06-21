@@ -46,7 +46,7 @@ Current audit:
 | Gate 3: Limited Perception | real-partial | Real fixture evidence covers occlusion and selected shape classifications; generic raycast/block-shape visibility and long-running perception cache behavior remain incomplete. |
 | Gate 4: MCP Host and Gateway | real-partial | MCP stdio, Streamable HTTP, reconnect, catalog preflight, token/rate/session checks, and real HTTP gateway smoke exist; full hosted gateway operations remain incomplete. |
 | Gate 5: Agent RPC JSON, MCP Compatibility, and Local SDK | real-partial | Codex JSON-RPC replay and generic MCP dynamic tools are verified; Python helper parity, polling/subscription helpers, reconnect ergonomics, replay SDK, and semantic retries remain incomplete. |
-| Gate 6: Container and Crafting | real-partial | Real chest, crafting table, furnace, native `useItemOn` container entry, server `Slot.safeTake/safeInsert` transfer evidence, slot refs, recipe registry, native oak-planks `ResultSlot` evidence, repeated oak-planks result takes, vanilla `PlaceRecipe` shaped stick placement, and FakePlayer inventory evidence exists; full server menu click parity, broader shaped/modded recipe breadth, and remainder parity remain incomplete. |
+| Gate 6: Container and Crafting | real-partial | Real chest, crafting table, furnace, native `useItemOn` container entry, server `Slot.safeTake/safeInsert` transfer evidence, slot refs, recipe registry, native oak-planks `ResultSlot` evidence, repeated oak-planks result takes, vanilla `PlaceRecipe` shaped stick placement, bounded crafting-table `AbstractContainerMenu.clicked` evidence, and FakePlayer inventory evidence exists; broader menu click parity, broader shaped/modded recipe breadth, and remainder parity remain incomplete. |
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
@@ -416,6 +416,13 @@ Current status:
   taken through `net.minecraft.world.inventory.ResultSlot`, and final
   FakePlayer inventory contains the shaped `minecraft:stick` output plus the
   remaining planks.
+- Real NeoForge `craft_smoke` now also covers a bounded manual crafting-table
+  click path after quick craft: public `container.click_slot` calls resolve
+  recent inventory/grid slot refs, reject output-slot clicks, run
+  `AbstractContainerMenu.clicked(..., ClickType.PICKUP, FakePlayer)`, expose
+  the native menu cursor, place `minecraft:oak_planks` into grid indexes 1 and
+  4 through `net.minecraft.world.inventory.CraftingMenu`, and take the
+  resulting sticks through `net.minecraft.world.inventory.ResultSlot`.
 - The real report records `native_interaction.menu_opened=false` and
   `native_interaction.menu_source=constructed_server_crafting_menu_after_use_item_on`
   for the headless crafting-table path: the visible/reachable block interaction
@@ -427,9 +434,11 @@ Current status:
   result slot output.
 - This is not the full Gate 6 release surface yet. The native repeated
   crafting evidence currently covers oak-log to oak-planks and one vanilla
-  shaped stick recipe. Broader shaped recipe breadth, modded recipe breadth,
-  container-click parity, remainder item handling, and broader inventory-full
-  edge cases still need separate implementation and real evidence.
+  shaped stick recipe, with bounded manual slot-click evidence only for the
+  crafting table menu. Broader container/furnace menu click parity, shift-click
+  and drag modes, modded recipe breadth, remainder item handling, and broader
+  inventory-full edge cases still need separate implementation and real
+  evidence.
 
 ### Gate 7: Create Adapter
 

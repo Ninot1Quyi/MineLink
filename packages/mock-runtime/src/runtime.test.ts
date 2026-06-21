@@ -877,14 +877,120 @@ describe("MockRuntimeServer", () => {
       }
     });
 
+    const afterStickTake = (stickTake.result as { container: ContainerSnapshot }).container;
+    const manualPlanksSlot = afterStickTake.inventory_slots.find((slot) => slot.item === "minecraft:oak_planks")!;
+    const pickupPlanks = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.click_slot",
+      arguments: { slot_ref: manualPlanksSlot.slot_ref, button: "secondary" }
+    });
+    expect(pickupPlanks).toMatchObject({
+      ok: true,
+      result: {
+        slot_click: {
+          method: "abstract_container_menu.clicked",
+          click_type: "PICKUP",
+          button: "secondary",
+          source_area: "inventory",
+          slot_class: "net.minecraft.world.inventory.Slot",
+          server_menu_hooks: true,
+          menu_type: "net.minecraft.world.inventory.CraftingMenu",
+          after_slot: { item: "minecraft:oak_planks", count: 3 },
+          after_cursor: { item: "minecraft:oak_planks", count: 3 }
+        }
+      }
+    });
+
+    const afterPickup = (pickupPlanks.result as { container: ContainerSnapshot }).container;
+    const gridOne = afterPickup.slots.find((slot) => slot.index === 1)!;
+    const placeTopStickPlank = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.click_slot",
+      arguments: { slot_ref: gridOne.slot_ref, button: "secondary" }
+    });
+    expect(placeTopStickPlank).toMatchObject({
+      ok: true,
+      result: {
+        slot_click: {
+          source_area: "container",
+          source_index: 1,
+          after_slot: { item: "minecraft:oak_planks", count: 1 },
+          after_cursor: { item: "minecraft:oak_planks", count: 2 }
+        }
+      }
+    });
+
+    const afterTopPlacement = (placeTopStickPlank.result as { container: ContainerSnapshot }).container;
+    const gridFour = afterTopPlacement.slots.find((slot) => slot.index === 4)!;
+    const placeBottomStickPlank = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.click_slot",
+      arguments: { slot_ref: gridFour.slot_ref, button: "secondary" }
+    });
+    expect(placeBottomStickPlank).toMatchObject({
+      ok: true,
+      result: {
+        slot_click: {
+          source_area: "container",
+          source_index: 4,
+          after_slot: { item: "minecraft:oak_planks", count: 1 },
+          after_cursor: { item: "minecraft:oak_planks", count: 1 }
+        },
+        container: {
+          output_slot: { item: "minecraft:stick", count: 4 }
+        }
+      }
+    });
+
+    const afterBottomPlacement = (placeBottomStickPlank.result as { container: ContainerSnapshot }).container;
+    const returnPlanksSlot = afterBottomPlacement.inventory_slots.find((slot) => slot.item === "minecraft:oak_planks")!;
+    const returnCursorPlank = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.click_slot",
+      arguments: { slot_ref: returnPlanksSlot.slot_ref, button: "primary" }
+    });
+    expect(returnCursorPlank).toMatchObject({
+      ok: true,
+      result: {
+        slot_click: {
+          button: "primary",
+          source_area: "inventory",
+          after_slot: { item: "minecraft:oak_planks", count: 4 },
+          after_cursor: null
+        }
+      }
+    });
+
+    const manualOutputSlot = (returnCursorPlank.result as { container: ContainerSnapshot }).container.output_slot!;
+    const manualStickTake = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.take_output",
+      arguments: { slot_ref: manualOutputSlot.slot_ref }
+    });
+    expect(manualStickTake).toMatchObject({
+      ok: true,
+      result: {
+        taken: { item: "minecraft:stick", count: 4 },
+        slot_transfer: {
+          source_slot_class: "net.minecraft.world.inventory.ResultSlot",
+          server_slot_hooks: true
+        }
+      }
+    });
+
     const inventory = await request(client, {
       type: "tool.execute",
       agent_id: agentId,
       name: "observe.inventory",
       arguments: {}
     });
-    expect(countItem(inventory, "minecraft:oak_planks")).toBe(6);
-    expect(countItem(inventory, "minecraft:stick")).toBe(4);
+    expect(countItem(inventory, "minecraft:oak_planks")).toBe(4);
+    expect(countItem(inventory, "minecraft:stick")).toBe(8);
     client.close();
   });
 
@@ -1061,6 +1167,10 @@ interface ContainerSnapshot {
     menu_opened: boolean;
     body_ui: string;
     menu_type: string;
+  };
+  cursor: {
+    item: string | null;
+    count: number;
   };
   slots: SlotSnapshot[];
   inventory_slots: SlotSnapshot[];

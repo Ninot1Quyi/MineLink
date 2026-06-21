@@ -18,6 +18,7 @@ describe("Agent SDK", () => {
     await agent.observe.events({ limit: 10 });
     await agent.container.open("blk_chest");
     await agent.container.moveStack("slot_from", "slot_to", 3);
+    await agent.container.clickSlot("slot_grid_1", "secondary");
     await agent.craft.quickCraft("minecraft:oak_planks", 2);
 
     expect(calls).toEqual([
@@ -56,6 +57,11 @@ describe("Agent SDK", () => {
       {
         name: "container.move_stack",
         args: { from_slot_ref: "slot_from", to_slot_ref: "slot_to", count: 3 },
+        options: undefined
+      },
+      {
+        name: "container.click_slot",
+        args: { slot_ref: "slot_grid_1", button: "secondary" },
         options: undefined
       },
       {

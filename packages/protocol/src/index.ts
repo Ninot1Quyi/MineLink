@@ -370,6 +370,28 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
     ]
   },
   {
+    name: "container.click_slot",
+    summary: "Click a slot in the open server menu.",
+    description:
+      "Runs a bounded pickup click through the server menu click path. Supports primary and secondary pickup clicks for inventory and container slots, not output slots.",
+    tags: ["container", "manual"],
+    input_schema: {
+      type: "object",
+      required: ["slot_ref"],
+      properties: {
+        slot_ref: { type: "string" },
+        button: { type: "string", enum: ["primary", "secondary", "left", "right"], default: "primary" }
+      }
+    },
+    failure_reasons: [
+      "container_not_open",
+      "stale_slot_ref",
+      "invalid_arguments",
+      "unsupported_capability",
+      "blocked"
+    ]
+  },
+  {
     name: "container.take_output",
     summary: "Take output from an open crafting or processing container.",
     description: "Takes output through server output-slot hooks when the opened container exposes them.",

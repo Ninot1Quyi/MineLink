@@ -56,6 +56,7 @@ import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player.BedSleepingProblem;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.FurnaceMenu;
@@ -286,6 +287,7 @@ public final class MineLinkEndpointBootstrap {
             "container.open",
             "container.observe",
             "container.move_stack",
+            "container.click_slot",
             "container.take_output",
             "craft.list_available",
             "craft.quick_craft",
@@ -360,6 +362,7 @@ public final class MineLinkEndpointBootstrap {
             case "container.open" -> openContainer(request, agent, arguments);
             case "container.observe" -> observeContainer(request, agent);
             case "container.move_stack" -> moveStack(request, agent, arguments);
+            case "container.click_slot" -> clickSlot(request, agent, arguments);
             case "container.take_output" -> takeOutput(request, agent, arguments);
             case "craft.list_available" -> listCraftable(request, agent, arguments);
             case "craft.quick_craft" -> quickCraft(request, agent, arguments);
@@ -1053,6 +1056,61 @@ public final class MineLinkEndpointBootstrap {
             destinationSlot,
             moved
         ));
+        result.add("container", containerSnapshot(agent));
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
+        return response;
+    }
+
+    private JsonObject clickSlot(JsonObject request, AgentBody agent, JsonObject arguments) {
+        if (agent.openContainer == null) {
+            return failure(request, "container_not_open", "No server-side container is currently open.");
+        }
+        AbstractContainerMenu menu = agent.openContainer.nativeMenu;
+        if (menu == null) {
+            return failure(request, "unsupported_capability", "The opened container does not expose a native server menu.");
+        }
+        if (!agent.openContainer.kind.equals("crafting_table")) {
+            return failure(request, "unsupported_capability", "Native slot clicking is currently supported for crafting table menus only.");
+        }
+        SlotRef slot = slotRef(agent, stringValue(arguments, "slot_ref", ""));
+        if (slot == null) {
+            return failure(request, "stale_slot_ref", "slot_ref is not valid for the current container snapshot.");
+        }
+        if (slot.area.equals("output")) {
+            return failure(request, "invalid_arguments", "Use container.take_output for output slots.");
+        }
+        int button = clickButton(arguments);
+        if (button < 0) {
+            return failure(request, "invalid_arguments", "button must be primary, secondary, left, or right.");
+        }
+        int menuSlot = menuSlotIndex(agent.openContainer, slot);
+        if (menuSlot < 0 || menuSlot >= menu.slots.size()) {
+            return failure(request, "blocked", "The requested slot is not available in the native server menu.");
+        }
+
+        Slot nativeSlot = menu.slots.get(menuSlot);
+        ItemStack beforeSlot = nativeSlot.getItem().copy();
+        ItemStack beforeCursor = menu.getCarried().copy();
+        try {
+            menu.clicked(menuSlot, button, ClickType.PICKUP, agent.entity);
+        } catch (RuntimeException error) {
+            MineLinkMod.LOGGER.warn("Native container click failed for {} slot {}", agent.openContainer.kind, menuSlot, error);
+            return failure(request, "blocked", "Native server menu rejected the slot click.");
+        }
+        ItemStack afterSlot = nativeSlot.getItem().copy();
+        ItemStack afterCursor = menu.getCarried().copy();
+        if (ItemStack.matches(beforeSlot, afterSlot) && ItemStack.matches(beforeCursor, afterCursor)) {
+            return failure(request, "blocked", "Native server menu did not accept the slot click.");
+        }
+        if (agent.openContainer.container != null) {
+            agent.openContainer.container.setChanged();
+        }
+        syncInventoryMirrorFromPlayer(agent);
+
+        JsonObject result = new JsonObject();
+        result.add("slot_click", slotClickPayload(agent.openContainer, slot, nativeSlot, menuSlot, button, beforeSlot, afterSlot, beforeCursor, afterCursor));
         result.add("container", containerSnapshot(agent));
 
         JsonObject response = toolCompleted(request);
@@ -1853,6 +1911,11 @@ public final class MineLinkEndpointBootstrap {
         nativeInteraction.addProperty("menu_type", open.nativeMenuType);
         nativeInteraction.addProperty("menu_source", open.nativeMenuSource);
         snapshot.add("native_interaction", nativeInteraction);
+        if (open.nativeMenu != null) {
+            snapshot.add("cursor", stackPayloadOrNull(open.nativeMenu.getCarried()));
+        } else {
+            snapshot.add("cursor", JsonNull.INSTANCE);
+        }
 
         JsonArray slots = new JsonArray();
         CraftingMenu craftingMenu = craftingMenu(open);
@@ -1943,6 +2006,33 @@ public final class MineLinkEndpointBootstrap {
         return null;
     }
 
+    private int menuSlotIndex(OpenContainer open, SlotRef slot) {
+        if (open == null || open.nativeMenu == null || !open.containerId.equals(slot.containerId)) {
+            return -1;
+        }
+        if (slot.area.equals("inventory")) {
+            if (open.kind.equals("crafting_table")) {
+                return inventoryMenuSlotIndex(slot.index);
+            }
+            return -1;
+        }
+        if (slot.area.equals("container") && open.kind.equals("crafting_table")) {
+            int menuIndex = CRAFTING_GRID_SLOT_START + slot.index;
+            return menuIndex >= CRAFTING_GRID_SLOT_START && menuIndex < CRAFTING_GRID_SLOT_END ? menuIndex : -1;
+        }
+        return -1;
+    }
+
+    private int inventoryMenuSlotIndex(int playerInventoryIndex) {
+        if (playerInventoryIndex >= 0 && playerInventoryIndex < 9) {
+            return 37 + playerInventoryIndex;
+        }
+        if (playerInventoryIndex >= 9 && playerInventoryIndex < PLAYER_INVENTORY_SLOT_LIMIT) {
+            return 10 + (playerInventoryIndex - 9);
+        }
+        return -1;
+    }
+
     private Slot furnaceMenuSlot(AgentBody agent, OpenContainer open, int containerSlot) {
         if (open.container == null || containerSlot < 0 || containerSlot >= open.container.getContainerSize()) {
             return null;
@@ -1986,6 +2076,49 @@ public final class MineLinkEndpointBootstrap {
         payload.addProperty("destination_slot_class", destinationSlot.getClass().getName());
         payload.addProperty("server_slot_hooks", true);
         payload.add("moved", stackPayload(moved));
+        return payload;
+    }
+
+    private int clickButton(JsonObject arguments) {
+        String button = stringValue(arguments, "button", "primary").toLowerCase();
+        return switch (button) {
+            case "", "primary", "left" -> 0;
+            case "secondary", "right" -> 1;
+            default -> -1;
+        };
+    }
+
+    private String clickButtonName(int button) {
+        return button == 1 ? "secondary" : "primary";
+    }
+
+    private JsonObject slotClickPayload(
+        OpenContainer open,
+        SlotRef source,
+        Slot nativeSlot,
+        int menuSlot,
+        int button,
+        ItemStack beforeSlot,
+        ItemStack afterSlot,
+        ItemStack beforeCursor,
+        ItemStack afterCursor
+    ) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("method", "abstract_container_menu.clicked");
+        payload.addProperty("click_type", ClickType.PICKUP.name());
+        payload.addProperty("button", clickButtonName(button));
+        payload.addProperty("button_id", button);
+        payload.addProperty("body_ui", "headless_server_agent");
+        payload.addProperty("source_area", source.area);
+        payload.addProperty("source_index", source.index);
+        payload.addProperty("menu_slot_index", menuSlot);
+        payload.addProperty("slot_class", nativeSlot.getClass().getName());
+        payload.addProperty("server_menu_hooks", true);
+        payload.addProperty("menu_type", open.nativeMenuType);
+        payload.add("before_slot", stackPayloadOrNull(beforeSlot));
+        payload.add("after_slot", stackPayloadOrNull(afterSlot));
+        payload.add("before_cursor", stackPayloadOrNull(beforeCursor));
+        payload.add("after_cursor", stackPayloadOrNull(afterCursor));
         return payload;
     }
 
@@ -2383,6 +2516,10 @@ public final class MineLinkEndpointBootstrap {
         return payload;
     }
 
+    private static JsonElement stackPayloadOrNull(ItemStack stack) {
+        return stack == null || stack.isEmpty() ? JsonNull.INSTANCE : stackPayload(stack);
+    }
+
     private static String stackItemId(ItemStack stack) {
         return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
@@ -2690,6 +2827,18 @@ public final class MineLinkEndpointBootstrap {
                 List.of("container"),
                 List.of("container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments", "blocked"),
                 List.of()
+            ),
+            tool(
+                "container.click_slot",
+                "Click a slot in the open server menu.",
+                "Runs a bounded pickup click through the native server menu click path for inventory and container slots. Output slots must use container.take_output.",
+                objectSchema(properties(
+                    prop("slot_ref", stringSchema()),
+                    prop("button", enumSchema("primary", "secondary", "left", "right"))
+                ), "slot_ref"),
+                List.of("container", "manual"),
+                List.of("container_not_open", "stale_slot_ref", "invalid_arguments", "unsupported_capability", "blocked"),
+                List.of("slot_ref comes from the current container snapshot")
             ),
             tool(
                 "container.take_output",

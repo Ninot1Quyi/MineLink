@@ -181,6 +181,13 @@ export class ContainerApi {
     });
   }
 
+  clickSlot(slotRef: string, button?: "primary" | "secondary" | "left" | "right"): Promise<ToolResult> {
+    return this.execute("container.click_slot", {
+      slot_ref: slotRef,
+      ...(button === undefined ? {} : { button })
+    });
+  }
+
   takeOutput(slotRef?: string): Promise<ToolResult> {
     return this.execute("container.take_output", slotRef ? { slot_ref: slotRef } : {});
   }

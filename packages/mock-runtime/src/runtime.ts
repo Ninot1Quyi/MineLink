@@ -145,6 +145,7 @@ interface OpenContainerState {
   block?: BlockState;
   slotRefs: Map<string, SlotBinding>;
   output: ItemStack | null;
+  cursor: ItemStack | null;
   pendingResultTakes?: number;
   repeatedCraftOutput?: ItemStack;
   nativeInteraction: {
@@ -465,6 +466,9 @@ export class MockRuntimeServer {
         String(args.to_slot_ref ?? ""),
         Number(args.count ?? 64)
       );
+    }
+    if (name === "container.click_slot") {
+      return this.clickSlot(agentId, String(args.slot_ref ?? ""), String(args.button ?? "primary"));
     }
     if (name === "container.take_output") {
       return this.takeOutput(agentId, typeof args.slot_ref === "string" ? args.slot_ref : undefined);
@@ -871,6 +875,9 @@ export class MockRuntimeServer {
     if (!block?.container) {
       return runtimeFail("unsupported_capability", "The referenced block is not a supported server-side container.");
     }
+    if (block.container.kind === "crafting_table" && block.container.slots.length === 0) {
+      block.container.slots = Array.from({ length: 9 }, () => null);
+    }
 
     const containerId = `container_${++this.seq}`;
     agent.openContainer = {
@@ -881,13 +888,17 @@ export class MockRuntimeServer {
       block,
       slotRefs: new Map(),
       output: null,
+      cursor: null,
       nativeInteraction: {
         method: "server_player_game_mode.use_item_on",
         server_container_available: true,
         interaction_result: "success",
         menu_opened: false,
         body_ui: "headless_server_agent",
-        menu_type: `mock.${block.container.kind}`,
+        menu_type:
+          block.container.kind === "crafting_table"
+            ? "net.minecraft.world.inventory.CraftingMenu"
+            : `mock.${block.container.kind}`,
         menu_source: "mock_server_menu"
       }
     };
@@ -984,7 +995,10 @@ export class MockRuntimeServer {
       return runtimeFail("inventory_full", "No inventory slot is available for the output.", { item: output.item });
     }
     this.addToInventory(agent, output);
-    if (agent.openContainer.kind === "crafting_table" && (agent.openContainer.pendingResultTakes ?? 0) > 1) {
+    if (agent.openContainer.kind === "crafting_table" && this.matchesManualStickRecipe(agent.openContainer)) {
+      this.consumeManualStickRecipe(agent.openContainer);
+      this.refreshManualCraftingOutput(agent.openContainer);
+    } else if (agent.openContainer.kind === "crafting_table" && (agent.openContainer.pendingResultTakes ?? 0) > 1) {
       agent.openContainer.pendingResultTakes = (agent.openContainer.pendingResultTakes ?? 1) - 1;
       this.writeOutputSlot(agent.openContainer, agent.openContainer.repeatedCraftOutput ?? output);
     } else {
@@ -1028,6 +1042,114 @@ export class MockRuntimeServer {
     };
   }
 
+  private clickSlot(agentId: string, slotRef: string, buttonValue: string): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    if (!agent.openContainer) return runtimeFail("container_not_open", "No server-side container is currently open.");
+    if (agent.openContainer.kind !== "crafting_table") {
+      return runtimeFail("unsupported_capability", "Native slot clicking is currently supported for crafting table menus only.");
+    }
+
+    const slot = this.resolveSlot(agent, slotRef);
+    if (!slot.ok) return slot;
+    if (slot.slot.area === "output") return runtimeFail("invalid_arguments", "Use container.take_output for output slots.");
+    const button = clickButton(buttonValue);
+    if (button < 0) return runtimeFail("invalid_arguments", "button must be primary, secondary, left, or right.");
+
+    const open = agent.openContainer;
+    const beforeSlot = cloneStack(this.readSlot(agent, slot.slot));
+    const beforeCursor = cloneStack(open.cursor);
+    const changed = this.applyPickupClick(agent, slot.slot, button);
+    if (!changed) return runtimeFail("blocked", "Native server menu did not accept the slot click.");
+    this.refreshManualCraftingOutput(open);
+    const afterSlot = cloneStack(this.readSlot(agent, slot.slot));
+    const afterCursor = cloneStack(open.cursor);
+    const slotClick = this.slotClickPayload(open, slot.slot, button, beforeSlot, afterSlot, beforeCursor, afterCursor);
+    this.trace({
+      event: "container.click_slot",
+      agent_id: agent.agentId,
+      slot_ref: slotRef,
+      before_slot: beforeSlot,
+      before_cursor: beforeCursor,
+      after_slot: afterSlot,
+      after_cursor: afterCursor,
+      slot_click: slotClick
+    });
+    return {
+      ok: true,
+      status: "completed",
+      result: {
+        slot_click: slotClick,
+        container: this.containerSnapshot(agent)
+      }
+    };
+  }
+
+  private applyPickupClick(agent: AgentState, slot: SlotBinding, button: number): boolean {
+    const open = agent.openContainer!;
+    const slotStack = cloneStack(this.readSlot(agent, slot));
+    const cursor = cloneStack(open.cursor);
+    if (button === 0) {
+      if (!cursor && !slotStack) return false;
+      if (!cursor && slotStack) {
+        this.writeSlot(agent, slot, null);
+        open.cursor = slotStack;
+        return true;
+      }
+      if (cursor && !slotStack) {
+        if (!this.canPlaceInSlot(agent, slot, cursor)) return false;
+        this.writeSlot(agent, slot, cursor);
+        open.cursor = null;
+        return true;
+      }
+      if (cursor && slotStack && cursor.item === slotStack.item) {
+        if (!this.canPlaceInSlot(agent, slot, cursor)) return false;
+        const room = stackMaxCount(slotStack.item) - slotStack.count;
+        const moved = Math.min(room, cursor.count);
+        if (moved <= 0) return false;
+        this.writeSlot(agent, slot, { item: slotStack.item, count: slotStack.count + moved });
+        open.cursor = cursor.count === moved ? null : { item: cursor.item, count: cursor.count - moved };
+        return true;
+      }
+      if (cursor && slotStack && this.canPlaceInSlot(agent, slot, cursor)) {
+        this.writeSlot(agent, slot, cursor);
+        open.cursor = slotStack;
+        return true;
+      }
+      return false;
+    }
+
+    if (!cursor && slotStack) {
+      const taken = Math.ceil(slotStack.count / 2);
+      this.writeSlot(
+        agent,
+        slot,
+        slotStack.count === taken ? null : { item: slotStack.item, count: slotStack.count - taken }
+      );
+      open.cursor = { item: slotStack.item, count: taken };
+      return true;
+    }
+    if (cursor && !slotStack) {
+      if (!this.canPlaceInSlot(agent, slot, cursor)) return false;
+      this.writeSlot(agent, slot, { item: cursor.item, count: 1 });
+      open.cursor = cursor.count === 1 ? null : { item: cursor.item, count: cursor.count - 1 };
+      return true;
+    }
+    if (cursor && slotStack && cursor.item === slotStack.item) {
+      if (!this.canPlaceInSlot(agent, slot, cursor)) return false;
+      if (slotStack.count >= stackMaxCount(slotStack.item)) return false;
+      this.writeSlot(agent, slot, { item: slotStack.item, count: slotStack.count + 1 });
+      open.cursor = cursor.count === 1 ? null : { item: cursor.item, count: cursor.count - 1 };
+      return true;
+    }
+    return false;
+  }
+
+  private canPlaceInSlot(agent: AgentState, slot: SlotBinding, stack: ItemStack): boolean {
+    if (slot.area !== "container") return true;
+    return this.validateDestinationSlot(agent, slot, stack) === null;
+  }
+
   private outputTransferPayload(open: OpenContainerState, taken: ItemStack): JsonObject {
     const furnaceOutput = open.kind === "furnace";
     const craftingOutput = open.kind === "crafting_table";
@@ -1048,6 +1170,44 @@ export class MockRuntimeServer {
       inventory_insert_method: "slot.safe_insert",
       taken: { item: taken.item, count: taken.count }
     };
+  }
+
+  private slotClickPayload(
+    open: OpenContainerState,
+    slot: SlotBinding,
+    button: number,
+    beforeSlot: ItemStack | null,
+    afterSlot: ItemStack | null,
+    beforeCursor: ItemStack | null,
+    afterCursor: ItemStack | null
+  ): JsonObject {
+    return {
+      method: "abstract_container_menu.clicked",
+      click_type: "PICKUP",
+      button: button === 1 ? "secondary" : "primary",
+      button_id: button,
+      body_ui: "headless_server_agent",
+      source_area: slot.area,
+      source_index: slot.index,
+      menu_slot_index: this.menuSlotIndex(open, slot),
+      slot_class: this.slotClass(open, slot),
+      server_menu_hooks: true,
+      menu_type: open.nativeInteraction.menu_type,
+      before_slot: stackPayloadOrNull(beforeSlot),
+      after_slot: stackPayloadOrNull(afterSlot),
+      before_cursor: stackPayloadOrNull(beforeCursor),
+      after_cursor: stackPayloadOrNull(afterCursor)
+    };
+  }
+
+  private menuSlotIndex(open: OpenContainerState, slot: SlotBinding): number {
+    if (open.kind !== "crafting_table") return -1;
+    if (slot.area === "container") return 1 + slot.index;
+    if (slot.area === "inventory" && slot.index >= 0 && slot.index < 9) return 37 + slot.index;
+    if (slot.area === "inventory" && slot.index >= 9 && slot.index < PLAYER_INVENTORY_SLOT_LIMIT) {
+      return 10 + (slot.index - 9);
+    }
+    return -1;
   }
 
   private slotClass(open: OpenContainerState, slot: SlotBinding): string {
@@ -1230,6 +1390,7 @@ export class MockRuntimeServer {
       block_ref: open.blockRef,
       block_pos: open.blockPos,
       native_interaction: open.nativeInteraction,
+      cursor: stackPayload(open.cursor),
       slots: containerSlots,
       inventory_slots: inventorySlots,
       output_slot: outputSlot
@@ -1303,6 +1464,33 @@ export class MockRuntimeServer {
       return;
     }
     open.output = stack;
+  }
+
+  private refreshManualCraftingOutput(open: OpenContainerState): void {
+    if (open.kind !== "crafting_table" || !open.block?.container) return;
+    open.pendingResultTakes = 0;
+    open.repeatedCraftOutput = undefined;
+    open.output = this.matchesManualStickRecipe(open) ? { item: "minecraft:stick", count: 4 } : null;
+  }
+
+  private matchesManualStickRecipe(open: OpenContainerState): boolean {
+    if (open.kind !== "crafting_table" || !open.block?.container) return false;
+    const slots = open.block.container.slots;
+    return slots.every((slot, index) => {
+      if (index === 1 || index === 4) {
+        return slot?.item === "minecraft:oak_planks" && slot.count >= 1;
+      }
+      return !slot || slot.count <= 0;
+    });
+  }
+
+  private consumeManualStickRecipe(open: OpenContainerState): void {
+    if (!open.block?.container) return;
+    for (const index of [1, 4]) {
+      const slot = open.block.container.slots[index];
+      if (!slot) continue;
+      open.block.container.slots[index] = slot.count <= 1 ? null : { item: slot.item, count: slot.count - 1 };
+    }
   }
 
   private processFurnace(open: OpenContainerState): void {
@@ -1842,7 +2030,7 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
         visibleFaces: ["north", "up"],
         container: {
           kind: "crafting_table",
-          slots: []
+          slots: Array.from({ length: 9 }, () => null)
         }
       }
     ];
@@ -2128,6 +2316,28 @@ function isPlaceableBlockItem(item: string): boolean {
 function stackMaxCount(item: string): number {
   if (item === "minecraft:flint_and_steel") return 1;
   return 64;
+}
+
+function clickButton(button: string): number {
+  switch (button.toLowerCase()) {
+    case "":
+    case "primary":
+    case "left":
+      return 0;
+    case "secondary":
+    case "right":
+      return 1;
+    default:
+      return -1;
+  }
+}
+
+function cloneStack(stack: ItemStack | null | undefined): ItemStack | null {
+  return stack && stack.count > 0 ? { item: stack.item, count: stack.count } : null;
+}
+
+function stackPayloadOrNull(stack: ItemStack | null): JsonObject | null {
+  return stack ? { item: stack.item, count: stack.count } : null;
 }
 
 export function parseFixture(value: string | undefined): FixtureName {
