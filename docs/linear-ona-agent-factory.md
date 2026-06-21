@@ -169,6 +169,29 @@ prove that Linear webhooks, GitHub issue webhooks, or remote Ona automation
 triggers are enabled in the user organization; those must be configured and
 tested in the Ona and Linear UIs.
 
+## Pilot Evidence
+
+As of 2026-06-21, the GitHub side of the factory has a real pilot issue:
+
+- GitHub issue: <https://github.com/Ninot1Quyi/MineLink/issues/3>
+- Ona automation: `019ee9f6-9adb-7c93-aaa6-c26337d2278b`
+- Read-only Ona `execute` smoke completed against environment
+  `019ee8fc-2d61-7dba-aed8-1dfc94d91fce`.
+- Broad pilot run `019ee9f8-ea92-70fe-a6b9-d59258e9b976` was cancelled after
+  the agent step stayed running too long.
+- Bounded pilot run `019ee9ff-86d6-7071-ae45-93866a16e998` completed but
+  reported `failedActionCount=1` and did not create a PR through the Ona
+  `pullRequest` step.
+
+Current conclusion: Ona AI automation registration and execution are proven,
+but the full issue-to-Ona-to-PR chain is not accepted yet. The next factory
+slice must make the PR step observable and reliable, or replace it with a
+documented GitHub connector fallback until the Ona PR step failure mode is
+understood.
+
+Linear remains unproven in this environment: no Linear CLI, connector, or API
+token was available when the pilot was run.
+
 ## Acceptance Video
 
 The initial video artifact is trace-driven, not a Minecraft client recording.
