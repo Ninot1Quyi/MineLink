@@ -76,6 +76,7 @@ public final class MineLinkEndpointBootstrap {
     private static final int REQUEST_TIMEOUT_SECONDS = 10;
     private static final double LOCAL_CHAT_RADIUS = 16.0D;
     private static final int MAX_SOCIAL_EVENTS = 200;
+    private static final int MAX_AGENTS_PER_OWNER = 3;
     private static final int MAX_ACTION_QUEUE_DEPTH = 4;
     private static final long SUBMITTED_ACTION_HOLD_MS = 1_000L;
     private static final int MAX_SYNC_MINING_TICKS = 600;
@@ -193,7 +194,7 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject admission = new JsonObject();
         admission.addProperty("mode", endpointToken().isPresent() ? "token" : "open");
-        admission.addProperty("max_agents_per_owner", 3);
+        admission.addProperty("max_agents_per_owner", MAX_AGENTS_PER_OWNER);
         response.add("admission", admission);
 
         JsonObject capabilities = new JsonObject();
@@ -235,6 +236,13 @@ public final class MineLinkEndpointBootstrap {
         String ownerId = stringValue(request, "owner_id", runtimeState.ownerId);
         if (ownerId.isBlank()) {
             return failure(request, "not_connected", "Call connect before agent.birth.");
+        }
+        if (runtimeState.agentCountForOwner(ownerId) >= MAX_AGENTS_PER_OWNER) {
+            return failure(
+                request,
+                "agent_quota_exceeded",
+                "Owner " + ownerId + " already has the maximum " + MAX_AGENTS_PER_OWNER + " server_agent bodies."
+            );
         }
         String seedPrompt = stringValue(request, "seed_prompt", "A cautious but curious newcomer.");
         AgentBody agent = runtimeState.birth(server.overworld(), ownerId, seedPrompt);
@@ -1908,6 +1916,16 @@ public final class MineLinkEndpointBootstrap {
 
         private AgentBody agent(String agentId) {
             return agents.get(agentId);
+        }
+
+        private int agentCountForOwner(String ownerId) {
+            int count = 0;
+            for (AgentBody agent : agents.values()) {
+                if (agent.ownerId.equals(ownerId)) {
+                    count++;
+                }
+            }
+            return count;
         }
 
         private SocialEvent addLocalChat(AgentBody agent, String message) {

@@ -28,6 +28,35 @@ describe("MockRuntimeServer", () => {
     client.close();
   });
 
+  it("enforces the per-owner server_agent quota", async () => {
+    const server = new MockRuntimeServer({ port: 25685 });
+    servers.push(server);
+    await server.start();
+
+    const client = await connect(server.endpoint());
+    const connectResult = await request(client, { type: "connect", server_address: "dev.local", owner: { name: "team" } });
+    const ownerId = String(connectResult.owner_id);
+
+    for (let index = 0; index < 3; index++) {
+      const birth = await request(client, {
+        type: "agent.birth",
+        owner_id: ownerId,
+        seed_prompt: `agent ${index + 1}`,
+        body_type: "server_agent"
+      });
+      expect(birth).toMatchObject({ ok: true });
+    }
+
+    const rejected = await request(client, {
+      type: "agent.birth",
+      owner_id: ownerId,
+      seed_prompt: "agent 4",
+      body_type: "server_agent"
+    });
+    expect(rejected).toMatchObject({ ok: false, reason: "agent_quota_exceeded" });
+    client.close();
+  });
+
   it("enforces visible ref reachability before mining", async () => {
     const server = new MockRuntimeServer({ port: 25676 });
     servers.push(server);

@@ -239,14 +239,16 @@ def run_portal_coop(
     final_assertions: List[JsonDict] = []
     connect_results: JsonDict = {}
     birth_results: JsonDict = {}
+    quota_probe: JsonDict = {}
     clients: Dict[str, MineLinkMcpClient] = {}
     tools: JsonDict = {}
+    team_owner_name = "codex_portal_team"
 
     with ExitStack() as stack:
         for name in agent_names:
             client = stack.enter_context(MineLinkMcpClient())
             clients[name] = client
-            connect_results[name] = client.connect_server(endpoint=endpoint, owner_name=f"codex_{name}")
+            connect_results[name] = client.connect_server(endpoint=endpoint, owner_name=team_owner_name)
             birth_results[name] = client.birth(f"{scenario}:{name}: {scenario_objective(scenario)}")
             state["agents"][name]["agent_id"] = birth_results[name].get("agent_id")
             state["agents"][name]["display_name"] = birth_results[name].get("display_name")
@@ -257,6 +259,12 @@ def run_portal_coop(
                 )
             if not tools:
                 tools = client.tool_list({"limit": 50})
+
+        quota_client = stack.enter_context(MineLinkMcpClient())
+        quota_connect = quota_client.connect_server(endpoint=endpoint, owner_name=team_owner_name)
+        quota_birth = quota_client.birth(f"{scenario}:quota_probe: should be rejected by owner limit")
+        quota_probe = {"connect": quota_connect, "birth": quota_birth}
+        state["quota_probe"] = quota_probe
 
         log(
             "codex_rpc_team_session_started",
@@ -355,6 +363,7 @@ def run_portal_coop(
         },
         "connect": connect_results,
         "birth": birth_results,
+        "quota_probe": quota_probe,
         "placements": state["placements"],
         "final_assertions": final_assertions,
         "tool_results": state["tool_results"],
@@ -662,6 +671,19 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "passed": actual == expected,
             "expected": expected,
             "actual": actual,
+        }
+    if kind == "agent_quota_rejected":
+        expected_reason = str(assertion.get("reason", "agent_quota_exceeded"))
+        probe = (global_state or state).get("quota_probe", {})
+        birth = probe.get("birth", {}) if isinstance(probe, dict) else {}
+        reason = birth.get("reason") if isinstance(birth, dict) else None
+        return {
+            "name": assertion.get("name", "agent_quota_rejected"),
+            "kind": kind,
+            "passed": isinstance(birth, dict) and birth.get("ok") is False and reason == expected_reason,
+            "expected_reason": expected_reason,
+            "observed_reason": reason,
+            "birth": birth,
         }
     if kind == "visible_block_exists":
         item = str(assertion.get("id", ""))

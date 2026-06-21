@@ -6,6 +6,7 @@ export const MINELINK_HOST_VERSION = "0.1.0";
 export const FAILURE_REASONS = [
   "unsupported_online_auth",
   "not_connected",
+  "agent_quota_exceeded",
   "agent_not_born",
   "unknown_tool",
   "invalid_arguments",

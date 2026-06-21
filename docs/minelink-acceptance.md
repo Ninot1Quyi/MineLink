@@ -148,6 +148,10 @@ Current status:
   and an `action_id`, while excess submissions return
   `backpressure_queue_full` instead of allowing unbounded per-agent queue
   growth.
+- Mock runtime and real NeoForge runtime enforce the advertised
+  `max_agents_per_owner=3` admission limit with `agent_quota_exceeded`; the
+  three-agent portal cooperation replay proves exactly three same-owner agents
+  can cooperate while a fourth same-owner birth is rejected server-side.
 - The real NeoForge guard fixture also proves that a fixture-hidden
   `minecraft:diamond_ore` is absent from `observe.scene` while the intervening
   `minecraft:stone` wall and reachable `minecraft:white_bed` are visible.
@@ -419,6 +423,9 @@ Current status:
   `portal_coop`.
 - Host tests cover Gateway token admission, public-bind startup refusal without
   a token, fixed-window rate limiting, and active MCP session caps.
+- Runtime tests and the real `portal_coop` smoke cover the server-side
+  per-owner `server_agent` cap: the fourth same-owner agent birth returns
+  `agent_quota_exceeded` while the three-agent portal workflow remains valid.
 - These reports are stability evidence, not full release acceptance. Gate 11
   still requires a longer real Minecraft soak profile before release.
 

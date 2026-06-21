@@ -22,6 +22,7 @@ type SlotArea = "container" | "inventory" | "output";
 
 const LOCAL_CHAT_RADIUS = 16;
 const MAX_SOCIAL_EVENTS = 200;
+const MAX_AGENTS_PER_OWNER = 3;
 const PLACEABLE_BLOCK_ITEMS = new Set([
   "create:shaft",
   "create:cogwheel",
@@ -65,6 +66,7 @@ interface AgentState {
   agentId: string;
   displayName: string;
   bodyId: string;
+  ownerId: string;
   position: Vec3;
   yaw: number;
   pitch: number;
@@ -242,7 +244,7 @@ export class MockRuntimeServer {
           limits: { max_agents: 3, actions_per_second: 5, max_queue_depth: 4 }
         };
       case "agent.birth":
-        return this.birth(String(request.seed_prompt ?? ""));
+        return this.birth(String(request.owner_id ?? "owner:offline:codex"), String(request.seed_prompt ?? ""));
       case "agent.observe":
         return this.observe(String(request.agent_id ?? ""), request.include as string[] | undefined);
       case "agent.action":
@@ -274,7 +276,13 @@ export class MockRuntimeServer {
     }
   }
 
-  private birth(seedPrompt: string): RuntimeResponse {
+  private birth(ownerId: string, seedPrompt: string): RuntimeResponse {
+    if (this.agentCountForOwner(ownerId) >= MAX_AGENTS_PER_OWNER) {
+      return runtimeFail(
+        "agent_quota_exceeded",
+        `Owner ${ownerId} already has the maximum ${MAX_AGENTS_PER_OWNER} server_agent bodies.`
+      );
+    }
     const n = this.agents.size + 1;
     const displayName = n === 1 ? "Elias Reed" : `MineLink Agent ${n}`;
     const agentId = `agent:${displayName.toLowerCase().replaceAll(" ", "_")}`;
@@ -283,6 +291,7 @@ export class MockRuntimeServer {
       agentId,
       displayName,
       bodyId,
+      ownerId,
       position: this.fixture === "portal_coop" ? [1.5, 66, -2] : [0, 64, 0],
       yaw: 0,
       pitch: 0,
@@ -307,6 +316,14 @@ export class MockRuntimeServer {
         relationships: {}
       }
     };
+  }
+
+  private agentCountForOwner(ownerId: string): number {
+    let count = 0;
+    for (const agent of this.agents.values()) {
+      if (agent.ownerId === ownerId) count += 1;
+    }
+    return count;
   }
 
   private observe(agentId: string, include: string[] = ["self", "inventory", "visible_scene"]): RuntimeResponse {
