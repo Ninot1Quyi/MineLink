@@ -186,10 +186,14 @@ function unique(values) {
 const nextActions = unique([
   ...blockers,
   ...checks.flatMap((check) => {
-    if (check.name === "current ONA_TOKEN/GITPOD_TOKEN" && check.status === "missing") {
+    if (check.name === "current ONA_TOKEN/GITPOD_TOKEN" && check.status === "missing" && env.githubActions) {
       return ["Provide ONA_TOKEN to the runner before dispatching Ona automation."];
     }
-    if (check.name === "current LINEAR_API_KEY" && check.status === "missing") {
+    if (
+      check.name === "current LINEAR_API_KEY" &&
+      check.status === "missing" &&
+      (env.githubActions || requireLinearEnv)
+    ) {
       return ["Provide LINEAR_API_KEY to the runner before enabling Linear watch/status sync."];
     }
     if (check.name === "GitHub CLI auth" && check.status === "blocked") {

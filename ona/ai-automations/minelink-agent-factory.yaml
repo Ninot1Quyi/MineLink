@@ -32,9 +32,9 @@ action:
           node scripts/dev/sync-linear-status.mjs
           --issue "{{ .Parameters.linear_issue }}"
           --status "In Progress"
-          --comment "Ona automation started for {{ .Parameters.task_id }} on branch {{ .Parameters.branch }}. Source issue: {{ .Parameters.issue_url }}"
+          --comment "Ona automation started for {{ .Parameters.task_id }} on branch {{ .Parameters.branch }}. Source issue: {{ .Parameters.github_issue }}"
           --attachment-title "MineLink source task {{ .Parameters.task_id }}"
-          --attachment-url "{{ .Parameters.issue_url }}"
+          --attachment-url "{{ .Parameters.github_issue }}"
           --require-key
           --require-update
     - task:

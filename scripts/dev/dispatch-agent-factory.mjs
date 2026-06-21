@@ -76,10 +76,6 @@ function run(command, commandArgs, options = {}) {
   });
 }
 
-function oneLine(text) {
-  return String(text ?? "").replace(/\s+/g, " ").trim();
-}
-
 function sanitizeOutput(text) {
   return String(text ?? "")
     .replace(/(lin_api_)[A-Za-z0-9]+/g, "$1[redacted]")
@@ -255,8 +251,6 @@ if (failures.length === 0) {
     "--param",
     `task_id=${taskId}`,
     "--param",
-    `issue_url=${issue.url || "none"}`,
-    "--param",
     `linear_issue=${linearIssue}`,
     "--param",
     `github_issue=${issue.url || "none"}`,
@@ -270,8 +264,6 @@ if (failures.length === 0) {
     `pr_title=${prTitle}`,
     "--param",
     `acceptance_gate=${acceptanceGate}`,
-    "--param",
-    `agent_instruction=${oneLine(parseSection(issue.body, "Task"))}`,
     "--param",
     `validation_scope=${validationScope}`,
     "--param",
@@ -292,7 +284,10 @@ if (failures.length === 0) {
       onaStatus = "blocked";
       dispatchStatus = "blocked";
       exitCode = requireOna ? result.status ?? 1 : 0;
-      failures.push("Ona automation start failed. Check ONA_TOKEN/Ona CLI authentication and project permissions.");
+      const onaFailure = commandError.includes("map.max_pairs")
+        ? "Ona automation start failed because the parameter map exceeded Ona's 10-entry limit."
+        : "Ona automation start failed. Check ONA_TOKEN/Ona CLI authentication and project permissions.";
+      failures.push(onaFailure);
     }
   }
 }

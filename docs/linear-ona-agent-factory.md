@@ -140,13 +140,11 @@ Manual pilot command:
 ona ai automation start <automation-id> \
   --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb \
   --param task_id=gh-45 \
-  --param issue_url=https://github.com/Ninot1Quyi/MineLink/issues/45 \
   --param linear_issue=NIN-7 \
   --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 \
   --param branch=codex/gh-45-short-task \
   --param pr_title="Advance MineLink task gh-45" \
   --param acceptance_gate="Gate 2" \
-  --param agent_instruction="Run a bounded validation pilot. Do not edit files unless validation fails." \
   --param validation_scope=docs \
   --param scenarios=none \
   --wait
@@ -155,6 +153,8 @@ ona ai automation start <automation-id> \
 Webhook or GitHub Actions dispatch can call the same command after validating
 the issue body. Do not paste tokens into shell history; use Ona/GitHub secret
 storage for any dispatcher credentials.
+Keep the dispatch map at 10 parameters or fewer; Ona rejects larger parameter
+maps.
 
 ## Linear Entrypoint
 
