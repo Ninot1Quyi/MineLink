@@ -256,7 +256,9 @@ esac
   echo
   echo "- \`.minelink-dev/reports/agent-task-summary.md\`"
   echo "- \`.minelink-dev/reports/artifacts/acceptance-summary.md\` when acceptance artifacts are rendered"
-  echo "- \`.minelink-dev/reports/artifacts/acceptance.mp4\` when ffmpeg is available or video is required"
+  echo "- \`.minelink-dev/reports/artifacts/acceptance.mp4\` for video-required tasks"
+  echo "- \`.minelink-dev/reports/artifacts/video-review.md\` for video-required tasks"
+  echo "- \`.minelink-dev/reports/artifacts/video-release-gate.md\` for video-required tasks"
   echo "- \`.minelink-dev/<scenario>/reports/<scenario>-result.json\` when e2e scenarios ran"
   echo "- \`.minelink-dev/soak/<runtime>/soak-report.json\` when soak scenarios ran"
 } > "$summary_path"

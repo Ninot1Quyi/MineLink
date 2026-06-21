@@ -6,9 +6,11 @@ cloud worktrees without losing the anti-mock product boundary.
 ## Migration Goal
 
 Ona is used as a cloud worktree platform for narrow, verifiable MineLink tasks.
-It is not a replacement for the acceptance process. The integration owner still
-checks the acceptance gate, local evidence, real NeoForge evidence when needed,
-and remote CI before merging.
+MineLink agent work must use the **Ona Platform Codex** agent option. The Ona
+CLI automation is a validation, artifact, PR, and status-sync runner; it is not
+the implementation agent. Ona is not a replacement for the acceptance process.
+The integration owner still checks the acceptance gate, local evidence, real
+NeoForge evidence when needed, and remote CI before merging.
 
 ## Ona Environment Contract
 
@@ -29,8 +31,14 @@ Every environment must start from a clean branch and read these files first:
 
 Use `.devcontainer/devcontainer.json` for bootstrap. It uses the prebuilt
 Node 22 image, Java 21 feature, image or OS provided `python3`, GitHub CLI,
-runs `npm ci`, and performs a docs-scope verification on attach. Do not pin the
-Python feature to a source-built version for Ona worktrees.
+runs `npm ci`, installs `ffmpeg` for required MP4 artifacts, and performs a
+docs-scope verification on attach. Do not pin the Python feature to a
+source-built version for Ona worktrees.
+
+OpenAI subscription binding and Codex model selection belong to the Ona
+Platform account/session. Do not add OpenAI API keys, proxy credentials, or
+subscription tokens to the repository, task body, automation parameters, or
+logs.
 
 Use `ona/<task-name>` or `agent/<task-name>` branches for Ona-managed tasks.
 GitHub Actions also accepts `codex/**` for local Codex worktrees.
@@ -40,6 +48,7 @@ GitHub Actions also accepts `codex/**` for local Codex worktrees.
 Only tasks with `agent-ready` scope are suitable for Ona. Each task must define:
 
 - Task: the concrete requested outcome.
+- Required agent mode: Ona Platform Codex.
 - Scope: exact files or directories the agent may change.
 - Forbidden changes: assertions, boundaries, or files that must not be weakened.
 - Acceptance gate: the gate in `docs/minelink-acceptance.md`.
@@ -98,6 +107,8 @@ Acceptance artifact generation writes:
 ```text
 .minelink-dev/reports/artifacts/acceptance-summary.md
 .minelink-dev/reports/artifacts/acceptance.mp4
+.minelink-dev/reports/artifacts/video-review.md
+.minelink-dev/reports/artifacts/video-release-gate.md
 ```
 
 ## Automatic Guards
@@ -116,13 +127,18 @@ MineLink uses automation to reduce agent memory load:
   semantics.
 - `scripts/dev/render-acceptance-video.mjs` turns existing reports into a
   trace-driven acceptance summary and optional MP4 artifact.
+- `scripts/dev/check-video-review.mjs` blocks release unless a separate Ona
+  Platform Codex verifier report confirms `Release decision: pass`,
+  `Task matched: yes`, `Video matched: yes`, and current summary/MP4 SHA-256
+  hashes against the rendered MP4.
 - `scripts/dev/sync-linear-status.mjs` uses `LINEAR_API_KEY` from the Ona
   environment to update Linear issue status, comments, and evidence links
   without printing the secret.
 - `.ona/automations.yaml` defines Ona-native environment tasks.
-- `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona AI
-  automation that should be started by manual pilot, GitHub dispatch, or Linear
-  webhook integration.
+- `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
+  finalizer that should be started by manual pilot, GitHub dispatch, or Linear
+  webhook integration after Platform Codex implementation and video-review
+  sessions have produced the required artifacts.
 - `.github/workflows/ci.yml` runs both guards on every push and PR.
 - `.github/workflows/install-smoke.yml` uploads
   `minelink-install-smoke-evidence` for install/workbench/bootstrap changes.
@@ -165,8 +181,12 @@ EULA files.
 
 ## Automation Readiness
 
-Ona AI automation is the target execution surface. `ona environment ssh` is only
-for debugging and readback. A valid pilot starts
+Ona Platform Codex is the target execution surface for implementation and video
+verification. `ona environment ssh` is only for debugging and readback. The
+checked-in Ona CLI automation is the validation/status/artifact-gate runner that
+executes after the Codex sessions have produced a branch, acceptance MP4, and,
+when video evidence is required, a dedicated video-review report. It does not
+re-render the MP4 after review. A valid validation pilot starts
 `ona/ai-automations/minelink-agent-factory.yaml` through:
 
 ```bash
@@ -180,10 +200,15 @@ sync script writes `.minelink-dev/reports/linear-sync.md` without exposing the
 key value.
 
 Linear or GitHub issue webhooks are not proven enabled until a real issue
-creates an Ona execution, writes Linear status from inside Ona, and opens a
+creates an Ona Platform Codex session, writes Linear status from inside Ona,
+checks the acceptance MP4 through a separate Codex video verifier, and opens a
 draft PR without manual SSH.
 The checked-in Ona AI automation uses a manual trigger because Ona rejects PR
 triggers until a webhook or integration is configured in the organization.
+
+Generic Ona Agent runs are not accepted as MineLink agent evidence. If a pilot
+accidentally uses the default Ona Agent instead of Platform Codex, record it as
+process smoke only and rerun the task with Codex selected.
 
 Scheduled or bulk Ona automation should wait until all of these are true:
 
@@ -197,7 +222,7 @@ Until then, use limited parallelism: two or three Ona environments at a time.
 
 ## Current Migration State
 
-MineLink is ready for limited Ona parallelism, not broad automatic issue
-draining. The next useful step is to open narrow PRs from
+MineLink is ready for limited Ona Platform Codex parallelism, not broad
+automatic issue draining. The next useful step is to open narrow PRs from
 `docs/agent-task-queue.md`, starting with install proof, artifact summaries,
 stability reporting, and one real runtime gate slice at a time.

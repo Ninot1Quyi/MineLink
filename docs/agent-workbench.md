@@ -1,7 +1,7 @@
 # MineLink Agent Workbench
 
-This document defines how Ona, Codex, and other cloud worktree agents should
-work on MineLink without relying on hidden thread context.
+This document defines how Ona Platform Codex and other cloud worktree agents
+should work on MineLink without relying on hidden thread context.
 
 ## Operating Model
 
@@ -13,6 +13,9 @@ one environment = one task = one branch = one PR
 
 The local Codex thread remains the integration and acceptance owner. Cloud
 agents should take narrow tasks with explicit write scopes and validation.
+When the task runs in Ona, select the platform **Codex** agent mode. The
+default Ona Agent mode is not accepted as MineLink implementation or verifier
+evidence.
 Use `docs/ona-migration.md` for the migration runbook and
 `docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona agent factory.
 Use `docs/agent-task-queue.md` for ready tasks.
@@ -37,13 +40,15 @@ sets are disjoint and a human or lead agent is integrating.
 Every agent-ready issue or PR must state:
 
 - Task: the one-sentence outcome.
+- Required agent mode: Ona Platform Codex for Ona tasks.
 - Scope: exact modules or files the agent may change.
 - Forbidden: assertions, boundaries, or files the agent must not weaken.
 - Acceptance gate: which gate in `docs/minelink-acceptance.md` is affected.
 - Mock/smoke reduction: which assumption is being replaced by real behavior.
 - Validation: exact commands to run.
 - Evidence: report paths and CI links to paste into the PR.
-- Acceptance video required: yes/no and the expected artifact path.
+- Acceptance video required: yes/no, expected MP4 path, and required dedicated
+  Codex video-review path.
 - Linked GitHub issue and linked Linear issue, when applicable.
 - Expected PR title and branch convention.
 - Remaining gaps: what this task does not complete.
@@ -87,8 +92,10 @@ Use automation to reduce agent memory load:
   `npm ci`, and records install evidence under `.minelink-dev/install-smoke/`.
 - `.ona/automations.yaml` provides Ona-native environment tasks for docs, fast,
   NeoForge guard, and acceptance artifact commands.
-- `ona/ai-automations/minelink-agent-factory.yaml` is the Ona AI automation
-  spec for task-to-PR agent work.
+- `ona/ai-automations/minelink-agent-factory.yaml` is the Ona CLI finalizer for
+  Linear sync, verification, evidence summaries, video-release gating, and PR
+  creation after Ona Platform Codex does the bounded work and a separate Codex
+  verifier reviews the MP4.
 - `sync-linear-status.mjs` lets Ona write Linear status/comments/evidence links
   through `LINEAR_API_KEY` without exposing the key in logs.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,
@@ -101,6 +108,10 @@ Use automation to reduce agent memory load:
   and appends the same evidence index to the GitHub Step Summary.
 - `render-acceptance-video.mjs` writes trace-driven acceptance artifact
   summaries and optional MP4 files under `.minelink-dev/reports/artifacts/`.
+- `.ona/automations.yaml` keeps rendering and release checking as separate
+  tasks so the video verifier can inspect the actual MP4 before publication.
+- `check-video-review.mjs` fails release unless a separate Ona Platform Codex
+  verifier has compared the task requirements against the summary and MP4.
 - The install smoke workflow uploads `minelink-install-smoke-evidence` for
   install/workbench/bootstrap changes.
 - The heavy NeoForge workflow is skipped for docs-only and workbench-only
@@ -142,7 +153,9 @@ Evidence paths:
 - `.minelink-dev/reports/ci-evidence-summary.md`
 - `.minelink-dev/reports/linear-sync.md`, when a Linear issue is linked
 - `.minelink-dev/reports/artifacts/acceptance-summary.md`
-- `.minelink-dev/reports/artifacts/acceptance.mp4`, if `video-required` or `ffmpeg` is available
+- `.minelink-dev/reports/artifacts/acceptance.mp4`
+- `.minelink-dev/reports/artifacts/video-review.md`
+- `.minelink-dev/reports/artifacts/video-release-gate.md`
 - `.minelink-dev/install-smoke/install-smoke-report.md`, for install/bootstrap tasks
 - `.minelink-dev/<scenario>/reports/<scenario>-result.json`
 

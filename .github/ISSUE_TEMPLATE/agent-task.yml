@@ -9,7 +9,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use one environment, one branch, and one PR for this task. Do not claim product completion from mock, replay, or smoke evidence.
+        Use one environment, one branch, and one PR for this task. Ona work must select the Platform Codex agent mode; default Ona Agent runs are not accepted as MineLink implementation or verifier evidence. Do not claim product completion from mock, replay, or smoke evidence.
   - type: dropdown
     id: gate
     attributes:
@@ -28,6 +28,15 @@ body:
         - Gate 9: Frontier Society and Director
         - Gate 10: Install and Product Packaging
         - Gate 11: Security, Stability, and Release
+    validations:
+      required: true
+  - type: dropdown
+    id: agent_mode
+    attributes:
+      label: Required agent mode
+      description: Ona tasks must use the platform Codex option, not the default Ona Agent.
+      options:
+        - Ona Platform Codex
     validations:
       required: true
   - type: textarea
@@ -86,6 +95,8 @@ body:
         - .minelink-dev/reports/agent-task-summary.md
         - .minelink-dev/reports/artifacts/acceptance-summary.md
         - .minelink-dev/reports/artifacts/acceptance.mp4 when video-required
+        - .minelink-dev/reports/artifacts/video-review.md when video-required
+        - .minelink-dev/reports/artifacts/video-release-gate.md when video-required
         - .minelink-dev/<scenario>/reports/<scenario>-result.json
     validations:
       required: true

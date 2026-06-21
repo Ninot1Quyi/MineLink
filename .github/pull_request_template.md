@@ -10,6 +10,8 @@ Linked Linear issue:
 
 Linked GitHub issue:
 
+Required agent mode:
+
 ## Mock/Smoke Assumption Reduced
 
 Describe the assumption this PR converts toward real product behavior:
@@ -36,10 +38,14 @@ Forbidden changes respected:
 - `.minelink-dev/reports/ci-evidence-summary.md`
 - `.minelink-dev/reports/artifacts/acceptance-summary.md`
 - `.minelink-dev/reports/artifacts/acceptance.mp4`
+- `.minelink-dev/reports/artifacts/video-review.md`
+- `.minelink-dev/reports/artifacts/video-release-gate.md`
 - `.minelink-dev/<scenario>/reports/<scenario>-result.json`
 - GitHub Actions run:
 
 Acceptance video artifact:
+
+Dedicated video verifier:
 
 ## Remaining Product Gaps
 

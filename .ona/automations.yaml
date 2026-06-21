@@ -24,7 +24,14 @@ tasks:
     name: Render MineLink acceptance evidence artifacts
     command: |
       node scripts/dev/summarize-evidence.mjs
-      node scripts/dev/render-acceptance-video.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)"
+      node scripts/dev/render-acceptance-video.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --require-mp4
+    triggeredBy:
+      - manual
+
+  check-video-release:
+    name: Check MineLink acceptance video release gate
+    command: |
+      node scripts/dev/check-video-review.mjs --require-mp4
     triggeredBy:
       - manual
 

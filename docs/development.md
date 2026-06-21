@@ -54,14 +54,30 @@ artifacts.
 Trace-driven acceptance artifacts can be rendered with:
 
 ```bash
-node scripts/dev/render-acceptance-video.mjs
+node scripts/dev/render-acceptance-video.mjs --require-mp4
 ```
 
 The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and,
 when `ffmpeg` is available, `.minelink-dev/reports/artifacts/acceptance.mp4`.
-Use `--require-mp4` for tasks labeled `video-required`.
+Use `--task-requirements` to embed the bounded task contract. For tasks labeled
+`video-required`, a separate Ona Platform Codex verifier must compare the task
+requirements with the rendered summary/MP4, record the current summary and MP4
+SHA-256 hashes, and write:
 
-Ona agent-factory work should use Ona AI automation rather than manual SSH:
+```text
+.minelink-dev/reports/artifacts/video-review.md
+```
+
+The release gate is:
+
+```bash
+node scripts/dev/check-video-review.mjs --require-mp4
+```
+
+Ona agent-factory implementation and video review must use the Ona Platform
+Codex agent option. The default Ona Agent mode is not accepted as MineLink
+agent evidence. The checked-in Ona CLI automation is only for validation,
+Linear status sync, artifact gating, and PR creation:
 
 ```bash
 ona automations validate .ona/automations.yaml

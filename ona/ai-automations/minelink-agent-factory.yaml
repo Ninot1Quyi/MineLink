@@ -1,7 +1,8 @@
 name: minelink-agent-factory
 description: >
-  MineLink issue-to-PR agent factory. Start this automation from a GitHub or
-  Linear task that already satisfies the MineLink agent task contract.
+  MineLink issue-to-PR validation factory. Use the Ona Platform Codex agent
+  for implementation and video review; this CLI automation only runs process
+  sync, validation, artifact, and PR steps.
 triggers:
   - context:
       projects:
@@ -23,46 +24,21 @@ action:
           --attachment-url "{{ .Parameters.issue_url }}"
           --require-key
           --require-update
-    - agent:
-        prompt: |
-          You are working on MineLink through the Ona agent execution environment,
-          not a manual SSH shell. Read AGENTS.md, ARCHITECTURE.md,
-          docs/minelink-acceptance.md, docs/agent-workbench.md, and
-          docs/linear-ona-agent-factory.md before editing.
-
-          Task id: {{ .Parameters.task_id }}
-          Source issue: {{ .Parameters.issue_url }}
-          Linked Linear issue: {{ .Parameters.linear_issue }}
-          Linked GitHub issue: {{ .Parameters.github_issue }}
-          Target branch: {{ .Parameters.branch }}
-          Acceptance gate: {{ .Parameters.acceptance_gate }}
-          Validation scope: {{ .Parameters.validation_scope }}
-          Scenarios: {{ .Parameters.scenarios }}
-          Task instruction: {{ .Parameters.agent_instruction }}
-
-          Follow the task instruction exactly. Keep the work bounded to the
-          issue scope. For pilot or validation tasks, do not edit files unless
-          the instruction explicitly asks for edits. Preserve MineLink anti-mock
-          boundaries: do not weaken assertions, do not add oracle tools, do not
-          replace real Minecraft behavior with synthetic output, and do not
-          claim product acceptance from mock or smoke evidence. Commit messages,
-          PR text, comments, and code comments must be English.
     - task:
         command: >
           bash scripts/dev/verify-agent-task.sh --scope {{ .Parameters.validation_scope }} --scenarios {{ .Parameters.scenarios }}
     - task:
         command: >
-          node scripts/dev/summarize-evidence.mjs &&
-          node scripts/dev/render-acceptance-video.mjs
-          --task-id {{ .Parameters.task_id }}
-          --branch {{ .Parameters.branch }}
-          --pr-url {{ .Parameters.issue_url }}
+          node scripts/dev/summarize-evidence.mjs
+    - task:
+        command: >
+          node scripts/dev/check-video-review.mjs --require-mp4
     - task:
         command: >
           node scripts/dev/sync-linear-status.mjs
           --issue "{{ .Parameters.linear_issue }}"
           --status "In Review"
-          --comment "Ona validation and acceptance artifact steps completed for {{ .Parameters.task_id }}. Evidence paths: .minelink-dev/reports/agent-task-summary.md, .minelink-dev/reports/ci-evidence-summary.md, .minelink-dev/reports/artifacts/acceptance-summary.md, and .minelink-dev/reports/artifacts/acceptance.mp4 when ffmpeg is available."
+          --comment "Ona validation and acceptance artifact steps completed for {{ .Parameters.task_id }}. Evidence paths: .minelink-dev/reports/agent-task-summary.md, .minelink-dev/reports/ci-evidence-summary.md, .minelink-dev/reports/artifacts/acceptance-summary.md, .minelink-dev/reports/artifacts/acceptance.mp4, .minelink-dev/reports/artifacts/video-review.md, and .minelink-dev/reports/artifacts/video-release-gate.md."
           --require-key
           --require-update
     - pullRequest:
@@ -81,7 +57,9 @@ action:
           - Evidence summary: `.minelink-dev/reports/ci-evidence-summary.md`
           - Agent verifier: `.minelink-dev/reports/agent-task-summary.md`
           - Acceptance video summary: `.minelink-dev/reports/artifacts/acceptance-summary.md`
-          - Acceptance video: `.minelink-dev/reports/artifacts/acceptance.mp4` when ffmpeg is available
+          - Acceptance video: `.minelink-dev/reports/artifacts/acceptance.mp4`
+          - Dedicated Codex video review: `.minelink-dev/reports/artifacts/video-review.md`
+          - Video release gate: `.minelink-dev/reports/artifacts/video-release-gate.md`
 
           This PR must still be reviewed against `docs/minelink-acceptance.md`.
           Mock, replay, smoke, or short-soak evidence does not imply full product

@@ -23,8 +23,8 @@ shape, and conditional verification.
 Use `docs/ona-migration.md`, `docs/agent-task-queue.md`, and
 `docs/github-labels.md` for Ona migration, ready task selection, and GitHub
 triage labels.
-Use `docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona agent ->
-PR/CI/evidence delivery workflow.
+Use `docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona Platform
+Codex -> validation/PR/CI/evidence delivery workflow.
 
 ## Architecture Maintenance Guard
 
@@ -193,9 +193,14 @@ Reports must distinguish:
 - Use Codex native subagents for independent CI monitoring, verification, review,
   or disjoint implementation slices when that improves throughput. The main
   agent still owns final integration and claims.
-- Use Ona AI automation for agent-factory work. `ona environment ssh` is only a
-  debugging surface and must not be described as the final Ona agent execution
-  flow.
+- Use Ona Platform Codex for Ona implementation and verifier work. The default
+  Ona Agent mode, `ona environment ssh`, and the checked-in Ona CLI automation
+  are debugging, synchronization, validation, or artifact surfaces only and
+  must not be described as final MineLink agent execution evidence.
+- Video-required tasks must produce `acceptance.mp4`, then a separate Ona
+  Platform Codex verifier must compare the task requirements against the
+  summary/video and write `video-review.md`. `check-video-review.mjs` must pass
+  before publishing or merging the video evidence.
 - Do not leak GitHub tokens, admission tokens, Microsoft credentials,
   OpenAI/API keys, EULA files, or server secrets.
 

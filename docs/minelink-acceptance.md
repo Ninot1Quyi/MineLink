@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is now scriptable through `scripts/dev/install-smoke.sh` and CI artifact collection; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is now scriptable through `scripts/dev/install-smoke.sh` and CI artifact collection; Ona Platform Codex delivery is specified but not fully proven end-to-end; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -583,15 +583,23 @@ Current status:
   `minelink-install-smoke-evidence`.
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
   fast verification, real NeoForge guard smoke, and acceptance artifact
-  rendering. `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona
-  AI automation spec for task-to-PR agent work, including `LINEAR_API_KEY`
-  backed Linear status/comment sync when the secret is present in Ona.
+  rendering plus a separate video-release check.
+  `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
+  finalizer for Linear status sync, verification, evidence summaries, video
+  release gating, and PR creation after the implementation work is performed by
+  Ona Platform Codex and the MP4 is reviewed by a separate Platform Codex
+  verifier.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.
 - `scripts/dev/render-acceptance-video.mjs` generates a trace-driven
   `.minelink-dev/reports/artifacts/acceptance-summary.md` and, when `ffmpeg` is
   available, `.minelink-dev/reports/artifacts/acceptance.mp4`.
+- `scripts/dev/check-video-review.mjs` blocks video publication unless a
+  separate Ona Platform Codex verifier writes
+  `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
+  match markers and current summary/MP4 hashes. The gate writes
+  `.minelink-dev/reports/artifacts/video-release-gate.md`.
 - Ona CLI bootstrap has been exercised against the MineLink cloud environment:
   `ona environment start`, `ona environment exec`, and
   `ona environment devcontainer rebuild` reached `/workspaces/MineLink` on
@@ -603,8 +611,12 @@ Current status:
 - This is real bootstrap evidence only. It does not prove server-admin mod
   installation, agent-user MCP configuration, LAN setup, cross-platform
   packaging, Linear webhook enablement, GitHub issue-to-Ona dispatch, Ona
-  native `pullRequest` success, acceptance MP4 availability in every
-  environment, or real NeoForge install acceptance.
+  Platform Codex launch/readback for the current PR, Ona native `pullRequest`
+  success, acceptance MP4 availability in every environment, dedicated video
+  verifier completion, or real NeoForge install acceptance.
+- Earlier generic Ona Agent executions are process smoke only. They do not
+  count as MineLink agent execution evidence because Ona work must select the
+  Platform Codex agent mode.
 
 ### Gate 11: Security, Stability, and Release
 

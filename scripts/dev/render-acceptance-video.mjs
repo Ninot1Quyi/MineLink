@@ -11,6 +11,7 @@ let outputDir = ".minelink-dev/reports/artifacts";
 let taskId = process.env.MINELINK_TASK_ID ?? "local";
 let branch = process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "";
 let prUrl = process.env.MINELINK_PR_URL ?? "";
+let taskRequirements = process.env.MINELINK_TASK_REQUIREMENTS ?? "";
 let requireMp4 = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -25,10 +26,12 @@ for (let index = 2; index < process.argv.length; index += 1) {
     branch = process.argv[++index] ?? "";
   } else if (arg === "--pr-url") {
     prUrl = process.argv[++index] ?? "";
+  } else if (arg === "--task-requirements") {
+    taskRequirements = process.argv[++index] ?? "";
   } else if (arg === "--require-mp4") {
     requireMp4 = true;
   } else if (arg === "-h" || arg === "--help") {
-    console.log(`Usage: node scripts/dev/render-acceptance-video.mjs [--root .minelink-dev] [--output-dir .minelink-dev/reports/artifacts] [--task-id id] [--branch branch] [--pr-url url] [--require-mp4]
+    console.log(`Usage: node scripts/dev/render-acceptance-video.mjs [--root .minelink-dev] [--output-dir .minelink-dev/reports/artifacts] [--task-id id] [--branch branch] [--pr-url url] [--task-requirements text] [--require-mp4]
 
 Creates trace-driven MineLink acceptance artifacts from existing reports. The
 summary is always written. MP4 rendering requires ffmpeg; use --require-mp4 to
@@ -269,6 +272,7 @@ lines.push(`- Branch: \`${resolvedBranch}\``);
 lines.push(`- PR: ${prUrl ? `[${prUrl}](${prUrl})` : "`unknown`"}`);
 lines.push(`- Evidence root: \`${root}\``);
 lines.push(`- Scenario reports: \`${scenarioReports.length}\``);
+lines.push(`- Task requirements: \`${taskRequirements || "unspecified"}\``);
 lines.push("");
 lines.push("## Acceptance Boundary");
 lines.push("");
@@ -318,6 +322,7 @@ const videoLines = [
   `Task: ${taskId}`,
   `Branch: ${resolvedBranch}`,
   `PR: ${prUrl || "unknown"}`,
+  `Task: ${taskRequirements || "requirements unspecified"}`,
   `Reports: ${scenarioReports.length}`,
   ...scenarioReports.slice(0, 8).map((report) => `${report.scenario}: ${status(report.passed)} (${report.runtime})`),
   "Boundary: trace-driven artifact, not product acceptance",

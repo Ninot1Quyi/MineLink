@@ -52,7 +52,7 @@ scripts/dev/                            build, server, e2e, soak, verification
   pull_request_template.md              required PR evidence template
 .devcontainer/                          cloud worktree bootstrap
 .ona/                                   Ona environment automations
-ona/ai-automations/                     Ona AI automation specs
+ona/ai-automations/                     Ona validation automation specs
 ```
 
 ## Authority Boundaries
@@ -175,18 +175,29 @@ paths, and remaining gaps. Use `docs/agent-workbench.md` for the full template.
 MineLink product work is fed by a repo-native delivery factory:
 
 ```text
-Linear or GitHub task -> Ona AI automation -> branch -> validation -> PR -> CI/artifacts -> Linear/GitHub status
+Linear or GitHub task
+  -> Ona Platform Codex agent
+  -> branch
+  -> validation automation
+  -> acceptance MP4
+  -> dedicated Ona Platform Codex video review
+  -> PR
+  -> CI/artifacts
+  -> Linear/GitHub status
 ```
 
 `docs/linear-ona-agent-factory.md` defines the status model, required task
 fields, Linear board setup, GitHub issue mapping, and manual pilot commands.
-The Ona AI automation spec is
+The Ona CLI finalizer/validation automation spec is
 `ona/ai-automations/minelink-agent-factory.yaml`. The local Ona environment
 automation file is `.ona/automations.yaml`.
 
-The final flow should use Ona AI automation executions, not manual SSH. Manual
-`ona environment ssh` remains useful for debugging or verification, but it is
-not the product delivery path. Linear status sync is handled by
+The final flow should use the Ona Platform Codex agent option for implementation
+and the separate video-verifier pass, not the default Ona Agent and not manual
+SSH. Manual `ona environment ssh` remains useful for debugging or verification,
+but it is not the product delivery path. The finalizer must not re-render the
+MP4 after video review; it checks the existing artifact hashes instead. Linear
+status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
 If Linear or GitHub webhook dispatch cannot be verified in the current
@@ -300,7 +311,18 @@ The script writes a trace-driven
 `.minelink-dev/reports/artifacts/acceptance-summary.md` and, when `ffmpeg` is
 available, `.minelink-dev/reports/artifacts/acceptance.mp4`. This artifact is a
 review visualization, not proof of client GUI perception and not a gate-status
-upgrade.
+upgrade. Video-required tasks must then run a separate Ona Platform Codex
+verifier that writes `.minelink-dev/reports/artifacts/video-review.md`, followed
+by:
+
+```bash
+node scripts/dev/check-video-review.mjs --require-mp4
+```
+
+The release gate writes
+`.minelink-dev/reports/artifacts/video-release-gate.md` and fails if the MP4 is
+missing, the verifier is not marked `Ona Platform Codex`, or the task/video
+match markers and summary/MP4 hashes are not passing.
 
 ## Current Product State
 

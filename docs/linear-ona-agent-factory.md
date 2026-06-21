@@ -2,25 +2,34 @@
 
 This document defines the AI-native engineering delivery system used to develop
 MineLink. MineLink remains the product. The factory below is the production
-line that turns bounded Linear or GitHub tasks into Ona agent work, PRs, CI
-evidence, and acceptance artifacts.
+line that turns bounded Linear or GitHub tasks into Ona Platform Codex work,
+PRs, CI evidence, and acceptance artifacts.
 
 ## Delivery Shape
 
 ```text
 Linear issue or GitHub issue
   -> agent task contract
-  -> Ona AI automation
+  -> Ona Platform Codex agent session
   -> one Ona environment / one branch
-  -> validation and evidence artifacts
+  -> validation and evidence automation
+  -> acceptance MP4
+  -> dedicated Ona Platform Codex video review
   -> draft GitHub PR
-  -> CI, acceptance summary, optional acceptance MP4
+  -> CI, acceptance summary, release gate
   -> Linear/GitHub status update
 ```
 
-Manual `ona environment ssh` is a debugging tool only. The durable flow should
-use `ona ai automation start` or a UI/webhook integration that starts the same
-automation with task parameters.
+The implementation agent must be selected as **Codex** in the Ona Platform UI.
+Generic Ona Agent runs, manual `ona environment ssh`, and repository CLI
+automation are debugging or validation surfaces only; they are not accepted as
+final MineLink agent execution evidence.
+
+The checked-in Ona CLI automation is a process runner: it syncs Linear status,
+runs validation, summarizes evidence, checks the dedicated video-review report,
+and opens or updates the review PR. It does not replace the Ona Platform Codex
+agent session, and it does not re-render the MP4 after the verifier has reviewed
+it.
 
 ## Status Model
 
@@ -31,10 +40,11 @@ Use these statuses for the Linear board and GitHub issue/PR comments:
 | `Triage` | Task is being shaped and is not ready for an agent. |
 | `Ready for Agent` | Task contract is complete and labels include `agent-ready`. |
 | `Agent Queued` | Ona automation was requested but has not started execution. |
-| `Agent Running` | Ona agent is editing, validating, or preparing evidence. |
+| `Agent Running` | Ona Platform Codex is editing, validating, or preparing evidence. |
 | `PR Open` | Draft PR exists and links the source task. |
 | `CI Running` | GitHub Actions is running required checks. |
 | `Video Rendering` | Acceptance summary/MP4 artifact generation is running. |
+| `Video Review` | A separate Ona Platform Codex verifier is comparing the task requirements against the MP4 and summary. |
 | `Human Review` | Automation is done; reviewer must inspect evidence and gaps. |
 | `Accepted` | Reviewer accepted the PR and updated gate evidence if applicable. |
 | `Blocked` | Agent cannot continue without a real dependency or human decision. |
@@ -42,10 +52,10 @@ Use these statuses for the Linear board and GitHub issue/PR comments:
 ## Required Labels
 
 - `agent-ready`: task contract is complete.
-- `agent:ona`: task should be handled by Ona AI automation.
+- `agent:ona`: task should be handled by Ona Platform Codex plus the checked-in validation automation.
 - `real-neoforge-required`: product behavior requires real NeoForge evidence.
-- `video-required`: PR must include an acceptance video artifact or an explicit
-  reason why MP4 could not be rendered.
+- `video-required`: PR must include an acceptance summary, acceptance MP4,
+  dedicated Ona Platform Codex video review, and video release gate.
 - `gate:0` through `gate:11`: acceptance gate touched by the task.
 - `mock-only`, `smoke-only`, `real-partial`, `product-accepted`: current
   evidence class, matching `docs/minelink-acceptance.md`.
@@ -57,6 +67,7 @@ Use these statuses for the Linear board and GitHub issue/PR comments:
 Every Linear or GitHub task must include:
 
 - Task: one sentence outcome.
+- Required agent mode: Ona Platform Codex.
 - Scope: exact files or modules the agent may change.
 - Forbidden: assertions, boundaries, or files the agent must not weaken.
 - Validation: exact commands the agent must run.
@@ -120,7 +131,7 @@ Display properties:
 Each card should show or link:
 
 - Current status.
-- Current Ona automation or agent execution id.
+- Current Ona Platform Codex session id and validation automation id.
 - GitHub issue.
 - Branch.
 - PR.
@@ -158,9 +169,9 @@ state, create comments, and attach source/evidence links. It writes
 `.minelink-dev/reports/linear-sync.md` with key presence, operation summaries,
 and sanitized errors. It never prints the key value.
 
-The Ona AI automation calls this script automatically:
+The Ona CLI validation automation calls this script automatically:
 
-- Before the agent step: move the Linear issue to `In Progress`.
+- Before validation: move the Linear issue to `In Progress`.
 - After validation and artifact rendering: move the Linear issue to
   `In Review` and comment with report paths.
 
@@ -186,6 +197,15 @@ The checked-in spec uses a manual trigger because the current Ona CLI rejects
 pull-request triggers unless an Ona webhook or integration already exists.
 After that integration is configured, add a repository trigger in Ona UI or in
 an organization-specific automation spec.
+
+The spec intentionally does not contain a generic `agent` step. Start the
+implementation and video-verifier work in the Ona Platform UI with the Codex
+agent option selected. The implementation Codex session must run validation and
+render the acceptance MP4; the separate verifier Codex session must inspect
+that MP4 and write `video-review.md`; the CLI automation then checks the
+existing artifacts and finalizes status/PR output. If
+`.minelink-dev/reports/artifacts/video-review.md` is missing or does not
+declare `Verifier: Ona Platform Codex`, the automation must fail before release.
 
 For local environment tasks, Ona discovers:
 
@@ -223,15 +243,18 @@ automation, and draft PR evidence:
 - Local GitHub connector fallback created PR #4 so the evidence is reviewable.
 - GitHub Actions CI run `27903350282` passed on PR #4.
 
-Current conclusion: Linear issue management, Ona AI automation registration,
-Ona agent execution, GitHub PR creation through the connector fallback, and CI
-evidence are proven. The full webhook-dispatched Linear-to-Ona-to-PR chain is
-not accepted yet.
+Current conclusion: Linear issue management, validation automation
+registration, `LINEAR_API_KEY`-backed status sync from inside Ona, GitHub PR
+creation through the connector fallback, and CI evidence are proven. Earlier
+generic Ona Agent executions are reclassified as process smoke only and are not
+accepted as MineLink agent evidence because they did not use the Ona Platform
+Codex option.
 
-The next factory slice must prove that the Ona environment can read
-`LINEAR_API_KEY` and run `scripts/dev/sync-linear-status.mjs` from inside the
-Ona automation. After that, the remaining gap is webhook dispatch plus the Ona
-native `pullRequest` step.
+The next factory slice must prove a full platform run: Linear task dispatch or
+manual launch -> Ona Platform Codex implementation session -> validation
+automation -> acceptance MP4 -> separate Ona Platform Codex video verifier ->
+video release gate -> PR/CI/Linear status readback. The remaining gap after
+that is webhook dispatch plus observable Ona-native `pullRequest` success.
 
 ## Acceptance Video
 
@@ -245,7 +268,9 @@ Generate artifacts:
 node scripts/dev/render-acceptance-video.mjs \
   --task-id gh-45 \
   --branch codex/gh-45-short-task \
-  --pr-url https://github.com/Ninot1Quyi/MineLink/pull/45
+  --pr-url https://github.com/Ninot1Quyi/MineLink/pull/45 \
+  --task-requirements "quoted task requirements" \
+  --require-mp4
 ```
 
 Outputs:
@@ -253,12 +278,38 @@ Outputs:
 ```text
 .minelink-dev/reports/artifacts/acceptance-summary.md
 .minelink-dev/reports/artifacts/acceptance.mp4
+.minelink-dev/reports/artifacts/video-review.md
+.minelink-dev/reports/artifacts/video-release-gate.md
 ```
 
 If `ffmpeg` is unavailable, the script still writes the summary and records why
 MP4 rendering was skipped. For `video-required` tasks, rerun on a host or CI
-image with `ffmpeg`, or pass `--require-mp4` and fail the task if MP4 cannot be
+image with `ffmpeg`; `--require-mp4` must fail the task if MP4 cannot be
 created.
+
+Before publishing or merging video evidence, a separate Ona Platform Codex
+session must inspect the task requirements, `acceptance-summary.md`, and
+`acceptance.mp4`. It writes `.minelink-dev/reports/artifacts/video-review.md`
+with these exact markers:
+
+```text
+Verifier: Ona Platform Codex
+Release decision: pass
+Task matched: yes
+Video matched: yes
+Summary sha256: <current acceptance-summary.md sha256>
+MP4 sha256: <current acceptance.mp4 sha256>
+```
+
+Then run:
+
+```bash
+node scripts/dev/check-video-review.mjs --require-mp4
+```
+
+If the implementation and video do not match the task, the verifier must write
+`Release decision: fail` or omit the pass markers, stop publication, and return
+the task for another implementation iteration.
 
 ## Remaining Gaps
 
@@ -268,10 +319,12 @@ created.
 - GitHub issue-to-Ona dispatch still needs a secret-backed dispatcher or an Ona
   webhook/integration. The manual Ona automation can be created from the repo
   spec, but issue/PR triggers are not enabled by the repository alone.
+- Ona Platform Codex launch and session readback still need observable evidence
+  for the current PR. Generic Ona Agent evidence is not accepted for this gap.
 - Ona native `pullRequest` step still needs observable success or actionable
   failure logs. Until then, the GitHub connector fallback can open the review
   PR, but it is a fallback and must be reported as such.
-- Acceptance video is a trace visualization. Real Minecraft GUI capture remains
-  future observer-client work.
+- Acceptance video is a trace visualization plus a dedicated Codex review gate.
+  Real Minecraft GUI capture remains future observer-client work.
 - Agent output still needs human review before a gate can become
   `product-accepted`.
