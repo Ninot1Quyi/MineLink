@@ -326,7 +326,8 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
   {
     name: "container.open",
     summary: "Open a visible server-side container block.",
-    description: "Opens a reachable container using server interaction rules.",
+    description:
+      "Opens a reachable container through the native server use-item-on path, then exposes a bounded headless server_agent slot snapshot.",
     tags: ["container"],
     input_schema: { type: "object", required: ["block_ref"], properties: { block_ref: { type: "string" } } },
     failure_reasons: [

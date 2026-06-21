@@ -879,16 +879,11 @@ public final class MineLinkEndpointBootstrap {
 
     private JsonObject openContainer(JsonObject request, AgentBody agent, JsonObject arguments) {
         String ref = stringValue(arguments, "block_ref", "");
-        BlockRef blockRef = agent.ref(ref);
-        if (blockRef == null) {
-            return failure(request, "unknown_or_unobserved_target", "Block ref is not from the latest observation.");
+        InteractionTarget target = validateInteractionRef(request, agent, ref);
+        if (target.failure != null) {
+            return target.failure;
         }
-        if (blockRef.expired()) {
-            return failure(request, "expired_ref", "Block ref has expired.");
-        }
-        if (Math.sqrt(blockRef.pos.distSqr(agent.blockPosition())) > 6.0) {
-            return failure(request, "target_too_far", "The container is outside the current server_agent reach.");
-        }
+        BlockRef blockRef = target.ref;
 
         ServerLevel level = server.overworld();
         BlockState state = level.getBlockState(blockRef.pos);
@@ -915,7 +910,37 @@ public final class MineLinkEndpointBootstrap {
             return failure(request, "unsupported_capability", "The referenced block is not a supported smoke fixture container.");
         }
 
-        agent.openContainer = new OpenContainer("container:" + agent.agentId + ":" + (++agent.containerSeq), kind, ref, blockRef.pos, container);
+        agent.entity.closeContainer();
+        var previousMenu = agent.entity.containerMenu;
+        ItemStack beforeStack = agent.entity.getItemInHand(InteractionHand.MAIN_HAND);
+        InteractionResult interactionResult = agent.entity.gameMode.useItemOn(
+            agent.entity,
+            level,
+            beforeStack,
+            InteractionHand.MAIN_HAND,
+            hitResult(blockRef.pos, Direction.UP)
+        );
+        if (interactionResult.shouldSwing()) {
+            agent.entity.swing(InteractionHand.MAIN_HAND, true);
+        }
+        if (!interactionResult.consumesAction()) {
+            return failure(request, "blocked", "Vanilla container interaction did not consume the action.");
+        }
+        var openedMenu = agent.entity.containerMenu;
+        boolean menuOpened = openedMenu != previousMenu && openedMenu != agent.entity.inventoryMenu;
+        String menuType = menuOpened ? openedMenu.getClass().getName() : "";
+
+        agent.openContainer = new OpenContainer(
+            "container:" + agent.agentId + ":" + (++agent.containerSeq),
+            kind,
+            ref,
+            blockRef.pos,
+            container,
+            true,
+            interactionResult.name().toLowerCase(),
+            menuOpened,
+            menuType
+        );
         JsonObject response = toolCompleted(request);
         response.add("result", containerSnapshot(agent));
         return response;
@@ -1679,6 +1704,14 @@ public final class MineLinkEndpointBootstrap {
         snapshot.addProperty("kind", open.kind);
         snapshot.addProperty("block_ref", open.blockRef);
         snapshot.add("block_pos", blockPosition(open.blockPos));
+        JsonObject nativeInteraction = new JsonObject();
+        nativeInteraction.addProperty("method", "server_player_game_mode.use_item_on");
+        nativeInteraction.addProperty("server_container_available", open.serverContainerAvailable);
+        nativeInteraction.addProperty("interaction_result", open.nativeInteractionResult);
+        nativeInteraction.addProperty("menu_opened", open.nativeMenuOpened);
+        nativeInteraction.addProperty("body_ui", "headless_server_agent");
+        nativeInteraction.addProperty("menu_type", open.nativeMenuType);
+        snapshot.add("native_interaction", nativeInteraction);
 
         JsonArray slots = new JsonArray();
         if (open.container != null) {
@@ -2215,7 +2248,7 @@ public final class MineLinkEndpointBootstrap {
             tool(
                 "container.open",
                 "Open a reachable smoke fixture container.",
-                "Opens a visible, reachable server-side container using server interaction rules.",
+                "Opens a visible, reachable server-side container through native use-item-on, then exposes a bounded headless server_agent slot snapshot.",
                 objectSchema(properties(prop("block_ref", stringSchema())), "block_ref"),
                 List.of("container"),
                 List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "unsupported_capability"),
@@ -3228,15 +3261,33 @@ public final class MineLinkEndpointBootstrap {
         private final String blockRef;
         private final BlockPos blockPos;
         private final Container container;
+        private final boolean serverContainerAvailable;
+        private final String nativeInteractionResult;
+        private final boolean nativeMenuOpened;
+        private final String nativeMenuType;
         private final Map<String, SlotRef> slotRefs = new LinkedHashMap<>();
         private ItemStack output = ItemStack.EMPTY;
 
-        private OpenContainer(String containerId, String kind, String blockRef, BlockPos blockPos, Container container) {
+        private OpenContainer(
+            String containerId,
+            String kind,
+            String blockRef,
+            BlockPos blockPos,
+            Container container,
+            boolean serverContainerAvailable,
+            String nativeInteractionResult,
+            boolean nativeMenuOpened,
+            String nativeMenuType
+        ) {
             this.containerId = containerId;
             this.kind = kind;
             this.blockRef = blockRef;
             this.blockPos = blockPos;
             this.container = container;
+            this.serverContainerAvailable = serverContainerAvailable;
+            this.nativeInteractionResult = nativeInteractionResult;
+            this.nativeMenuOpened = nativeMenuOpened;
+            this.nativeMenuType = nativeMenuType;
         }
     }
 

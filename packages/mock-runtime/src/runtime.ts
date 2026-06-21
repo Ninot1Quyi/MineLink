@@ -140,6 +140,14 @@ interface OpenContainerState {
   block?: BlockState;
   slotRefs: Map<string, SlotBinding>;
   output: ItemStack | null;
+  nativeInteraction: {
+    method: "server_player_game_mode.use_item_on";
+    server_container_available: boolean;
+    interaction_result: "success";
+    menu_opened: boolean;
+    body_ui: "headless_server_agent";
+    menu_type: string;
+  };
 }
 
 interface SlotBinding {
@@ -864,14 +872,23 @@ export class MockRuntimeServer {
       blockPos: block.pos,
       block,
       slotRefs: new Map(),
-      output: null
+      output: null,
+      nativeInteraction: {
+        method: "server_player_game_mode.use_item_on",
+        server_container_available: true,
+        interaction_result: "success",
+        menu_opened: false,
+        body_ui: "headless_server_agent",
+        menu_type: `mock.${block.container.kind}`
+      }
     };
     this.trace({
       event: "container.open",
       agent_id: agent.agentId,
       container_id: containerId,
       kind: block.container.kind,
-      block_ref: blockRef
+      block_ref: blockRef,
+      native_interaction: agent.openContainer.nativeInteraction
     });
     return { ok: true, status: "completed", result: this.containerSnapshot(agent) };
   }
@@ -1054,6 +1071,7 @@ export class MockRuntimeServer {
       kind: open.kind,
       block_ref: open.blockRef,
       block_pos: open.blockPos,
+      native_interaction: open.nativeInteraction,
       slots: containerSlots,
       inventory_slots: inventorySlots,
       output_slot: outputSlot

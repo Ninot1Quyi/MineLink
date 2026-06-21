@@ -668,6 +668,13 @@ describe("MockRuntimeServer", () => {
       arguments: { block_ref: chest.block_ref }
     });
     const chestSnapshot = chestOpen.result as ContainerSnapshot;
+    expect(chestSnapshot.native_interaction).toMatchObject({
+      method: "server_player_game_mode.use_item_on",
+      server_container_available: true,
+      interaction_result: "success",
+      menu_opened: false,
+      body_ui: "headless_server_agent"
+    });
     const logSlot = chestSnapshot.slots.find((slot) => slot.item === "minecraft:oak_log")!;
     const emptyInventorySlot = chestSnapshot.inventory_slots.find((slot) => slot.item === null)!;
 
@@ -701,7 +708,19 @@ describe("MockRuntimeServer", () => {
       name: "container.open",
       arguments: { block_ref: craftingTable.block_ref }
     });
-    expect(tableOpen).toMatchObject({ ok: true, result: { kind: "crafting_table" } });
+    expect(tableOpen).toMatchObject({
+      ok: true,
+      result: {
+        kind: "crafting_table",
+        native_interaction: {
+          method: "server_player_game_mode.use_item_on",
+          server_container_available: true,
+          interaction_result: "success",
+          menu_opened: false,
+          body_ui: "headless_server_agent"
+        }
+      }
+    });
 
     const recipes = await request(client, {
       type: "tool.execute",
@@ -895,6 +914,14 @@ interface ContainerSnapshot {
   container_id: string;
   kind: string;
   block_ref: string;
+  native_interaction: {
+    method: string;
+    server_container_available: boolean;
+    interaction_result: string;
+    menu_opened: boolean;
+    body_ui: string;
+    menu_type: string;
+  };
   slots: SlotSnapshot[];
   inventory_slots: SlotSnapshot[];
   output_slot: SlotSnapshot | null;

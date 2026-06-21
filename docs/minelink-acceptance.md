@@ -26,6 +26,36 @@ Hard boundaries:
 
 ## 2. Full Acceptance Gates
 
+### Gate Status Audit
+
+Status vocabulary:
+
+- `mock-only`: only the mock runtime proves the behavior.
+- `smoke-only`: a narrow happy-path fixture proves the behavior, but not a real product capability.
+- `real-partial`: real NeoForge/Minecraft evidence exists, but release requirements remain incomplete.
+- `product-accepted`: every required item in the gate has repeatable real evidence.
+- `missing`: no meaningful accepted implementation/evidence exists yet.
+
+Current audit:
+
+| Gate | Status | Evidence Boundary |
+| --- | --- | --- |
+| Gate 0: Repository, Install, and Baseline Harness | real-partial | Build, typecheck, tests, CI, mock e2e, and real NeoForge smoke exist; fresh user install and full release readiness remain incomplete. |
+| Gate 1: Real NeoForge Mod Runtime | real-partial | Real dedicated NeoForge e2e covers core protocol and smoke tools; persistence, full lifecycle, and complete runtime parity remain incomplete. |
+| Gate 2: server_agent Body and Guard Pipeline | real-partial | Real guard, queue, FakePlayer inventory, movement, mining, and owner quota evidence exists; restore/freeze/remove, cancellation, expiry, and full body parity remain incomplete. |
+| Gate 3: Limited Perception | real-partial | Real fixture evidence covers occlusion and selected shape classifications; generic raycast/block-shape visibility and long-running perception cache behavior remain incomplete. |
+| Gate 4: MCP Host and Gateway | real-partial | MCP stdio, Streamable HTTP, reconnect, catalog preflight, token/rate/session checks, and real HTTP gateway smoke exist; full hosted gateway operations remain incomplete. |
+| Gate 5: Agent RPC JSON, MCP Compatibility, and Local SDK | real-partial | Codex JSON-RPC replay and generic MCP dynamic tools are verified; Python helper parity, polling/subscription helpers, reconnect ergonomics, replay SDK, and semantic retries remain incomplete. |
+| Gate 6: Container and Crafting | real-partial | Real chest, crafting table, furnace, native `useItemOn` container entry, slot refs, recipe registry, and FakePlayer inventory evidence exists; full server menu click parity remains incomplete. |
+| Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
+| Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
+| Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
+| Gate 10: Install and Product Packaging | missing | Developer scripts exist, but fresh server/user/LAN installer flows and cross-platform packaging evidence are not accepted yet. |
+| Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
+
+No gate is currently `product-accepted`. A full-product completion claim requires
+every gate above to move to `product-accepted` with repeatable real evidence.
+
 ### Gate 0: Repository, Install, and Baseline Harness
 
 Required:
@@ -335,6 +365,13 @@ Current status:
   block entity tick path, slot 2 is exposed only as an output slot, and
   `container.take_output` moves the resulting `minecraft:iron_ingot` into the
   FakePlayer-backed agent inventory.
+- Mock runtime and real NeoForge `craft_smoke`, `furnace_smoke`,
+  `create_smoke`, and `portal_coop` now assert that `container.open` first
+  enters through the native `ServerPlayerGameMode.useItemOn` path for a recent
+  visible reachable block ref before exposing the bounded MineLink slot
+  snapshot. The reports also mark the body UI as `headless_server_agent`, so
+  server_agent validation does not imply keyboard, mouse, screenshot, or
+  client GUI perception.
 - Real NeoForge `craft_smoke` and `furnace_smoke` reports now include
   `inventory.source=fake_player` for the final inventory observation, proving
   that recipe output and furnace output are read back from the native
