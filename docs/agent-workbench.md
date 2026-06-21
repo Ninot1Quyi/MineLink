@@ -13,6 +13,8 @@ one environment = one task = one branch = one PR
 
 The local Codex thread remains the integration and acceptance owner. Cloud
 agents should take narrow tasks with explicit write scopes and validation.
+Use `docs/ona-migration.md` for the migration runbook and
+`docs/agent-task-queue.md` for ready tasks.
 
 ## Task Classes
 
@@ -75,6 +77,8 @@ Use automation to reduce agent memory load:
   created.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,
   runtime, or NeoForge checks.
+- `check-agent-workbench.sh` verifies that Ona migration docs, task queue,
+  issue template, PR template, and devcontainer entry points stay present.
 - GitHub CI runs the fast contract suite on pushes and PRs.
 - The heavy NeoForge workflow is skipped for docs-only and workbench-only
   changes, but still runs for code, runtime, scripts, and workflow changes.
@@ -84,15 +88,11 @@ Automation must not reduce acceptance truth. A skipped heavy workflow means the
 change did not need that class of evidence, not that the related product gate is
 accepted.
 
-## Recommended Initial Ona Tasks
+## Recommended Ona Tasks
 
-Good first parallel tasks:
-
-- Improve devcontainer bootstrapping and readme evidence.
-- Add CI artifact summaries for `.minelink-dev` reports.
-- Create issue templates for one-gate agent tasks.
-- Add a read-only acceptance audit script.
-- Implement one bounded Gate 2 action lifecycle slice in a single worktree.
+Use `docs/agent-task-queue.md` as the source of truth for ready work. Good
+parallel tasks should stay in docs/architecture, CI/reporting, install proof,
+or one narrow runtime gate slice.
 
 Avoid:
 
@@ -126,7 +126,9 @@ Remaining product gaps:
 Keep this queue narrow and update it after each accepted slice:
 
 1. Gate 2 action lifecycle: public status/poll/cancel tools with real NeoForge
-   queued, completed, cancelled, expired evidence.
+   queued, completed, cancelled, expired evidence. Completed in the current
+   branch; next Gate 2 work is persistent body lifecycle plus `running` and
+   `failed` states.
 2. Gate 10 install: fresh clone plus devcontainer proof for mock CI and
    documented NeoForge smoke.
 3. Gate 11 stability: longer real NeoForge soak profile with process and queue

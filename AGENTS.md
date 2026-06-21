@@ -20,6 +20,9 @@ Use `docs/minelink-acceptance.md` as the source of truth for gate status. If a
 change alters evidence or scope, update that document in the same commit.
 Use `docs/agent-workbench.md` for Ona/Codex parallel task boundaries, issue
 shape, and conditional verification.
+Use `docs/ona-migration.md`, `docs/agent-task-queue.md`, and
+`docs/github-labels.md` for Ona migration, ready task selection, and GitHub
+triage labels.
 
 ## Architecture Maintenance Guard
 
@@ -29,6 +32,9 @@ shape, and conditional verification.
   workflow, update `ARCHITECTURE.md` in the same branch.
 - `scripts/dev/check-architecture-guard.sh` and GitHub CI enforce this
   maintenance rule for architecture-sensitive paths.
+- `scripts/dev/check-agent-workbench.sh` and GitHub CI enforce the Ona/agent
+  workbench entry points, PR template, issue template, task queue, and label
+  map.
 - If the guard reports a false positive, prefer a small clarifying
   architecture note over bypassing it. Use
   `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1` only for reviewed cases where the

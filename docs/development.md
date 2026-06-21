@@ -23,6 +23,17 @@ bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundar
 The script writes `.minelink-dev/reports/agent-task-summary.md`, which should
 be pasted into PRs together with scenario report paths.
 
+Ona/Codex cloud worktrees should also read:
+
+- `docs/ona-migration.md`
+- `docs/agent-task-queue.md`
+- `.github/pull_request_template.md`
+
+The docs scope runs both repository guards:
+
+- `scripts/dev/check-architecture-guard.sh`
+- `scripts/dev/check-agent-workbench.sh`
+
 ## Local Commands
 
 ```bash
@@ -189,7 +200,8 @@ non-loopback host, set `MINELINK_GATEWAY_TOKEN` and send
 
 ## GitHub Workflow
 
-Use short-lived `codex/*` branches for implementation work. Keep product changes in reviewable commits and include:
+Use short-lived `codex/*`, `ona/*`, or `agent/*` branches for implementation
+work. Keep product changes in reviewable commits and include:
 
 - Acceptance gate touched.
 - Commands run.
@@ -199,10 +211,12 @@ Use short-lived `codex/*` branches for implementation work. Keep product changes
 CI is split into two layers:
 
 - `.github/workflows/ci.yml` runs fast contract, TypeScript, mock runtime, and
-  JSON-RPC replay gates plus a short mock stability soak on every push/PR.
+  JSON-RPC replay gates plus architecture/workbench guards and a short mock
+  stability soak on every push/PR.
 - `.github/workflows/minecraft-neoforge.yml` runs a real NeoForge dedicated
-  server smoke for `mine_tree`, `craft_smoke`, `craft_negative`,
-  `guard_boundaries`, and
-  `portal_coop`, then runs a short real NeoForge stability soak on push, pull
-  request, `workflow_dispatch`, and a daily schedule. Keep long Create worlds
-  and release-length soak tests on a future self-hosted runner profile.
+  server smoke for `create_smoke`, `mine_tree`, HTTP `mine_tree`,
+  `craft_smoke`, `furnace_smoke`, `craft_negative`, `guard_boundaries`,
+  `perception_shapes`, and `portal_coop`, then runs a short real NeoForge
+  stability soak on push, pull request, `workflow_dispatch`, and a daily
+  schedule. Keep long Create worlds and release-length soak tests on a future
+  self-hosted runner profile.

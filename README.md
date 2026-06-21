@@ -17,6 +17,11 @@ This repository currently delivers the Phase 0/1 engineering baseline:
 
 The mock runtime is not a replacement for the NeoForge server. It is the repeatable fast harness used before running a real Minecraft server. Real Minecraft validation runs through the NeoForge Mod endpoint and remains the authority for product acceptance.
 
+For Ona/Codex cloud worktrees, start with `AGENTS.md`,
+`ARCHITECTURE.md`, `docs/ona-migration.md`, and
+`docs/agent-task-queue.md`. Each cloud task should use one environment, one
+branch, and one PR with evidence from `bash scripts/dev/verify-agent-task.sh`.
+
 ## Quick Start
 
 ```bash

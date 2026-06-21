@@ -79,7 +79,7 @@ needs_neoforge=false
 
 for file in "${changed[@]}"; do
   case "$file" in
-    AGENTS.md|ARCHITECTURE.md|README.md|SECURITY.md|docs/*.md|docs/**/*.md|.devcontainer/*|.github/ISSUE_TEMPLATE/*)
+    AGENTS.md|ARCHITECTURE.md|README.md|SECURITY.md|docs/*.md|docs/**/*.md|.devcontainer/*|.github/ISSUE_TEMPLATE/*|.github/pull_request_template.md|.github/PULL_REQUEST_TEMPLATE/*)
       ;;
     .github/workflows/*|scripts/dev/*)
       is_docs_only=false
@@ -145,6 +145,7 @@ run_shell() {
 run_docs_checks() {
   run_cmd git diff --check
   run_cmd bash scripts/dev/check-architecture-guard.sh --base "$base_ref"
+  run_cmd bash scripts/dev/check-agent-workbench.sh
   if [[ -d scripts/dev ]]; then
     run_shell "bash -n scripts/dev/*.sh"
   fi

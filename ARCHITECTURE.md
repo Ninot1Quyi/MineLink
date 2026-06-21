@@ -32,6 +32,9 @@ docs/
   development.md                        commands, evidence layout, local flows
   codex-rpc-agent.md                    Codex JSON-RPC agent contract
   agent-workbench.md                    Ona/Codex task workflow
+  ona-migration.md                      cloud worktree migration runbook
+  agent-task-queue.md                   bounded agent-ready task queue
+  github-labels.md                      issue/PR label taxonomy
 packages/
   protocol/                             MineLink Protocol types and schemas
   host/                                 MCP stdio Host and HTTP Gateway
@@ -45,6 +48,7 @@ scripts/dev/                            build, server, e2e, soak, verification
 .github/
   workflows/                            CI and real NeoForge smoke automation
   ISSUE_TEMPLATE/                       agent-ready task templates
+  pull_request_template.md              required PR evidence template
 .devcontainer/                          cloud worktree bootstrap
 ```
 
@@ -98,6 +102,8 @@ Disallowed shortcuts:
 - Development truth: `docs/development.md` and `scripts/dev/`
 - Parallel task truth: `docs/agent-workbench.md` and
   `.github/ISSUE_TEMPLATE/agent-task.yml`
+- Ona migration truth: `docs/ona-migration.md`, `docs/agent-task-queue.md`,
+  `docs/github-labels.md`, and `.github/pull_request_template.md`
 
 When a durable rule appears in review, chat, CI, or an issue, promote it into
 one of these files or into an executable check. Avoid relying on unstated
@@ -188,6 +194,17 @@ false-positive override is set with `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1`.
 The guard is intentionally lightweight. It does not prove the architecture is
 correct; it prevents silent architecture drift and makes context maintenance a
 normal part of CI.
+
+The agent workbench guard is:
+
+```bash
+bash scripts/dev/check-agent-workbench.sh
+```
+
+It runs locally through `scripts/dev/verify-agent-task.sh` and in GitHub CI. It
+keeps the Ona migration runbook, ready task queue, label taxonomy, PR template,
+issue template, devcontainer, and verification entry point present with required
+anchors.
 
 ## Current Product State
 
