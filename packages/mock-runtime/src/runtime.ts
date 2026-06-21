@@ -810,21 +810,30 @@ export class MockRuntimeServer {
     if (destination && destination.item !== source.item) {
       return runtimeFail("inventory_full", "Destination slot already contains a different item.");
     }
+    const slotRuleFailure = this.validateDestinationSlot(agent, to.slot, source);
+    if (slotRuleFailure) return slotRuleFailure;
+    const destinationRoom = stackMaxCount(destination?.item ?? source.item) - (destination?.count ?? 0);
+    if (destinationRoom <= 0) return runtimeFail("inventory_full", "Destination slot cannot accept more of this item.");
 
-    this.writeSlot(agent, from.slot, source.count === count ? null : { item: source.item, count: source.count - count });
-    this.writeSlot(agent, to.slot, { item: source.item, count: (destination?.count ?? 0) + count });
+    const movedCount = Math.min(count, destinationRoom);
+    this.writeSlot(
+      agent,
+      from.slot,
+      source.count === movedCount ? null : { item: source.item, count: source.count - movedCount }
+    );
+    this.writeSlot(agent, to.slot, { item: source.item, count: (destination?.count ?? 0) + movedCount });
     this.trace({
       event: "container.move_stack",
       agent_id: agent.agentId,
       from_slot_ref: fromSlotRef,
       to_slot_ref: toSlotRef,
       item: source.item,
-      count
+      count: movedCount
     });
     return {
       ok: true,
       status: "completed",
-      result: { moved: { item: source.item, count }, container: this.containerSnapshot(agent) }
+      result: { moved: { item: source.item, count: movedCount }, container: this.containerSnapshot(agent) }
     };
   }
 
@@ -968,6 +977,21 @@ export class MockRuntimeServer {
       return runtimeFail("stale_slot_ref", `Slot ref is not valid for the current container: ${ref}`) as SlotValidation;
     }
     return { ok: true, slot };
+  }
+
+  private validateDestinationSlot(agent: AgentState, slot: SlotBinding, source: ItemStack): RuntimeResponse | null {
+    if (slot.area !== "container") return null;
+    const open = agent.openContainer;
+    if (!open?.block?.container) return null;
+    if (open.kind === "furnace") {
+      const accepted =
+        (slot.index === 0 && source.item === "minecraft:raw_iron") ||
+        (slot.index === 1 && source.item === "minecraft:coal");
+      if (!accepted) {
+        return runtimeFail("blocked", "Server slot rules rejected this item for the destination slot.");
+      }
+    }
+    return null;
   }
 
   private readSlot(agent: AgentState, slot: SlotBinding): ItemStack | null {
@@ -1379,7 +1403,8 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
           kind: "chest",
           slots: [
             { item: "minecraft:raw_iron", count: 1 },
-            { item: "minecraft:coal", count: 1 }
+            { item: "minecraft:coal", count: 1 },
+            { item: "minecraft:dirt", count: 1 }
           ]
         }
       },
@@ -1696,6 +1721,11 @@ function createHeldItem(metadata: unknown): ItemStack | null {
 
 function isPlaceableBlockItem(item: string): boolean {
   return PLACEABLE_BLOCK_ITEMS.has(item);
+}
+
+function stackMaxCount(item: string): number {
+  if (item === "minecraft:flint_and_steel") return 1;
+  return 64;
 }
 
 export function parseFixture(value: string | undefined): FixtureName {

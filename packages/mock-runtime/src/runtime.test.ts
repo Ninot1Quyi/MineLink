@@ -724,6 +724,92 @@ describe("MockRuntimeServer", () => {
     expect(invalidRecipe).toMatchObject({ ok: false, reason: "invalid_recipe" });
     client.close();
   });
+
+  it("rejects furnace moves that violate server slot rules", async () => {
+    const server = new MockRuntimeServer({ port: 25686, fixture: "furnace_smoke" });
+    servers.push(server);
+    await server.start();
+
+    const client = await connect(server.endpoint());
+    await request(client, { type: "connect", server_address: "dev.local", owner: { name: "test" } });
+    const birth = await request(client, { type: "agent.birth", seed_prompt: "test", body_type: "server_agent" });
+    const agentId = String(birth.agent_id);
+
+    const scene = await request(client, { type: "tool.execute", agent_id: agentId, name: "observe.scene", arguments: {} });
+    const visibleScene = scene.visible_scene as { visible_blocks: Array<{ block_ref: string; id: string }> };
+    const chest = visibleScene.visible_blocks.find((block) => block.id === "minecraft:chest")!;
+    const furnace = visibleScene.visible_blocks.find((block) => block.id === "minecraft:furnace")!;
+
+    const chestOpen = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.open",
+      arguments: { block_ref: chest.block_ref }
+    });
+    let snapshot = chestOpen.result as ContainerSnapshot;
+
+    for (const item of ["minecraft:raw_iron", "minecraft:coal", "minecraft:dirt"]) {
+      const sourceSlot = snapshot.slots.find((slot) => slot.item === item)!;
+      const targetSlot = snapshot.inventory_slots.find((slot) => slot.item === null)!;
+      const move = await request(client, {
+        type: "tool.execute",
+        agent_id: agentId,
+        name: "container.move_stack",
+        arguments: { from_slot_ref: sourceSlot.slot_ref, to_slot_ref: targetSlot.slot_ref, count: 1 }
+      });
+      expect(move).toMatchObject({ ok: true, result: { moved: { item, count: 1 } } });
+      snapshot = (move.result as { container: ContainerSnapshot }).container;
+    }
+
+    const furnaceOpen = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.open",
+      arguments: { block_ref: furnace.block_ref }
+    });
+    snapshot = furnaceOpen.result as ContainerSnapshot;
+
+    const dirtSlot = snapshot.inventory_slots.find((slot) => slot.item === "minecraft:dirt")!;
+    const fuelSlot = snapshot.slots.find((slot) => slot.index === 1)!;
+    const invalidFuel = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: dirtSlot.slot_ref, to_slot_ref: fuelSlot.slot_ref, count: 1 }
+    });
+    expect(invalidFuel).toMatchObject({ ok: false, reason: "blocked" });
+
+    const rawSlot = snapshot.inventory_slots.find((slot) => slot.item === "minecraft:raw_iron")!;
+    const inputSlot = snapshot.slots.find((slot) => slot.index === 0)!;
+    const moveRaw = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: rawSlot.slot_ref, to_slot_ref: inputSlot.slot_ref, count: 1 }
+    });
+    expect(moveRaw).toMatchObject({ ok: true });
+    snapshot = (moveRaw.result as { container: ContainerSnapshot }).container;
+
+    const coalSlot = snapshot.inventory_slots.find((slot) => slot.item === "minecraft:coal")!;
+    const validFuelSlot = snapshot.slots.find((slot) => slot.index === 1)!;
+    const moveCoal = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.move_stack",
+      arguments: { from_slot_ref: coalSlot.slot_ref, to_slot_ref: validFuelSlot.slot_ref, count: 1 }
+    });
+    snapshot = (moveCoal.result as { container: ContainerSnapshot }).container;
+    expect(snapshot.output_slot).toMatchObject({ item: "minecraft:iron_ingot", count: 1 });
+
+    const take = await request(client, {
+      type: "tool.execute",
+      agent_id: agentId,
+      name: "container.take_output",
+      arguments: { slot_ref: snapshot.output_slot!.slot_ref }
+    });
+    expect(take).toMatchObject({ ok: true, result: { taken: { item: "minecraft:iron_ingot", count: 1 } } });
+    client.close();
+  });
 });
 
 interface SlotSnapshot {

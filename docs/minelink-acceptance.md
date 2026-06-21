@@ -309,10 +309,11 @@ Current status:
   `observe.inventory`.
 - Mock runtime and real NeoForge runtime cover `furnace_smoke`: raw iron and
   coal move from a visible chest into a visible furnace through public
-  `container.move_stack` slot refs, the real NeoForge furnace processes through
-  its vanilla block entity tick path, slot 2 is exposed only as an output slot,
-  and `container.take_output` moves the resulting `minecraft:iron_ingot` into
-  the agent inventory.
+  `container.move_stack` slot refs, dirt is rejected from the furnace fuel slot
+  by server slot rules, the real NeoForge furnace processes through its vanilla
+  block entity tick path, slot 2 is exposed only as an output slot, and
+  `container.take_output` moves the resulting `minecraft:iron_ingot` into the
+  agent inventory.
 - This is not the full Gate 6 release surface yet. Negative inventory-full
   cases, complete server menu/slot rule parity, and FakePlayer-backed inventory
   semantics still need separate implementation and evidence.
@@ -481,6 +482,7 @@ Before a release tag, these must pass against mock and real runtime where applic
   rejection.
 - Furnace output is exposed as an output slot and taken through
   `container.take_output`, not moved as a normal input/fuel slot.
+- Furnace input/fuel slots reject items that the server slot rules do not allow.
 - An opaque-wall fixture does not return the hidden diamond ore in
   `observe.scene`.
 - Transparent, decorative, fluid, partial-occluder, and opaque fixture blocks

@@ -890,12 +890,22 @@ public final class MineLinkEndpointBootstrap {
         if (source.isEmpty()) {
             return failure(request, "missing_material", "Source slot is empty.");
         }
-        int requestedCount = Math.max(1, intValue(arguments, "count", source.getCount()));
-        int count = Math.min(requestedCount, source.getCount());
         ItemStack destination = readSlot(agent, to);
         if (!destination.isEmpty() && !ItemStack.isSameItemSameComponents(destination, source)) {
             return failure(request, "inventory_full", "Destination slot already contains a different item.");
         }
+        JsonObject slotRuleFailure = validateDestinationSlot(request, agent, to, source);
+        if (slotRuleFailure != null) {
+            return slotRuleFailure;
+        }
+
+        int requestedCount = Math.max(1, intValue(arguments, "count", source.getCount()));
+        int destinationLimit = destinationLimit(agent, to, source, destination);
+        int destinationRoom = destinationLimit - (destination.isEmpty() ? 0 : destination.getCount());
+        if (destinationRoom <= 0) {
+            return failure(request, "inventory_full", "Destination slot cannot accept more of this item.");
+        }
+        int count = Math.min(Math.min(requestedCount, source.getCount()), destinationRoom);
 
         ItemStack moved = source.copyWithCount(count);
         ItemStack remaining = source.copy();
@@ -1541,6 +1551,29 @@ public final class MineLinkEndpointBootstrap {
         return slot != null && slot.containerId.equals(open.containerId) ? slot : null;
     }
 
+    private JsonObject validateDestinationSlot(JsonObject request, AgentBody agent, SlotRef slot, ItemStack stack) {
+        OpenContainer open = agent.openContainer;
+        if (open == null || !open.containerId.equals(slot.containerId)) {
+            return failure(request, "stale_slot_ref", "Destination slot is not valid for the current container snapshot.");
+        }
+        if (slot.area.equals("container") && open.container != null && slot.index >= 0 && slot.index < open.container.getContainerSize()) {
+            ItemStack probe = stack.copyWithCount(1);
+            if (!open.container.canPlaceItem(slot.index, probe)) {
+                return failure(request, "blocked", "Server slot rules rejected this item for the destination slot.");
+            }
+        }
+        return null;
+    }
+
+    private int destinationLimit(AgentBody agent, SlotRef slot, ItemStack source, ItemStack destination) {
+        int itemLimit = destination.isEmpty() ? source.getMaxStackSize() : destination.getMaxStackSize();
+        OpenContainer open = agent.openContainer;
+        if (slot.area.equals("container") && open != null && open.container != null) {
+            return Math.min(itemLimit, open.container.getMaxStackSize());
+        }
+        return itemLimit;
+    }
+
     private ItemStack readSlot(AgentBody agent, SlotRef slot) {
         OpenContainer open = agent.openContainer;
         if (open == null || !open.containerId.equals(slot.containerId)) {
@@ -2158,6 +2191,7 @@ public final class MineLinkEndpointBootstrap {
             if (level.getBlockEntity(chestPos) instanceof Container container) {
                 container.setItem(0, new ItemStack(Items.RAW_IRON, 1));
                 container.setItem(1, new ItemStack(Items.COAL, 1));
+                container.setItem(2, new ItemStack(Items.DIRT, 1));
                 container.setChanged();
             }
             level.setBlockAndUpdate(base.south(4), Blocks.FURNACE.defaultBlockState());

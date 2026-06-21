@@ -309,7 +309,14 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
         count: { type: "number", minimum: 1 }
       }
     },
-    failure_reasons: ["container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments"]
+    failure_reasons: [
+      "container_not_open",
+      "stale_slot_ref",
+      "missing_material",
+      "inventory_full",
+      "invalid_arguments",
+      "blocked"
+    ]
   },
   {
     name: "container.take_output",
