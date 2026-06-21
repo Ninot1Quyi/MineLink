@@ -178,6 +178,7 @@ public final class MineLinkEndpointBootstrap {
             case "connect" -> connect(request);
             case "agent.birth" -> birth(request);
             case "tool.list" -> toolList(request);
+            case "tool.query" -> toolQuery(request);
             case "tool.execute" -> toolExecute(request);
             default -> failure(request, "unknown_tool", "Unsupported MineLink protocol request: " + type);
         };
@@ -278,26 +279,33 @@ public final class MineLinkEndpointBootstrap {
     private JsonObject toolList(JsonObject request) {
         JsonObject response = baseResponse(request, "tool.list_result");
         JsonArray tools = new JsonArray();
-        addTool(tools, "observe.self", "Observe the active server_agent body state.", "observe", "self");
-        addTool(tools, "observe.scene", "Observe visible nearby surfaces from the current body.", "observe", "scene");
-        addTool(tools, "observe.inventory", "Observe the active server_agent inventory.", "observe", "inventory");
-        addTool(tools, "observe.events", "Observe locally visible social and action events.", "observe", "events", "social");
-        addTool(tools, "action.move", "Move the active body using a bounded vector.", "action", "movement");
-        addTool(tools, "action.look_at", "Turn toward a visible block ref.", "action", "look");
-        addTool(tools, "action.mine_visible_block", "Mine a currently visible block ref.", "action", "mine");
-        addTool(tools, "action.use", "Use a visible target when supported.", "action", "use");
-        addTool(tools, "action.sleep", "Try to sleep in a visible reachable bed.", "action", "sleep");
-        addTool(tools, "block.place", "Place a block from inventory against a visible target.", "action", "build");
-        addTool(tools, "chat.say_local", "Say a bounded local message as the active server_agent.", "chat", "social");
-        addTool(tools, "container.open", "Open a reachable smoke fixture container.", "container");
-        addTool(tools, "container.observe", "Observe the currently open smoke fixture container.", "container", "observe");
-        addTool(tools, "container.move_stack", "Move a stack between smoke fixture container and agent inventory.", "container");
-        addTool(tools, "container.take_output", "Take crafting output into agent inventory.", "container", "craft");
-        addTool(tools, "craft.list_available", "List smoke fixture recipes available through the server recipe registry.", "craft", "recipe");
-        addTool(tools, "craft.quick_craft", "Craft through the server recipe registry for the smoke fixture.", "craft", "recipe");
-        addTool(tools, "create.inspect_component", "Inspect a visible Create component.", "create", "observe");
+        for (ToolDefinition tool : filteredToolDefinitions(request)) {
+            tools.add(tool.summaryJson());
+        }
         response.add("tools", tools);
         response.add("next_cursor", null);
+        return response;
+    }
+
+    private JsonObject toolQuery(JsonObject request) {
+        String name = stringValue(request, "name", "");
+        Optional<ToolDefinition> tool = toolDefinitions().stream().filter(candidate -> candidate.name.equals(name)).findFirst();
+        if (tool.isEmpty()) {
+            return failure(request, "unknown_tool", "Unknown dynamic tool: " + name);
+        }
+
+        JsonObject response = baseResponse(request, "tool.query_result");
+        response.addProperty("name", tool.get().name);
+        response.addProperty("summary", tool.get().summary);
+        response.addProperty("description", tool.get().description);
+        response.add("tags", stringArray(tool.get().tags.toArray(String[]::new)));
+        response.add("input_schema", tool.get().inputSchema);
+        if (!tool.get().preconditions.isEmpty()) {
+            response.add("preconditions", stringArray(tool.get().preconditions.toArray(String[]::new)));
+        }
+        if (!tool.get().failureReasons.isEmpty()) {
+            response.add("failure_reasons", stringArray(tool.get().failureReasons.toArray(String[]::new)));
+        }
         return response;
     }
 
@@ -1831,16 +1839,313 @@ public final class MineLinkEndpointBootstrap {
         return response;
     }
 
-    private static void addTool(JsonArray tools, String name, String summary, String... tags) {
-        JsonObject tool = new JsonObject();
-        tool.addProperty("name", name);
-        tool.addProperty("summary", summary);
-        JsonArray tagArray = new JsonArray();
-        for (String tag : tags) {
-            tagArray.add(tag);
+    private static List<ToolDefinition> filteredToolDefinitions(JsonObject request) {
+        String namespace = stringValue(request, "namespace", "").toLowerCase();
+        String query = stringValue(request, "query", "").toLowerCase();
+        List<String> tags = stringList(arrayValue(request, "tags"));
+        int limit = Math.min(Math.max(intValue(request, "limit", 20), 1), 50);
+        List<ToolDefinition> tools = new ArrayList<>();
+        for (ToolDefinition tool : toolDefinitions()) {
+            if (!namespace.isBlank() && !tool.name.toLowerCase().startsWith(namespace + ".")) {
+                continue;
+            }
+            if (!query.isBlank() && !tool.searchText().contains(query)) {
+                continue;
+            }
+            if (!tool.tags.containsAll(tags)) {
+                continue;
+            }
+            tools.add(tool);
+            if (tools.size() >= limit) {
+                break;
+            }
         }
-        tool.add("tags", tagArray);
-        tools.add(tool);
+        return tools;
+    }
+
+    private static List<String> stringList(JsonArray array) {
+        List<String> values = new ArrayList<>();
+        for (JsonElement element : array) {
+            if (!element.isJsonNull()) {
+                values.add(element.getAsString());
+            }
+        }
+        return values;
+    }
+
+    private static List<ToolDefinition> toolDefinitions() {
+        return List.of(
+            tool(
+                "observe.self",
+                "Observe the active server_agent body state.",
+                "Returns health, hunger, position, yaw, pitch, current action, and body capability flags.",
+                objectSchema(),
+                List.of("observe", "self", "survival"),
+                List.of(),
+                List.of()
+            ),
+            tool(
+                "observe.scene",
+                "Observe visible nearby surfaces from the current body.",
+                "Returns a bounded visible scene with short-lived refs. It is not a chunk oracle.",
+                objectSchema(properties(
+                    prop("radius", numberSchema(1, 32, 16)),
+                    prop("include", arraySchema("string"))
+                )),
+                List.of("observe", "scene", "perception"),
+                List.of("runtime_unavailable"),
+                List.of()
+            ),
+            tool(
+                "observe.inventory",
+                "Observe the active server_agent inventory.",
+                "Returns hotbar, main inventory, selected slot, and equipment known to the server.",
+                objectSchema(),
+                List.of("observe", "inventory"),
+                List.of(),
+                List.of()
+            ),
+            tool(
+                "observe.events",
+                "Observe locally visible social and action events.",
+                "Returns bounded event summaries visible from the active server_agent body. It is not a global timeline.",
+                objectSchema(properties(
+                    prop("after_event_id", stringSchema()),
+                    prop("limit", numberSchema(1, 50, 20))
+                )),
+                List.of("observe", "events", "social"),
+                List.of("invalid_cursor"),
+                List.of()
+            ),
+            tool(
+                "action.move",
+                "Move the active body using a bounded vector.",
+                "Moves by a small vector and returns collision plus moved-distance feedback.",
+                objectSchema(properties(
+                    prop("vector", arraySchema("number")),
+                    prop("durationMs", numberSchema(50, 5000, null))
+                ), "vector", "durationMs"),
+                List.of("action", "movement"),
+                List.of("blocked", "backpressure_queue_full"),
+                List.of()
+            ),
+            tool(
+                "action.look_at",
+                "Turn toward a visible block ref.",
+                "Updates the body orientation. Refs must come from a current observation.",
+                objectSchema(properties(
+                    prop("block_ref", stringSchema()),
+                    prop("entity_ref", stringSchema()),
+                    prop("point", arraySchema("number"))
+                )),
+                List.of("action", "look"),
+                List.of("unknown_or_unobserved_target", "expired_ref"),
+                List.of()
+            ),
+            tool(
+                "action.mine_visible_block",
+                "Mine a currently visible block ref.",
+                "Mines through server-side guard checks and native runtime harvest rules. It never accepts hidden ore coordinates as authority.",
+                objectSchema(properties(
+                    prop("block_ref", stringSchema()),
+                    prop("tool_policy", stringSchema("best_available"))
+                ), "block_ref"),
+                List.of("action", "mine", "survival"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "wrong_tool"),
+                List.of("block_ref comes from a recent observe.scene result", "target is visible and reachable")
+            ),
+            tool(
+                "action.use",
+                "Use a visible target when supported.",
+                "Runs a server-side use/interact action with the selected item or an empty hand when allowed.",
+                objectSchema(properties(
+                    prop("target_ref", stringSchema()),
+                    prop("block_ref", stringSchema()),
+                    prop("item", stringSchema()),
+                    prop("face", enumSchema("up", "down", "north", "south", "east", "west"))
+                )),
+                List.of("action", "use"),
+                List.of("unsupported_capability", "target_too_far", "target_not_visible", "missing_material", "blocked"),
+                List.of()
+            ),
+            tool(
+                "action.sleep",
+                "Try to sleep in a visible reachable bed.",
+                "Uses the native server sleep path and returns vanilla sleep rejection as a structured failure.",
+                objectSchema(properties(prop("target_ref", stringSchema())), "target_ref"),
+                List.of("action", "sleep", "survival"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "unsupported_capability", "blocked"),
+                List.of("target_ref comes from a recent observe.scene result", "target is a visible reachable bed")
+            ),
+            tool(
+                "block.place",
+                "Place a block from inventory against a visible target.",
+                "Places only through server-side reach, visibility, inventory, and occupancy checks.",
+                objectSchema(properties(
+                    prop("target_ref", stringSchema()),
+                    prop("face", enumSchema("up", "down", "north", "south", "east", "west")),
+                    prop("item", stringSchema()),
+                    prop("placement_label", stringSchema())
+                ), "target_ref", "face", "item"),
+                List.of("action", "build", "survival"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "missing_material", "blocked", "unsupported_capability", "invalid_arguments"),
+                List.of()
+            ),
+            tool(
+                "chat.say_local",
+                "Say a bounded local message as the active server_agent.",
+                "Sends a bounded local chat/social event with normal rate limits.",
+                objectSchema(properties(prop("message", stringSchema())), "message"),
+                List.of("chat", "social"),
+                List.of("invalid_arguments", "backpressure_queue_full"),
+                List.of()
+            ),
+            tool(
+                "container.open",
+                "Open a reachable smoke fixture container.",
+                "Opens a visible, reachable server-side container using server interaction rules.",
+                objectSchema(properties(prop("block_ref", stringSchema())), "block_ref"),
+                List.of("container"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "unsupported_capability"),
+                List.of("block_ref comes from a recent observe.scene result", "target is visible and reachable")
+            ),
+            tool(
+                "container.observe",
+                "Observe the currently open smoke fixture container.",
+                "Returns server slot refs for the currently opened container.",
+                objectSchema(),
+                List.of("container", "observe"),
+                List.of("container_not_open"),
+                List.of()
+            ),
+            tool(
+                "container.move_stack",
+                "Move a stack between smoke fixture container and agent inventory.",
+                "Moves item stacks through normal slot, placement, stack-capacity, and output-slot rules.",
+                objectSchema(properties(
+                    prop("from_slot_ref", stringSchema()),
+                    prop("to_slot_ref", stringSchema()),
+                    prop("count", numberSchema(1, null, null))
+                ), "from_slot_ref", "to_slot_ref"),
+                List.of("container"),
+                List.of("container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments", "blocked"),
+                List.of()
+            ),
+            tool(
+                "container.take_output",
+                "Take crafting output into agent inventory.",
+                "Takes output through real server output-slot rules.",
+                objectSchema(properties(prop("slot_ref", stringSchema()))),
+                List.of("container", "craft"),
+                List.of("container_not_open", "stale_slot_ref", "missing_material", "inventory_full", "invalid_arguments"),
+                List.of()
+            ),
+            tool(
+                "craft.list_available",
+                "List smoke fixture recipes available through the server recipe registry.",
+                "Returns recipe summaries, not every recipe in the registry.",
+                objectSchema(properties(
+                    prop("query", stringSchema()),
+                    prop("limit", numberSchema(1, 50, 20))
+                )),
+                List.of("craft", "recipe"),
+                List.of("station_too_far"),
+                List.of()
+            ),
+            tool(
+                "craft.quick_craft",
+                "Craft through the server recipe registry for the smoke fixture.",
+                "Crafts only when ingredients and station rules are satisfied.",
+                objectSchema(properties(
+                    prop("recipe_id", stringSchema()),
+                    prop("count", numberSchema(1, null, null))
+                ), "recipe_id", "count"),
+                List.of("craft", "recipe"),
+                List.of("station_too_far", "missing_material", "invalid_recipe", "inventory_full"),
+                List.of()
+            ),
+            tool(
+                "create.inspect_component",
+                "Inspect a visible Create component.",
+                "Returns bounded Create adapter semantics for a visible component, including coarse kinetic, blockage, and unsupported client-only capability hints.",
+                objectSchema(properties(prop("block_ref", stringSchema())), "block_ref"),
+                List.of("create", "observe"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "unsupported_capability", "target_not_visible", "target_too_far"),
+                List.of("block_ref comes from a recent observe.scene result")
+            )
+        );
+    }
+
+    private static ToolDefinition tool(String name, String summary, String description, JsonObject inputSchema, List<String> tags, List<String> failureReasons, List<String> preconditions) {
+        return new ToolDefinition(name, summary, description, inputSchema, tags, failureReasons, preconditions);
+    }
+
+    private static JsonObject objectSchema() {
+        return objectSchema(new JsonObject());
+    }
+
+    private static JsonObject objectSchema(JsonObject properties, String... required) {
+        JsonObject schema = new JsonObject();
+        schema.addProperty("type", "object");
+        schema.add("properties", properties);
+        if (required.length > 0) {
+            schema.add("required", stringArray(required));
+        }
+        return schema;
+    }
+
+    private static JsonObject properties(PropertyDefinition... definitions) {
+        JsonObject properties = new JsonObject();
+        for (PropertyDefinition definition : definitions) {
+            properties.add(definition.name, definition.schema);
+        }
+        return properties;
+    }
+
+    private static PropertyDefinition prop(String name, JsonObject schema) {
+        return new PropertyDefinition(name, schema);
+    }
+
+    private static JsonObject stringSchema() {
+        JsonObject schema = new JsonObject();
+        schema.addProperty("type", "string");
+        return schema;
+    }
+
+    private static JsonObject stringSchema(String defaultValue) {
+        JsonObject schema = stringSchema();
+        schema.addProperty("default", defaultValue);
+        return schema;
+    }
+
+    private static JsonObject numberSchema(Integer minimum, Integer maximum, Integer defaultValue) {
+        JsonObject schema = new JsonObject();
+        schema.addProperty("type", "number");
+        if (minimum != null) {
+            schema.addProperty("minimum", minimum);
+        }
+        if (maximum != null) {
+            schema.addProperty("maximum", maximum);
+        }
+        if (defaultValue != null) {
+            schema.addProperty("default", defaultValue);
+        }
+        return schema;
+    }
+
+    private static JsonObject arraySchema(String itemType) {
+        JsonObject schema = new JsonObject();
+        JsonObject items = new JsonObject();
+        items.addProperty("type", itemType);
+        schema.addProperty("type", "array");
+        schema.add("items", items);
+        return schema;
+    }
+
+    private static JsonObject enumSchema(String... values) {
+        JsonObject schema = stringSchema();
+        schema.add("enum", stringArray(values));
+        return schema;
     }
 
     private static JsonObject objectValue(JsonObject object, String name) {
@@ -2590,6 +2895,31 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private record InteractionTarget(BlockRef ref, JsonObject failure) {
+    }
+
+    private record PropertyDefinition(String name, JsonObject schema) {
+    }
+
+    private record ToolDefinition(
+        String name,
+        String summary,
+        String description,
+        JsonObject inputSchema,
+        List<String> tags,
+        List<String> failureReasons,
+        List<String> preconditions
+    ) {
+        private String searchText() {
+            return (name + " " + summary + " " + description).toLowerCase();
+        }
+
+        private JsonObject summaryJson() {
+            JsonObject payload = new JsonObject();
+            payload.addProperty("name", name);
+            payload.addProperty("summary", summary);
+            payload.add("tags", stringArray(tags.toArray(String[]::new)));
+            return payload;
+        }
     }
 
     private static final class OpenContainer {

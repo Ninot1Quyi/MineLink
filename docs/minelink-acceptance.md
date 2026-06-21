@@ -207,6 +207,10 @@ Required:
 - Public MCP surface remains small:
   `minelink.ping`, `minelink.connect_server`, `minelink.birth`, `minelink.tool_list`, `minelink.tool_query`, `minelink.tool_execute`.
 - Game capabilities are lazy dynamic tools.
+- Connected runtimes are the authority for dynamic game tools: `tool.list`
+  returns compact summaries with namespace/query/tag filters, and `tool.query`
+  returns the full input schema, preconditions, and failure reasons for one
+  tool.
 - Reconnect to a new endpoint cannot leave stale socket/session state.
 - Connected-runtime errors are not masked by local fallback.
 - Host/Gateway logs include tool call, protocol request, protocol response, action id, failure reason, latency, and agent id.
@@ -229,6 +233,16 @@ Current status:
   `.minelink-dev/http-mine_tree` evidence. The real NeoForge workflow also runs
   `mine_tree` through the HTTP Gateway and uploads
   `.minelink-dev/neoforge-http-mine_tree` evidence.
+- Connected Host sessions now forward `minelink.tool_query` to the runtime
+  instead of relying on a static Host catalog. Runtime extension
+  `minelink.tool_execute` calls are also forwarded after birth, so modded server
+  capabilities can be added without preloading every schema into the Host.
+- Mock and real NeoForge e2e reports now perform a catalog preflight before
+  gameplay: default `tool.list` must return tools, `namespace=container` must
+  return only `container.*`, `query=Create` must include
+  `create.inspect_component`, `tool.query(container.move_stack)` must include
+  an input schema plus `blocked` as an advertised failure reason, and
+  `tool.query(debug.oracle)` must fail with `unknown_tool`.
 - The Gateway now has a basic admission and abuse-control layer: optional
   `MINELINK_GATEWAY_TOKEN` Bearer auth, refusal to bind a non-loopback host
   without a token unless explicitly overridden for controlled tests,
@@ -247,6 +261,8 @@ Required:
 - `examples/agents/codex_rpc_json_runner.py` creates an agent, consumes Codex-style JSON-RPC tool-call decisions, executes the calls through MCP, and writes assertions/evidence.
 - Failed attempts are retried from structured failure reasons.
 - Reports include agent id, final assertions, evidence paths, actions, final inventory, and trace path.
+- Reports include catalog preflight evidence so every gameplay scenario proves
+  lazy dynamic-tool discovery before agent decisions are replayed.
 
 Evidence:
 
@@ -473,6 +489,11 @@ Current status:
 Before a release tag, these must pass against mock and real runtime where applicable:
 
 - Unknown dynamic tool returns `unknown_tool`.
+- Unknown dynamic tool query returns `unknown_tool`.
+- Runtime `tool.list` supports namespace/query filtering without leaking tools
+  outside the requested namespace.
+- Runtime `tool.query` returns full schema and failure reasons only for the
+  requested tool.
 - `online-mode=true` returns `unsupported_online_auth`.
 - Mining without a current observation returns `unknown_or_unobserved_target`.
 - Mining an expired ref returns `expired_ref`.
@@ -489,6 +510,8 @@ Before a release tag, these must pass against mock and real runtime where applic
   carry expected vision tags without exposing the hidden diamond ore.
 - Submitting too many concurrent actions returns `backpressure_queue_full`.
 - Connected `tool_list` runtime failure is surfaced, not hidden by local fallback.
+- Connected `tool_query` is forwarded to the runtime catalog, and runtime-only
+  extension tool execution is forwarded after agent birth.
 - Reconnecting to endpoint B stops using endpoint A.
 - Create fixture returns structured component data or structured unsupported reason.
 - Server log, Host log, agent log, and action trace are valid JSON/JSONL.
@@ -524,6 +547,9 @@ The repository currently has an executable baseline for Gates 0, 3 partial,
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh perception_shapes`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh portal_coop`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,perception_shapes,portal_coop`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-catalog-furnace bash scripts/dev/e2e.sh furnace_smoke`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_MCP_TRANSPORT=http MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-catalog-http bash scripts/dev/e2e.sh mine_tree`
+- `MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --work-dir .minelink-dev/soak/neoforge-catalog --scenarios create_smoke,portal_coop,guard_boundaries`
 - `.minelink-dev/soak/<runtime>/soak-report.json`
 - `.minelink-dev/soak/<runtime>/process-cleanup.json`
 - `.minelink-dev/soak/<runtime>/queue-metrics.json`

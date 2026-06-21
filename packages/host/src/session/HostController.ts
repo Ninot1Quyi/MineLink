@@ -168,6 +168,21 @@ export class HostController {
       return fail("invalid_arguments", parsed.error.message);
     }
 
+    if (this.client.connected) {
+      try {
+        const response = await this.client.request({
+          type: "tool.query",
+          name: parsed.data.name
+        });
+        if (response.ok === false) {
+          return response as unknown as ToolResult;
+        }
+        return ok(response);
+      } catch (error) {
+        return fail("runtime_unavailable", error instanceof Error ? error.message : String(error));
+      }
+    }
+
     const local = findDynamicTool(parsed.data.name);
     if (!local) {
       return fail("unknown_tool", `Unknown dynamic tool: ${parsed.data.name}`);
@@ -182,11 +197,11 @@ export class HostController {
     }
     const args = parsed.data;
 
-    const tool = findDynamicTool(args.name);
-    if (!tool) {
-      return fail("unknown_tool", `Unknown dynamic tool: ${args.name}`);
-    }
     if (!this.client.connected || !this.session.agentId) {
+      const local = findDynamicTool(args.name);
+      if (!local) {
+        return fail("unknown_tool", `Unknown dynamic tool: ${args.name}`);
+      }
       return fail("agent_not_born", "Call minelink.connect_server and minelink.birth first.");
     }
 

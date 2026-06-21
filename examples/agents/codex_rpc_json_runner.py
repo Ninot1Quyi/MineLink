@@ -96,7 +96,9 @@ def main() -> None:
         agent_id = birth.get("agent_id")
         if connect.get("ok") is False or not agent_id:
             raise RuntimeError(f"MineLink session setup failed: connect={connect}, birth={birth}")
-        tools = client.tool_list({"limit": 50})
+        catalog = validate_dynamic_catalog(client)
+        tools = catalog["default_list"]
+        state["catalog_checks"] = catalog
         log("codex_rpc_session_started", scenario=scenario, endpoint=endpoint, agent_id=agent_id)
 
         for turn in range(1, args.max_turns + 1):
@@ -153,6 +155,7 @@ def main() -> None:
             "replay_env": "MINELINK_CODEX_RPC_REPLAY",
         },
         "mcp_transport": mcp_transport_report(),
+        "catalog_checks": state.get("catalog_checks"),
         "connect": connect,
         "placements": state["placements"],
         "final_assertions": final_assertions,
@@ -263,7 +266,9 @@ def run_portal_coop(
                     f"connect={connect_results[name]}, birth={birth_results[name]}"
                 )
             if not tools:
-                tools = client.tool_list({"limit": 50})
+                catalog = validate_dynamic_catalog(client)
+                tools = catalog["default_list"]
+                state["catalog_checks"] = catalog
 
         quota_client = stack.enter_context(MineLinkMcpClient())
         quota_connect = quota_client.connect_server(endpoint=endpoint, owner_name=team_owner_name)
@@ -367,6 +372,7 @@ def run_portal_coop(
             "replay_env": "MINELINK_CODEX_RPC_REPLAY",
         },
         "mcp_transport": mcp_transport_report(),
+        "catalog_checks": state.get("catalog_checks"),
         "connect": connect_results,
         "birth": birth_results,
         "quota_probe": quota_probe,
@@ -415,6 +421,50 @@ def mcp_transport_report() -> JsonDict:
         "transport": transport,
         "url": os.environ.get("MINELINK_MCP_URL") or os.environ.get("MINELINK_MCP_HTTP_URL"),
         "gateway_token_configured": bool(os.environ.get("MINELINK_GATEWAY_TOKEN")),
+    }
+
+
+def validate_dynamic_catalog(client: MineLinkMcpClient) -> JsonDict:
+    default_list = client.tool_list({"limit": 50})
+    tools = default_list.get("tools", [])
+    if not isinstance(tools, list) or not tools:
+        raise RuntimeError(f"Dynamic tool_list returned no tools: {default_list}")
+
+    container_list = client.tool_list({"namespace": "container", "limit": 20})
+    container_tools = container_list.get("tools", [])
+    if not isinstance(container_tools, list) or not container_tools:
+        raise RuntimeError(f"container namespace tool_list returned no tools: {container_list}")
+    non_container = [tool.get("name") for tool in container_tools if not str(tool.get("name", "")).startswith("container.")]
+    if non_container:
+        raise RuntimeError(f"container namespace tool_list leaked non-container tools: {non_container}")
+
+    create_list = client.tool_list({"query": "Create", "limit": 10})
+    create_tools = create_list.get("tools", [])
+    if not any(tool.get("name") == "create.inspect_component" for tool in create_tools if isinstance(tool, dict)):
+        raise RuntimeError(f"Create query did not return create.inspect_component: {create_list}")
+
+    move_stack = client.tool_query("container.move_stack")
+    input_schema = move_stack.get("input_schema")
+    failure_reasons = move_stack.get("failure_reasons", [])
+    if move_stack.get("name") != "container.move_stack" or not isinstance(input_schema, dict):
+        raise RuntimeError(f"tool_query did not return container.move_stack schema: {move_stack}")
+    if "blocked" not in failure_reasons:
+        raise RuntimeError(f"container.move_stack schema does not advertise blocked slot-rule failures: {move_stack}")
+
+    unknown = client.tool_query("debug.oracle")
+    if unknown.get("ok") is not False or unknown.get("reason") != "unknown_tool":
+        raise RuntimeError(f"unknown tool_query did not return unknown_tool: {unknown}")
+
+    return {
+        "default_list": default_list,
+        "container_list": container_list,
+        "create_query_list": create_list,
+        "queried_tool": {
+            "name": move_stack.get("name"),
+            "input_schema": input_schema,
+            "failure_reasons": failure_reasons,
+        },
+        "unknown_query": unknown,
     }
 
 
