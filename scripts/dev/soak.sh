@@ -80,7 +80,7 @@ fi
 
 for scenario in "${scenario_list[@]}"; do
   case "$scenario" in
-    mine_tree|create_smoke|craft_smoke|craft_negative|guard_boundaries|portal_coop) ;;
+    mine_tree|create_smoke|craft_smoke|craft_negative|guard_boundaries|perception_shapes|portal_coop) ;;
     *)
       echo "Unsupported soak scenario: $scenario" >&2
       exit 2
@@ -106,6 +106,7 @@ ports_for_scenario() {
     craft_smoke) endpoint_port=25577 ;;
     craft_negative) endpoint_port=25578 ;;
     guard_boundaries) endpoint_port=25580 ;;
+    perception_shapes) endpoint_port=25581 ;;
     portal_coop) endpoint_port=25579 ;;
     *) endpoint_port=25575 ;;
   esac

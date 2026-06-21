@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 
 scenario="${1:-mine_tree}"
 case "$scenario" in
-  mine_tree | create_smoke | craft_smoke | craft_negative | guard_boundaries | portal_coop)
+  mine_tree | create_smoke | craft_smoke | craft_negative | guard_boundaries | perception_shapes | portal_coop)
     export MINELINK_SCENARIO="$scenario"
     if [ "$scenario" = "portal_coop" ]; then
       export MINELINK_AGENT_MAX_TURNS="${MINELINK_AGENT_MAX_TURNS:-64}"

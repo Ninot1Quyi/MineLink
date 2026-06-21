@@ -59,13 +59,18 @@ jobs:
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
+      - name: NeoForge perception shapes smoke
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
+        env:
+          MINELINK_RUNTIME: neoforge
+          MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge portal cooperation smoke
         run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"
       - name: NeoForge short stability soak
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,guard_boundaries,portal_coop
+        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios craft_negative,guard_boundaries,perception_shapes,portal_coop
         env:
           MINELINK_RUNTIME: neoforge
           MINELINK_ACCEPT_EULA: "1"

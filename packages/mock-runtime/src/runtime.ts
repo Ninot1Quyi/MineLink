@@ -12,7 +12,13 @@ import {
 } from "@minelink/protocol";
 
 type Vec3 = [number, number, number];
-type FixtureName = "vanilla_tree" | "create_smoke" | "craft_smoke" | "portal_coop" | "guard_boundaries";
+type FixtureName =
+  | "vanilla_tree"
+  | "create_smoke"
+  | "craft_smoke"
+  | "portal_coop"
+  | "guard_boundaries"
+  | "perception_shapes";
 type RuntimeResponse = Record<string, unknown>;
 type RuntimeRequest = RuntimeResponse & { id?: string; type?: string };
 type RefValidation = { ok: true; ref: VisibleRef } | ({ ok: false } & RuntimeResponse);
@@ -1119,7 +1125,7 @@ export class MockRuntimeServer {
   }
 
   private isVisibleFromAgent(agent: AgentState, block: BlockState): boolean {
-    if (this.fixture !== "guard_boundaries") {
+    if (this.fixture !== "guard_boundaries" && this.fixture !== "perception_shapes") {
       return true;
     }
     if (block.id !== "minecraft:diamond_ore") {
@@ -1243,6 +1249,53 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
         id: "minecraft:stone",
         pos: [3, 64, 0],
         tags: ["minecraft:stone", "minelink:opaque_fixture"],
+        visibleFaces: ["west", "north", "up"]
+      },
+      {
+        id: "minecraft:diamond_ore",
+        pos: [4, 64, 0],
+        tags: ["minecraft:diamond_ore", "minelink:hidden_fixture"],
+        visibleFaces: ["west", "north", "up"]
+      }
+    ];
+  }
+
+  if (fixture === "perception_shapes") {
+    return [
+      {
+        id: "minecraft:glass",
+        pos: [2, 64, 0],
+        tags: ["minecraft:glass", "minelink:vision_translucent"],
+        visibleFaces: ["west", "north", "up"]
+      },
+      {
+        id: "minecraft:oak_leaves",
+        pos: [2, 65, 0],
+        tags: ["minecraft:leaves", "minelink:vision_translucent"],
+        visibleFaces: ["west", "north", "up"]
+      },
+      {
+        id: "minecraft:short_grass",
+        pos: [0, 64, 2],
+        tags: ["minecraft:short_grass", "minelink:vision_decorative"],
+        visibleFaces: ["north", "up"]
+      },
+      {
+        id: "minecraft:water",
+        pos: [0, 64, 3],
+        tags: ["minecraft:water", "minelink:vision_fluid"],
+        visibleFaces: ["north", "up"]
+      },
+      {
+        id: "minecraft:oak_fence",
+        pos: [0, 64, 4],
+        tags: ["minecraft:fences", "minelink:vision_partial_occluder"],
+        visibleFaces: ["north", "up"]
+      },
+      {
+        id: "minecraft:stone",
+        pos: [3, 64, 0],
+        tags: ["minecraft:stone", "minelink:vision_opaque", "minelink:opaque_fixture"],
         visibleFaces: ["west", "north", "up"]
       },
       {
@@ -1584,6 +1637,7 @@ function isPlaceableBlockItem(item: string): boolean {
 
 export function parseFixture(value: string | undefined): FixtureName {
   if (value === "guard_boundaries") return "guard_boundaries";
+  if (value === "perception_shapes") return "perception_shapes";
   if (value === "portal_coop") return "portal_coop";
   if (value === "create_smoke") return "create_smoke";
   if (value === "craft_smoke") return "craft_smoke";

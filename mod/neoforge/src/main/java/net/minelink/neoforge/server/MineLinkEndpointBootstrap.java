@@ -1953,6 +1953,10 @@ public final class MineLinkEndpointBootstrap {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedGuardFixture(level, base);
                 spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
+            } else if (fixtureName.equals("perception_shapes")) {
+                base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
+                seedPerceptionFixture(level, base);
+                spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
             } else if (fixtureName.equals("create_smoke")) {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedCreateFixture(level, base);
@@ -2203,6 +2207,24 @@ public final class MineLinkEndpointBootstrap {
             );
         }
 
+        private static void seedPerceptionFixture(ServerLevel level, BlockPos base) {
+            for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -1), base.offset(5, 4, 5))) {
+                if (pos.getY() >= base.getY()) {
+                    level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
+                }
+            }
+            for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -1), base.offset(5, -1, 5))) {
+                level.setBlockAndUpdate(pos.immutable(), Blocks.GRASS_BLOCK.defaultBlockState());
+            }
+            level.setBlockAndUpdate(base.east(2), Blocks.GLASS.defaultBlockState());
+            level.setBlockAndUpdate(base.east(2).above(), Blocks.OAK_LEAVES.defaultBlockState());
+            level.setBlockAndUpdate(base.south(2), Blocks.SHORT_GRASS.defaultBlockState());
+            level.setBlockAndUpdate(base.south(3), Blocks.WATER.defaultBlockState());
+            level.setBlockAndUpdate(base.south(4), Blocks.OAK_FENCE.defaultBlockState());
+            level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(base.east(4), Blocks.DIAMOND_ORE.defaultBlockState());
+        }
+
         private static void seedPortalFixture(ServerLevel level, BlockPos anchor) {
             for (BlockPos pos : BlockPos.betweenClosed(anchor.offset(-4, 0, -4), anchor.offset(6, 7, 4))) {
                 if (pos.getY() >= anchor.getY()) {
@@ -2344,6 +2366,17 @@ public final class MineLinkEndpointBootstrap {
                     fixtureBase.south(1)
                 };
             }
+            if (fixtureName.equals("perception_shapes")) {
+                return new BlockPos[] {
+                    fixtureBase.east(2),
+                    fixtureBase.east(2).above(),
+                    fixtureBase.south(2),
+                    fixtureBase.south(3),
+                    fixtureBase.south(4),
+                    fixtureBase.east(3),
+                    fixtureBase.east(4)
+                };
+            }
             if (fixtureName.equals("create_smoke")) {
                 return new BlockPos[] {
                     fixtureBase.east(3),
@@ -2385,6 +2418,28 @@ public final class MineLinkEndpointBootstrap {
                     extra.add("minelink:hidden_fixture");
                 }
             }
+            if (fixtureName.equals("perception_shapes")) {
+                if ((pos.equals(fixtureBase.east(2)) && id.equals("minecraft:glass"))
+                    || (pos.equals(fixtureBase.east(2).above()) && id.equals("minecraft:oak_leaves"))) {
+                    extra.add("minelink:vision_translucent");
+                }
+                if (pos.equals(fixtureBase.south(2)) && id.equals("minecraft:short_grass")) {
+                    extra.add("minelink:vision_decorative");
+                }
+                if (pos.equals(fixtureBase.south(3)) && id.equals("minecraft:water")) {
+                    extra.add("minelink:vision_fluid");
+                }
+                if (pos.equals(fixtureBase.south(4)) && id.equals("minecraft:oak_fence")) {
+                    extra.add("minelink:vision_partial_occluder");
+                }
+                if (pos.equals(fixtureBase.east(3)) && id.equals("minecraft:stone")) {
+                    extra.add("minelink:vision_opaque");
+                    extra.add("minelink:opaque_fixture");
+                }
+                if (pos.equals(fixtureBase.east(4)) && id.equals("minecraft:diamond_ore")) {
+                    extra.add("minelink:hidden_fixture");
+                }
+            }
             if (fixtureName.equals("portal_coop") && pos.equals(fixtureBase) && id.equals("minecraft:netherrack")) {
                 extra.add("minelink:portal_anchor");
             }
@@ -2398,7 +2453,7 @@ public final class MineLinkEndpointBootstrap {
         }
 
         private boolean canSee(BlockPos pos, BlockState state, BlockPos origin) {
-            if (!fixtureName.equals("guard_boundaries")) {
+            if (!fixtureName.equals("guard_boundaries") && !fixtureName.equals("perception_shapes")) {
                 return true;
             }
             return !blockId(state).equals("minecraft:diamond_ore") || origin.getX() > fixtureBase.east(3).getX();

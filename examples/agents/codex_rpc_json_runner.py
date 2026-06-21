@@ -205,6 +205,7 @@ def scenario_objective(scenario: str) -> str:
         "craft_smoke": "Use MineLink MCP tools to move one oak log from a chest, craft oak planks at a crafting table, and prove the planks are in inventory.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, movement-collision, and sleep-limited actions.",
+        "perception_shapes": "Use MineLink MCP tools to prove limited perception classifies visible translucent, decorative, fluid, partial-occluder, and opaque fixtures while hiding a blocked ore.",
         "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to exchange a local social event, withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
     }
     return objectives.get(scenario, f"Complete MineLink scenario {scenario}.")
@@ -805,6 +806,34 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "id": item,
             "expected_min_count": min_count,
             "actual_count": count,
+            "agent": assertion.get("agent"),
+        }
+    if kind == "visible_block_has_tags":
+        item = str(assertion.get("id", ""))
+        required_tags = [str(tag) for tag in assertion.get("required_tags", [])]
+        min_count = int(assertion.get("min_count", 1))
+        assertion_state = assertion_agent_state(assertion, state, global_state)
+        observed = []
+        matches = 0
+        for block in visible_blocks(assertion_state):
+            if block.get("id") != item:
+                continue
+            tags = block.get("tags", [])
+            if not isinstance(tags, list):
+                tags = []
+            tag_set = {str(tag) for tag in tags}
+            observed.append({"id": block.get("id"), "tags": sorted(tag_set)})
+            if all(tag in tag_set for tag in required_tags):
+                matches += 1
+        return {
+            "name": assertion.get("name", f"visible_block_has_tags_{item}"),
+            "kind": kind,
+            "passed": matches >= min_count,
+            "id": item,
+            "required_tags": required_tags,
+            "expected_min_count": min_count,
+            "matching_blocks": matches,
+            "observed": observed,
             "agent": assertion.get("agent"),
         }
     if kind == "visible_block_absent":

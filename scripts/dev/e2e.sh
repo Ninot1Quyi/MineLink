@@ -34,6 +34,11 @@ case "$scenario" in
     report="$work_dir/reports/guard_boundaries-result.json"
     default_port="25580"
     ;;
+  perception_shapes)
+    fixture="perception_shapes"
+    report="$work_dir/reports/perception_shapes-result.json"
+    default_port="25581"
+    ;;
   portal_coop)
     fixture="portal_coop"
     report="$work_dir/reports/portal_coop-result.json"
