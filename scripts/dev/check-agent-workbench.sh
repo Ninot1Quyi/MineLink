@@ -173,6 +173,7 @@ require_text "scripts/dev/dispatch-agent-factory.mjs" "does not replace the requ
 require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink acceptance artifacts"
 require_text "scripts/dev/report-agent-factory-chain.mjs" "automation-chain evidence only"
 require_text "scripts/dev/report-agent-factory-chain.mjs" "First Blocking Edge"
+require_text "scripts/dev/report-agent-factory-chain.mjs" "agent-factory-secrets.json"
 require_text "scripts/dev/check-video-review.mjs" "Release decision: pass"
 require_text "scripts/dev/check-video-review.mjs" "Verifier: Ona Platform Codex"
 require_text "scripts/dev/check-video-review.mjs" "Summary sha256"

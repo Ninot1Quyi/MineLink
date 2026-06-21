@@ -37,6 +37,7 @@ const defaults = {
   videoReview: ".minelink-dev/reports/artifacts/video-review.md",
   videoReleaseGate: ".minelink-dev/reports/artifacts/video-release-gate.md",
   linearSyncReport: ".minelink-dev/reports/linear-sync.md",
+  secretPreflight: ".minelink-dev/reports/agent-factory-secrets.json",
 };
 
 const args = { ...defaults };
@@ -77,6 +78,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--video-review") args.videoReview = readValue();
   else if (arg === "--video-release-gate") args.videoReleaseGate = readValue();
   else if (arg === "--linear-sync-report") args.linearSyncReport = readValue();
+  else if (arg === "--secret-preflight") args.secretPreflight = readValue();
   else if (arg === "--codex-auth-failed") codexAuthFailed = true;
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/report-agent-factory-chain.mjs [options]
@@ -116,6 +118,14 @@ async function readText(filePath) {
     return await fs.readFile(filePath, "utf8");
   } catch {
     return "";
+  }
+}
+
+async function readJson(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
   }
 }
 
@@ -185,9 +195,14 @@ const mp4Info = await fileInfo(args.acceptanceMp4);
 const reviewInfo = await fileInfo(args.videoReview);
 const releaseInfo = await fileInfo(args.videoReleaseGate);
 const linearSyncInfo = await fileInfo(args.linearSyncReport);
+const secretPreflightInfo = await fileInfo(args.secretPreflight);
 const releaseText = await readText(args.videoReleaseGate);
 const reviewText = await readText(args.videoReview);
 const linearSyncText = await readText(args.linearSyncReport);
+const secretPreflight = await readJson(args.secretPreflight);
+const secretPreflightActions = Array.isArray(secretPreflight?.nextActions)
+  ? secretPreflight.nextActions.filter(Boolean)
+  : [];
 
 const issueStatus = hasValue(args.githubIssue) ? "passed" : hasValue(args.linearIssue) ? "partial" : "missing";
 const taskContractStatus = normalizeStatus(args.issueContractStatus) !== "missing"
@@ -259,6 +274,7 @@ const nodes = [
   ], taskContractStatus === "blocked" ? globalBlocker : ""),
   mkNode("github_dispatcher", "GitHub Actions dispatcher", dispatcherStatus, [
     hasValue(args.githubDispatcherUrl) && `Dispatcher: ${args.githubDispatcherUrl}`,
+    secretPreflightInfo && `${args.secretPreflight}${secretPreflight?.result ? ` (${secretPreflight.result})` : ""}`,
   ], dispatcherStatus === "blocked" ? globalBlocker : ""),
   mkNode("ona_automation", "Ona automation execution queued", automationStatus, [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
@@ -371,7 +387,11 @@ const nextActions = [];
 if (firstBlockedEdge?.to === "issue_contract") {
   nextActions.push("Fix the GitHub/Linear task contract so it has agent-ready labels, scope, forbidden changes, validation, evidence, video requirement, and remaining gaps.");
 } else if (firstBlockedEdge?.to === "github_dispatcher") {
-  nextActions.push("Run the GitHub issue dispatcher workflow or Linear watcher and attach its Actions URL/report.");
+  if (secretPreflightActions.length > 0) {
+    nextActions.push(...secretPreflightActions);
+  } else {
+    nextActions.push("Run the GitHub issue dispatcher workflow or Linear watcher and attach its Actions URL/report.");
+  }
 } else if (firstBlockedEdge?.to === "ona_automation") {
   nextActions.push("Provide ONA_TOKEN/Ona CLI authentication, start the Ona automation, and capture the automation execution id.");
 } else if (firstBlockedEdge?.to === "ona_prebuild") {
@@ -418,6 +438,13 @@ const report = {
   nodes,
   edges,
   nextActions,
+  secretPreflight: secretPreflightInfo
+    ? {
+        path: args.secretPreflight,
+        result: secretPreflight?.result ?? "unknown",
+        nextActions: secretPreflightActions,
+      }
+    : null,
   hashes: summaryHashes,
   acceptanceBoundary:
     "This is automation-chain evidence only. It does not upgrade MineLink acceptance gates or prove product completion.",

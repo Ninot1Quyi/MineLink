@@ -218,6 +218,9 @@ by `scripts/dev/dispatch-agent-factory.mjs`,
 `scripts/dev/check-agent-factory-secrets.mjs` is the secret-safe preflight for
 this bridge: it checks GitHub secret presence, local/runner `LINEAR_API_KEY`
 presence, and Ona CLI active-context status without printing credential values.
+`report-agent-factory-chain.mjs` consumes that preflight JSON when present so
+the chain report can name missing secret/context repair actions on the blocked
+dispatcher edge.
 
 The final flow should use the Ona Platform Codex agent option for implementation
 and the separate video-verifier pass, not the default Ona Agent and not manual

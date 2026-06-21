@@ -107,6 +107,8 @@ Use automation to reduce agent memory load:
 - `check-agent-factory-secrets.mjs` records secret-safe credential and Ona
   context preflight evidence before dispatcher and Linear watcher runs. It
   reports presence and active-context status only, never credential values.
+  The chain reporter consumes that JSON to surface concrete next actions on the
+  blocked dispatcher edge.
 - `sync-linear-status.mjs` lets Ona write Linear status/comments/evidence links
   through `LINEAR_API_KEY` without exposing the key in logs.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,
