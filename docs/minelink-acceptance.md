@@ -714,6 +714,18 @@ Current status:
   automation, then `scripts/dev/report-agent-factory-chain.mjs` records the
   issue-to-PR nodes, edges, first blocker, and remaining percentage. This is
   delivery-chain evidence only and does not prove Minecraft product behavior.
+- `scripts/dev/setup-linear-agent-factory.mjs` is the repeatable Linear setup
+  entry point for the `MineLink` project, required agent-factory labels, and
+  workflow states. Local readback on 2026-06-21 created the Linear project
+  `https://linear.app/ninotquyi/project/minelink-163d36d60652`, the missing
+  `gate:*` and evidence-status labels, and workflow states from `Triage` through
+  `Blocked`; the report is
+  `.minelink-dev/reports/linear-agent-factory-setup.md`.
+- The Linear watcher now treats `blocked` as a real dispatch blocker instead of
+  dropping that label when it calls the shared dispatcher. Local negative
+  readback against `NIN-7` wrote
+  `.minelink-dev/reports/linear-watch-nin7-blocked.md` with `Skipped count: 1`,
+  `reason=blocked_label`, and `Dispatched count: 0`.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

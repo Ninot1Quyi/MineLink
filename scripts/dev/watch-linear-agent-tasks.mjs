@@ -18,6 +18,7 @@ const args = {
 let dryRun = false;
 let requireKey = false;
 let requireOna = false;
+let allowBlocked = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -32,6 +33,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--dry-run") dryRun = true;
   else if (arg === "--require-key") requireKey = true;
   else if (arg === "--require-ona") requireOna = true;
+  else if (arg === "--allow-blocked") allowBlocked = true;
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/watch-linear-agent-tasks.mjs [options]
 
@@ -72,6 +74,7 @@ async function writeReport(report) {
     `- Issue filter: \`${args.issue || "none"}\``,
     `- LINEAR_API_KEY present: \`${report.keyPresent ? "yes" : "no"}\``,
     `- Candidate count: \`${report.candidates.length}\``,
+    `- Skipped count: \`${report.skipped.length}\``,
     `- Dispatched count: \`${report.dispatched.length}\``,
     `- Result: \`${report.result}\``,
     "",
@@ -82,6 +85,15 @@ async function writeReport(report) {
       : report.candidates.map(
           (candidate) =>
             `- \`${candidate.identifier}\` ${candidate.url} labels=\`${candidate.labels.join(", ") || "none"}\` github=\`${candidate.githubIssue || "none"}\``,
+        )),
+    "",
+    "## Skipped",
+    "",
+    ...(report.skipped.length === 0
+      ? ["- none"]
+      : report.skipped.map(
+          (skipped) =>
+            `- \`${skipped.identifier}\` reason=\`${skipped.reason}\` labels=\`${skipped.labels.join(", ") || "none"}\``,
         )),
     "",
     "## Dispatches",
@@ -110,6 +122,7 @@ const report = {
   keyPresent: apiKey.length > 0,
   candidates: [],
   dispatched: [],
+  skipped: [],
   errors: [],
   result: "skipped",
 };
@@ -156,7 +169,7 @@ function isOpenState(issue) {
   return !["completed", "canceled"].includes(type);
 }
 
-function isCandidate(issue) {
+function isBaseCandidate(issue) {
   if (args.issue && issue.identifier?.toUpperCase() !== args.issue.toUpperCase()) return false;
   if (!isOpenState(issue)) return false;
   const labels = labelNames(issue);
@@ -165,6 +178,10 @@ function isCandidate(issue) {
   const textMentions = `${issue.title ?? ""}\n${issue.description ?? ""}`;
   const mentionsRepo = /Ninot1Quyi\/MineLink|github\.com\/Ninot1Quyi\/MineLink/i.test(textMentions);
   return (projectMatches || mentionsRepo || Boolean(findGithubIssue(issue))) && hasRequiredLabels;
+}
+
+function isBlocked(issue) {
+  return labelNames(issue).includes("blocked");
 }
 
 function run(command, commandArgs) {
@@ -199,16 +216,32 @@ try {
   );
 
   const issues = data.issues?.nodes ?? [];
-  const candidates = issues.filter(isCandidate).slice(0, args.maxStarts);
+  const matched = issues.filter(isBaseCandidate);
+  const skipped = [];
+  const dispatchable = [];
+  for (const issue of matched) {
+    if (isBlocked(issue) && !allowBlocked) {
+      skipped.push({ issue, reason: "blocked_label" });
+    } else {
+      dispatchable.push(issue);
+    }
+  }
+  const candidates = dispatchable.slice(0, args.maxStarts);
   report.candidates = candidates.map((issue) => ({
     identifier: issue.identifier,
     url: issue.url,
     labels: labelNames(issue),
     githubIssue: findGithubIssue(issue),
   }));
+  report.skipped = skipped.map(({ issue, reason }) => ({
+    identifier: issue.identifier,
+    reason,
+    labels: labelNames(issue),
+  }));
 
   for (const issue of candidates) {
     const githubIssue = findGithubIssue(issue);
+    const labels = labelNames(issue);
     const commandArgs = [
       "scripts/dev/dispatch-agent-factory.mjs",
       "--source",
@@ -218,7 +251,7 @@ try {
       "--github-issue",
       githubIssue || "none",
       "--github-issue-labels",
-      "agent-ready,agent:ona",
+      labels.join(","),
       "--github-issue-title",
       issue.title ?? `Linear ${issue.identifier}`,
       "--github-issue-body",
@@ -232,6 +265,7 @@ try {
     ];
     if (dryRun) commandArgs.push("--dry-run");
     if (requireOna) commandArgs.push("--require-ona");
+    if (allowBlocked) commandArgs.push("--allow-blocked");
     const result = run("node", commandArgs);
     const dispatchReport = `.minelink-dev/reports/agent-factory-dispatch-${issue.identifier}.md`;
     report.dispatched.push({

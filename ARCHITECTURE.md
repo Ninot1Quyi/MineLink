@@ -218,6 +218,12 @@ by `scripts/dev/dispatch-agent-factory.mjs`,
 `scripts/dev/check-agent-factory-secrets.mjs` is the secret-safe preflight for
 this bridge: it checks GitHub secret presence, local/runner `LINEAR_API_KEY`
 presence, and Ona CLI active-context status without printing credential values.
+`scripts/dev/setup-linear-agent-factory.mjs` is the repeatable Linear setup
+entry point for the `MineLink` project, required labels, and agent-factory
+workflow states. It records setup evidence without printing `LINEAR_API_KEY`.
+The Linear watcher passes the real Linear label set into the dispatcher and
+skips `blocked` tasks by default; `--allow-blocked` is reserved for explicit
+diagnostic dispatches.
 
 Ona prebuild readiness is a parallel environment-baseline gate, not a required
 per-task chain step. `.github/workflows/ona-prebuild.yml` refreshes that

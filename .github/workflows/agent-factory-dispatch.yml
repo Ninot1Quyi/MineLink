@@ -157,6 +157,9 @@ jobs:
           if [ -n "$issue" ]; then
             args+=(--issue "$issue")
           fi
+          if [ "${{ github.event.inputs.allow_blocked }}" = "true" ]; then
+            args+=(--allow-blocked)
+          fi
           node "${args[@]}"
       - name: Upload watch evidence
         if: always()

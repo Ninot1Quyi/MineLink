@@ -159,6 +159,16 @@ maps.
 ## Linear Entrypoint
 
 Configure a Linear project named `MineLink` with a board grouped by Status.
+The repeatable repository setup command is:
+
+```bash
+npm run agent-factory:setup-linear -- --require-key
+```
+
+It requires `LINEAR_API_KEY`, creates missing agent-factory labels, creates the
+recommended workflow states, ensures the `MineLink` project exists, and writes
+`.minelink-dev/reports/linear-agent-factory-setup.md`. Use `--dry-run` first
+when auditing a new workspace.
 Recommended filters:
 
 - Project is `MineLink`.
@@ -198,6 +208,9 @@ a schedule and through manual dispatch with `source=linear`. The watcher uses
 `agent:ona`, extracts the linked GitHub issue when present, and dispatches the
 same Ona automation as the GitHub issue path. This is a polling fallback, not
 proof that a native Linear webhook to Ona has been enabled.
+Tasks labeled `blocked` are skipped by default and recorded in the watcher
+report; `--allow-blocked` is only for explicit diagnostics and is wired through
+the manual GitHub Actions input.
 
 Use the same preflight to distinguish a missing Linear secret from watcher
 logic failures:
@@ -381,6 +394,16 @@ automation, and draft PR evidence:
   about 7.75 GB and completed in about 13 minutes. Older overlapping manual
   prebuilds, including `019eeb05-69dc-75d4-9ffa-a6769945ae50`, were cancelled
   and are not accepted as the ready baseline.
+- Linear setup readback on 2026-06-21 ran
+  `npm run agent-factory:setup-linear -- --require-key` and created the
+  `MineLink` project at
+  <https://linear.app/ninotquyi/project/minelink-163d36d60652>, missing
+  gate/evidence labels, and the target workflow states from `Triage` through
+  `Blocked`. The setup report is
+  `.minelink-dev/reports/linear-agent-factory-setup.md`.
+- Linear watcher negative readback on 2026-06-21 ran against `NIN-7` and
+  recorded `Skipped count: 1`, `reason=blocked_label`, and `Dispatched count:
+  0` in `.minelink-dev/reports/linear-watch-nin7-blocked.md`.
 
 Current conclusion: Linear issue management, validation automation
 registration, `LINEAR_API_KEY`-backed status sync from inside Ona, GitHub PR
