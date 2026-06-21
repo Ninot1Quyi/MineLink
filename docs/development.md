@@ -40,6 +40,19 @@ devcontainer intentionally uses the prebuilt Node 22 image, Java 21 feature,
 and image or OS provided `python3`; do not add a pinned Python feature that
 forces source compilation during cloud rebuilds.
 
+Ona prebuilds use the same devcontainer `postCreateCommand`:
+
+```bash
+bash scripts/dev/bootstrap-prebuild.sh
+```
+
+This prebuild bootstrap installs OS tools, verifies Node/npm/Python/Java/ffmpeg,
+runs `npm ci`, `npm run build`, `npm run typecheck`, and runs
+`mod/neoforge/./gradlew --no-daemon build` to warm Gradle, Minecraft, and
+NeoForge caches before a Codex agent opens the environment. It only logs whether
+`LINEAR_API_KEY` is present; it never prints the value. It does not start a
+Minecraft server or write EULA files.
+
 CI and PR review evidence can be summarized with:
 
 ```bash

@@ -9,7 +9,7 @@
     },
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg && npm ci && node --version && npm --version && python3 --version && java -version && ffmpeg -version",
+  "postCreateCommand": "bash scripts/dev/bootstrap-prebuild.sh",
   "postAttachCommand": "git status --short --branch && bash scripts/dev/verify-agent-task.sh --scope docs",
   "customizations": {
     "vscode": {

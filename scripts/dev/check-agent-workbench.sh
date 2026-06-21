@@ -42,6 +42,7 @@ require_file ".github/pull_request_template.md"
 require_file ".github/workflows/install-smoke.yml"
 require_file "ona/ai-automations/minelink-agent-factory.yaml"
 require_file "scripts/dev/install-smoke.sh"
+require_file "scripts/dev/bootstrap-prebuild.sh"
 require_file "scripts/dev/check-video-review.mjs"
 require_file "scripts/dev/render-acceptance-video.mjs"
 require_file "scripts/dev/summarize-evidence.mjs"
@@ -80,7 +81,6 @@ require_text "docs/github-labels.md" "real-partial"
 require_text "docs/github-labels.md" "product-accepted"
 require_text ".ona/automations.yaml" "render-acceptance-evidence"
 require_text ".ona/automations.yaml" "sync-linear-status"
-require_text ".devcontainer/devcontainer.json" "ffmpeg"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "agent-ready"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "agent:ona"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "needs-acceptance-evidence"
@@ -104,11 +104,16 @@ require_text ".github/workflows/minecraft-neoforge.yml" "Summarize MineLink evid
 require_text ".github/workflows/install-smoke.yml" "Summarize MineLink evidence"
 require_text ".devcontainer/devcontainer.json" "postCreateCommand"
 require_text ".devcontainer/devcontainer.json" "postAttachCommand"
+require_text ".devcontainer/devcontainer.json" "scripts/dev/bootstrap-prebuild.sh"
 require_text ".devcontainer/devcontainer.json" "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm"
 require_text ".devcontainer/devcontainer.json" "ghcr.io/devcontainers/features/java:1"
-require_text ".devcontainer/devcontainer.json" "python3 --version"
+require_text "scripts/dev/bootstrap-prebuild.sh" "ffmpeg"
+require_text "scripts/dev/bootstrap-prebuild.sh" "python3 --version"
 require_text "scripts/dev/install-smoke.sh" "fresh clone"
 require_text "scripts/dev/install-smoke.sh" "dirty-local-non-acceptance"
+require_text "scripts/dev/bootstrap-prebuild.sh" "MINELINK_PREBUILD_SKIP_GRADLE"
+require_text "scripts/dev/bootstrap-prebuild.sh" "LINEAR_API_KEY present"
+require_text "scripts/dev/bootstrap-prebuild.sh" "./gradlew --no-daemon build"
 require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink acceptance artifacts"
 require_text "scripts/dev/check-video-review.mjs" "Release decision: pass"
 require_text "scripts/dev/check-video-review.mjs" "Verifier: Ona Platform Codex"
@@ -173,6 +178,7 @@ PY
     ".github/workflows/install-smoke.yml" \
     "ona/ai-automations/minelink-agent-factory.yaml" \
     "scripts/dev/install-smoke.sh" \
+    "scripts/dev/bootstrap-prebuild.sh" \
     "scripts/dev/check-video-review.mjs" \
     "scripts/dev/render-acceptance-video.mjs" \
     "scripts/dev/summarize-evidence.mjs" \

@@ -592,6 +592,12 @@ Current status:
   checkout, runs `npm ci`, runs `bash scripts/dev/verify-agent-task.sh --scope
   fast --base HEAD`, and writes
   `.minelink-dev/install-smoke/install-smoke-report.md`.
+- `scripts/dev/bootstrap-prebuild.sh` is the devcontainer/Ona prebuild entry
+  point. It installs OS tools, verifies Node/npm/Python/Java/ffmpeg, runs
+  TypeScript build/typecheck, and runs the NeoForge Gradle build so Java,
+  Gradle, Minecraft, and NeoForge dependencies are cached before Codex agents
+  start work. It does not accept the Minecraft EULA, start the server, or print
+  secret values.
 - The report records the sanitized remote, source ref and commit, dirty-source
   decision, Node/npm/Git/Java/OS versions, exact command exit codes, log path,
   and copied agent-task summary when available.
