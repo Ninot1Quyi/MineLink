@@ -11,6 +11,10 @@ ENV GRADLE_USER_HOME=/home/node/.gradle
 
 COPY --from=jdk /opt/java/openjdk /usr/local/openjdk-21
 
+RUN ln -sf /usr/local/openjdk-21/bin/java /usr/local/bin/java \
+  && ln -sf /usr/local/openjdk-21/bin/javac /usr/local/bin/javac \
+  && ln -sf /usr/local/openjdk-21/bin/jar /usr/local/bin/jar
+
 RUN mkdir -p -m 0755 /etc/apt/keyrings \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
@@ -62,12 +66,19 @@ RUN chmod +x mod/neoforge/gradlew \
 
 FROM base AS runtime
 
+ENV JAVA_HOME=/usr/local/openjdk-21
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
 LABEL org.opencontainers.image.title="MineLink prewarmed devcontainer"
 LABEL org.opencontainers.image.description="Node 22, Java 21, ffmpeg, GitHub CLI, npm cache, and Gradle user-home cache for Ona/Codex development."
 LABEL org.opencontainers.image.source="https://github.com/Ninot1Quyi/MineLink"
 
 COPY --from=prewarm --chown=node:node /home/node/.npm /home/node/.npm
 COPY --from=prewarm --chown=node:node /home/node/.gradle /home/node/.gradle
+
+RUN java -version \
+  && test -d /home/node/.npm \
+  && test -d /home/node/.gradle/caches/modules-2
 
 USER node
 WORKDIR /workspaces/MineLink
