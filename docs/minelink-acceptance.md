@@ -235,6 +235,24 @@ Evidence:
 - `examples/codex-rpc/*.replay.jsonl`
 - `.minelink-dev/reports/mine_tree-result.json`
 
+Current status:
+
+- The TypeScript SDK exposes typed observe/body/chat/container/craft/create
+  wrappers over the generic dynamic-tool executor. Awaited wrappers preserve the
+  raw MCP-compatible tool result path.
+- The TypeScript SDK now also exposes submit-mode helpers for queueable
+  body/chat actions and converts accepted responses into action handles with
+  `actionId`, lifecycle status, tool name, and queue depth metadata where the
+  runtime provides it. Backpressure and malformed submit responses remain
+  structured failures instead of synthetic handles.
+- Protocol and Host tests cover `mode: "submit"` parsing and forwarding through
+  the public `minelink.tool_execute` path. The generic MCP surface remains the
+  authority; SDK helpers do not call runtime internals.
+- This is not the full Gate 5 release surface yet. Python helper parity,
+  action polling/subscription helpers, reconnect ergonomics, replay access in
+  the SDK, and semantic retry loops still need separate implementation and
+  evidence.
+
 ### Gate 6: Container and Crafting
 
 Required:

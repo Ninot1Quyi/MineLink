@@ -49,4 +49,75 @@ describe("HostController", () => {
     controller.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
+
+  it("forwards submit mode and returns accepted action handles", async () => {
+    let forwardedToolExecute: Record<string, unknown> | undefined;
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    server.on("connection", (socket: WebSocket) => {
+      socket.on("message", (raw) => {
+        const request = JSON.parse(raw.toString());
+        if (request.type === "hello") {
+          socket.send(JSON.stringify({ id: request.id, type: "hello.result", ok: true, capabilities: {} }));
+          return;
+        }
+        if (request.type === "connect") {
+          socket.send(JSON.stringify({ id: request.id, type: "connect.result", ok: true, owner_id: "owner:test" }));
+          return;
+        }
+        if (request.type === "agent.birth") {
+          socket.send(
+            JSON.stringify({ id: request.id, type: "agent.birth.result", ok: true, agent_id: "agent_1", display_name: "agent" })
+          );
+          return;
+        }
+        if (request.type === "tool.execute") {
+          forwardedToolExecute = request;
+          socket.send(
+            JSON.stringify({
+              id: request.id,
+              type: "tool.execute.result",
+              ok: true,
+              status: "accepted",
+              action_id: "act_1",
+              result: {
+                action_id: "act_1",
+                lifecycle_status: "queued",
+                tool_name: request.name
+              }
+            })
+          );
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("WebSocket server address is unavailable");
+
+    const controller = new HostController();
+    await controller.connectServer({ endpoint: `ws://127.0.0.1:${address.port}` });
+    await controller.birth({ seedPrompt: "submit test", bodyType: "server_agent" });
+    const result = await controller.toolExecute({
+      name: "action.move",
+      mode: "submit",
+      arguments: { vector: [0, 0, 0], durationMs: 1000 }
+    });
+
+    expect(forwardedToolExecute).toMatchObject({
+      type: "tool.execute",
+      agent_id: "agent_1",
+      name: "action.move",
+      mode: "submit",
+      arguments: { vector: [0, 0, 0], durationMs: 1000 }
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        status: "accepted",
+        action_id: "act_1",
+        result: { lifecycle_status: "queued", tool_name: "action.move" }
+      }
+    });
+    controller.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
 });

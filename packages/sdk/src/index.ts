@@ -1,6 +1,32 @@
 import type { JsonObject, ToolResult } from "@minelink/protocol";
 
-export type MineLinkToolExecutor = (name: string, args?: JsonObject) => Promise<ToolResult>;
+export type ToolExecutionMode = "await_completion" | "submit";
+
+export interface ToolExecuteOptions {
+  mode?: ToolExecutionMode;
+}
+
+export type MineLinkToolExecutor = (name: string, args?: JsonObject, options?: ToolExecuteOptions) => Promise<ToolResult>;
+
+export interface SubmittedActionOk {
+  ok: true;
+  actionId: string;
+  status: string;
+  lifecycleStatus?: string;
+  toolName?: string;
+  queueDepth?: number;
+  maxQueueDepth?: number;
+  raw: ToolResult;
+}
+
+export interface SubmittedActionError {
+  ok: false;
+  reason: string;
+  message?: string;
+  raw: ToolResult;
+}
+
+export type SubmittedAction = SubmittedActionOk | SubmittedActionError;
 
 export class Agent {
   readonly observe: ObserveApi;
@@ -19,8 +45,12 @@ export class Agent {
     this.craft = new CraftApi(execute);
   }
 
-  toolExecute(name: string, args: JsonObject = {}): Promise<ToolResult> {
-    return this.execute(name, args);
+  toolExecute(name: string, args: JsonObject = {}, options?: ToolExecuteOptions): Promise<ToolResult> {
+    return this.execute(name, args, options);
+  }
+
+  async submitToolExecute(name: string, args: JsonObject = {}): Promise<SubmittedAction> {
+    return submitAction(this.execute, name, args);
   }
 }
 
@@ -47,28 +77,59 @@ export class ObserveApi {
 export class BodyApi {
   constructor(private readonly execute: MineLinkToolExecutor) {}
 
-  move(vector: [number, number, number], durationMs = 250): Promise<ToolResult> {
-    return this.execute("action.move", { vector, durationMs });
+  move(vector: [number, number, number], durationMs = 250, options?: ToolExecuteOptions): Promise<ToolResult> {
+    return this.execute("action.move", { vector, durationMs }, options);
   }
 
-  lookAt(blockRef: string): Promise<ToolResult> {
-    return this.execute("action.look_at", { block_ref: blockRef });
+  submitMove(vector: [number, number, number], durationMs = 250): Promise<SubmittedAction> {
+    return submitAction(this.execute, "action.move", { vector, durationMs });
   }
 
-  mine(blockRef: string): Promise<ToolResult> {
-    return this.execute("action.mine_visible_block", { block_ref: blockRef, tool_policy: "best_available" });
+  lookAt(blockRef: string, options?: ToolExecuteOptions): Promise<ToolResult> {
+    return this.execute("action.look_at", { block_ref: blockRef }, options);
   }
 
-  use(targetRef?: string, item?: string, face?: string): Promise<ToolResult> {
-    return this.execute("action.use", {
+  submitLookAt(blockRef: string): Promise<SubmittedAction> {
+    return submitAction(this.execute, "action.look_at", { block_ref: blockRef });
+  }
+
+  mine(blockRef: string, options?: ToolExecuteOptions): Promise<ToolResult> {
+    return this.execute("action.mine_visible_block", { block_ref: blockRef, tool_policy: "best_available" }, options);
+  }
+
+  submitMine(blockRef: string): Promise<SubmittedAction> {
+    return submitAction(this.execute, "action.mine_visible_block", {
+      block_ref: blockRef,
+      tool_policy: "best_available"
+    });
+  }
+
+  use(targetRef?: string, item?: string, face?: string, options?: ToolExecuteOptions): Promise<ToolResult> {
+    return this.execute(
+      "action.use",
+      {
+        ...(targetRef ? { target_ref: targetRef } : {}),
+        ...(item ? { item } : {}),
+        ...(face ? { face } : {})
+      },
+      options
+    );
+  }
+
+  submitUse(targetRef?: string, item?: string, face?: string): Promise<SubmittedAction> {
+    return submitAction(this.execute, "action.use", {
       ...(targetRef ? { target_ref: targetRef } : {}),
       ...(item ? { item } : {}),
       ...(face ? { face } : {})
     });
   }
 
-  sleep(targetRef: string): Promise<ToolResult> {
-    return this.execute("action.sleep", { target_ref: targetRef });
+  sleep(targetRef: string, options?: ToolExecuteOptions): Promise<ToolResult> {
+    return this.execute("action.sleep", { target_ref: targetRef }, options);
+  }
+
+  submitSleep(targetRef: string): Promise<SubmittedAction> {
+    return submitAction(this.execute, "action.sleep", { target_ref: targetRef });
   }
 
   place(targetRef: string, face: string, item: string, placementLabel?: string): Promise<ToolResult> {
@@ -84,8 +145,12 @@ export class BodyApi {
 export class ChatApi {
   constructor(private readonly execute: MineLinkToolExecutor) {}
 
-  sayLocal(message: string): Promise<ToolResult> {
-    return this.execute("chat.say_local", { message });
+  sayLocal(message: string, options?: ToolExecuteOptions): Promise<ToolResult> {
+    return this.execute("chat.say_local", { message }, options);
+  }
+
+  submitSayLocal(message: string): Promise<SubmittedAction> {
+    return submitAction(this.execute, "chat.say_local", { message });
   }
 }
 
@@ -134,4 +199,74 @@ export class CraftApi {
   quickCraft(recipeId: string, count = 1): Promise<ToolResult> {
     return this.execute("craft.quick_craft", { recipe_id: recipeId, count });
   }
+}
+
+export async function submitAction(
+  execute: MineLinkToolExecutor,
+  name: string,
+  args: JsonObject = {}
+): Promise<SubmittedAction> {
+  return submittedActionFromResult(await execute(name, args, { mode: "submit" }));
+}
+
+export function submittedActionFromResult(raw: ToolResult): SubmittedAction {
+  if (!raw.ok) {
+    return {
+      ok: false,
+      reason: String(raw.reason),
+      ...(typeof raw.message === "string" ? { message: raw.message } : {}),
+      raw
+    };
+  }
+
+  const payload = actionPayload(raw);
+  const actionId = stringField(payload, "action_id");
+  if (!actionId) {
+    return {
+      ok: false,
+      reason: "missing_action_id",
+      message: "Submit-mode MineLink action did not return an action_id.",
+      raw
+    };
+  }
+
+  return {
+    ok: true,
+    actionId,
+    status: stringField(payload, "status") ?? "accepted",
+    ...(stringField(payload, "lifecycle_status") ? { lifecycleStatus: stringField(payload, "lifecycle_status") } : {}),
+    ...(stringField(payload, "tool_name") ? { toolName: stringField(payload, "tool_name") } : {}),
+    ...(numberField(payload, "queue_depth") === undefined ? {} : { queueDepth: numberField(payload, "queue_depth") }),
+    ...(numberField(payload, "max_queue_depth") === undefined
+      ? {}
+      : { maxQueueDepth: numberField(payload, "max_queue_depth") }),
+    raw
+  };
+}
+
+function actionPayload(raw: ToolResult): JsonObject {
+  const topLevel = asObject(raw) ?? {};
+  const result = asObject(raw.result) ?? {};
+  const nestedResult = asObject(result.result) ?? {};
+  return {
+    ...topLevel,
+    ...result,
+    ...nestedResult,
+    action_id: topLevel.action_id ?? result.action_id ?? nestedResult.action_id,
+    status: topLevel.status ?? result.status ?? nestedResult.status
+  };
+}
+
+function asObject(value: unknown): JsonObject | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : undefined;
+}
+
+function stringField(value: JsonObject | undefined, key: string): string | undefined {
+  const field = value?.[key];
+  return typeof field === "string" ? field : undefined;
+}
+
+function numberField(value: JsonObject | undefined, key: string): number | undefined {
+  const field = value?.[key];
+  return typeof field === "number" ? field : undefined;
 }

@@ -30,5 +30,9 @@ describe("protocol catalog", () => {
     expect(ToolExecuteArgsSchema.parse({ name: "observe.self", arguments: {} }).mode).toBe(
       "await_completion"
     );
+    expect(ToolExecuteArgsSchema.parse({ name: "action.move", mode: "submit", arguments: {} }).mode).toBe("submit");
+    expect(() =>
+      ToolExecuteArgsSchema.parse({ name: "action.move", mode: "fire_and_forget", arguments: {} })
+    ).toThrow();
   });
 });
