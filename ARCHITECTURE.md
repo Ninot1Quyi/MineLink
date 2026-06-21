@@ -215,6 +215,9 @@ The source dispatcher is `.github/workflows/agent-factory-dispatch.yml`, backed
 by `scripts/dev/dispatch-agent-factory.mjs`,
 `scripts/dev/watch-linear-agent-tasks.mjs`, and
 `scripts/dev/report-agent-factory-chain.mjs`.
+`scripts/dev/check-agent-factory-secrets.mjs` is the secret-safe preflight for
+this bridge: it checks GitHub secret presence, local/runner `LINEAR_API_KEY`
+presence, and Ona CLI active-context status without printing credential values.
 
 The final flow should use the Ona Platform Codex agent option for implementation
 and the separate video-verifier pass, not the default Ona Agent and not manual

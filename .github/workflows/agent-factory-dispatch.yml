@@ -64,6 +64,13 @@ jobs:
           else
             echo "ONA_TOKEN is missing; dispatcher will report the Ona start edge as blocked."
           fi
+      - name: Report agent factory credential context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          node scripts/dev/check-agent-factory-secrets.mjs --repo "$GITHUB_REPOSITORY"
       - name: Dispatch agent task
         env:
           GH_TOKEN: ${{ github.token }}
@@ -124,6 +131,13 @@ jobs:
           else
             echo "ONA_TOKEN is missing; Linear watcher will report the Ona start edge as blocked."
           fi
+      - name: Report agent factory credential context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          node scripts/dev/check-agent-factory-secrets.mjs --repo "$GITHUB_REPOSITORY"
       - name: Watch Linear and dispatch one task
         env:
           GH_TOKEN: ${{ github.token }}

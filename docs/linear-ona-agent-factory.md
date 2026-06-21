@@ -125,6 +125,15 @@ issue. It requires `ONA_TOKEN` in GitHub secrets to start Ona from CI; missing
 Ona authentication is recorded as a blocked edge instead of being treated as a
 MineLink validation failure.
 
+Before debugging a failed dispatcher run, run the secret-safe preflight:
+
+```bash
+npm run agent-factory:secrets -- --require-github-secrets --require-ona-context
+```
+
+The preflight checks only credential presence and Ona CLI context. It never
+prints `ONA_TOKEN`, `LINEAR_API_KEY`, GitHub tokens, or any other secret value.
+
 Manual pilot command:
 
 ```bash
@@ -189,6 +198,13 @@ a schedule and through manual dispatch with `source=linear`. The watcher uses
 `agent:ona`, extracts the linked GitHub issue when present, and dispatches the
 same Ona automation as the GitHub issue path. This is a polling fallback, not
 proof that a native Linear webhook to Ona has been enabled.
+
+Use the same preflight to distinguish a missing Linear secret from watcher
+logic failures:
+
+```bash
+npm run agent-factory:secrets -- --require-linear-env
+```
 
 Current Ona repository webhooks are not assumed to be available. If
 `ona webhook list` or `ona webhook create` returns an enterprise-only error,

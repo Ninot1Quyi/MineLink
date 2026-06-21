@@ -30,6 +30,9 @@ Use `.github/workflows/agent-factory-dispatch.yml`,
 `scripts/dev/watch-linear-agent-tasks.mjs`, and
 `scripts/dev/report-agent-factory-chain.mjs` for the GitHub/Linear issue to
 Ona automation bridge and full-chain status reports.
+Use `scripts/dev/check-agent-factory-secrets.mjs` before diagnosing dispatcher
+auth failures; it reports credential presence and Ona CLI context without
+printing secret values.
 
 ## Architecture Maintenance Guard
 

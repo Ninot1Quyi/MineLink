@@ -27,6 +27,7 @@
     "acceptance:video-review-request": "node scripts/dev/prepare-video-review-request.mjs",
     "linear:sync": "node scripts/dev/sync-linear-status.mjs",
     "acceptance:video-review": "node scripts/dev/check-video-review.mjs",
+    "agent-factory:secrets": "node scripts/dev/check-agent-factory-secrets.mjs",
     "agent-factory:chain": "node scripts/dev/report-agent-factory-chain.mjs",
     "agent-factory:dispatch": "node scripts/dev/dispatch-agent-factory.mjs",
     "agent-factory:watch-linear": "node scripts/dev/watch-linear-agent-tasks.mjs"
