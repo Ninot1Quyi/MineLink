@@ -189,6 +189,81 @@ function mkEdge(from, to, status, evidence, blocker = "") {
   };
 }
 
+function queryOnaPrebuild(projectId) {
+  if (!hasValue(projectId)) return null;
+  const result = spawnSync("ona", ["prebuild", "list", "--project-id", projectId, "--format", "json"], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    return {
+      status: "missing",
+      evidence: ["Ona prebuild readback failed; check Ona CLI authentication."],
+    };
+  }
+
+  let prebuilds = [];
+  try {
+    prebuilds = JSON.parse(result.stdout);
+  } catch {
+    return {
+      status: "missing",
+      evidence: ["Ona prebuild readback returned non-JSON output."],
+    };
+  }
+  if (!Array.isArray(prebuilds) || prebuilds.length === 0) {
+    return {
+      status: "missing",
+      evidence: ["No Ona prebuild records returned for the project."],
+    };
+  }
+
+  const completed = prebuilds.find((prebuild) => {
+    const status = prebuild?.status ?? {};
+    return status.phase === "PREBUILD_PHASE_COMPLETED" && Number(status.snapshotCompletionPercentage ?? 0) >= 100;
+  });
+  if (completed) {
+    const status = completed.status ?? {};
+    return {
+      id: completed.id,
+      status: "passed",
+      evidence: [
+        `Ona prebuild ${completed.id} completed`,
+        status.snapshotSizeBytes ? `snapshot ${status.snapshotSizeBytes} bytes` : "",
+        status.completionTime ? `completed ${status.completionTime}` : "",
+      ].filter(Boolean),
+    };
+  }
+
+  const active = prebuilds.find((prebuild) =>
+    ["PREBUILD_PHASE_RUNNING", "PREBUILD_PHASE_SNAPSHOTTING", "PREBUILD_PHASE_CREATING"].includes(
+      prebuild?.status?.phase,
+    ),
+  );
+  if (active) {
+    return {
+      id: active.id,
+      status: "partial",
+      evidence: [`Ona prebuild ${active.id} is ${active.status?.phase}`],
+    };
+  }
+
+  const failed = prebuilds.find((prebuild) =>
+    ["PREBUILD_PHASE_FAILED", "PREBUILD_PHASE_CANCELLED"].includes(prebuild?.status?.phase),
+  );
+  if (failed) {
+    return {
+      id: failed.id,
+      status: "blocked",
+      evidence: [`Latest available Ona prebuild evidence is ${failed.status?.phase}`],
+    };
+  }
+
+  return {
+    status: "missing",
+    evidence: ["Ona prebuild records did not contain a completed, active, or failed phase."],
+  };
+}
+
 const validationInfo = await fileInfo(args.validationReport);
 const summaryInfo = await fileInfo(args.acceptanceSummary);
 const mp4Info = await fileInfo(args.acceptanceMp4);
@@ -203,6 +278,14 @@ const secretPreflight = await readJson(args.secretPreflight);
 const secretPreflightActions = Array.isArray(secretPreflight?.nextActions)
   ? secretPreflight.nextActions.filter(Boolean)
   : [];
+const autoPrebuild = !hasValue(args.onaPrebuild) || normalizeStatus(args.onaPrebuildStatus) === "missing"
+  ? queryOnaPrebuild(args.onaProject)
+  : null;
+if (!hasValue(args.onaPrebuild) && autoPrebuild?.id) args.onaPrebuild = autoPrebuild.id;
+if (normalizeStatus(args.onaPrebuildStatus) === "missing" && autoPrebuild?.status) {
+  args.onaPrebuildStatus = autoPrebuild.status;
+}
+const autoPrebuildEvidence = Array.isArray(autoPrebuild?.evidence) ? autoPrebuild.evidence : [];
 
 const issueStatus = hasValue(args.githubIssue) ? "passed" : hasValue(args.linearIssue) ? "partial" : "missing";
 const taskContractStatus = normalizeStatus(args.issueContractStatus) !== "missing"
@@ -234,24 +317,32 @@ const implementationStatus = codexAuthFailed
     : hasValue(args.onaImplementationSession)
       ? "partial"
       : "missing";
-const branchStatus = args.branch && args.commit ? "passed" : "missing";
-const validationStatus = validationInfo && validationInfo.size > 0 ? "passed" : "missing";
-const mp4Status = summaryInfo && mp4Info && mp4Info.size > 0 ? "passed" : summaryInfo ? "partial" : "missing";
+const branchStatus = implementationStatus === "passed" && args.branch && args.commit ? "passed" : "missing";
+const validationStatus = branchStatus === "passed" && validationInfo && validationInfo.size > 0 ? "passed" : "missing";
+const mp4Status = validationStatus === "passed" && summaryInfo && mp4Info && mp4Info.size > 0
+  ? "passed"
+  : validationStatus === "passed" && summaryInfo
+    ? "partial"
+    : "missing";
 const verifierStatus = normalizeStatus(args.onaVerifierStatus) !== "missing"
   ? normalizeStatus(args.onaVerifierStatus)
-  : reviewInfo && /Verifier:\s*Ona Platform Codex/im.test(reviewText)
+  : mp4Status === "passed" && reviewInfo && /Verifier:\s*Ona Platform Codex/im.test(reviewText)
     ? /Release decision:\s*pass/im.test(reviewText)
       ? "passed"
       : "blocked"
-    : reviewInfo
+    : mp4Status === "passed" && reviewInfo
       ? "partial"
       : "missing";
-const releaseStatus = releaseInfo && /Result:\s*`?passed`?/im.test(releaseText) ? "passed" : releaseInfo ? "blocked" : "missing";
-const prStatus = hasValue(args.prUrl) ? "passed" : "missing";
-const ciStatus = hasValue(args.ciUrl) ? "passed" : "missing";
-const statusSyncStatus = hasValue(args.githubStatusUrl) && hasValue(args.linearStatusUrl)
+const releaseStatus = verifierStatus === "passed" && releaseInfo && /Result:\s*`?passed`?/im.test(releaseText)
   ? "passed"
-  : hasValue(args.githubStatusUrl) || hasValue(args.linearStatusUrl) || linearSyncInfo
+  : verifierStatus === "passed" && releaseInfo
+    ? "blocked"
+    : "missing";
+const prStatus = releaseStatus === "passed" && hasValue(args.prUrl) ? "passed" : "missing";
+const ciStatus = prStatus === "passed" && hasValue(args.ciUrl) ? "passed" : "missing";
+const statusSyncStatus = ciStatus === "passed" && hasValue(args.githubStatusUrl) && hasValue(args.linearStatusUrl)
+  ? "passed"
+  : ciStatus === "passed" && (hasValue(args.githubStatusUrl) || hasValue(args.linearStatusUrl) || linearSyncInfo)
     ? /created comment|updated .* status|attached /i.test(linearSyncText)
       ? "partial"
       : "partial"
@@ -283,6 +374,7 @@ const nodes = [
   mkNode("ona_prebuild", "Ona project prebuild ready", prebuildStatus, [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
+    ...autoPrebuildEvidence,
   ], prebuildStatus === "blocked" ? globalBlocker : ""),
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
     args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
@@ -336,6 +428,7 @@ const rawEdges = [
   mkEdge("ona_automation", "ona_prebuild", edgeStatus(nodeStatus.ona_prebuild), [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
+    ...autoPrebuildEvidence,
   ]),
   mkEdge("ona_prebuild", "implementation_codex", edgeStatus(nodeStatus.implementation_codex), [
     args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
