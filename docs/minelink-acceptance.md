@@ -823,6 +823,14 @@ Current status:
   dispatcher readback window is now 600 seconds, and the Ona AI automation uses
   a single `--stage all` task to reduce repeated task scheduling overhead while
   preserving per-stage fail-closed evidence reports.
+  GitHub Actions run `27921514822` proved that follow-up path on commit
+  `6c642e8`: issue #7 dispatch completed in about 1m13s, Ona execution
+  `019eec9a-4d83-7d71-91a9-615fb2c5722c` reached
+  `WORKFLOW_EXECUTION_PHASE_COMPLETED` with `failedActionCount=0`, and
+  `.minelink-dev/reports/ona-automation-execution.md` recorded 12 readbacks.
+  The resulting chain report was still correctly blocked at
+  `ona_automation -> implementation_codex` because no accepted
+  `.minelink-dev/reports/ona-codex-implementation-session.md` was present.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

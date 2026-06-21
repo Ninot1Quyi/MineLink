@@ -474,6 +474,12 @@ guard. The dispatcher readback window was raised to 600 seconds after run
 started/In Progress/In Review issues as active and marks a successfully
 dispatched Linear issue `In Progress` with a comment before the next schedule,
 preventing repeated environments for the same unresolved task.
+GitHub Actions run `27921514822` then proved the one-task finalizer and
+600-second readback path on commit `6c642e8`: GitHub issue #7 dispatch completed
+in about 1m13s, Ona execution `019eec9a-4d83-7d71-91a9-615fb2c5722c` reached
+`WORKFLOW_EXECUTION_PHASE_COMPLETED` with `failedActionCount=0`, and the chain
+report stopped at `ona_automation -> implementation_codex` because the accepted
+Platform Codex implementation-session readback was still missing.
 GitHub Actions run `27920695755` proved the Linear dispatch status sync path
 for `NIN-8`: the watcher selected the Ready for Agent issue, started Ona
 execution `019eec7b-5a90-7ee8-a7d9-83ec135f759f`, updated Linear to
