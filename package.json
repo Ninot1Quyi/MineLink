@@ -23,7 +23,8 @@
     "e2e:craft": "bash scripts/dev/e2e.sh craft_smoke",
     "e2e:guard": "bash scripts/dev/e2e.sh guard_boundaries",
     "e2e:portal": "bash scripts/dev/e2e.sh portal_coop",
-    "acceptance:video": "node scripts/dev/render-acceptance-video.mjs"
+    "acceptance:video": "node scripts/dev/render-acceptance-video.mjs",
+    "linear:sync": "node scripts/dev/sync-linear-status.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

@@ -44,6 +44,7 @@ require_file "ona/ai-automations/minelink-agent-factory.yaml"
 require_file "scripts/dev/install-smoke.sh"
 require_file "scripts/dev/render-acceptance-video.mjs"
 require_file "scripts/dev/summarize-evidence.mjs"
+require_file "scripts/dev/sync-linear-status.mjs"
 require_file "scripts/dev/verify-agent-task.sh"
 
 require_text "AGENTS.md" "docs/agent-workbench.md"
@@ -61,6 +62,7 @@ require_text "docs/ona-migration.md" "Ona AI automation is the target execution 
 require_text "docs/ona-migration.md" "Secrets Policy"
 require_text "docs/ona-migration.md" "Validation Matrix"
 require_text "docs/linear-ona-agent-factory.md" "Ona AI automation"
+require_text "docs/linear-ona-agent-factory.md" "LINEAR_API_KEY"
 require_text "docs/linear-ona-agent-factory.md" "Acceptance video"
 require_text "docs/agent-task-queue.md" "Ready Tasks"
 require_text "docs/agent-task-queue.md" "scripts/dev/install-smoke.sh"
@@ -73,6 +75,7 @@ require_text "docs/github-labels.md" "smoke-only"
 require_text "docs/github-labels.md" "real-partial"
 require_text "docs/github-labels.md" "product-accepted"
 require_text ".ona/automations.yaml" "render-acceptance-evidence"
+require_text ".ona/automations.yaml" "sync-linear-status"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "agent-ready"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "agent:ona"
 require_text ".github/ISSUE_TEMPLATE/agent-task.yml" "needs-acceptance-evidence"
@@ -101,6 +104,7 @@ require_text "scripts/dev/install-smoke.sh" "dirty-local-non-acceptance"
 require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink acceptance artifacts"
 require_text "scripts/dev/summarize-evidence.mjs" "Acceptance Boundary"
 require_text "scripts/dev/summarize-evidence.mjs" "GITHUB_STEP_SUMMARY"
+require_text "scripts/dev/sync-linear-status.mjs" "LINEAR_API_KEY"
 require_text "scripts/dev/verify-agent-task.sh" "install   fresh clone"
 
 python3 - <<'PY' || failures+=(".devcontainer/devcontainer.json must not pin the Python feature to a source-built version in Ona.")
@@ -160,6 +164,7 @@ PY
     "scripts/dev/install-smoke.sh" \
     "scripts/dev/render-acceptance-video.mjs" \
     "scripts/dev/summarize-evidence.mjs" \
+    "scripts/dev/sync-linear-status.mjs" \
     "scripts/dev/verify-agent-task.sh"; do
     if [[ -f "$file" ]]; then
       echo "- present: \`$file\`"

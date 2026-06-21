@@ -584,7 +584,11 @@ Current status:
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
   fast verification, real NeoForge guard smoke, and acceptance artifact
   rendering. `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona
-  AI automation spec for task-to-PR agent work.
+  AI automation spec for task-to-PR agent work, including `LINEAR_API_KEY`
+  backed Linear status/comment sync when the secret is present in Ona.
+- `scripts/dev/sync-linear-status.mjs` writes
+  `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
+  without exposing the key value in logs or repository files.
 - `scripts/dev/render-acceptance-video.mjs` generates a trace-driven
   `.minelink-dev/reports/artifacts/acceptance-summary.md` and, when `ffmpeg` is
   available, `.minelink-dev/reports/artifacts/acceptance.mp4`.
@@ -598,8 +602,8 @@ Current status:
   Ona rebuilds.
 - This is real bootstrap evidence only. It does not prove server-admin mod
   installation, agent-user MCP configuration, LAN setup, cross-platform
-  packaging, Linear webhook enablement, GitHub issue-to-Ona dispatch,
-  Ona webhook or PR-trigger setup, acceptance MP4 availability in every
+  packaging, Linear webhook enablement, GitHub issue-to-Ona dispatch, Ona
+  native `pullRequest` success, acceptance MP4 availability in every
   environment, or real NeoForge install acceptance.
 
 ### Gate 11: Security, Stability, and Release

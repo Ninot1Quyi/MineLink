@@ -175,7 +175,7 @@ paths, and remaining gaps. Use `docs/agent-workbench.md` for the full template.
 MineLink product work is fed by a repo-native delivery factory:
 
 ```text
-Linear or GitHub task -> Ona AI automation -> branch -> validation -> PR -> CI/artifacts
+Linear or GitHub task -> Ona AI automation -> branch -> validation -> PR -> CI/artifacts -> Linear/GitHub status
 ```
 
 `docs/linear-ona-agent-factory.md` defines the status model, required task
@@ -186,9 +186,12 @@ automation file is `.ona/automations.yaml`.
 
 The final flow should use Ona AI automation executions, not manual SSH. Manual
 `ona environment ssh` remains useful for debugging or verification, but it is
-not the product delivery path. If Linear or GitHub webhook dispatch cannot be
-verified in the current environment, the repo must say so and keep the gap
-visible instead of pretending automation is enabled.
+not the product delivery path. Linear status sync is handled by
+`scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
+environment; the key must never be committed, passed as a parameter, or printed.
+If Linear or GitHub webhook dispatch cannot be verified in the current
+environment, the repo must say so and keep the gap visible instead of
+pretending automation is enabled.
 
 ## Conditional Verification
 
@@ -230,6 +233,16 @@ metrics, and install smoke output under
 directory. GitHub workflows append the same Markdown to `$GITHUB_STEP_SUMMARY`
 before artifact upload. This is an evidence index only; it does not change gate
 status or workflow pass/fail semantics.
+
+Linear task status is synchronized by:
+
+```bash
+node scripts/dev/sync-linear-status.mjs --issue NIN-7 --status "In Review"
+```
+
+The script calls Linear with `LINEAR_API_KEY`, writes
+`.minelink-dev/reports/linear-sync.md`, and records only sanitized operation
+summaries. It is process evidence, not Minecraft product evidence.
 
 ## Architecture Maintenance Guard
 

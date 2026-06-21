@@ -116,6 +116,9 @@ MineLink uses automation to reduce agent memory load:
   semantics.
 - `scripts/dev/render-acceptance-video.mjs` turns existing reports into a
   trace-driven acceptance summary and optional MP4 artifact.
+- `scripts/dev/sync-linear-status.mjs` uses `LINEAR_API_KEY` from the Ona
+  environment to update Linear issue status, comments, and evidence links
+  without printing the secret.
 - `.ona/automations.yaml` defines Ona-native environment tasks.
 - `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona AI
   automation that should be started by manual pilot, GitHub dispatch, or Linear
@@ -152,6 +155,7 @@ Never commit or print:
 - Admission tokens.
 - Microsoft credentials.
 - OpenAI/API keys.
+- `LINEAR_API_KEY`.
 - Minecraft `eula.txt`.
 - Server secrets or non-loopback gateway bearer tokens.
 
@@ -167,11 +171,17 @@ for debugging and readback. A valid pilot starts
 
 ```bash
 ona ai automation create ona/ai-automations/minelink-agent-factory.yaml
-ona ai automation start <automation-id> --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb --param task_id=gh-45 --param issue_url=https://github.com/Ninot1Quyi/MineLink/issues/45 --param linear_issue=none --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 --param branch=codex/gh-45-short-task --param pr_title="Advance MineLink task gh-45" --param acceptance_gate="Gate 2" --param agent_instruction="Run a bounded validation pilot. Do not edit files unless validation fails." --param validation_scope=docs --param scenarios=none --wait
+ona ai automation start <automation-id> --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb --param task_id=gh-45 --param issue_url=https://github.com/Ninot1Quyi/MineLink/issues/45 --param linear_issue=NIN-7 --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 --param branch=codex/gh-45-short-task --param pr_title="Advance MineLink task gh-45" --param acceptance_gate="Gate 2" --param agent_instruction="Run a bounded validation pilot. Do not edit files unless validation fails." --param validation_scope=docs --param scenarios=none --wait
 ```
 
+When `linear_issue` is a real key, the Ona environment must have
+`LINEAR_API_KEY` set. The automation fails early if the key is missing, and the
+sync script writes `.minelink-dev/reports/linear-sync.md` without exposing the
+key value.
+
 Linear or GitHub issue webhooks are not proven enabled until a real issue
-creates an Ona execution and a draft PR without manual SSH.
+creates an Ona execution, writes Linear status from inside Ona, and opens a
+draft PR without manual SSH.
 The checked-in Ona AI automation uses a manual trigger because Ona rejects PR
 triggers until a webhook or integration is configured in the organization.
 

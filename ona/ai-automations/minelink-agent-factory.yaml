@@ -13,6 +13,16 @@ action:
     maxParallel: 2
     maxTotal: 6
   steps:
+    - task:
+        command: >
+          node scripts/dev/sync-linear-status.mjs
+          --issue "{{ .Parameters.linear_issue }}"
+          --status "In Progress"
+          --comment "Ona automation started for {{ .Parameters.task_id }} on branch {{ .Parameters.branch }}. Source issue: {{ .Parameters.issue_url }}"
+          --attachment-title "MineLink source task {{ .Parameters.task_id }}"
+          --attachment-url "{{ .Parameters.issue_url }}"
+          --require-key
+          --require-update
     - agent:
         prompt: |
           You are working on MineLink through the Ona agent execution environment,
@@ -47,6 +57,14 @@ action:
           --task-id {{ .Parameters.task_id }}
           --branch {{ .Parameters.branch }}
           --pr-url {{ .Parameters.issue_url }}
+    - task:
+        command: >
+          node scripts/dev/sync-linear-status.mjs
+          --issue "{{ .Parameters.linear_issue }}"
+          --status "In Review"
+          --comment "Ona validation and acceptance artifact steps completed for {{ .Parameters.task_id }}. Evidence paths: .minelink-dev/reports/agent-task-summary.md, .minelink-dev/reports/ci-evidence-summary.md, .minelink-dev/reports/artifacts/acceptance-summary.md, and .minelink-dev/reports/artifacts/acceptance.mp4 when ffmpeg is available."
+          --require-key
+          --require-update
     - pullRequest:
         branch: "{{ .Parameters.branch }}"
         description: |

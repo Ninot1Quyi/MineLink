@@ -89,6 +89,8 @@ Use automation to reduce agent memory load:
   NeoForge guard, and acceptance artifact commands.
 - `ona/ai-automations/minelink-agent-factory.yaml` is the Ona AI automation
   spec for task-to-PR agent work.
+- `sync-linear-status.mjs` lets Ona write Linear status/comments/evidence links
+  through `LINEAR_API_KEY` without exposing the key in logs.
 - `verify-agent-task.sh` auto-classifies changed files and chooses docs, fast,
   runtime, or NeoForge checks.
 - `check-agent-workbench.sh` verifies that Ona migration docs, task queue,
@@ -138,6 +140,7 @@ Validation:
 Evidence paths:
 - `.minelink-dev/reports/agent-task-summary.md`
 - `.minelink-dev/reports/ci-evidence-summary.md`
+- `.minelink-dev/reports/linear-sync.md`, when a Linear issue is linked
 - `.minelink-dev/reports/artifacts/acceptance-summary.md`
 - `.minelink-dev/reports/artifacts/acceptance.mp4`, if `video-required` or `ffmpeg` is available
 - `.minelink-dev/install-smoke/install-smoke-report.md`, for install/bootstrap tasks

@@ -85,7 +85,7 @@ ona ai automation start <automation-id> \
   --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb \
   --param task_id=gh-45 \
   --param issue_url=https://github.com/Ninot1Quyi/MineLink/issues/45 \
-  --param linear_issue=none \
+  --param linear_issue=NIN-7 \
   --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 \
   --param branch=codex/gh-45-short-task \
   --param pr_title="Advance MineLink task gh-45" \
@@ -133,6 +133,41 @@ organization-level Linear webhook or app is configured, create a matching
 GitHub issue from the Linear card and start the Ona automation with the Linear
 issue key in `--param linear_issue=LIN-123`.
 
+## Linear API Status Sync
+
+Ona environments that need to write back to Linear must receive
+`LINEAR_API_KEY` through Ona secret/environment configuration. Never pass the
+key as an automation parameter, command argument, issue body, PR body, or log
+line.
+
+The repository sync entry point is:
+
+```bash
+node scripts/dev/sync-linear-status.mjs \
+  --issue NIN-7 \
+  --status "In Progress" \
+  --comment "Ona automation started" \
+  --attachment-title "MineLink source task" \
+  --attachment-url https://github.com/Ninot1Quyi/MineLink/issues/3 \
+  --require-key \
+  --require-update
+```
+
+The script uses `LINEAR_API_KEY` to load the Linear issue, update its workflow
+state, create comments, and attach source/evidence links. It writes
+`.minelink-dev/reports/linear-sync.md` with key presence, operation summaries,
+and sanitized errors. It never prints the key value.
+
+The Ona AI automation calls this script automatically:
+
+- Before the agent step: move the Linear issue to `In Progress`.
+- After validation and artifact rendering: move the Linear issue to
+  `In Review` and comment with report paths.
+
+If `linear_issue=none`, the script skips safely. If a real Linear issue is
+provided and `LINEAR_API_KEY` is missing, the Ona automation fails before agent
+work so the missing secret is visible.
+
 ## Ona Automation Contract
 
 The repository automation spec lives at:
@@ -171,9 +206,12 @@ tested in the Ona and Linear UIs.
 
 ## Pilot Evidence
 
-As of 2026-06-21, the GitHub side of the factory has a real pilot issue:
+As of 2026-06-21, the factory has a real Linear issue, GitHub issue, Ona
+automation, and draft PR evidence:
 
+- Linear issue: <https://linear.app/ninotquyi/issue/NIN-7/agent-task-run-ona-agent-factory-pilot-for-minelink-delivery-flow>
 - GitHub issue: <https://github.com/Ninot1Quyi/MineLink/issues/3>
+- GitHub PR: <https://github.com/Ninot1Quyi/MineLink/pull/4>
 - Ona automation: `019ee9f6-9adb-7c93-aaa6-c26337d2278b`
 - Read-only Ona `execute` smoke completed against environment
   `019ee8fc-2d61-7dba-aed8-1dfc94d91fce`.
@@ -182,15 +220,18 @@ As of 2026-06-21, the GitHub side of the factory has a real pilot issue:
 - Bounded pilot run `019ee9ff-86d6-7071-ae45-93866a16e998` completed but
   reported `failedActionCount=1` and did not create a PR through the Ona
   `pullRequest` step.
+- Local GitHub connector fallback created PR #4 so the evidence is reviewable.
+- GitHub Actions CI run `27903350282` passed on PR #4.
 
-Current conclusion: Ona AI automation registration and execution are proven,
-but the full issue-to-Ona-to-PR chain is not accepted yet. The next factory
-slice must make the PR step observable and reliable, or replace it with a
-documented GitHub connector fallback until the Ona PR step failure mode is
-understood.
+Current conclusion: Linear issue management, Ona AI automation registration,
+Ona agent execution, GitHub PR creation through the connector fallback, and CI
+evidence are proven. The full webhook-dispatched Linear-to-Ona-to-PR chain is
+not accepted yet.
 
-Linear remains unproven in this environment: no Linear CLI, connector, or API
-token was available when the pilot was run.
+The next factory slice must prove that the Ona environment can read
+`LINEAR_API_KEY` and run `scripts/dev/sync-linear-status.mjs` from inside the
+Ona automation. After that, the remaining gap is webhook dispatch plus the Ona
+native `pullRequest` step.
 
 ## Acceptance Video
 
@@ -222,10 +263,14 @@ created.
 ## Remaining Gaps
 
 - Linear webhook creation and status sync are documented but not enabled by
-  this repository alone.
+  this repository alone. Status sync is executable through `LINEAR_API_KEY`
+  when the secret is present in the Ona environment.
 - GitHub issue-to-Ona dispatch still needs a secret-backed dispatcher or an Ona
   webhook/integration. The manual Ona automation can be created from the repo
   spec, but issue/PR triggers are not enabled by the repository alone.
+- Ona native `pullRequest` step still needs observable success or actionable
+  failure logs. Until then, the GitHub connector fallback can open the review
+  PR, but it is a fallback and must be reported as such.
 - Acceptance video is a trace visualization. Real Minecraft GUI capture remains
   future observer-client work.
 - Agent output still needs human review before a gate can become

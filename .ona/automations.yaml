@@ -27,3 +27,15 @@ tasks:
       node scripts/dev/render-acceptance-video.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)"
     triggeredBy:
       - manual
+
+  sync-linear-status:
+    name: Sync MineLink task status back to Linear
+    command: |
+      node scripts/dev/sync-linear-status.mjs \
+        --issue "${MINELINK_LINEAR_ISSUE:-}" \
+        --status "${MINELINK_LINEAR_STATUS:-In Review}" \
+        --comment "${MINELINK_LINEAR_COMMENT:-MineLink Ona environment status sync completed.}" \
+        --attachment-title "${MINELINK_LINEAR_ATTACHMENT_TITLE:-MineLink evidence}" \
+        --attachment-url "${MINELINK_LINEAR_ATTACHMENT_URL:-}"
+    triggeredBy:
+      - manual
