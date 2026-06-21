@@ -229,6 +229,11 @@ Current status:
   fence carries `minelink:vision_partial_occluder`, stone carries
   `minelink:vision_opaque` and `minelink:opaque_fixture`, and the diamond ore
   behind that stone wall remains absent from `observe.scene`.
+- Real NeoForge decorative/fluid perception no longer depends on the exact
+  seeded fixture coordinate for short grass: the mod now classifies decorative
+  visible blocks from empty collision shape and fluid blocks from `FluidState`,
+  which covers fixture drift such as water updates replacing the originally
+  seeded grass block.
 - This is not the full Gate 3 release surface yet. General raycast/shape-based
   occlusion for arbitrary block shapes, complex modded blocks, and long-running
   perception cache behavior remains to be implemented.

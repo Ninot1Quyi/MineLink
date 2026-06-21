@@ -3269,26 +3269,7 @@ public final class MineLinkEndpointBootstrap {
                 }
             }
             if (fixtureName.equals("perception_shapes")) {
-                if ((pos.equals(fixtureBase.east(2)) && id.equals("minecraft:glass"))
-                    || (pos.equals(fixtureBase.east(2).above()) && id.equals("minecraft:oak_leaves"))) {
-                    extra.add("minelink:vision_translucent");
-                }
-                if (pos.equals(fixtureBase.south(2)) && id.equals("minecraft:short_grass")) {
-                    extra.add("minelink:vision_decorative");
-                }
-                if (pos.equals(fixtureBase.south(3)) && id.equals("minecraft:water")) {
-                    extra.add("minelink:vision_fluid");
-                }
-                if (pos.equals(fixtureBase.south(4)) && id.equals("minecraft:oak_fence")) {
-                    extra.add("minelink:vision_partial_occluder");
-                }
-                if (pos.equals(fixtureBase.east(3)) && id.equals("minecraft:stone")) {
-                    extra.add("minelink:vision_opaque");
-                    extra.add("minelink:opaque_fixture");
-                }
-                if (pos.equals(fixtureBase.east(4)) && id.equals("minecraft:diamond_ore")) {
-                    extra.add("minelink:hidden_fixture");
-                }
+                addPerceptionVisionTags(pos, state, id, extra);
             }
             if (fixtureName.equals("portal_coop") && pos.equals(fixtureBase) && id.equals("minecraft:netherrack")) {
                 extra.add("minelink:portal_anchor");
@@ -3303,6 +3284,38 @@ public final class MineLinkEndpointBootstrap {
                 extra.add("minelink:create_build_anchor");
             }
             return extra;
+        }
+
+        private void addPerceptionVisionTags(BlockPos pos, BlockState state, String id, List<String> extra) {
+            boolean hasFluid = !state.getFluidState().isEmpty();
+            boolean hasEmptyCollision = state.getCollisionShape(entity.level(), pos).isEmpty();
+            if (state.is(Blocks.GLASS) || state.is(BlockTags.LEAVES)) {
+                addTag(extra, "minelink:vision_translucent");
+            }
+            if (hasFluid) {
+                addTag(extra, "minelink:vision_fluid");
+            }
+            if (!hasFluid && !id.equals("minecraft:air") && hasEmptyCollision) {
+                addTag(extra, "minelink:vision_decorative");
+            }
+            if (id.endsWith("_fence") || id.endsWith("_wall")) {
+                addTag(extra, "minelink:vision_partial_occluder");
+            }
+            if (state.is(Blocks.STONE)) {
+                addTag(extra, "minelink:vision_opaque");
+            }
+            if (pos.equals(fixtureBase.east(3)) && state.is(Blocks.STONE)) {
+                addTag(extra, "minelink:opaque_fixture");
+            }
+            if (pos.equals(fixtureBase.east(4)) && id.equals("minecraft:diamond_ore")) {
+                addTag(extra, "minelink:hidden_fixture");
+            }
+        }
+
+        private static void addTag(List<String> tags, String tag) {
+            if (!tags.contains(tag)) {
+                tags.add(tag);
+            }
         }
 
         private boolean canSee(BlockPos pos, BlockState state, BlockPos origin) {
