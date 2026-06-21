@@ -785,6 +785,18 @@ Current status:
   readback against `NIN-7` wrote
   `.minelink-dev/reports/linear-watch-nin7-blocked.md` with `Skipped count: 1`,
   `reason=blocked_label`, and `Dispatched count: 0`.
+  GitHub Actions schedule run `27920492296` proved the Linear path can select
+  `NIN-8` and start Ona execution `019eec73-6138-7929-ae90-06039b6a90d3`, but
+  also exposed that repeated schedules can duplicate unresolved dispatches and
+  that a 120-second readback window can time out before the guarded finalizer
+  reaches its terminal phase. Direct Ona readback later showed that execution
+  completed with `failedActionCount=1`, which is expected until Platform Codex
+  implementation evidence exists. The dispatcher readback window is now 240
+  seconds, and the watcher now skips started/In Progress/In Review issues and,
+  after a successful non-dry-run dispatch, writes an `In Progress` Linear status
+  plus a dispatch-boundary comment. That prevents schedule spam while preserving
+  the fail-closed Platform Codex readback guard for validation, video release,
+  PR, and product acceptance.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

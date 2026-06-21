@@ -451,6 +451,16 @@ that readback path end to end for GitHub issue #7: dispatcher execution
 chain report to 31%. The first blocked edge then moved to
 `ona_automation -> implementation_codex` because no accepted automated Ona
 Platform Codex implementation-session readback was present.
+Scheduled Linear watcher run `27920492296` then showed the duplicate-dispatch
+hazard: `NIN-8` remained `agent-ready`, so the watcher started another Ona
+execution `019eec73-6138-7929-ae90-06039b6a90d3`. The 120-second artifact
+readback timed out, but direct Ona readback later showed the execution completed
+with `failedActionCount=1`, matching the fail-closed Platform Codex evidence
+guard. The dispatcher readback window is now 240 seconds so those terminal
+guarded-finalizer results are captured in CI artifacts. The watcher also treats
+started/In Progress/In Review issues as active and marks a successfully
+dispatched Linear issue `In Progress` with a comment before the next schedule,
+preventing repeated environments for the same unresolved task.
 
 The next factory slice must prove a full platform run: Linear task dispatch or
 manual launch -> Ona Platform Codex implementation session -> validation

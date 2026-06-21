@@ -223,7 +223,11 @@ entry point for the `MineLink` project, required labels, and agent-factory
 workflow states. It records setup evidence without printing `LINEAR_API_KEY`.
 The Linear watcher passes the real Linear label set into the dispatcher and
 skips `blocked` tasks by default; `--allow-blocked` is reserved for explicit
-diagnostic dispatches.
+diagnostic dispatches. After a successful dispatch, the watcher marks the
+Linear issue `In Progress` and comments with the dispatch boundary so the
+scheduled poller does not repeatedly start the same unresolved task. Future
+polls also skip started/In Progress/In Review issues until a human or a later
+automation changes the state.
 
 Ona prebuild readiness is a parallel environment-baseline gate, not a required
 per-task chain step. `.github/workflows/ona-prebuild.yml` refreshes that
@@ -250,7 +254,9 @@ After a successful `ona ai automation start`, the dispatcher can also perform a
 bounded `ona ai automation executions get` readback and write
 `.minelink-dev/reports/ona-automation-execution.md` plus JSON. That readback
 records the execution phase, session id when exposed, and `failedActionCount`.
-An execution that completes with failed actions proves the repository bridge
+The default readback window is 240 seconds so guarded finalizer failures are
+captured as terminal `completed_with_failed_actions` evidence instead of
+misleading short-window `timed_out` evidence. An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; the next accepted edge remains the separate Ona Platform Codex
 implementation-session readback.

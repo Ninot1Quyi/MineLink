@@ -12,6 +12,7 @@ const args = {
   maxStarts: Number(process.env.MINELINK_LINEAR_MAX_STARTS ?? 1),
   onaAutomation: process.env.MINELINK_ONA_AUTOMATION_ID ?? "019ee9f6-9adb-7c93-aaa6-c26337d2278b",
   onaProject: process.env.MINELINK_ONA_PROJECT_ID ?? "019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb",
+  dispatchStatus: process.env.MINELINK_LINEAR_DISPATCH_STATUS ?? "In Progress",
   output: ".minelink-dev/reports/linear-agent-task-watch.md",
 };
 
@@ -19,8 +20,9 @@ let dryRun = false;
 let requireKey = false;
 let requireOna = false;
 let allowBlocked = false;
+let syncDispatchStatus = process.env.MINELINK_LINEAR_SYNC_DISPATCH_STATUS !== "0";
 let waitOnaExecution = process.env.MINELINK_WAIT_ONA_EXECUTION === "1";
-let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 120);
+let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 240);
 let onaExecutionPollSeconds = Number(process.env.MINELINK_ONA_EXECUTION_POLL_SECONDS ?? 5);
 
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -32,6 +34,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--max-starts") args.maxStarts = Number(readValue());
   else if (arg === "--ona-automation") args.onaAutomation = readValue();
   else if (arg === "--ona-project") args.onaProject = readValue();
+  else if (arg === "--dispatch-status") args.dispatchStatus = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--wait-ona-execution") waitOnaExecution = true;
   else if (arg === "--ona-execution-timeout-seconds") onaExecutionTimeoutSeconds = Number(readValue());
@@ -40,6 +43,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--require-key") requireKey = true;
   else if (arg === "--require-ona") requireOna = true;
   else if (arg === "--allow-blocked") allowBlocked = true;
+  else if (arg === "--no-dispatch-status-sync") syncDispatchStatus = false;
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/watch-linear-agent-tasks.mjs [options]
 
@@ -87,6 +91,7 @@ async function writeReport(report) {
     `- Project filter: \`${args.project || "none"}\``,
     `- Issue filter: \`${args.issue || "none"}\``,
     `- LINEAR_API_KEY present: \`${report.keyPresent ? "yes" : "no"}\``,
+    `- Dispatch status sync: \`${report.dispatchStatusSync}\``,
     `- Candidate count: \`${report.candidates.length}\``,
     `- Skipped count: \`${report.skipped.length}\``,
     `- Dispatched count: \`${report.dispatched.length}\``,
@@ -98,7 +103,7 @@ async function writeReport(report) {
       ? ["- none"]
       : report.candidates.map(
           (candidate) =>
-            `- \`${candidate.identifier}\` ${candidate.url} labels=\`${candidate.labels.join(", ") || "none"}\` github=\`${candidate.githubIssue || "none"}\``,
+            `- \`${candidate.identifier}\` ${candidate.url} state=\`${candidate.stateName}/${candidate.stateType}\` labels=\`${candidate.labels.join(", ") || "none"}\` github=\`${candidate.githubIssue || "none"}\``,
         )),
     "",
     "## Skipped",
@@ -107,7 +112,7 @@ async function writeReport(report) {
       ? ["- none"]
       : report.skipped.map(
           (skipped) =>
-            `- \`${skipped.identifier}\` reason=\`${skipped.reason}\` labels=\`${skipped.labels.join(", ") || "none"}\``,
+            `- \`${skipped.identifier}\` reason=\`${skipped.reason}\` state=\`${skipped.stateName}/${skipped.stateType}\` labels=\`${skipped.labels.join(", ") || "none"}\``,
         )),
     "",
     "## Dispatches",
@@ -116,7 +121,7 @@ async function writeReport(report) {
       ? ["- none"]
       : report.dispatched.map(
           (dispatch) =>
-            `- \`${dispatch.identifier}\` status=\`${dispatch.status}\` github=\`${dispatch.githubIssue || "none"}\` report=\`${dispatch.report}\``,
+            `- \`${dispatch.identifier}\` status=\`${dispatch.status}\` github=\`${dispatch.githubIssue || "none"}\` report=\`${dispatch.report}\` linearSync=\`${dispatch.linearSyncReport || "none"}\``,
         )),
     "",
     "## Errors",
@@ -139,6 +144,10 @@ const report = {
   skipped: [],
   errors: [],
   result: "skipped",
+  dispatchStatusSync:
+    syncDispatchStatus && args.dispatchStatus
+      ? `enabled:${args.dispatchStatus}`
+      : "disabled",
 };
 
 async function graphql(query, variables = {}) {
@@ -170,6 +179,14 @@ function labelNames(issue) {
   return issue.labels?.nodes?.map((label) => label.name).filter(Boolean) ?? [];
 }
 
+function stateName(issue) {
+  return issue.state?.name ?? "unknown";
+}
+
+function stateType(issue) {
+  return issue.state?.type ?? "unknown";
+}
+
 function findGithubIssue(issue) {
   const text = [
     issue.description ?? "",
@@ -198,8 +215,48 @@ function isBlocked(issue) {
   return labelNames(issue).includes("blocked");
 }
 
+function isActiveDispatchState(issue) {
+  const type = stateType(issue).toLowerCase();
+  const name = stateName(issue).toLowerCase();
+  return type === "started" || ["in progress", "in review"].includes(name);
+}
+
 function run(command, commandArgs) {
   return spawnSync(command, commandArgs, { encoding: "utf8", stdio: "pipe" });
+}
+
+function syncLinearDispatchStatus(issue, githubIssue) {
+  if (!syncDispatchStatus || dryRun || !args.dispatchStatus) return null;
+  const reportPath = `.minelink-dev/reports/linear-dispatch-sync-${issue.identifier}.md`;
+  const comment = [
+    `MineLink dispatcher started Ona automation for ${issue.identifier}.`,
+    "This marks the polling task active so scheduled watchers do not start duplicate environments.",
+    githubIssue ? `Source GitHub issue: ${githubIssue}` : "",
+    "Platform Codex implementation evidence is still required before validation, video release, PR creation, or acceptance.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const result = run("node", [
+    "scripts/dev/sync-linear-status.mjs",
+    "--issue",
+    issue.identifier,
+    "--status",
+    args.dispatchStatus,
+    "--comment",
+    comment,
+    "--output",
+    reportPath,
+    "--require-key",
+    "--require-update",
+  ]);
+  if (result.status !== 0) {
+    report.errors.push(
+      `Linear dispatch status sync failed for ${issue.identifier}: ${sanitize(
+        result.stderr || result.stdout,
+      )}`,
+    );
+  }
+  return reportPath;
 }
 
 try {
@@ -236,6 +293,8 @@ try {
   for (const issue of matched) {
     if (isBlocked(issue) && !allowBlocked) {
       skipped.push({ issue, reason: "blocked_label" });
+    } else if (isActiveDispatchState(issue)) {
+      skipped.push({ issue, reason: `active_state_${stateName(issue).replace(/\s+/g, "_")}` });
     } else {
       dispatchable.push(issue);
     }
@@ -244,12 +303,16 @@ try {
   report.candidates = candidates.map((issue) => ({
     identifier: issue.identifier,
     url: issue.url,
+    stateName: stateName(issue),
+    stateType: stateType(issue),
     labels: labelNames(issue),
     githubIssue: findGithubIssue(issue),
   }));
   report.skipped = skipped.map(({ issue, reason }) => ({
     identifier: issue.identifier,
     reason,
+    stateName: stateName(issue),
+    stateType: stateType(issue),
     labels: labelNames(issue),
   }));
 
@@ -295,11 +358,13 @@ try {
     }
     const result = run("node", commandArgs);
     const dispatchReport = `.minelink-dev/reports/agent-factory-dispatch-${issue.identifier}.md`;
+    const linearSyncReport = result.status === 0 ? syncLinearDispatchStatus(issue, githubIssue) : null;
     report.dispatched.push({
       identifier: issue.identifier,
       githubIssue,
       status: result.status === 0 ? "queued_or_dry_run" : "blocked",
       report: dispatchReport,
+      linearSyncReport,
     });
     if (result.status !== 0) {
       report.errors.push(
