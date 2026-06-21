@@ -123,17 +123,23 @@ jobs:
               '
             )"
             echo "Ona prebuild $prebuild_id status: $phase"
+            if node -e 'const fs = require("node:fs"); const records = JSON.parse(fs.readFileSync(".minelink-dev/reports/ona-prebuild-status.json", "utf8")); process.exit(records?.[0]?.status?.failureMessage ? 0 : 1);' \
+              && [ ! -f .minelink-dev/reports/ona-prebuild-log-capture.md ]; then
+              bash scripts/dev/capture-ona-prebuild-logs.sh || true
+            fi
             case "$phase" in
               PREBUILD_PHASE_COMPLETED:100)
                 break
                 ;;
               PREBUILD_PHASE_FAILED:*|PREBUILD_PHASE_CANCELLED:*)
+                bash scripts/dev/capture-ona-prebuild-logs.sh || true
                 node scripts/dev/summarize-ona-prebuild-phases.mjs || true
                 echo "Ona prebuild $prebuild_id failed with status $phase" >&2
                 exit 1
                 ;;
             esac
             if [ "$SECONDS" -ge "$deadline" ]; then
+              bash scripts/dev/capture-ona-prebuild-logs.sh || true
               node scripts/dev/summarize-ona-prebuild-phases.mjs || true
               echo "Timed out waiting for Ona prebuild $prebuild_id to complete" >&2
               exit 1
@@ -155,6 +161,7 @@ jobs:
             echo "- Final status: \`.minelink-dev/reports/ona-prebuild-status.json\`"
             echo "- Phase history: \`.minelink-dev/reports/ona-prebuild-phase-history.jsonl\`"
             echo "- Phase summary: \`.minelink-dev/reports/ona-prebuild-phase-summary.md\`"
+            echo "- Log capture: \`.minelink-dev/reports/ona-prebuild-log-capture.md\`"
             echo
             cat .minelink-dev/reports/ona-prebuild-phase-summary.md
           } > .minelink-dev/reports/ona-prebuild.md

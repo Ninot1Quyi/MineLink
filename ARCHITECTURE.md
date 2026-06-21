@@ -224,7 +224,9 @@ per-task chain step. `.github/workflows/ona-prebuild.yml` refreshes that
 baseline only for environment-sensitive changes or manual dispatch, records
 phase polling history through `scripts/dev/summarize-ona-prebuild-phases.mjs`,
 and uploads the summary so slow refreshes can be attributed before a Codex
-implementation handoff.
+implementation handoff. Failed or timed-out refreshes also run
+`scripts/dev/capture-ona-prebuild-logs.sh` to preserve raw bootstrap logs when
+Ona exposes them before the transient environment is removed.
 `report-agent-factory-chain.mjs` consumes that preflight JSON when present so
 the chain report can name missing secret/context repair actions on the blocked
 dispatcher edge.

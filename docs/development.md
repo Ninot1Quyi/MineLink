@@ -125,7 +125,9 @@ verification. A fast cache hit is useful only if the hard gate still passes.
 The Ona prebuild workflow also records phase polling history and a Markdown
 phase-duration summary so slow refreshes can be attributed to environment
 startup, bootstrap execution, stopping, or snapshotting instead of guessed from
-the UI.
+the UI. On failure or timeout it attempts to capture raw environment logs and
+the prebuild log URL under `.minelink-dev/reports/ona-prebuild-log-capture.md`
+before the transient prebuild environment is removed.
 
 CI and PR review evidence can be summarized with:
 

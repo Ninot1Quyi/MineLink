@@ -647,6 +647,11 @@ Current status:
   that were later cancelled, including
   `019eeb05-69dc-75d4-9ffa-a6769945ae50`, are not accepted as usable baseline
   evidence.
+- Failed or timed-out `.github/workflows/ona-prebuild.yml` refreshes now call
+  `scripts/dev/capture-ona-prebuild-logs.sh` before failing the workflow. The
+  resulting `ona-prebuild-log-capture.md` records whether raw environment logs
+  or the authenticated prebuild log URL were preserved before the transient Ona
+  environment was removed.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the finalizer guard for
   Ona Platform Codex readbacks. The checked-in Ona AI automation runs
   sequentially and requires implementation readback before Linear status sync,
