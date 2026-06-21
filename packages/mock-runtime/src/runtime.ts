@@ -30,6 +30,7 @@ type SlotArea = "container" | "inventory" | "output";
 const LOCAL_CHAT_RADIUS = 16;
 const MAX_SOCIAL_EVENTS = 200;
 const MAX_AGENTS_PER_OWNER = 3;
+const PLAYER_INVENTORY_SLOT_LIMIT = 36;
 const PLACEABLE_BLOCK_ITEMS = new Set([
   "create:shaft",
   "create:cogwheel",
@@ -77,7 +78,7 @@ interface AgentState {
   position: Vec3;
   yaw: number;
   pitch: number;
-  inventory: Record<string, number>;
+  inventory: Array<ItemStack | null>;
   refs: Map<string, VisibleRef>;
   lookedAtRef?: string;
   queueDepth: number;
@@ -302,7 +303,7 @@ export class MockRuntimeServer {
       position: this.fixture === "portal_coop" ? [1.5, 66, -2] : [0, 64, 0],
       yaw: 0,
       pitch: 0,
-      inventory: {},
+      inventory: Array.from({ length: PLAYER_INVENTORY_SLOT_LIMIT }, () => null),
       refs: new Map(),
       queueDepth: 0,
       nextActionId: 0,
@@ -360,9 +361,10 @@ export class MockRuntimeServer {
       };
     }
     if (include.includes("inventory")) {
+      const main = this.inventorySlotEntries(agent);
       result.inventory = {
-        hotbar: [],
-        main: Object.entries(agent.inventory).map(([item, count]) => ({ item, count })),
+        hotbar: main.filter((item) => item.slot < 9),
+        main,
         equipment: []
       };
     }
@@ -565,7 +567,7 @@ export class MockRuntimeServer {
     }
     block.mined = true;
     const drop = block.id === "minecraft:oak_log" ? "minecraft:oak_log" : block.id;
-    agent.inventory[drop] = (agent.inventory[drop] ?? 0) + 1;
+    this.addToInventory(agent, { item: drop, count: 1 });
     this.trace({
       event: "agent.action",
       action: "mine_visible_block",
@@ -587,7 +589,7 @@ export class MockRuntimeServer {
       const refState = this.validateRef(agent, targetRef);
       if (!refState.ok) return refState;
       if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside use range.");
-      if (item && (agent.inventory[item] ?? 0) <= 0) {
+      if (item && this.inventoryCount(agent, item) <= 0) {
         return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
       }
       if (item === "minecraft:flint_and_steel") {
@@ -603,8 +605,7 @@ export class MockRuntimeServer {
         if (!block || block.mined) {
           return runtimeFail("target_not_visible", "Block is no longer present.");
         }
-        agent.inventory[item] -= 1;
-        if (agent.inventory[item] <= 0) delete agent.inventory[item];
+        this.removeFromInventory(agent, item, 1);
         const insertedItem = { item, count: 1 };
         const heldItem = { item: "create:iron_sheet", count: 1 };
         block.metadata = {
@@ -643,7 +644,9 @@ export class MockRuntimeServer {
         if (!heldItem) {
           return runtimeFail("blocked", "The depot does not hold an item that can be picked up.");
         }
-        agent.inventory[heldItem.item] = (agent.inventory[heldItem.item] ?? 0) + heldItem.count;
+        if (!this.addToInventory(agent, heldItem)) {
+          return runtimeFail("inventory_full", "No inventory slot is available for the picked up item.", { item: heldItem.item });
+        }
         block.metadata = {
           create: createComponentSemantics({
             ...refState.ref,
@@ -853,7 +856,7 @@ export class MockRuntimeServer {
     if (!this.canAcceptInventory(agent, output)) {
       return runtimeFail("inventory_full", "No inventory slot is available for the output.", { item: output.item });
     }
-    agent.inventory[output.item] = (agent.inventory[output.item] ?? 0) + output.count;
+    this.addToInventory(agent, output);
     this.writeOutputSlot(agent.openContainer, null);
     this.trace({ event: "container.take_output", agent_id: agent.agentId, item: output.item, count: output.count });
     return { ok: true, status: "completed", result: { taken: output, inventory: this.inventoryEntries(agent) } };
@@ -871,7 +874,7 @@ export class MockRuntimeServer {
         recipe_id: "minecraft:oak_planks",
         input: [{ item: "minecraft:oak_log", count: 1 }],
         output: { item: "minecraft:oak_planks", count: 4 },
-        craftable: (agent.inventory["minecraft:oak_log"] ?? 0) >= 1
+        craftable: this.inventoryCount(agent, "minecraft:oak_log") >= 1
       }
     ].filter((recipe) => !query || recipe.recipe_id.includes(query) || recipe.output.item.includes(query));
 
@@ -891,14 +894,13 @@ export class MockRuntimeServer {
     if (agent.openContainer?.output) {
       return runtimeFail("inventory_full", "Take the current crafting output before crafting again.");
     }
-    if ((agent.inventory["minecraft:oak_log"] ?? 0) < neededLogs) {
+    if (this.inventoryCount(agent, "minecraft:oak_log") < neededLogs) {
       return runtimeFail("missing_material", "minecraft:oak_log is required for minecraft:oak_planks.", {
         required: [{ item: "minecraft:oak_log", count: neededLogs }],
-        available: agent.inventory["minecraft:oak_log"] ?? 0
+        available: this.inventoryCount(agent, "minecraft:oak_log")
       });
     }
-    agent.inventory["minecraft:oak_log"] -= neededLogs;
-    if (agent.inventory["minecraft:oak_log"] <= 0) delete agent.inventory["minecraft:oak_log"];
+    this.removeFromInventory(agent, "minecraft:oak_log", neededLogs);
     const output = { item: "minecraft:oak_planks", count: count * 4 };
     agent.openContainer!.output = output;
     this.trace({
@@ -940,12 +942,11 @@ export class MockRuntimeServer {
         index,
         ...stackPayload(stack)
       }));
-    const inventoryEntries = this.inventoryEntries(agent);
-    const inventorySlots = Array.from({ length: 8 }, (_, index) => ({
+    const inventorySlots = Array.from({ length: PLAYER_INVENTORY_SLOT_LIMIT }, (_, index) => ({
       slot_ref: bind("inventory", index),
       area: "inventory",
       index,
-      ...stackPayload(inventoryEntries[index] ?? null)
+      ...stackPayload(agent.inventory[index] ?? null)
     }));
     const output = this.outputSlot(open);
     const outputIndex = open.kind === "furnace" ? 2 : 0;
@@ -1001,7 +1002,7 @@ export class MockRuntimeServer {
       return open.block?.container?.slots[slot.index] ?? null;
     }
     if (slot.area === "inventory") {
-      return this.inventoryEntries(agent)[slot.index] ?? null;
+      return agent.inventory[slot.index] ?? null;
     }
     return this.outputSlot(open);
   }
@@ -1018,13 +1019,8 @@ export class MockRuntimeServer {
       return;
     }
 
-    const entries = this.inventoryEntries(agent);
-    const existing = entries[slot.index];
-    if (existing) {
-      delete agent.inventory[existing.item];
-    }
-    if (stack) {
-      agent.inventory[stack.item] = (agent.inventory[stack.item] ?? 0) + stack.count;
+    if (slot.index >= 0 && slot.index < PLAYER_INVENTORY_SLOT_LIMIT) {
+      agent.inventory[slot.index] = stack ? { ...stack } : null;
     }
   }
 
@@ -1057,13 +1053,76 @@ export class MockRuntimeServer {
   }
 
   private inventoryEntries(agent: AgentState): ItemStack[] {
-    return Object.entries(agent.inventory)
-      .filter(([, count]) => count > 0)
-      .map(([item, count]) => ({ item, count }));
+    return agent.inventory
+      .filter((stack): stack is ItemStack => Boolean(stack && stack.count > 0))
+      .map((stack) => ({ ...stack }));
+  }
+
+  private inventorySlotEntries(agent: AgentState): Array<ItemStack & { slot: number }> {
+    return agent.inventory
+      .map((stack, slot) => (stack && stack.count > 0 ? { ...stack, slot } : null))
+      .filter((stack): stack is ItemStack & { slot: number } => Boolean(stack));
+  }
+
+  private inventoryCount(agent: AgentState, item: string): number {
+    return agent.inventory.reduce((total, stack) => total + (stack?.item === item ? stack.count : 0), 0);
+  }
+
+  private addToInventory(agent: AgentState, stack: ItemStack): boolean {
+    if (!this.canAcceptInventory(agent, stack)) {
+      return false;
+    }
+    let remaining = stack.count;
+    for (const existing of agent.inventory) {
+      if (!existing || existing.item !== stack.item) continue;
+      const room = stackMaxCount(existing.item) - existing.count;
+      if (room <= 0) continue;
+      const moved = Math.min(room, remaining);
+      existing.count += moved;
+      remaining -= moved;
+      if (remaining <= 0) return true;
+    }
+    for (let index = 0; index < agent.inventory.length && remaining > 0; index++) {
+      if (agent.inventory[index]) continue;
+      const moved = Math.min(stackMaxCount(stack.item), remaining);
+      agent.inventory[index] = { item: stack.item, count: moved };
+      remaining -= moved;
+    }
+    return remaining <= 0;
+  }
+
+  private removeFromInventory(agent: AgentState, item: string, count: number): boolean {
+    if (this.inventoryCount(agent, item) < count) {
+      return false;
+    }
+    let remaining = count;
+    for (let index = 0; index < agent.inventory.length && remaining > 0; index++) {
+      const stack = agent.inventory[index];
+      if (!stack || stack.item !== item) continue;
+      const removed = Math.min(stack.count, remaining);
+      stack.count -= removed;
+      remaining -= removed;
+      if (stack.count <= 0) {
+        agent.inventory[index] = null;
+      }
+    }
+    return remaining <= 0;
   }
 
   private canAcceptInventory(agent: AgentState, stack: ItemStack): boolean {
-    return Boolean(agent.inventory[stack.item] || this.inventoryEntries(agent).length < 8);
+    let remaining = stack.count;
+    for (const existing of agent.inventory) {
+      if (!existing || existing.item !== stack.item) continue;
+      remaining -= Math.max(0, stackMaxCount(existing.item) - existing.count);
+      if (remaining <= 0) return true;
+    }
+    for (const existing of agent.inventory) {
+      if (!existing) {
+        remaining -= stackMaxCount(stack.item);
+        if (remaining <= 0) return true;
+      }
+    }
+    return false;
   }
 
   private hasReachableCraftingStation(agent: AgentState): boolean {
@@ -1115,7 +1174,7 @@ export class MockRuntimeServer {
     if (!isPlaceableBlockItem(item)) {
       return runtimeFail("unsupported_capability", "block.place requires a placeable block item.");
     }
-    if ((agent.inventory[item] ?? 0) <= 0) {
+    if (this.inventoryCount(agent, item) <= 0) {
       return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
     }
 
@@ -1132,8 +1191,7 @@ export class MockRuntimeServer {
 
     const block = placedBlock(item, pos);
     this.blocks.push(block);
-    agent.inventory[item] -= 1;
-    if (agent.inventory[item] <= 0) delete agent.inventory[item];
+    this.removeFromInventory(agent, item, 1);
     this.trace({
       event: "block.place",
       agent_id: agent.agentId,
@@ -1432,7 +1490,7 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
           kind: "chest",
           slots: [
             { item: "minecraft:oak_log", count: 2 },
-            { item: "minecraft:cobblestone", count: 1 },
+            { item: "minecraft:cobblestone", count: 35 },
             { item: "minecraft:dirt", count: 1 },
             { item: "minecraft:stone", count: 1 },
             { item: "minecraft:sand", count: 1 },
@@ -1519,7 +1577,7 @@ function samePos(a: Vec3, b: Vec3): boolean {
 }
 
 function hasPickaxe(agent: AgentState): boolean {
-  return Object.keys(agent.inventory).some((item) => item.endsWith("_pickaxe") && (agent.inventory[item] ?? 0) > 0);
+  return agent.inventory.some((stack) => Boolean(stack && stack.item.endsWith("_pickaxe") && stack.count > 0));
 }
 
 function playerIntersectsBlock(position: Vec3, block: Vec3): boolean {

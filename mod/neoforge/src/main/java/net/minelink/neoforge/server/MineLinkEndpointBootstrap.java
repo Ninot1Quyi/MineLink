@@ -80,6 +80,8 @@ public final class MineLinkEndpointBootstrap {
     private static final int MAX_ACTION_QUEUE_DEPTH = 4;
     private static final long SUBMITTED_ACTION_HOLD_MS = 1_000L;
     private static final int MAX_SYNC_MINING_TICKS = 600;
+    private static final int PLAYER_INVENTORY_SLOT_LIMIT = 36;
+    private static final int CONTAINER_INVENTORY_SLOT_LIMIT = PLAYER_INVENTORY_SLOT_LIMIT;
 
     private final MinecraftServer server;
     private final RuntimeState runtimeState = new RuntimeState();
@@ -469,22 +471,9 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private JsonObject observeInventory(JsonObject request, AgentBody agent) {
-        JsonObject inventory = new JsonObject();
-        JsonArray main = new JsonArray();
-        int slot = 0;
-        for (Map.Entry<String, Integer> entry : agent.inventory.entrySet()) {
-            JsonObject item = new JsonObject();
-            item.addProperty("slot", slot++);
-            item.addProperty("item", entry.getKey());
-            item.addProperty("count", entry.getValue());
-            main.add(item);
-        }
-        inventory.add("main", main);
-        inventory.add("hotbar", new JsonArray());
-
         JsonObject response = baseResponse(request, "tool.execute_result");
         response.addProperty("status", "completed");
-        response.add("inventory", inventory);
+        response.add("inventory", inventoryPayload(agent));
         return response;
     }
 
@@ -604,7 +593,10 @@ public final class MineLinkEndpointBootstrap {
         }
 
         String selectedItemId = selectMiningItem(agent, state, toolPolicy);
-        syncPlayerInventoryFromAgent(agent, selectedItemId);
+        ItemStack miningStack = prepareMainHand(agent, selectedItemId);
+        if (selectedItemId.isBlank() && !miningStack.isEmpty()) {
+            return failure(request, "blocked", "The active server_agent cannot make its main hand empty.");
+        }
         if (state.getDestroySpeed(level, blockRef.pos) < 0.0F) {
             return failure(request, "blocked", "The observed block is unbreakable.");
         }
@@ -625,7 +617,7 @@ public final class MineLinkEndpointBootstrap {
         Set<Integer> existingDropIds = itemEntityIds(level, pickupArea);
         boolean destroyed = agent.entity.gameMode.destroyBlock(blockRef.pos);
         collectNewNearbyDrops(level, agent, pickupArea, existingDropIds);
-        syncInventoryFromPlayer(agent);
+        syncInventoryMirrorFromPlayer(agent);
 
         BlockState afterState = level.getBlockState(blockRef.pos);
         if (!destroyed || !afterState.isAir()) {
@@ -668,7 +660,7 @@ public final class MineLinkEndpointBootstrap {
         if (item == Items.AIR || !(item instanceof BlockItem)) {
             return failure(request, "unsupported_capability", "block.place requires a placeable block item.");
         }
-        if (agent.inventory.getOrDefault(itemId, 0) <= 0) {
+        if (inventoryCounts(agent).getOrDefault(itemId, 0) <= 0) {
             return failure(request, "missing_material", "Agent inventory does not contain " + itemId + ".");
         }
 
@@ -687,7 +679,7 @@ public final class MineLinkEndpointBootstrap {
         if (interactionResult.shouldSwing()) {
             agent.entity.swing(InteractionHand.MAIN_HAND, true);
         }
-        syncInventoryFromPlayer(agent);
+        syncInventoryMirrorFromPlayer(agent);
 
         BlockState placedState = level.getBlockState(placementPos);
         if (!interactionResult.consumesAction() || placedState.isAir()) {
@@ -717,7 +709,7 @@ public final class MineLinkEndpointBootstrap {
         if (face == null) {
             return failure(request, "invalid_arguments", "action.use face must be one of up, down, north, south, east, west.");
         }
-        if (!itemId.isBlank() && agent.inventory.getOrDefault(itemId, 0) <= 0) {
+        if (!itemId.isBlank() && inventoryCounts(agent).getOrDefault(itemId, 0) <= 0) {
             return failure(request, "missing_material", "Agent inventory does not contain " + itemId + ".");
         }
 
@@ -738,6 +730,9 @@ public final class MineLinkEndpointBootstrap {
         Map<String, Integer> beforeInventory = inventoryCounts(agent);
         JsonElement beforeHeldItem = blockRef == null ? JsonNull.INSTANCE : createHeldItem(level, blockRef.pos);
         ItemStack beforeStack = prepareMainHand(agent, itemId);
+        if (itemId.isBlank() && !beforeStack.isEmpty()) {
+            return failure(request, "blocked", "The active server_agent cannot make its main hand empty.");
+        }
         InteractionResult interactionResult;
         if (ref.isBlank()) {
             interactionResult = agent.entity.gameMode.useItem(agent.entity, level, beforeStack, InteractionHand.MAIN_HAND);
@@ -747,7 +742,7 @@ public final class MineLinkEndpointBootstrap {
         if (interactionResult.shouldSwing()) {
             agent.entity.swing(InteractionHand.MAIN_HAND, true);
         }
-        syncInventoryFromPlayer(agent);
+        syncInventoryMirrorFromPlayer(agent);
         Map<String, Integer> afterInventory = inventoryCounts(agent);
         JsonElement afterHeldItem = blockRef == null ? JsonNull.INSTANCE : createHeldItem(level, blockRef.pos);
 
@@ -954,7 +949,9 @@ public final class MineLinkEndpointBootstrap {
         if (!canAcceptInventory(agent, output)) {
             return failure(request, "inventory_full", "No inventory slot is available for the output.");
         }
-        agent.addInventory(stackItemId(output), output.getCount());
+        if (!addToPlayerInventory(agent, output)) {
+            return failure(request, "inventory_full", "No inventory slot is available for the output.");
+        }
         JsonObject taken = stackPayload(output);
         writeOutputStack(agent.openContainer, ItemStack.EMPTY);
 
@@ -1027,8 +1024,11 @@ public final class MineLinkEndpointBootstrap {
         }
 
         for (Map.Entry<String, Integer> entry : plan.get().consumed.entrySet()) {
-            agent.removeInventory(entry.getKey(), entry.getValue());
+            if (!removeFromPlayerInventory(agent, entry.getKey(), entry.getValue())) {
+                return failure(request, "missing_material", "Current agent inventory cannot satisfy the requested recipe.");
+            }
         }
+        syncInventoryMirrorFromPlayer(agent);
         agent.openContainer.output = plan.get().output;
 
         JsonObject result = new JsonObject();
@@ -1342,51 +1342,44 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private ItemStack prepareMainHand(AgentBody agent, String itemId) {
-        syncPlayerInventoryFromAgent(agent, itemId);
         agent.entity.getInventory().selected = 0;
         if (itemId.isBlank()) {
-            agent.entity.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            int emptyHotbarSlot = firstEmptyPlayerSlot(agent, 0, Math.min(9, playerInventorySize(agent)));
+            if (emptyHotbarSlot >= 0) {
+                agent.entity.getInventory().selected = emptyHotbarSlot;
+                return agent.entity.getItemInHand(InteractionHand.MAIN_HAND);
+            }
+            int emptyMainInventorySlot = firstEmptyPlayerSlot(agent, 9, playerInventorySize(agent));
+            if (emptyMainInventorySlot >= 0) {
+                var playerInventory = agent.entity.getInventory();
+                ItemStack selected = playerInventory.getItem(0).copy();
+                playerInventory.setItem(0, ItemStack.EMPTY);
+                playerInventory.setItem(emptyMainInventorySlot, selected);
+            }
+            return agent.entity.getItemInHand(InteractionHand.MAIN_HAND);
+        }
+        var playerInventory = agent.entity.getInventory();
+        int itemSlot = firstPlayerSlotWithItem(agent, itemId);
+        if (itemSlot < 0) {
             return ItemStack.EMPTY;
         }
-        int count = Math.max(1, agent.inventory.getOrDefault(itemId, 0));
-        ItemStack stack = new ItemStack(itemById(itemId), count);
-        agent.entity.setItemInHand(InteractionHand.MAIN_HAND, stack);
-        return stack;
+        if (itemSlot >= 0 && itemSlot < 9) {
+            playerInventory.selected = itemSlot;
+        } else {
+            ItemStack selected = playerInventory.getItem(0).copy();
+            ItemStack target = playerInventory.getItem(itemSlot).copy();
+            playerInventory.setItem(0, target);
+            playerInventory.setItem(itemSlot, selected);
+            playerInventory.selected = 0;
+        }
+        return agent.entity.getItemInHand(InteractionHand.MAIN_HAND);
     }
 
-    private void syncPlayerInventoryFromAgent(AgentBody agent, String selectedItemId) {
-        var playerInventory = agent.entity.getInventory();
-        playerInventory.clearContent();
-        playerInventory.selected = 0;
-        int slot = 1;
-        for (Map.Entry<String, Integer> entry : agent.inventory.entrySet()) {
-            if (entry.getValue() <= 0) {
-                continue;
-            }
-            Item item = itemById(entry.getKey());
-            if (item == Items.AIR) {
-                continue;
-            }
-            int targetSlot;
-            if (!selectedItemId.isBlank() && entry.getKey().equals(selectedItemId)) {
-                targetSlot = 0;
-            } else {
-                targetSlot = slot++;
-            }
-            if (targetSlot >= playerInventory.getContainerSize()) {
-                break;
-            }
-            playerInventory.setItem(targetSlot, new ItemStack(item, entry.getValue()));
-        }
-        if (selectedItemId.isBlank()) {
-            playerInventory.setItem(0, ItemStack.EMPTY);
-        }
-    }
-
-    private void syncInventoryFromPlayer(AgentBody agent) {
+    private void syncInventoryMirrorFromPlayer(AgentBody agent) {
         agent.inventory.clear();
         var playerInventory = agent.entity.getInventory();
-        for (int slot = 0; slot < playerInventory.getContainerSize(); slot++) {
+        int size = playerInventorySize(agent);
+        for (int slot = 0; slot < size; slot++) {
             ItemStack stack = playerInventory.getItem(slot);
             if (stack.isEmpty()) {
                 continue;
@@ -1395,18 +1388,105 @@ public final class MineLinkEndpointBootstrap {
         }
     }
 
+    private static int playerInventorySize(AgentBody agent) {
+        return Math.min(PLAYER_INVENTORY_SLOT_LIMIT, agent.entity.getInventory().getContainerSize());
+    }
+
+    private static ItemStack playerInventoryStack(AgentBody agent, int slot) {
+        if (slot < 0 || slot >= playerInventorySize(agent)) {
+            return ItemStack.EMPTY;
+        }
+        return agent.entity.getInventory().getItem(slot).copy();
+    }
+
+    private static int firstPlayerSlotWithItem(AgentBody agent, String itemId) {
+        int size = playerInventorySize(agent);
+        for (int slot = 0; slot < size; slot++) {
+            ItemStack stack = agent.entity.getInventory().getItem(slot);
+            if (!stack.isEmpty() && stackItemId(stack).equals(itemId)) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    private static int firstEmptyPlayerSlot(AgentBody agent, int startInclusive, int endExclusive) {
+        int end = Math.min(endExclusive, playerInventorySize(agent));
+        for (int slot = Math.max(0, startInclusive); slot < end; slot++) {
+            if (agent.entity.getInventory().getItem(slot).isEmpty()) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    private boolean addToPlayerInventory(AgentBody agent, ItemStack stack) {
+        if (!canAcceptInventory(agent, stack)) {
+            return false;
+        }
+        ItemStack remaining = stack.copy();
+        var playerInventory = agent.entity.getInventory();
+        int size = playerInventorySize(agent);
+        for (int slot = 0; slot < size && !remaining.isEmpty(); slot++) {
+            ItemStack existing = playerInventory.getItem(slot);
+            if (existing.isEmpty() || !ItemStack.isSameItemSameComponents(existing, remaining)) {
+                continue;
+            }
+            int limit = Math.min(existing.getMaxStackSize(), playerInventory.getMaxStackSize());
+            int room = Math.max(0, limit - existing.getCount());
+            if (room <= 0) {
+                continue;
+            }
+            int moved = Math.min(room, remaining.getCount());
+            existing.grow(moved);
+            remaining.shrink(moved);
+            playerInventory.setItem(slot, existing);
+        }
+        for (int slot = 0; slot < size && !remaining.isEmpty(); slot++) {
+            if (!playerInventory.getItem(slot).isEmpty()) {
+                continue;
+            }
+            int moved = Math.min(remaining.getMaxStackSize(), remaining.getCount());
+            playerInventory.setItem(slot, remaining.copyWithCount(moved));
+            remaining.shrink(moved);
+        }
+        syncInventoryMirrorFromPlayer(agent);
+        return remaining.isEmpty();
+    }
+
+    private boolean removeFromPlayerInventory(AgentBody agent, String itemId, int count) {
+        if (inventoryCounts(agent).getOrDefault(itemId, 0) < count) {
+            return false;
+        }
+        int remaining = count;
+        var playerInventory = agent.entity.getInventory();
+        int size = playerInventorySize(agent);
+        for (int slot = 0; slot < size && remaining > 0; slot++) {
+            ItemStack stack = playerInventory.getItem(slot);
+            if (stack.isEmpty() || !stackItemId(stack).equals(itemId)) {
+                continue;
+            }
+            int removed = Math.min(remaining, stack.getCount());
+            stack.shrink(removed);
+            playerInventory.setItem(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+            remaining -= removed;
+        }
+        syncInventoryMirrorFromPlayer(agent);
+        return remaining == 0;
+    }
+
     private String selectMiningItem(AgentBody agent, BlockState state, String toolPolicy) {
         if (toolPolicy.equals("empty_hand")) {
             return "";
         }
         if (!toolPolicy.isBlank() && !toolPolicy.equals("best_available")) {
-            return agent.inventory.getOrDefault(toolPolicy, 0) > 0 ? toolPolicy : "";
+            return inventoryCounts(agent).getOrDefault(toolPolicy, 0) > 0 ? toolPolicy : "";
         }
 
         String selected = "";
         float bestSpeed = 1.0F;
         boolean bestHarvests = false;
-        for (Map.Entry<String, Integer> entry : agent.inventory.entrySet()) {
+        for (Map.Entry<String, Integer> entry : inventoryCounts(agent).entrySet()) {
             if (entry.getValue() <= 0) {
                 continue;
             }
@@ -1444,7 +1524,16 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private static Map<String, Integer> inventoryCounts(AgentBody agent) {
-        return new LinkedHashMap<>(agent.inventory);
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        var playerInventory = agent.entity.getInventory();
+        int size = playerInventorySize(agent);
+        for (int slot = 0; slot < size; slot++) {
+            ItemStack stack = playerInventory.getItem(slot);
+            if (!stack.isEmpty()) {
+                counts.merge(stackItemId(stack), stack.getCount(), Integer::sum);
+            }
+        }
+        return counts;
     }
 
     private static JsonArray positiveInventoryDelta(Map<String, Integer> before, Map<String, Integer> after) {
@@ -1518,10 +1607,10 @@ public final class MineLinkEndpointBootstrap {
         }
         snapshot.add("slots", slots);
 
-        List<ItemStack> inventory = inventoryEntries(agent);
         JsonArray inventorySlots = new JsonArray();
-        for (int index = 0; index < 8; index++) {
-            ItemStack stack = index < inventory.size() ? inventory.get(index) : ItemStack.EMPTY;
+        int inventorySlotCount = Math.min(CONTAINER_INVENTORY_SLOT_LIMIT, playerInventorySize(agent));
+        for (int index = 0; index < inventorySlotCount; index++) {
+            ItemStack stack = playerInventoryStack(agent, index);
             inventorySlots.add(slotPayload(agent, "inventory", index, stack));
         }
         snapshot.add("inventory_slots", inventorySlots);
@@ -1579,6 +1668,9 @@ public final class MineLinkEndpointBootstrap {
         if (slot.area.equals("container") && open != null && open.container != null) {
             return Math.min(itemLimit, open.container.getMaxStackSize());
         }
+        if (slot.area.equals("inventory")) {
+            return Math.min(itemLimit, agent.entity.getInventory().getMaxStackSize());
+        }
         return itemLimit;
     }
 
@@ -1591,8 +1683,7 @@ public final class MineLinkEndpointBootstrap {
             return open.container.getItem(slot.index).copy();
         }
         if (slot.area.equals("inventory")) {
-            List<ItemStack> inventory = inventoryEntries(agent);
-            return slot.index >= 0 && slot.index < inventory.size() ? inventory.get(slot.index).copy() : ItemStack.EMPTY;
+            return playerInventoryStack(agent, slot.index);
         }
         if (slot.area.equals("output")) {
             return outputStack(open);
@@ -1611,13 +1702,9 @@ public final class MineLinkEndpointBootstrap {
             return;
         }
         if (slot.area.equals("inventory")) {
-            List<ItemStack> inventory = inventoryEntries(agent);
-            if (slot.index >= 0 && slot.index < inventory.size()) {
-                ItemStack existing = inventory.get(slot.index);
-                agent.removeInventory(stackItemId(existing), existing.getCount());
-            }
-            if (!stack.isEmpty()) {
-                agent.addInventory(stackItemId(stack), stack.getCount());
+            if (slot.index >= 0 && slot.index < playerInventorySize(agent)) {
+                agent.entity.getInventory().setItem(slot.index, stack.copy());
+                syncInventoryMirrorFromPlayer(agent);
             }
             return;
         }
@@ -1646,35 +1733,51 @@ public final class MineLinkEndpointBootstrap {
         return open.kind.equals("furnace") ? 2 : 0;
     }
 
-    private List<ItemStack> inventoryEntries(AgentBody agent) {
-        List<ItemStack> entries = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : agent.inventory.entrySet()) {
-            if (entry.getValue() <= 0) {
-                continue;
-            }
-            Item item = itemById(entry.getKey());
-            if (item != Items.AIR) {
-                entries.add(new ItemStack(item, entry.getValue()));
+    private boolean canAcceptInventory(AgentBody agent, ItemStack stack) {
+        ItemStack remaining = stack.copy();
+        var playerInventory = agent.entity.getInventory();
+        int size = playerInventorySize(agent);
+        for (int slot = 0; slot < size; slot++) {
+            ItemStack existing = playerInventory.getItem(slot);
+            if (!existing.isEmpty() && ItemStack.isSameItemSameComponents(existing, remaining)) {
+                int limit = Math.min(existing.getMaxStackSize(), playerInventory.getMaxStackSize());
+                remaining.shrink(Math.max(0, limit - existing.getCount()));
+                if (remaining.isEmpty()) {
+                    return true;
+                }
             }
         }
-        return entries;
-    }
-
-    private boolean canAcceptInventory(AgentBody agent, ItemStack stack) {
-        return agent.inventory.containsKey(stackItemId(stack)) || inventoryEntries(agent).size() < 8;
+        int emptySlotLimit = Math.min(remaining.getMaxStackSize(), playerInventory.getMaxStackSize());
+        for (int slot = 0; slot < size; slot++) {
+            if (playerInventory.getItem(slot).isEmpty()) {
+                remaining.shrink(emptySlotLimit);
+                if (remaining.isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private JsonObject inventoryPayload(AgentBody agent) {
         JsonObject inventory = new JsonObject();
         JsonArray main = new JsonArray();
-        int slot = 0;
-        for (ItemStack stack : inventoryEntries(agent)) {
-            JsonObject item = stackPayload(stack);
-            item.addProperty("slot", slot++);
-            main.add(item);
+        JsonArray hotbar = new JsonArray();
+        int size = playerInventorySize(agent);
+        for (int slot = 0; slot < size; slot++) {
+            ItemStack stack = agent.entity.getInventory().getItem(slot);
+            if (!stack.isEmpty()) {
+                JsonObject item = stackPayload(stack);
+                item.addProperty("slot", slot);
+                main.add(item);
+                if (slot < 9) {
+                    hotbar.add(item.deepCopy());
+                }
+            }
         }
+        inventory.addProperty("source", "fake_player");
         inventory.add("main", main);
-        inventory.add("hotbar", new JsonArray());
+        inventory.add("hotbar", hotbar);
         return inventory;
     }
 
@@ -1682,7 +1785,7 @@ public final class MineLinkEndpointBootstrap {
         if (!recipe.value().canCraftInDimensions(3, 3)) {
             return Optional.empty();
         }
-        Map<String, Integer> available = new LinkedHashMap<>(agent.inventory);
+        Map<String, Integer> available = new LinkedHashMap<>(inventoryCounts(agent));
         Map<String, Integer> consumed = new LinkedHashMap<>();
         ItemStack output = ItemStack.EMPTY;
 
@@ -2439,7 +2542,7 @@ public final class MineLinkEndpointBootstrap {
             level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
             if (level.getBlockEntity(chestPos) instanceof Container container) {
                 container.setItem(0, new ItemStack(Items.OAK_LOG, 2));
-                container.setItem(1, new ItemStack(Items.COBBLESTONE, 1));
+                container.setItem(1, new ItemStack(Items.COBBLESTONE, 35));
                 container.setItem(2, new ItemStack(Items.DIRT, 1));
                 container.setItem(3, new ItemStack(Items.STONE, 1));
                 container.setItem(4, new ItemStack(Items.SAND, 1));
@@ -2697,13 +2800,6 @@ public final class MineLinkEndpointBootstrap {
 
         private void addInventory(String itemId, int count) {
             inventory.merge(itemId, count, Integer::sum);
-        }
-
-        private void removeInventory(String itemId, int count) {
-            inventory.merge(itemId, -count, Integer::sum);
-            if (inventory.getOrDefault(itemId, 0) <= 0) {
-                inventory.remove(itemId);
-            }
         }
 
         private boolean acceptChatNow() {

@@ -150,6 +150,11 @@ Current status:
   from newly spawned nearby item entities through vanilla/NeoForge pickup hooks,
   and unbreakable or unharvestable targets return structured `blocked` or
   `wrong_tool` failures instead of synthetic inventory credit.
+- The real NeoForge runtime now treats the FakePlayer inventory as the
+  authoritative item store for `observe.inventory`, container inventory slots,
+  `container.take_output`, `craft.quick_craft` ingredient consumption,
+  `block.place`, and `action.use`. The remaining internal inventory map is only
+  a compatibility mirror rebuilt from the FakePlayer inventory.
 - The guard replay also exercises `mode=submit` for real NeoForge actions:
   accepted action handles return `status=accepted`, `lifecycle_status=queued`,
   and an `action_id`, while excess submissions return
@@ -329,10 +334,18 @@ Current status:
   by server slot rules, the real NeoForge furnace processes through its vanilla
   block entity tick path, slot 2 is exposed only as an output slot, and
   `container.take_output` moves the resulting `minecraft:iron_ingot` into the
-  agent inventory.
+  FakePlayer-backed agent inventory.
+- Real NeoForge `craft_smoke` and `furnace_smoke` reports now include
+  `inventory.source=fake_player` for the final inventory observation, proving
+  that recipe output and furnace output are read back from the native
+  server_agent body inventory rather than a Host-local or replay-local store.
+- Real NeoForge `craft_negative` now fills all 36 FakePlayer inventory slots
+  through public container slot refs before attempting `container.take_output`,
+  and the output path returns structured `inventory_full` when no native player
+  slot can accept the staged recipe output.
 - This is not the full Gate 6 release surface yet. Negative inventory-full
-  cases, complete server menu/slot rule parity, and FakePlayer-backed inventory
-  semantics still need separate implementation and evidence.
+  coverage is present for the current crafting output path, but complete server
+  menu/slot rule parity still needs separate implementation and evidence.
 
 ### Gate 7: Create Adapter
 
@@ -369,7 +382,9 @@ Current status:
   powered press speed, and a real pressing result observed as
   `create:iron_sheet` on the depot. The replay now asserts the `action.use`
   result payload for iron-ingot insertion into the depot and the empty-hand
-  pickup payload before accepting inventory ownership of the sheet.
+  pickup payload before accepting FakePlayer inventory ownership of the sheet.
+  The real NeoForge report includes `inventory.source=fake_player` with
+  `create:iron_sheet` and `create:wrench` in hotbar slots after the run.
 - This is not the full Gate 7 release surface yet. Belt transport behavior,
   multi-step Create recipes, broader kinetic-network diagnostics, and broader
   Create component parity still need separate implementation and evidence.
@@ -550,6 +565,9 @@ The repository currently has an executable baseline for Gates 0, 3 partial,
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-catalog-furnace bash scripts/dev/e2e.sh furnace_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_MCP_TRANSPORT=http MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-catalog-http bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --work-dir .minelink-dev/soak/neoforge-catalog --scenarios create_smoke,portal_coop,guard_boundaries`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_ENABLE_CREATE=1 MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-native-inventory-create-rerun bash scripts/dev/e2e.sh create_smoke`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-native-inventory-craft-negative-final bash scripts/dev/e2e.sh craft_negative`
+- `MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --work-dir .minelink-dev/soak/neoforge-native-inventory-final --scenarios craft_smoke,furnace_smoke,create_smoke,portal_coop`
 - `.minelink-dev/soak/<runtime>/soak-report.json`
 - `.minelink-dev/soak/<runtime>/process-cleanup.json`
 - `.minelink-dev/soak/<runtime>/queue-metrics.json`
