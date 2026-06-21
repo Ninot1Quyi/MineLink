@@ -212,7 +212,8 @@ The final flow should use the Ona Platform Codex agent option for implementation
 and the separate video-verifier pass, not the default Ona Agent and not manual
 SSH. Manual `ona environment ssh` remains useful for debugging or verification,
 but it is not the product delivery path. The finalizer must not re-render the
-MP4 after video review; it checks the existing artifact hashes instead. Linear
+MP4 after video review; it prepares the hash-based `video-review-request.md`
+from existing artifacts and then checks the existing artifact hashes. Linear
 status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
