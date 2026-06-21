@@ -230,6 +230,10 @@ dispatcher and scheduled Linear watcher are the active automation bridge. If
 Ona Platform Codex cannot be started automatically or rejects LLM
 authentication, the chain report must stop at that edge and record the blocker
 instead of falling back to generic Ona Agent evidence.
+`scripts/dev/report-agent-factory-chain.mjs` is the durable node/edge report
+for that bridge. Its first blocked edge must carry the actionable blocker text
+directly on the edge row, because later nodes can have valid local evidence
+without the external chain having reached them.
 If Linear or GitHub webhook dispatch cannot be verified in the current
 environment, the repo must say so and keep the gap visible instead of
 pretending automation is enabled.
