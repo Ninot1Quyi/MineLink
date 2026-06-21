@@ -28,12 +28,15 @@ action:
           Acceptance gate: {{ .Parameters.acceptance_gate }}
           Validation scope: {{ .Parameters.validation_scope }}
           Scenarios: {{ .Parameters.scenarios }}
+          Task instruction: {{ .Parameters.agent_instruction }}
 
-          Implement only the scoped task described by the issue. Preserve
-          MineLink anti-mock boundaries: do not weaken assertions, do not add
-          oracle tools, do not replace real Minecraft behavior with synthetic
-          output, and do not claim product acceptance from mock or smoke evidence.
-          Commit messages, PR text, comments, and code comments must be English.
+          Follow the task instruction exactly. Keep the work bounded to the
+          issue scope. For pilot or validation tasks, do not edit files unless
+          the instruction explicitly asks for edits. Preserve MineLink anti-mock
+          boundaries: do not weaken assertions, do not add oracle tools, do not
+          replace real Minecraft behavior with synthetic output, and do not
+          claim product acceptance from mock or smoke evidence. Commit messages,
+          PR text, comments, and code comments must be English.
     - task:
         command: >
           bash scripts/dev/verify-agent-task.sh --scope {{ .Parameters.validation_scope }} --scenarios {{ .Parameters.scenarios }}

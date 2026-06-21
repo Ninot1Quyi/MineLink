@@ -167,7 +167,7 @@ for debugging and readback. A valid pilot starts
 
 ```bash
 ona ai automation create ona/ai-automations/minelink-agent-factory.yaml
-ona ai automation start <automation-id> --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb --param task_id=gh-45 --param issue_url=https://github.com/Ninot1Quyi/MineLink/issues/45 --param linear_issue=none --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 --param branch=codex/gh-45-short-task --param pr_title="Advance MineLink task gh-45" --param acceptance_gate="Gate 2" --param validation_scope=docs --param scenarios=none --wait
+ona ai automation start <automation-id> --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb --param task_id=gh-45 --param issue_url=https://github.com/Ninot1Quyi/MineLink/issues/45 --param linear_issue=none --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 --param branch=codex/gh-45-short-task --param pr_title="Advance MineLink task gh-45" --param acceptance_gate="Gate 2" --param agent_instruction="Run a bounded validation pilot. Do not edit files unless validation fails." --param validation_scope=docs --param scenarios=none --wait
 ```
 
 Linear or GitHub issue webhooks are not proven enabled until a real issue

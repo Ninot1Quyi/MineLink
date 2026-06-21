@@ -90,6 +90,7 @@ ona ai automation start <automation-id> \
   --param branch=codex/gh-45-short-task \
   --param pr_title="Advance MineLink task gh-45" \
   --param acceptance_gate="Gate 2" \
+  --param agent_instruction="Run a bounded validation pilot. Do not edit files unless validation fails." \
   --param validation_scope=docs \
   --param scenarios=none \
   --wait
