@@ -95,6 +95,7 @@ body:
         - .minelink-dev/reports/agent-task-summary.md
         - .minelink-dev/reports/artifacts/acceptance-summary.md
         - .minelink-dev/reports/artifacts/acceptance.mp4 when video-required
+        - .minelink-dev/reports/artifacts/video-review-request.md when video-required
         - .minelink-dev/reports/artifacts/video-review.md when video-required
         - .minelink-dev/reports/artifacts/video-release-gate.md when video-required
         - .minelink-dev/<scenario>/reports/<scenario>-result.json

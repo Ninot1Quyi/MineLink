@@ -71,14 +71,17 @@ Trace-driven acceptance artifacts can be rendered with:
 
 ```bash
 node scripts/dev/render-acceptance-video.mjs --require-mp4
+node scripts/dev/prepare-video-review-request.mjs --require-mp4
 ```
 
 The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and
 `.minelink-dev/reports/artifacts/acceptance.mp4`; `--require-mp4` makes missing
 `ffmpeg` support fail the command. Use `--task-requirements` to embed the
-bounded task contract. For tasks labeled `video-required`, a separate Ona
-Platform Codex verifier must compare the task requirements with the rendered
-summary/MP4, record the current summary and MP4 SHA-256 hashes, and write:
+bounded task contract. The review-request script writes
+`.minelink-dev/reports/artifacts/video-review-request.md` with the current
+summary and MP4 hashes plus the exact markers that the release gate will
+enforce. For tasks labeled `video-required`, a separate Ona Platform Codex
+verifier must compare that request with the rendered summary/MP4 and write:
 
 ```text
 .minelink-dev/reports/artifacts/video-review.md
@@ -133,6 +136,7 @@ bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,cra
 node packages/host/dist/index.js http --port 8765
 node scripts/dev/summarize-evidence.mjs
 node scripts/dev/render-acceptance-video.mjs --require-mp4
+node scripts/dev/prepare-video-review-request.mjs --require-mp4
 ```
 
 ## Harness Modes

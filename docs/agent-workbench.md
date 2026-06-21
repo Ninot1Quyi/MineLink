@@ -110,6 +110,8 @@ Use automation to reduce agent memory load:
   summaries and optional MP4 files under `.minelink-dev/reports/artifacts/`.
 - `.ona/automations.yaml` keeps rendering and release checking as separate
   tasks so the video verifier can inspect the actual MP4 before publication.
+- `prepare-video-review-request.mjs` writes the current artifact hashes and
+  verifier assignment into `.minelink-dev/reports/artifacts/video-review-request.md`.
 - `check-video-review.mjs` fails release unless a separate Ona Platform Codex
   verifier has compared the task requirements against the summary and MP4.
 - The install smoke workflow uploads `minelink-install-smoke-evidence` for

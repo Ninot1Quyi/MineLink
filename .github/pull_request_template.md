@@ -38,6 +38,7 @@ Forbidden changes respected:
 - `.minelink-dev/reports/ci-evidence-summary.md`
 - `.minelink-dev/reports/artifacts/acceptance-summary.md`
 - `.minelink-dev/reports/artifacts/acceptance.mp4`
+- `.minelink-dev/reports/artifacts/video-review-request.md`
 - `.minelink-dev/reports/artifacts/video-review.md`
 - `.minelink-dev/reports/artifacts/video-release-gate.md`
 - `.minelink-dev/<scenario>/reports/<scenario>-result.json`
@@ -46,6 +47,8 @@ Forbidden changes respected:
 Acceptance video artifact:
 
 Dedicated video verifier:
+
+Video review request:
 
 ## Remaining Product Gaps
 

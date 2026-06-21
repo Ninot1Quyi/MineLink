@@ -24,6 +24,7 @@
     "e2e:guard": "bash scripts/dev/e2e.sh guard_boundaries",
     "e2e:portal": "bash scripts/dev/e2e.sh portal_coop",
     "acceptance:video": "node scripts/dev/render-acceptance-video.mjs",
+    "acceptance:video-review-request": "node scripts/dev/prepare-video-review-request.mjs",
     "linear:sync": "node scripts/dev/sync-linear-status.mjs",
     "acceptance:video-review": "node scripts/dev/check-video-review.mjs"
   },

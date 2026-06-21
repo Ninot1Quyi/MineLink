@@ -25,6 +25,14 @@ tasks:
     command: |
       node scripts/dev/summarize-evidence.mjs
       node scripts/dev/render-acceptance-video.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --require-mp4
+      node scripts/dev/prepare-video-review-request.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --require-mp4
+    triggeredBy:
+      - manual
+
+  prepare-video-review:
+    name: Prepare MineLink video review request
+    command: |
+      node scripts/dev/prepare-video-review-request.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --require-mp4
     triggeredBy:
       - manual
 

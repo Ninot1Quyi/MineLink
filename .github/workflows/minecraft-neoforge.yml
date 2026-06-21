@@ -109,7 +109,9 @@ jobs:
         run: node scripts/dev/summarize-evidence.mjs --append-step-summary
       - name: Render MineLink acceptance artifacts
         if: always()
-        run: node scripts/dev/render-acceptance-video.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --pr-url "$MINELINK_PR_URL" --task-requirements docs/minelink-acceptance.md --require-mp4
+        run: |
+          node scripts/dev/render-acceptance-video.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --pr-url "$MINELINK_PR_URL" --task-requirements docs/minelink-acceptance.md --require-mp4
+          node scripts/dev/prepare-video-review-request.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --task-requirements docs/minelink-acceptance.md --require-mp4
         env:
           MINELINK_PR_URL: ${{ github.event.pull_request.html_url || github.server_url }}
       - uses: actions/upload-artifact@v4

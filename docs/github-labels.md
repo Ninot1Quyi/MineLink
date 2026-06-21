@@ -10,7 +10,7 @@ Use these labels to keep Ona/Codex work bounded and reviewable.
 | `agent:ona` | Task should be handled by Ona Platform Codex plus the checked-in validation automation, not manual SSH or the default Ona Agent. |
 | `needs-acceptance-evidence` | PR or issue cannot close until report paths and CI links are attached. |
 | `real-neoforge-required` | Real NeoForge evidence is required before review can accept the claim. |
-| `video-required` | Acceptance summary, MP4 artifact, dedicated Ona Platform Codex video review, and video release gate are required. |
+| `video-required` | Acceptance summary, MP4 artifact, video-review request, dedicated Ona Platform Codex video review, and video release gate are required. |
 | `runtime-single-owner` | Work touches conflict-heavy runtime paths and should not run in parallel. |
 | `docs-architecture` | Documentation, architecture, workbench, templates, or runbooks. |
 | `ci-reporting` | GitHub Actions, artifacts, verification scripts, or report summaries. |

@@ -293,6 +293,7 @@ Outputs:
 ```text
 .minelink-dev/reports/artifacts/acceptance-summary.md
 .minelink-dev/reports/artifacts/acceptance.mp4
+.minelink-dev/reports/artifacts/video-review-request.md
 .minelink-dev/reports/artifacts/video-review.md
 .minelink-dev/reports/artifacts/video-release-gate.md
 ```
@@ -302,10 +303,17 @@ MP4 rendering was skipped. For `video-required` tasks, rerun on a host or CI
 image with `ffmpeg`; `--require-mp4` must fail the task if MP4 cannot be
 created.
 
-Before publishing or merging video evidence, a separate Ona Platform Codex
-session must inspect the task requirements, `acceptance-summary.md`, and
-`acceptance.mp4`. It writes `.minelink-dev/reports/artifacts/video-review.md`
-with these exact markers:
+After rendering, run:
+
+```bash
+node scripts/dev/prepare-video-review-request.mjs --require-mp4
+```
+
+This writes `.minelink-dev/reports/artifacts/video-review-request.md` with the
+current artifact hashes and verifier assignment. Before publishing or merging
+video evidence, a separate Ona Platform Codex session must inspect that request,
+the task requirements, `acceptance-summary.md`, and `acceptance.mp4`. It writes
+`.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 
 ```text
 Verifier: Ona Platform Codex

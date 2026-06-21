@@ -621,6 +621,10 @@ Current status:
   `.minelink-dev/reports/artifacts/acceptance-summary.md` and
   `.minelink-dev/reports/artifacts/acceptance.mp4`; the real NeoForge GitHub
   workflow installs `ffmpeg` and runs the renderer with `--require-mp4`.
+- `scripts/dev/prepare-video-review-request.mjs` generates
+  `.minelink-dev/reports/artifacts/video-review-request.md` with the current
+  summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
+  request artifact is a handoff package only and does not release the task.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   separate Ona Platform Codex verifier writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
