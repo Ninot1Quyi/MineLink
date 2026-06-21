@@ -681,6 +681,40 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "matching_calls": len(matches),
             "observed": observed,
         }
+    if kind == "tool_result_array_contains_all":
+        name = str(assertion.get("tool_name", ""))
+        path = assertion_path(assertion.get("path", []))
+        expected_items = assertion.get("expected_items", [])
+        if not isinstance(expected_items, list):
+            expected_items = []
+        agent = assertion.get("agent")
+        min_count = int(assertion.get("min_count", 1))
+        observed = []
+        matches = []
+        for record in tool_records(state, global_state):
+            if name and record.get("name") != name:
+                continue
+            if agent is not None and record.get("agent") != agent:
+                continue
+            if is_tool_failure(record.get("result", {})):
+                continue
+            payload = tool_result_payload(record.get("result", {}))
+            actual = nested_value(payload, path)
+            observed.append({"agent": record.get("agent"), "value": actual})
+            if isinstance(actual, list) and all(item in actual for item in expected_items):
+                matches.append(record)
+        return {
+            "name": assertion.get("name", f"tool_result_array_contains_all_{name}_{'.'.join(path)}"),
+            "kind": kind,
+            "passed": len(matches) >= min_count,
+            "tool_name": name,
+            "agent": agent,
+            "path": path,
+            "expected_items": expected_items,
+            "expected_min_count": min_count,
+            "matching_calls": len(matches),
+            "observed": observed,
+        }
     if kind == "tool_call_agent_count":
         name = str(assertion.get("tool_name", ""))
         minimums = assertion.get("min_per_agent", {})

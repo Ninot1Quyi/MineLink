@@ -727,6 +727,8 @@ public final class MineLinkEndpointBootstrap {
             }
             blockRef = target.ref;
         }
+        Map<String, Integer> beforeInventory = inventoryCounts(agent);
+        JsonElement beforeHeldItem = blockRef == null ? JsonNull.INSTANCE : createHeldItem(level, blockRef.pos);
         ItemStack beforeStack = prepareMainHand(agent, itemId);
         InteractionResult interactionResult;
         if (ref.isBlank()) {
@@ -738,6 +740,8 @@ public final class MineLinkEndpointBootstrap {
             agent.entity.swing(InteractionHand.MAIN_HAND, true);
         }
         syncInventoryFromPlayer(agent);
+        Map<String, Integer> afterInventory = inventoryCounts(agent);
+        JsonElement afterHeldItem = blockRef == null ? JsonNull.INSTANCE : createHeldItem(level, blockRef.pos);
 
         if (!interactionResult.consumesAction()) {
             return failure(request, "blocked", "Vanilla use did not consume the action.");
@@ -748,6 +752,31 @@ public final class MineLinkEndpointBootstrap {
         result.addProperty("item", itemId.isBlank() ? "minecraft:air" : itemId);
         result.addProperty("hand", itemId.isBlank() ? "empty" : "main");
         result.addProperty("interaction_result", interactionResult.name().toLowerCase());
+        if (blockRef != null) {
+            JsonObject targetAfterUse = new JsonObject();
+            targetAfterUse.add("held_item", afterHeldItem.deepCopy());
+            result.add("target_after_use", targetAfterUse);
+        }
+        JsonArray inventoryDelta = positiveInventoryDelta(beforeInventory, afterInventory);
+        if (inventoryDelta.size() > 0) {
+            result.add("inventory_delta", inventoryDelta.deepCopy());
+            if (itemId.isBlank()) {
+                result.add("taken", inventoryDelta.get(0).deepCopy());
+            }
+        }
+        if (!itemId.isBlank() && jsonItemPresent(afterHeldItem) && !sameJsonItem(beforeHeldItem, afterHeldItem)) {
+            JsonObject placedOnTarget = new JsonObject();
+            placedOnTarget.addProperty("input", itemId);
+            placedOnTarget.add("held_item", afterHeldItem.deepCopy());
+            result.add("placed_on_target", placedOnTarget);
+            String outputItem = jsonItemId(afterHeldItem);
+            if (!outputItem.isBlank() && !outputItem.equals(itemId)) {
+                JsonObject processed = new JsonObject();
+                processed.addProperty("input", itemId);
+                processed.add("output", afterHeldItem.deepCopy());
+                result.add("processed", processed);
+            }
+        }
         if (portalActivatedNear(level, agent.fixtureBase)) {
             result.addProperty("activated", "minecraft:nether_portal");
         }
@@ -1081,6 +1110,42 @@ public final class MineLinkEndpointBootstrap {
             inventory.add("held_item", JsonNull.INSTANCE);
         }
         return inventory;
+    }
+
+    private static JsonElement createHeldItem(ServerLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        if (!createKind(blockId(state)).equals("depot")) {
+            return JsonNull.INSTANCE;
+        }
+        return reflectedValue(level.getBlockEntity(pos), "getHeldItem");
+    }
+
+    private static boolean jsonItemPresent(JsonElement value) {
+        return !jsonItemId(value).isBlank();
+    }
+
+    private static boolean sameJsonItem(JsonElement left, JsonElement right) {
+        String leftItem = jsonItemId(left);
+        String rightItem = jsonItemId(right);
+        return !leftItem.isBlank()
+            && leftItem.equals(rightItem)
+            && jsonItemCount(left) == jsonItemCount(right);
+    }
+
+    private static String jsonItemId(JsonElement value) {
+        if (value == null || value.isJsonNull() || !value.isJsonObject()) {
+            return "";
+        }
+        JsonElement item = value.getAsJsonObject().get("item");
+        return item == null || item.isJsonNull() ? "" : item.getAsString();
+    }
+
+    private static int jsonItemCount(JsonElement value) {
+        if (value == null || value.isJsonNull() || !value.isJsonObject()) {
+            return 0;
+        }
+        JsonElement count = value.getAsJsonObject().get("count");
+        return count == null || count.isJsonNull() ? 0 : count.getAsInt();
     }
 
     private static JsonObject createBeltDetails(BlockEntity blockEntity) {

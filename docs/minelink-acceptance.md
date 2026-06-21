@@ -77,10 +77,13 @@ Required:
   cogwheel, depot, mechanical press, and belt fixtures, wrench `action.use`
   against visible component refs, and a real powered press flow where
   `action.use` places `minecraft:iron_ingot` onto a visible depot and
-  `create.inspect_component` observes `create:iron_sheet` after Create
+  returns a target-insert payload with `placed_on_target.input=minecraft:iron_ingot`
+  and `placed_on_target.held_item.item=minecraft:iron_ingot`;
+  `create.inspect_component` then observes `create:iron_sheet` after Create
   processing on a real NeoForge dev server. The same replay then uses
-  empty-hand `action.use` on the visible depot and proves the sheet enters the
-  agent inventory.
+  empty-hand `action.use` on the visible depot, asserts
+  `taken.item=create:iron_sheet`, and proves the sheet enters the agent
+  inventory.
 - The guard-boundaries smoke path adds `action.sleep` and deliberate negative
   actions that prove unobserved refs, too-far refs, expired refs, missing
   materials, hidden fixture blocks, and vanilla sleep rejections produce
@@ -324,10 +327,13 @@ Current status:
   material chest containing Create items plus an iron ingot,
   chest-to-inventory transfer, native `block.place` of `create:shaft`, bounded
   semantic inspection for shaft, cogwheel, depot, mechanical press, and belt,
-  unsupported client-only capability hints, wrench use through the same
-  FakePlayer-backed vanilla interaction path as other item use, non-zero powered
-  press speed, and a real pressing result observed as `create:iron_sheet` on the
-  depot, followed by empty-hand pickup of the sheet into the agent inventory.
+  unsupported client-only capability hints for `create_ponder_overlay`,
+  `jei_recipe_overlay`, and `client_goggle_overlay`, wrench use through the
+  same FakePlayer-backed vanilla interaction path as other item use, non-zero
+  powered press speed, and a real pressing result observed as
+  `create:iron_sheet` on the depot. The replay now asserts the `action.use`
+  result payload for iron-ingot insertion into the depot and the empty-hand
+  pickup payload before accepting inventory ownership of the sheet.
 - This is not the full Gate 7 release surface yet. Belt transport behavior,
   multi-step Create recipes, broader kinetic-network diagnostics, and broader
   Create component parity still need separate implementation and evidence.

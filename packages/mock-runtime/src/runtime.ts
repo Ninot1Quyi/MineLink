@@ -598,6 +598,7 @@ export class MockRuntimeServer {
         }
         agent.inventory[item] -= 1;
         if (agent.inventory[item] <= 0) delete agent.inventory[item];
+        const insertedItem = { item, count: 1 };
         const heldItem = { item: "create:iron_sheet", count: 1 };
         block.metadata = {
           create: createComponentSemantics({
@@ -616,7 +617,14 @@ export class MockRuntimeServer {
         return {
           ok: true,
           status: "completed",
-          result: { used: true, item, processed: { input: item, output: heldItem } }
+          result: {
+            used: true,
+            item,
+            hand: "main",
+            target_after_use: { held_item: insertedItem },
+            placed_on_target: { input: item, held_item: insertedItem },
+            processed: { input: item, output: heldItem }
+          }
         };
       }
       if (!item && refState.ref.id === "create:depot") {
@@ -646,7 +654,14 @@ export class MockRuntimeServer {
         return {
           ok: true,
           status: "completed",
-          result: { used: true, item: "minecraft:air", hand: "empty", taken: heldItem }
+          result: {
+            used: true,
+            item: "minecraft:air",
+            hand: "empty",
+            target_after_use: { held_item: null },
+            inventory_delta: [heldItem],
+            taken: heldItem
+          }
         };
       }
     }
