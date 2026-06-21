@@ -23,13 +23,18 @@ type FixtureName =
 type RuntimeResponse = Record<string, unknown>;
 type RuntimeRequest = RuntimeResponse & { id?: string; type?: string };
 type RefValidation = { ok: true; ref: VisibleRef } | ({ ok: false } & RuntimeResponse);
+type NoticeBoardValidation =
+  | { ok: true; ref: VisibleRef; block: BlockState; boardId: string }
+  | ({ ok: false } & RuntimeResponse);
 type SlotValidation = { ok: true; slot: SlotBinding } | ({ ok: false } & RuntimeResponse);
 type ContainerKind = "chest" | "crafting_table" | "furnace";
 type SlotArea = "container" | "inventory" | "output";
 
 const LOCAL_CHAT_RADIUS = 16;
 const MAX_SOCIAL_EVENTS = 200;
+const MAX_NOTICE_ENTRIES = 200;
 const MAX_AGENTS_PER_OWNER = 3;
+const NOTICE_BOARD_TAG = "minelink:notice_board";
 const PLAYER_INVENTORY_SLOT_LIMIT = 36;
 const PLACEABLE_BLOCK_ITEMS = new Set([
   "create:shaft",
@@ -98,6 +103,15 @@ interface SocialEvent {
   createdAt: string;
 }
 
+interface NoticeEntry {
+  noticeId: string;
+  boardId: string;
+  sourceAgentId: string;
+  sourceDisplayName: string;
+  message: string;
+  createdAt: string;
+}
+
 interface BlockState {
   id: string;
   pos: Vec3;
@@ -145,10 +159,14 @@ export class MockRuntimeServer {
   private readonly refTtlMs: number;
   private readonly agents = new Map<string, AgentState>();
   private readonly socialEvents: SocialEvent[] = [];
+  private readonly noticeEntries: NoticeEntry[] = [];
+  private readonly noticeBoardIds = new Map<string, string>();
   private readonly blocks: BlockState[];
   private server?: WebSocketServer;
   private seq = 0;
   private eventSeq = 0;
+  private noticeSeq = 0;
+  private noticeBoardSeq = 0;
 
   constructor(options: MockRuntimeOptions = {}) {
     this.fixture = options.fixture ?? "vanilla_tree";
@@ -238,6 +256,7 @@ export class MockRuntimeServer {
             crafting_basic: this.fixture === "craft_smoke",
             sleep_basic: this.fixture === "guard_boundaries",
             social_events: true,
+            notice_board: true,
             complex_gui: false,
             create_adapter: this.fixture === "create_smoke" ? "mock-partial" : false
           }
@@ -407,6 +426,12 @@ export class MockRuntimeServer {
     }
     if (name === "chat.say_local") {
       return this.executeAction(agentId, { kind: "chat", ...args }, mode);
+    }
+    if (name === "notice.post") {
+      return this.postNotice(agentId, args);
+    }
+    if (name === "notice.observe") {
+      return this.observeNoticeBoard(agentId, args);
     }
     if (name === "create.inspect_component") {
       return this.inspectCreateComponent(agentId, String(args.block_ref ?? ""));
@@ -682,12 +707,10 @@ export class MockRuntimeServer {
   private chat(agent: AgentState, action: JsonObject): RuntimeResponse {
     const message = String(action.message ?? "").trim().slice(0, 256);
     if (!message) return runtimeFail("invalid_arguments", "chat.say_local requires message.");
-    const now = Date.now();
-    agent.chatTimestamps = agent.chatTimestamps.filter((timestamp) => now - timestamp < 10_000);
-    if (agent.chatTimestamps.length >= 4) {
+    if (!this.acceptSocialWrite(agent)) {
       return runtimeFail("backpressure_queue_full", "Local chat rate limit is full for this agent.");
     }
-    agent.chatTimestamps.push(now);
+    const now = Date.now();
 
     const event: SocialEvent = {
       eventId: `event_${++this.eventSeq}`,
@@ -713,6 +736,73 @@ export class MockRuntimeServer {
       ok: true,
       status: "completed",
       result: { delivered: true, event: this.eventPayload(event, agent), recipient_count: recipientCount }
+    };
+  }
+
+  private postNotice(agentId: string, args: JsonObject): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    const board = this.validateNoticeBoardRef(agent, String(args.board_ref ?? ""));
+    if (!board.ok) return board;
+    const message = String(args.message ?? "").trim().slice(0, 256);
+    if (!message) return runtimeFail("invalid_arguments", "notice.post requires message.");
+    if (!this.acceptSocialWrite(agent)) {
+      return runtimeFail("backpressure_queue_full", "Notice write rate limit is full for this agent.");
+    }
+    const entry: NoticeEntry = {
+      noticeId: `notice_${++this.noticeSeq}`,
+      boardId: board.boardId,
+      sourceAgentId: agent.agentId,
+      sourceDisplayName: agent.displayName,
+      message,
+      createdAt: new Date().toISOString()
+    };
+    this.noticeEntries.push(entry);
+    if (this.noticeEntries.length > MAX_NOTICE_ENTRIES) this.noticeEntries.shift();
+    this.trace({
+      event: "social.notice.post",
+      notice_id: entry.noticeId,
+      board_id: entry.boardId,
+      agent_id: agent.agentId,
+      message
+    });
+    return {
+      ok: true,
+      status: "completed",
+      result: {
+        posted: true,
+        board: this.noticeBoardPayload(board.ref, board.boardId),
+        notice: this.noticePayload(entry, agent)
+      }
+    };
+  }
+
+  private observeNoticeBoard(agentId: string, args: JsonObject): RuntimeResponse {
+    const agent = this.agents.get(agentId);
+    if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
+    const board = this.validateNoticeBoardRef(agent, String(args.board_ref ?? ""));
+    if (!board.ok) return board;
+    const afterNoticeId = typeof args.after_notice_id === "string" ? args.after_notice_id : "";
+    const limit = Math.max(1, Math.min(Number(args.limit ?? 20), 50));
+    if (afterNoticeId && !this.visibleNoticeCursor(board.boardId, afterNoticeId)) {
+      return runtimeFail("invalid_cursor", "after_notice_id is not present on this visible notice board or has expired.");
+    }
+    const entries = this.visibleNotices(board.boardId, afterNoticeId, limit).map((entry) =>
+      this.noticePayload(entry, agent)
+    );
+    this.trace({
+      event: "social.notice.observe",
+      board_id: board.boardId,
+      agent_id: agent.agentId,
+      count: entries.length,
+      after_notice_id: afterNoticeId
+    });
+    return {
+      ok: true,
+      status: "completed",
+      board: this.noticeBoardPayload(board.ref, board.boardId),
+      entries,
+      next_cursor: entries.length ? entries[entries.length - 1].notice_id : afterNoticeId || null
     };
   }
 
@@ -1301,6 +1391,16 @@ export class MockRuntimeServer {
     return Boolean(event && this.canObserveEvent(agent, event));
   }
 
+  private visibleNotices(boardId: string, afterNoticeId: string, limit: number): NoticeEntry[] {
+    const boardEntries = this.noticeEntries.filter((entry) => entry.boardId === boardId);
+    const startIndex = afterNoticeId ? boardEntries.findIndex((entry) => entry.noticeId === afterNoticeId) + 1 : 0;
+    return boardEntries.slice(Math.max(0, startIndex)).slice(-limit);
+  }
+
+  private visibleNoticeCursor(boardId: string, noticeId: string): boolean {
+    return this.noticeEntries.some((entry) => entry.boardId === boardId && entry.noticeId === noticeId);
+  }
+
   private visibleRecipientCount(event: SocialEvent): number {
     return Array.from(this.agents.values()).filter((agent) => this.canObserveEvent(agent, event)).length;
   }
@@ -1320,6 +1420,59 @@ export class MockRuntimeServer {
       distance_band: event.sourceAgentId === observer.agentId ? "self" : "nearby",
       created_at: event.createdAt
     };
+  }
+
+  private noticePayload(entry: NoticeEntry, observer: AgentState): RuntimeResponse {
+    const self = entry.sourceAgentId === observer.agentId;
+    return {
+      notice_id: entry.noticeId,
+      type: "notice.board",
+      board_id: entry.boardId,
+      source_agent_id: entry.sourceAgentId,
+      source_display_name: entry.sourceDisplayName,
+      message: entry.message,
+      visibility: self ? "self_board" : "shared_board",
+      distance_band: self ? "self" : "same_board",
+      created_at: entry.createdAt
+    };
+  }
+
+  private noticeBoardPayload(ref: VisibleRef, boardId: string): RuntimeResponse {
+    return {
+      board_id: boardId,
+      block_ref: ref.ref,
+      id: ref.id
+    };
+  }
+
+  private validateNoticeBoardRef(agent: AgentState, boardRef: string): NoticeBoardValidation {
+    const refState = this.validateRef(agent, boardRef);
+    if (!refState.ok) return refState;
+    const ref = refState.ref;
+    if (ref.distance > 4.5) return runtimeFail("target_too_far", "Notice board is outside interaction range.");
+    const block = this.blocks.find((candidate) => samePos(candidate.pos, ref.pos) && candidate.id === ref.id && !candidate.mined);
+    if (!block) return runtimeFail("target_not_visible", "The observed notice board is no longer present.");
+    if (!isNoticeBoard(ref, block)) {
+      return runtimeFail("unsupported_capability", "The referenced block is not a supported notice board.");
+    }
+    return { ok: true, ref, block, boardId: this.noticeBoardId(ref.pos) };
+  }
+
+  private noticeBoardId(pos: Vec3): string {
+    const key = pos.join(",");
+    const existing = this.noticeBoardIds.get(key);
+    if (existing) return existing;
+    const next = `board_${++this.noticeBoardSeq}`;
+    this.noticeBoardIds.set(key, next);
+    return next;
+  }
+
+  private acceptSocialWrite(agent: AgentState): boolean {
+    const now = Date.now();
+    agent.chatTimestamps = agent.chatTimestamps.filter((timestamp) => now - timestamp < 10_000);
+    if (agent.chatTimestamps.length >= 4) return false;
+    agent.chatTimestamps.push(now);
+    return true;
   }
 
   private send(socket: WebSocket, payload: RuntimeResponse): void {
@@ -1446,6 +1599,12 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
             { item: "minecraft:flint_and_steel", count: 1 }
           ]
         }
+      },
+      {
+        id: "minecraft:lectern",
+        pos: [0, 64, -2],
+        tags: ["minecraft:lectern", NOTICE_BOARD_TAG],
+        visibleFaces: ["north", "up"]
       }
     ];
   }
@@ -1612,6 +1771,15 @@ function placedBlock(item: string, pos: Vec3): BlockState {
     tags: item === "minecraft:obsidian" ? ["minecraft:obsidian"] : [],
     visibleFaces: ["north", "south", "east", "west", "up"]
   };
+}
+
+function isNoticeBoard(ref: VisibleRef, block: BlockState): boolean {
+  return (
+    ref.tags.includes(NOTICE_BOARD_TAG) ||
+    block.tags.includes(NOTICE_BOARD_TAG) ||
+    block.id === "minecraft:lectern" ||
+    block.id.endsWith("_sign")
+  );
 }
 
 function createFixtureComponent(id: string, pos: Vec3): BlockState {

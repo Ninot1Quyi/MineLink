@@ -274,6 +274,56 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
     failure_reasons: ["invalid_arguments", "backpressure_queue_full"]
   },
   {
+    name: "notice.post",
+    summary: "Post a message to a visible notice board.",
+    description:
+      "Writes a bounded notice to a reachable visible board ref. It is not a global broadcast or timeline.",
+    tags: ["notice", "social", "write"],
+    input_schema: {
+      type: "object",
+      required: ["board_ref", "message"],
+      properties: {
+        board_ref: { type: "string" },
+        message: { type: "string", minLength: 1, maxLength: 256 }
+      }
+    },
+    preconditions: ["board_ref comes from a recent observe.scene result", "target is visible and reachable"],
+    failure_reasons: [
+      "unknown_or_unobserved_target",
+      "expired_ref",
+      "target_too_far",
+      "target_not_visible",
+      "unsupported_capability",
+      "invalid_arguments",
+      "backpressure_queue_full"
+    ]
+  },
+  {
+    name: "notice.observe",
+    summary: "Read entries from a visible notice board.",
+    description:
+      "Returns bounded notices from one reachable visible board ref. It does not expose board coordinates or other boards.",
+    tags: ["notice", "social", "observe"],
+    input_schema: {
+      type: "object",
+      required: ["board_ref"],
+      properties: {
+        board_ref: { type: "string" },
+        after_notice_id: { type: "string" },
+        limit: { type: "number", minimum: 1, maximum: 50, default: 20 }
+      }
+    },
+    preconditions: ["board_ref comes from a recent observe.scene result", "target is visible and reachable"],
+    failure_reasons: [
+      "unknown_or_unobserved_target",
+      "expired_ref",
+      "target_too_far",
+      "target_not_visible",
+      "unsupported_capability",
+      "invalid_cursor"
+    ]
+  },
+  {
     name: "container.open",
     summary: "Open a visible server-side container block.",
     description: "Opens a reachable container using server interaction rules.",

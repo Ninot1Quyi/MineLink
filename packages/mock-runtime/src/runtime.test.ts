@@ -205,6 +205,23 @@ describe("MockRuntimeServer", () => {
     const birthB = await request(clientB, { type: "agent.birth", seed_prompt: "builder b", body_type: "server_agent" });
     const agentA = String(birthA.agent_id);
     const agentB = String(birthB.agent_id);
+    const sceneA = await request(clientA, {
+      type: "tool.execute",
+      agent_id: agentA,
+      name: "observe.scene",
+      arguments: {}
+    });
+    const sceneB = await request(clientB, {
+      type: "tool.execute",
+      agent_id: agentB,
+      name: "observe.scene",
+      arguments: {}
+    });
+    const visibleA = sceneA.visible_scene as { visible_blocks: Array<{ block_ref: string; tags: string[] }> };
+    const visibleB = sceneB.visible_scene as { visible_blocks: Array<{ block_ref: string; tags: string[] }> };
+    const boardA = visibleA.visible_blocks.find((block) => block.tags.includes("minelink:notice_board"))!;
+    const boardB = visibleB.visible_blocks.find((block) => block.tags.includes("minelink:notice_board"))!;
+    const anchorA = visibleA.visible_blocks.find((block) => block.tags.includes("minelink:portal_anchor"))!;
 
     const say = await request(clientA, {
       type: "tool.execute",
@@ -256,6 +273,60 @@ describe("MockRuntimeServer", () => {
       arguments: { after_event_id: "event_missing" }
     });
     expect(invalidCursor).toMatchObject({ ok: false, reason: "invalid_cursor" });
+
+    const noticePost = await request(clientA, {
+      type: "tool.execute",
+      agent_id: agentA,
+      name: "notice.post",
+      arguments: { board_ref: boardA.block_ref, message: "Obsidian is split across all builders." }
+    });
+    expect(noticePost).toMatchObject({
+      ok: true,
+      result: {
+        posted: true,
+        board: { id: "minecraft:lectern" },
+        notice: { type: "notice.board", visibility: "self_board", distance_band: "self" }
+      }
+    });
+    const postResult = noticePost.result as { notice: Record<string, unknown>; board: Record<string, unknown> };
+    expect(postResult.notice).not.toHaveProperty("position");
+    expect(postResult.notice).not.toHaveProperty("radius");
+    expect(postResult.notice).not.toHaveProperty("observer_distance");
+    expect(postResult.board).not.toHaveProperty("position");
+
+    const boardEntries = await request(clientB, {
+      type: "tool.execute",
+      agent_id: agentB,
+      name: "notice.observe",
+      arguments: { board_ref: boardB.block_ref, limit: 10 }
+    });
+    const seenNotice = (boardEntries.entries as Array<Record<string, unknown>>).find(
+      (entry) => entry.source_agent_id === agentA && entry.message === "Obsidian is split across all builders."
+    );
+    expect(seenNotice).toMatchObject({
+      source_agent_id: agentA,
+      message: "Obsidian is split across all builders.",
+      visibility: "shared_board",
+      distance_band: "same_board"
+    });
+    expect(seenNotice).not.toHaveProperty("position");
+    expect(seenNotice).not.toHaveProperty("radius");
+    expect(seenNotice).not.toHaveProperty("observer_distance");
+
+    const notBoard = await request(clientA, {
+      type: "tool.execute",
+      agent_id: agentA,
+      name: "notice.post",
+      arguments: { board_ref: anchorA.block_ref, message: "Wrong surface." }
+    });
+    expect(notBoard).toMatchObject({ ok: false, reason: "unsupported_capability" });
+    const invalidNoticeCursor = await request(clientB, {
+      type: "tool.execute",
+      agent_id: agentB,
+      name: "notice.observe",
+      arguments: { board_ref: boardB.block_ref, after_notice_id: "notice_missing" }
+    });
+    expect(invalidNoticeCursor).toMatchObject({ ok: false, reason: "invalid_cursor" });
 
     for (let step = 0; step < 5; step++) {
       await request(clientB, {

@@ -76,7 +76,9 @@ public final class MineLinkEndpointBootstrap {
     private static final int REQUEST_TIMEOUT_SECONDS = 10;
     private static final double LOCAL_CHAT_RADIUS = 16.0D;
     private static final int MAX_SOCIAL_EVENTS = 200;
+    private static final int MAX_NOTICE_ENTRIES = 200;
     private static final int MAX_AGENTS_PER_OWNER = 3;
+    private static final String NOTICE_BOARD_TAG = "minelink:notice_board";
     private static final int MAX_ACTION_QUEUE_DEPTH = 4;
     private static final long SUBMITTED_ACTION_HOLD_MS = 1_000L;
     private static final int MAX_SYNC_MINING_TICKS = 600;
@@ -210,6 +212,7 @@ public final class MineLinkEndpointBootstrap {
         capabilities.addProperty("block_place", true);
         capabilities.addProperty("item_use", true);
         capabilities.addProperty("social_events", true);
+        capabilities.addProperty("notice_board", true);
         if (createAdapterAvailable()) {
             capabilities.addProperty("create_adapter", "registry-partial");
         } else {
@@ -267,6 +270,8 @@ public final class MineLinkEndpointBootstrap {
             "action.use",
             "block.place",
             "chat.say_local",
+            "notice.post",
+            "notice.observe",
             "container.open",
             "container.observe",
             "container.move_stack",
@@ -339,6 +344,8 @@ public final class MineLinkEndpointBootstrap {
             case "action.sleep" -> sleep(request, agent, arguments);
             case "block.place" -> placeBlock(request, agent, arguments);
             case "chat.say_local" -> sayLocal(request, agent, arguments);
+            case "notice.post" -> postNotice(request, agent, arguments);
+            case "notice.observe" -> observeNoticeBoard(request, agent, arguments);
             case "container.open" -> openContainer(request, agent, arguments);
             case "container.observe" -> observeContainer(request, agent);
             case "container.move_stack" -> moveStack(request, agent, arguments);
@@ -515,6 +522,56 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject response = toolCompleted(request);
         response.add("result", result);
+        return response;
+    }
+
+    private JsonObject postNotice(JsonObject request, AgentBody agent, JsonObject arguments) {
+        NoticeBoardTarget target = validateNoticeBoardRef(request, agent, stringValue(arguments, "board_ref", ""));
+        if (target.failure != null) {
+            return target.failure;
+        }
+        String message = stringValue(arguments, "message", "").trim();
+        if (message.isBlank()) {
+            return failure(request, "invalid_arguments", "notice.post requires message.");
+        }
+        if (message.length() > 256) {
+            message = message.substring(0, 256);
+        }
+        if (!agent.acceptChatNow()) {
+            return failure(request, "backpressure_queue_full", "Notice write rate limit is full for this agent.");
+        }
+
+        NoticeEntry entry = runtimeState.addNotice(agent, target.boardId, message);
+        JsonObject result = new JsonObject();
+        result.addProperty("posted", true);
+        result.add("board", noticeBoardPayload(target.ref, target.blockRef, target.boardId));
+        result.add("notice", entry.payloadFor(agent));
+
+        JsonObject response = toolCompleted(request);
+        response.add("result", result);
+        return response;
+    }
+
+    private JsonObject observeNoticeBoard(JsonObject request, AgentBody agent, JsonObject arguments) {
+        NoticeBoardTarget target = validateNoticeBoardRef(request, agent, stringValue(arguments, "board_ref", ""));
+        if (target.failure != null) {
+            return target.failure;
+        }
+        String afterNoticeId = stringValue(arguments, "after_notice_id", "");
+        int limit = Math.min(Math.max(intValue(arguments, "limit", 20), 1), 50);
+        if (!afterNoticeId.isBlank() && !runtimeState.visibleNoticeCursor(target.boardId, afterNoticeId)) {
+            return failure(request, "invalid_cursor", "after_notice_id is not present on this visible notice board or has expired.");
+        }
+
+        JsonObject response = toolCompleted(request);
+        JsonArray entries = runtimeState.visibleNotices(agent, target.boardId, afterNoticeId, limit);
+        response.add("board", noticeBoardPayload(target.ref, target.blockRef, target.boardId));
+        response.add("entries", entries);
+        if (entries.size() == 0) {
+            response.add("next_cursor", afterNoticeId.isBlank() ? JsonNull.INSTANCE : GSON.toJsonTree(afterNoticeId));
+        } else {
+            response.addProperty("next_cursor", entries.get(entries.size() - 1).getAsJsonObject().get("notice_id").getAsString());
+        }
         return response;
     }
 
@@ -1341,6 +1398,33 @@ public final class MineLinkEndpointBootstrap {
         return new InteractionTarget(blockRef, null);
     }
 
+    private NoticeBoardTarget validateNoticeBoardRef(JsonObject request, AgentBody agent, String blockRefValue) {
+        InteractionTarget target = validateInteractionRef(request, agent, blockRefValue);
+        if (target.failure != null) {
+            return new NoticeBoardTarget(null, "", "", target.failure);
+        }
+        BlockState state = server.overworld().getBlockState(target.ref.pos);
+        if (!isNoticeBoard(state)) {
+            return new NoticeBoardTarget(null, "", "", failure(request, "unsupported_capability", "The referenced block is not a supported notice board."));
+        }
+        return new NoticeBoardTarget(target.ref, blockRefValue, runtimeState.noticeBoardId(target.ref.pos), null);
+    }
+
+    private static JsonObject noticeBoardPayload(BlockRef ref, String blockRefValue, String boardId) {
+        JsonObject board = new JsonObject();
+        board.addProperty("board_id", boardId);
+        board.addProperty("block_ref", blockRefValue);
+        if (ref != null) {
+            board.addProperty("id", ref.blockId);
+        }
+        return board;
+    }
+
+    private static boolean isNoticeBoard(BlockState state) {
+        String id = blockId(state);
+        return id.equals("minecraft:lectern") || id.endsWith("_sign");
+    }
+
     private ItemStack prepareMainHand(AgentBody agent, String itemId) {
         agent.entity.getInventory().selected = 0;
         if (itemId.isBlank()) {
@@ -2104,6 +2188,31 @@ public final class MineLinkEndpointBootstrap {
                 List.of()
             ),
             tool(
+                "notice.post",
+                "Post a message to a visible notice board.",
+                "Writes a bounded notice to a reachable visible board ref. It is not a global broadcast or timeline.",
+                objectSchema(properties(
+                    prop("board_ref", stringSchema()),
+                    prop("message", stringSchema())
+                ), "board_ref", "message"),
+                List.of("notice", "social", "write"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "unsupported_capability", "invalid_arguments", "backpressure_queue_full"),
+                List.of("board_ref comes from a recent observe.scene result", "target is visible and reachable")
+            ),
+            tool(
+                "notice.observe",
+                "Read entries from a visible notice board.",
+                "Returns bounded notices from one reachable visible board ref. It does not expose board coordinates or other boards.",
+                objectSchema(properties(
+                    prop("board_ref", stringSchema()),
+                    prop("after_notice_id", stringSchema()),
+                    prop("limit", numberSchema(1, 50, 20))
+                ), "board_ref"),
+                List.of("notice", "social", "observe"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "unsupported_capability", "invalid_cursor"),
+                List.of("board_ref comes from a recent observe.scene result", "target is visible and reachable")
+            ),
+            tool(
                 "container.open",
                 "Open a reachable smoke fixture container.",
                 "Opens a visible, reachable server-side container using server interaction rules.",
@@ -2369,6 +2478,10 @@ public final class MineLinkEndpointBootstrap {
         return anchor.west(2).above();
     }
 
+    private static BlockPos portalNoticeBoardPos(BlockPos anchor) {
+        return anchor.north(2).above();
+    }
+
     private static BlockPos[] portalFramePositions(BlockPos anchor) {
         return new BlockPos[] {
             anchor.offset(0, 1, 0),
@@ -2402,9 +2515,13 @@ public final class MineLinkEndpointBootstrap {
     private static final class RuntimeState {
         private final Map<String, AgentBody> agents = new LinkedHashMap<>();
         private final List<SocialEvent> socialEvents = new ArrayList<>();
+        private final List<NoticeEntry> noticeEntries = new ArrayList<>();
+        private final Map<BlockPos, String> noticeBoardIds = new LinkedHashMap<>();
         private String ownerId = "";
         private int agentSeq = 0;
         private int eventSeq = 0;
+        private int noticeSeq = 0;
+        private int noticeBoardSeq = 0;
         private BlockPos portalBase;
 
         private AgentBody birth(ServerLevel level, String ownerId, String seedPrompt) {
@@ -2527,6 +2644,61 @@ public final class MineLinkEndpointBootstrap {
                 }
             }
             return count;
+        }
+
+        private String noticeBoardId(BlockPos pos) {
+            BlockPos key = pos.immutable();
+            String existing = noticeBoardIds.get(key);
+            if (existing != null) {
+                return existing;
+            }
+            String next = "board:" + (++noticeBoardSeq);
+            noticeBoardIds.put(key, next);
+            return next;
+        }
+
+        private NoticeEntry addNotice(AgentBody agent, String boardId, String message) {
+            NoticeEntry entry = new NoticeEntry(
+                "notice:" + (++noticeSeq),
+                boardId,
+                agent.agentId,
+                agent.displayName,
+                message,
+                Instant.now()
+            );
+            noticeEntries.add(entry);
+            if (noticeEntries.size() > MAX_NOTICE_ENTRIES) {
+                noticeEntries.remove(0);
+            }
+            return entry;
+        }
+
+        private JsonArray visibleNotices(AgentBody observer, String boardId, String afterNoticeId, int limit) {
+            JsonArray entries = new JsonArray();
+            boolean afterSeen = afterNoticeId.isBlank();
+            for (NoticeEntry entry : noticeEntries) {
+                if (!entry.boardId.equals(boardId)) {
+                    continue;
+                }
+                if (!afterSeen) {
+                    afterSeen = entry.noticeId.equals(afterNoticeId);
+                    continue;
+                }
+                entries.add(entry.payloadFor(observer));
+                if (entries.size() > limit) {
+                    entries.remove(0);
+                }
+            }
+            return entries;
+        }
+
+        private boolean visibleNoticeCursor(String boardId, String noticeId) {
+            for (NoticeEntry entry : noticeEntries) {
+                if (entry.boardId.equals(boardId) && entry.noticeId.equals(noticeId)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static void seedFixture(ServerLevel level, BlockPos base) {
@@ -2729,6 +2901,7 @@ public final class MineLinkEndpointBootstrap {
             }
             level.setBlockAndUpdate(anchor.below(), Blocks.GRASS_BLOCK.defaultBlockState());
             level.setBlockAndUpdate(anchor, Blocks.NETHERRACK.defaultBlockState());
+            level.setBlockAndUpdate(portalNoticeBoardPos(anchor), Blocks.LECTERN.defaultBlockState());
             BlockPos chestPos = portalChestPos(anchor);
             level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
             if (level.getBlockEntity(chestPos) instanceof Container container) {
@@ -2837,6 +3010,7 @@ public final class MineLinkEndpointBootstrap {
                 List<BlockPos> positions = new ArrayList<>();
                 positions.add(fixtureBase);
                 positions.add(portalChestPos(fixtureBase));
+                positions.add(portalNoticeBoardPos(fixtureBase));
                 for (BlockPos pos : portalFramePositions(fixtureBase)) {
                     positions.add(pos);
                 }
@@ -2938,6 +3112,9 @@ public final class MineLinkEndpointBootstrap {
             if (fixtureName.equals("portal_coop") && pos.equals(fixtureBase) && id.equals("minecraft:netherrack")) {
                 extra.add("minelink:portal_anchor");
             }
+            if (fixtureName.equals("portal_coop") && pos.equals(portalNoticeBoardPos(fixtureBase)) && isNoticeBoard(state)) {
+                extra.add(NOTICE_BOARD_TAG);
+            }
             if (fixtureName.equals("create_smoke") && id.startsWith("create:")) {
                 extra.add("minelink:create_fixture");
             }
@@ -2984,6 +3161,30 @@ public final class MineLinkEndpointBootstrap {
         }
     }
 
+    private record NoticeEntry(
+        String noticeId,
+        String boardId,
+        String sourceAgentId,
+        String sourceDisplayName,
+        String message,
+        Instant createdAt
+    ) {
+        private JsonObject payloadFor(AgentBody observer) {
+            JsonObject payload = new JsonObject();
+            payload.addProperty("notice_id", noticeId);
+            payload.addProperty("type", "notice.board");
+            payload.addProperty("board_id", boardId);
+            payload.addProperty("source_agent_id", sourceAgentId);
+            payload.addProperty("source_display_name", sourceDisplayName);
+            payload.addProperty("message", message);
+            boolean self = sourceAgentId.equals(observer.agentId);
+            payload.addProperty("visibility", self ? "self_board" : "shared_board");
+            payload.addProperty("distance_band", self ? "self" : "same_board");
+            payload.addProperty("created_at", createdAt.toString());
+            return payload;
+        }
+    }
+
     private record BlockRef(BlockPos pos, String blockId, long expiresAtMs) {
         private boolean expired() {
             return System.currentTimeMillis() > expiresAtMs;
@@ -2991,6 +3192,9 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private record InteractionTarget(BlockRef ref, JsonObject failure) {
+    }
+
+    private record NoticeBoardTarget(BlockRef ref, String blockRef, String boardId, JsonObject failure) {
     }
 
     private record PropertyDefinition(String name, JsonObject schema) {

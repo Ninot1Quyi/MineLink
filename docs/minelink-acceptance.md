@@ -417,19 +417,27 @@ Current status:
   event path: `builder_a` emits `chat.say_local`, `builder_b` observes it
   through `observe.events`, and the runtime filters event visibility by agent
   distance rather than exposing a global timeline.
+- The portal cooperation replay now also exercises a physical notice board:
+  each participating agent must first observe a reachable `minelink:notice_board`
+  block ref, `builder_a` posts through `notice.post`, and `builder_b` reads the
+  same board through `notice.observe`. There is no global notice listing or
+  Host-side mailbox.
 - Public social event payloads expose coarse visibility cues only, such as
   `visibility` and `distance_band`; exact source coordinates, event radius, and
   observer distance remain runtime-internal. The replay assertions now verify
   that those coarse fields are present while position/radius/recipient internals
   are absent.
+- Notice board payloads follow the same redaction rule: assertions require
+  `visibility`, `distance_band`, and `board_id`, while forbidding source
+  position, board position, radius, observer distance, and recipient internals.
 - The portal cooperation replay also asserts that all three builders contribute
   successful `block.place` actions and that portal ignition reports
   `activated: "minecraft:nether_portal"` rather than relying only on a generic
   successful `action.use` call.
-- This is not full Gate 8 acceptance yet. Human chat interaction, persisted A2A
-  social events, notice boards, distance-limited social discovery, and rate
-  limited agent-to-agent messaging still require separate implementation and
-  evidence.
+- This is not full Gate 8 acceptance yet. Human chat interaction, restart-durable
+  A2A/social persistence, distance-limited social discovery, orders,
+  letters/telegraph placeholders, and broader rate-limited agent-to-agent
+  messaging still require separate implementation and evidence.
 
 ### Gate 9: Frontier Society and Director
 

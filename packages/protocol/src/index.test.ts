@@ -19,6 +19,18 @@ describe("protocol catalog", () => {
     );
   });
 
+  it("keeps notice board tools bounded to observed refs", () => {
+    const names = filterDynamicTools({ query: "notice board" }).map((tool) => tool.name);
+    expect(names).toEqual(expect.arrayContaining(["notice.post", "notice.observe"]));
+    expect(findDynamicTool("notice.post")?.input_schema).toMatchObject({
+      required: ["board_ref", "message"]
+    });
+    expect(findDynamicTool("notice.observe")?.failure_reasons).toEqual(
+      expect.arrayContaining(["unknown_or_unobserved_target", "expired_ref", "unsupported_capability"])
+    );
+    expect(DYNAMIC_TOOLS.map((tool) => tool.name)).not.toContain("notice.list_all");
+  });
+
   it("keeps Create tools bounded to visible component inspection", () => {
     expect(DYNAMIC_TOOLS.map((tool) => tool.name)).not.toContain("create.auto_build_factory");
     expect(findDynamicTool("create.inspect_component")?.failure_reasons).toEqual(

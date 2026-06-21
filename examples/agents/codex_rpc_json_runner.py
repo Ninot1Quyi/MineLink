@@ -84,6 +84,7 @@ def main() -> None:
         "last_container": None,
         "last_inventory": None,
         "last_events": None,
+        "last_notices": None,
         "placements": {},
         "tool_results": [],
     }
@@ -210,7 +211,7 @@ def scenario_objective(scenario: str) -> str:
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, movement-collision, and sleep-limited actions.",
         "perception_shapes": "Use MineLink MCP tools to prove limited perception classifies visible translucent, decorative, fluid, partial-occluder, and opaque fixtures while hiding a blocked ore.",
-        "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to exchange a local social event, withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
+        "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to exchange local social and notice-board events, withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
     }
     return objectives.get(scenario, f"Complete MineLink scenario {scenario}.")
 
@@ -236,6 +237,7 @@ def run_portal_coop(
                 "last_container": None,
                 "last_inventory": None,
                 "last_events": None,
+                "last_notices": None,
                 "tool_results": [],
             }
             for name in agent_names
@@ -614,6 +616,8 @@ def update_state_from_tool_result(state: JsonDict, name: str, result: JsonDict) 
         state["last_inventory"] = result
     elif name == "observe.events":
         state["last_events"] = result
+    elif name == "notice.observe":
+        state["last_notices"] = result
 
 
 def update_shared_state_from_tool_result(global_state: JsonDict, name: str, result: JsonDict) -> None:
@@ -1019,6 +1023,81 @@ def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[J
             "events_with_required_fields": len(events_with_required),
             "leaked_fields": leaked_fields,
         }
+    if kind == "notice_message_seen":
+        assertion_state = assertion_agent_state(assertion, state, global_state)
+        message_contains = str(assertion.get("message_contains", ""))
+        source_agent = assertion.get("source_agent")
+        source_agent_id = None
+        if source_agent and global_state:
+            agent_info = (global_state.get("agents") or {}).get(source_agent, {})
+            if isinstance(agent_info, dict):
+                source_agent_id = agent_info.get("agent_id")
+        notices_payload = assertion_state.get("last_notices") or {}
+        entries = notices_payload.get("entries", []) if isinstance(notices_payload, dict) else []
+        matches = [
+            entry
+            for entry in entries
+            if isinstance(entry, dict)
+            and (not message_contains or message_contains in str(entry.get("message", "")))
+            and (source_agent_id is None or entry.get("source_agent_id") == source_agent_id)
+        ]
+        return {
+            "name": assertion.get("name", "notice_message_seen"),
+            "kind": kind,
+            "passed": bool(matches),
+            "agent": assertion.get("agent"),
+            "source_agent": source_agent,
+            "message_contains": message_contains,
+            "matching_notices": len(matches),
+            "observed_messages": [entry.get("message") for entry in entries if isinstance(entry, dict)],
+        }
+    if kind == "notice_payload_limited":
+        assertion_state = assertion_agent_state(assertion, state, global_state)
+        message_contains = str(assertion.get("message_contains", ""))
+        source_agent = assertion.get("source_agent")
+        required_fields = [str(field) for field in assertion.get("required_fields", ["visibility", "distance_band"])]
+        forbidden_fields = [
+            str(field)
+            for field in assertion.get("forbidden_fields", ["position", "radius", "observer_distance", "recipients"])
+        ]
+        source_agent_id = None
+        if source_agent and global_state:
+            agent_info = (global_state.get("agents") or {}).get(source_agent, {})
+            if isinstance(agent_info, dict):
+                source_agent_id = agent_info.get("agent_id")
+        notices_payload = assertion_state.get("last_notices") or {}
+        entries = notices_payload.get("entries", []) if isinstance(notices_payload, dict) else []
+        matching_entries = [
+            entry
+            for entry in entries
+            if isinstance(entry, dict)
+            and (not message_contains or message_contains in str(entry.get("message", "")))
+            and (source_agent_id is None or entry.get("source_agent_id") == source_agent_id)
+        ]
+        entries_with_required = [
+            entry for entry in matching_entries if all(field in entry for field in required_fields)
+        ]
+        leaked_fields = sorted(
+            {
+                field
+                for entry in matching_entries
+                for field in forbidden_fields
+                if field in entry
+            }
+        )
+        return {
+            "name": assertion.get("name", "notice_payload_limited"),
+            "kind": kind,
+            "passed": bool(entries_with_required) and not leaked_fields,
+            "agent": assertion.get("agent"),
+            "source_agent": source_agent,
+            "message_contains": message_contains,
+            "required_fields": required_fields,
+            "forbidden_fields": forbidden_fields,
+            "matching_notices": len(matching_entries),
+            "notices_with_required_fields": len(entries_with_required),
+            "leaked_fields": leaked_fields,
+        }
     if kind == "create_component_semantics":
         expected_kinds = [str(item) for item in assertion.get("kinds", [])]
         require_client_limits = bool(assertion.get("require_unsupported_client_capabilities", True))
@@ -1210,6 +1289,7 @@ def public_state(state: JsonDict) -> JsonDict:
         "last_container": state.get("last_container"),
         "last_inventory": state.get("last_inventory"),
         "last_events": state.get("last_events"),
+        "last_notices": state.get("last_notices"),
         "tool_results": state.get("tool_results", [])[-5:],
     }
 
