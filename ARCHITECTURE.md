@@ -250,6 +250,9 @@ blocked edge is `ready prebuild -> readable Platform Codex task session`, not
 for that bridge. Its first blocked edge must carry the actionable blocker text
 directly on the edge row, because later nodes can have valid local evidence
 without the external chain having reached them.
+The report can accept an older completed Ona prebuild as readiness evidence
+while warning about a newer stale active prebuild, because a stuck
+`SNAPSHOTTING` control-plane record should not hide the current bridge blocker.
 If Linear or GitHub webhook dispatch cannot be verified in the current
 environment, the repo must say so and keep the gap visible instead of
 pretending automation is enabled.

@@ -42,6 +42,13 @@ const defaults = {
 
 const args = { ...defaults };
 let codexAuthFailed = false;
+const activePrebuildPhases = new Set([
+  "PREBUILD_PHASE_CREATING",
+  "PREBUILD_PHASE_RUNNING",
+  "PREBUILD_PHASE_SNAPSHOTTING",
+]);
+const failedPrebuildPhases = new Set(["PREBUILD_PHASE_FAILED", "PREBUILD_PHASE_CANCELLED"]);
+const prebuildStaleMs = Number(process.env.MINELINK_PREBUILD_STALE_MINUTES ?? 30) * 60 * 1000;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -189,6 +196,29 @@ function mkEdge(from, to, status, evidence, blocker = "") {
   };
 }
 
+function dateMs(value) {
+  const ms = Date.parse(String(value ?? ""));
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function prebuildCreatedMs(prebuild) {
+  return dateMs(prebuild?.metadata?.createdAt);
+}
+
+function prebuildUpdatedMs(prebuild) {
+  return dateMs(prebuild?.metadata?.updatedAt ?? prebuild?.metadata?.createdAt);
+}
+
+function newestFirst(prebuilds) {
+  return [...prebuilds].sort((left, right) => prebuildCreatedMs(right) - prebuildCreatedMs(left));
+}
+
+function describePrebuild(prebuild) {
+  const phase = prebuild?.status?.phase ?? "unknown";
+  const updatedAt = prebuild?.metadata?.updatedAt ?? "unknown";
+  return `Ona prebuild ${prebuild?.id ?? "unknown"} is ${phase} since ${updatedAt}`;
+}
+
 function queryOnaPrebuild(projectId) {
   if (!hasValue(projectId)) return null;
   const result = spawnSync("ona", ["prebuild", "list", "--project-id", projectId, "--format", "json"], {
@@ -217,12 +247,24 @@ function queryOnaPrebuild(projectId) {
     };
   }
 
-  const completed = prebuilds.find((prebuild) => {
+  const sorted = newestFirst(prebuilds);
+  const now = Date.now();
+  const completed = sorted.find((prebuild) => {
     const status = prebuild?.status ?? {};
     return status.phase === "PREBUILD_PHASE_COMPLETED" && Number(status.snapshotCompletionPercentage ?? 0) >= 100;
   });
+  const active = sorted.find((prebuild) => activePrebuildPhases.has(prebuild?.status?.phase));
+  const staleActive = active && now - prebuildUpdatedMs(active) >= prebuildStaleMs ? active : null;
   if (completed) {
     const status = completed.status ?? {};
+    const warningEvidence =
+      active && prebuildCreatedMs(active) > prebuildCreatedMs(completed)
+        ? [
+            staleActive
+              ? `${describePrebuild(active)}; using completed prebuild ${completed.id} for readiness evidence.`
+              : `Newer ${describePrebuild(active)}; using completed prebuild ${completed.id} until the newer snapshot completes.`,
+          ]
+        : [];
     return {
       id: completed.id,
       status: "passed",
@@ -231,25 +273,20 @@ function queryOnaPrebuild(projectId) {
         status.snapshotSizeBytes ? `snapshot ${status.snapshotSizeBytes} bytes` : "",
         status.completionTime ? `completed ${status.completionTime}` : "",
       ].filter(Boolean),
+      warnings: warningEvidence,
     };
   }
 
-  const active = prebuilds.find((prebuild) =>
-    ["PREBUILD_PHASE_RUNNING", "PREBUILD_PHASE_SNAPSHOTTING", "PREBUILD_PHASE_CREATING"].includes(
-      prebuild?.status?.phase,
-    ),
-  );
   if (active) {
     return {
       id: active.id,
       status: "partial",
-      evidence: [`Ona prebuild ${active.id} is ${active.status?.phase}`],
+      evidence: [describePrebuild(active)],
+      warnings: staleActive ? [`${describePrebuild(active)}; inspect or cancel this stale prebuild.`] : [],
     };
   }
 
-  const failed = prebuilds.find((prebuild) =>
-    ["PREBUILD_PHASE_FAILED", "PREBUILD_PHASE_CANCELLED"].includes(prebuild?.status?.phase),
-  );
+  const failed = sorted.find((prebuild) => failedPrebuildPhases.has(prebuild?.status?.phase));
   if (failed) {
     return {
       id: failed.id,
@@ -286,6 +323,7 @@ if (normalizeStatus(args.onaPrebuildStatus) === "missing" && autoPrebuild?.statu
   args.onaPrebuildStatus = autoPrebuild.status;
 }
 const autoPrebuildEvidence = Array.isArray(autoPrebuild?.evidence) ? autoPrebuild.evidence : [];
+const autoPrebuildWarnings = Array.isArray(autoPrebuild?.warnings) ? autoPrebuild.warnings : [];
 
 const issueStatus = hasValue(args.githubIssue) ? "passed" : hasValue(args.linearIssue) ? "partial" : "missing";
 const taskContractStatus = normalizeStatus(args.issueContractStatus) !== "missing"
@@ -477,6 +515,9 @@ const progress = Math.round((score / edges.length) * 100);
 const firstBlockedEdge = edges.find((edge) => ["blocked", "missing"].includes(edge.status)) ?? null;
 
 const nextActions = [];
+if (autoPrebuildWarnings.length > 0) {
+  nextActions.push(...autoPrebuildWarnings.map((warning) => `Investigate Ona prebuild warning: ${warning}`));
+}
 if (firstBlockedEdge?.to === "issue_contract") {
   nextActions.push("Fix the GitHub/Linear task contract so it has agent-ready labels, scope, forbidden changes, validation, evidence, video requirement, and remaining gaps.");
 } else if (firstBlockedEdge?.to === "github_dispatcher") {
@@ -530,6 +571,7 @@ const report = {
   firstBlockedEdge,
   nodes,
   edges,
+  warnings: autoPrebuildWarnings,
   nextActions,
   secretPreflight: secretPreflightInfo
     ? {
@@ -560,6 +602,10 @@ const lines = [
   firstBlockedEdge
     ? `- \`${firstBlockedEdge.from} -> ${firstBlockedEdge.to}\`: \`${firstBlockedEdge.status}\`${firstBlockedEdge.blocker ? ` - ${escapeMd(firstBlockedEdge.blocker)}` : ""}`
     : "- none",
+  "",
+  "## Warnings",
+  "",
+  ...(autoPrebuildWarnings.length > 0 ? autoPrebuildWarnings.map((warning) => `- ${escapeMd(warning)}`) : ["- none"]),
   "",
   "## Nodes",
   "",
