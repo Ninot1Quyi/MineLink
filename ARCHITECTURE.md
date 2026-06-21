@@ -254,6 +254,17 @@ The report models Ona prebuild as a parallel environment-readiness gate, not as
 a child step of the issue dispatcher. The dispatcher can queue the task while
 the project prebuild pipeline independently keeps a usable environment baseline
 ready.
+When the baseline is available, the prebuild edge is considered ready; the
+first true blocker should then move to the automation-to-Platform-Codex handoff
+unless a concrete Codex session readback exists. The chain reporter and Ona
+finalizer require `.minelink-dev/reports/ona-codex-implementation-session.md`
+to identify `Agent mode: Ona Platform Codex`, a `Session id`, and
+`Result: passed` before validation or PR finalization can be treated as
+downstream evidence. Generic Ona automation, SSH, task, or default-agent output
+must not satisfy this implementation edge. The separate video-verifier session
+uses the same pattern through
+`.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the
+hash-checked video review artifacts.
 `.github/workflows/ona-prebuild.yml` is the CI fallback for that pipeline:
 manual dispatches and environment-sensitive changes on
 `codex/minelink-mvp-engineering` cancel active stale project prebuilds, trigger

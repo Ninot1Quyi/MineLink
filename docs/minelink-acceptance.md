@@ -658,6 +658,15 @@ Current status:
   review request preparation, release gating, and PR creation after the
   implementation work is performed by Ona Platform Codex and the MP4 is
   reviewed by a separate Platform Codex verifier.
+- The finalizer now fails closed before validation/PR finalization unless
+  `scripts/dev/report-agent-factory-chain.mjs` can read accepted implementation
+  evidence from `.minelink-dev/reports/ona-codex-implementation-session.md`.
+  The readback must identify `Agent mode: Ona Platform Codex`, a `Session id`,
+  and `Result: passed`; generic Ona automation, SSH, task, stale local artifact,
+  or default-agent output is not accepted for the implementation edge. The
+  separate video verifier must likewise provide
+  `.minelink-dev/reports/ona-codex-video-verifier-session.md` in addition to
+  the hash-checked `video-review.md` and release gate.
 - `.github/workflows/agent-factory-dispatch.yml` provides the repository source
   dispatcher for agent-ready GitHub issues plus a scheduled/manual Linear
   polling fallback. It uses `scripts/dev/dispatch-agent-factory.mjs` and

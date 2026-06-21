@@ -19,10 +19,14 @@ const defaults = {
   onaAutomationStatus: process.env.MINELINK_ONA_AUTOMATION_STATUS ?? "",
   onaPrebuild: process.env.MINELINK_ONA_PREBUILD ?? "",
   onaPrebuildStatus: process.env.MINELINK_ONA_PREBUILD_STATUS ?? "",
+  onaImplementationAgent: process.env.MINELINK_ONA_IMPLEMENTATION_AGENT ?? "",
   onaImplementationSession: process.env.MINELINK_ONA_IMPLEMENTATION_SESSION ?? "",
   onaImplementationStatus: process.env.MINELINK_ONA_IMPLEMENTATION_STATUS ?? "",
+  onaImplementationReadback: ".minelink-dev/reports/ona-codex-implementation-session.md",
+  onaVerifierAgent: process.env.MINELINK_ONA_VERIFIER_AGENT ?? "",
   onaVerifierSession: process.env.MINELINK_ONA_VERIFIER_SESSION ?? "",
   onaVerifierStatus: process.env.MINELINK_ONA_VERIFIER_STATUS ?? "",
+  onaVerifierReadback: ".minelink-dev/reports/ona-codex-video-verifier-session.md",
   branch: process.env.MINELINK_BRANCH ?? "",
   commit: process.env.MINELINK_COMMIT ?? "",
   prUrl: process.env.MINELINK_PR_URL ?? "",
@@ -42,6 +46,8 @@ const defaults = {
 
 const args = { ...defaults };
 let codexAuthFailed = false;
+let requirePlatformCodexImplementation = false;
+let requirePlatformCodexVerifier = false;
 const activePrebuildPhases = new Set([
   "PREBUILD_PHASE_CREATING",
   "PREBUILD_PHASE_PENDING",
@@ -69,10 +75,14 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-automation-status") args.onaAutomationStatus = readValue();
   else if (arg === "--ona-prebuild") args.onaPrebuild = readValue();
   else if (arg === "--ona-prebuild-status") args.onaPrebuildStatus = readValue();
+  else if (arg === "--ona-implementation-agent") args.onaImplementationAgent = readValue();
   else if (arg === "--ona-implementation-session") args.onaImplementationSession = readValue();
   else if (arg === "--ona-implementation-status") args.onaImplementationStatus = readValue();
+  else if (arg === "--ona-implementation-readback") args.onaImplementationReadback = readValue();
+  else if (arg === "--ona-verifier-agent") args.onaVerifierAgent = readValue();
   else if (arg === "--ona-verifier-session") args.onaVerifierSession = readValue();
   else if (arg === "--ona-verifier-status") args.onaVerifierStatus = readValue();
+  else if (arg === "--ona-verifier-readback") args.onaVerifierReadback = readValue();
   else if (arg === "--branch") args.branch = readValue();
   else if (arg === "--commit") args.commit = readValue();
   else if (arg === "--pr-url") args.prUrl = readValue();
@@ -89,6 +99,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--linear-sync-report") args.linearSyncReport = readValue();
   else if (arg === "--secret-preflight") args.secretPreflight = readValue();
   else if (arg === "--codex-auth-failed") codexAuthFailed = true;
+  else if (arg === "--require-platform-codex-implementation") requirePlatformCodexImplementation = true;
+  else if (arg === "--require-platform-codex-verifier") requirePlatformCodexVerifier = true;
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/report-agent-factory-chain.mjs [options]
 
@@ -169,6 +181,30 @@ function linkOrText(value) {
 function hasValue(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
   return normalized.length > 0 && !["none", "null", "undefined", "-"].includes(normalized);
+}
+
+function markerValue(text, names) {
+  const keys = Array.isArray(names) ? names : [names];
+  for (const key of keys) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = String(text ?? "").match(new RegExp(`^${escaped}:\\s*` + "(.+?)\\s*$", "im"));
+    if (match?.[1]) return match[1].replace(/^`|`$/g, "").trim();
+  }
+  return "";
+}
+
+function readbackAgentAccepted(explicitAgent, text) {
+  return /Ona Platform Codex/i.test(explicitAgent) || /^(Agent mode|Agent|Verifier):\s*Ona Platform Codex\s*$/im.test(text);
+}
+
+function readbackSessionId(explicitSession, text) {
+  if (hasValue(explicitSession)) return explicitSession;
+  return markerValue(text, "Session id") || markerValue(text, "Session");
+}
+
+function readbackPassed(text) {
+  const result = markerValue(text, "Result") || markerValue(text, "Status") || markerValue(text, "Release decision");
+  return /^(passed|pass|completed|complete|succeeded|success)$/i.test(result);
 }
 
 function escapeMd(value) {
@@ -321,9 +357,13 @@ const reviewInfo = await fileInfo(args.videoReview);
 const releaseInfo = await fileInfo(args.videoReleaseGate);
 const linearSyncInfo = await fileInfo(args.linearSyncReport);
 const secretPreflightInfo = await fileInfo(args.secretPreflight);
+const implementationReadbackInfo = await fileInfo(args.onaImplementationReadback);
+const verifierReadbackInfo = await fileInfo(args.onaVerifierReadback);
 const releaseText = await readText(args.videoReleaseGate);
 const reviewText = await readText(args.videoReview);
 const linearSyncText = await readText(args.linearSyncReport);
+const implementationReadbackText = await readText(args.onaImplementationReadback);
+const verifierReadbackText = await readText(args.onaVerifierReadback);
 const secretPreflight = await readJson(args.secretPreflight);
 const secretPreflightActions = Array.isArray(secretPreflight?.nextActions)
   ? secretPreflight.nextActions.filter(Boolean)
@@ -362,11 +402,17 @@ const prebuildStatus = normalizeStatus(args.onaPrebuildStatus) !== "missing"
   : hasValue(args.onaPrebuild)
     ? "partial"
     : "missing";
+const implementationSessionId = readbackSessionId(args.onaImplementationSession, implementationReadbackText);
+const implementationAgentAccepted = readbackAgentAccepted(args.onaImplementationAgent, implementationReadbackText);
+const implementationRequestedStatus = normalizeStatus(args.onaImplementationStatus);
+const implementationClaimsPassed = implementationRequestedStatus === "passed" || readbackPassed(implementationReadbackText);
 const implementationStatus = codexAuthFailed
   ? "blocked"
-  : normalizeStatus(args.onaImplementationStatus) !== "missing"
-    ? normalizeStatus(args.onaImplementationStatus)
-    : hasValue(args.onaImplementationSession)
+  : implementationClaimsPassed
+    ? implementationAgentAccepted && hasValue(implementationSessionId)
+      ? "passed"
+      : "blocked"
+    : implementationReadbackInfo || hasValue(implementationSessionId)
       ? "partial"
       : "missing";
 const branchStatus = implementationStatus === "passed" && args.branch && args.commit ? "passed" : "missing";
@@ -376,15 +422,23 @@ const mp4Status = validationStatus === "passed" && summaryInfo && mp4Info && mp4
   : validationStatus === "passed" && summaryInfo
     ? "partial"
     : "missing";
-const verifierStatus = normalizeStatus(args.onaVerifierStatus) !== "missing"
-  ? normalizeStatus(args.onaVerifierStatus)
-  : mp4Status === "passed" && reviewInfo && /Verifier:\s*Ona Platform Codex/im.test(reviewText)
-    ? /Release decision:\s*pass/im.test(reviewText)
+const verifierSessionId = readbackSessionId(args.onaVerifierSession, verifierReadbackText);
+const verifierAgentAccepted =
+  readbackAgentAccepted(args.onaVerifierAgent, verifierReadbackText) ||
+  /Verifier:\s*Ona Platform Codex/im.test(reviewText);
+const verifierClaimsPassed =
+  normalizeStatus(args.onaVerifierStatus) === "passed" ||
+  readbackPassed(verifierReadbackText) ||
+  (reviewInfo && /Release decision:\s*pass/im.test(reviewText));
+const verifierStatus = mp4Status === "passed"
+  ? verifierClaimsPassed
+    ? verifierAgentAccepted && hasValue(verifierSessionId)
       ? "passed"
       : "blocked"
-    : mp4Status === "passed" && reviewInfo
+    : reviewInfo || verifierReadbackInfo || hasValue(verifierSessionId)
       ? "partial"
-      : "missing";
+      : "missing"
+  : "missing";
 const releaseStatus = verifierStatus === "passed" && releaseInfo && /Result:\s*`?passed`?/im.test(releaseText)
   ? "passed"
   : verifierStatus === "passed" && releaseInfo
@@ -402,8 +456,10 @@ const statusSyncStatus = ciStatus === "passed" && hasValue(args.githubStatusUrl)
 
 const codexBlocker = codexAuthFailed
   ? "Ona Platform Codex rejected the LLM request as unauthenticated before repository commands could run."
-  : implementationStatus === "missing"
-    ? "No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Current public docs describe starting Codex from the environment conversation menu, not from the checked-in automation YAML."
+  : implementationStatus === "blocked"
+    ? `Implementation evidence must identify Agent mode: Ona Platform Codex, Session id, and Result: passed in ${args.onaImplementationReadback}; generic Ona automation, task, or agent evidence is not accepted.`
+    : implementationStatus === "missing"
+      ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Session id, and Result: passed.`
     : "";
 const globalBlocker = args.blocker || codexBlocker;
 const prebuildBlocker =
@@ -433,7 +489,9 @@ const nodes = [
     ...autoPrebuildEvidence,
   ], prebuildBlocker),
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
-    args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
+    implementationSessionId && `Implementation session: ${implementationSessionId}`,
+    implementationAgentAccepted && "Agent mode: Ona Platform Codex",
+    implementationReadbackInfo && args.onaImplementationReadback,
   ], codexBlocker),
   mkNode("branch_commit", "Branch and commit produced", branchStatus, [
     `Branch: ${args.branch}`,
@@ -447,9 +505,11 @@ const nodes = [
     mp4Info && `${args.acceptanceMp4}${mp4Info ? ` (${mp4Info.size} bytes)` : ""}`,
   ]),
   mkNode("video_verifier", "Dedicated video verifier", verifierStatus, [
-    args.onaVerifierSession && `Verifier session: ${args.onaVerifierSession}`,
+    verifierSessionId && `Verifier session: ${verifierSessionId}`,
+    verifierAgentAccepted && "Agent mode: Ona Platform Codex",
+    verifierReadbackInfo && args.onaVerifierReadback,
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? "Video verifier did not approve the current acceptance artifacts." : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback} and approve the current acceptance artifacts.` : ""),
   mkNode("release_gate", "Video release gate", releaseStatus, [
     releaseInfo && args.videoReleaseGate,
   ], releaseStatus === "blocked" ? "Video release gate failed or hashes do not match." : ""),
@@ -468,10 +528,15 @@ const nodes = [
 
 const nodeStatus = Object.fromEntries(nodes.map((node) => [node.id, node.status]));
 const edgeStatus = (targetStatus) => targetStatus;
-const prebuildHandoffStatus = nodeStatus.ona_prebuild === "passed" ? nodeStatus.implementation_codex : "blocked";
+const prebuildHandoffStatus =
+  nodeStatus.ona_prebuild === "passed"
+    ? "passed"
+    : nodeStatus.ona_prebuild === "partial"
+      ? "partial"
+      : "blocked";
 const prebuildHandoffBlocker =
   nodeStatus.ona_prebuild === "passed"
-    ? codexBlocker
+    ? ""
     : prebuildBlocker || "No completed Ona prebuild baseline is available; Codex handoff must wait for a prepared environment.";
 const automationHandoffStatus =
   nodeStatus.ona_automation === "passed" || nodeStatus.ona_automation === "partial"
@@ -494,12 +559,13 @@ const rawEdges = [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
     ...autoPrebuildEvidence,
-    args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
   ], prebuildHandoffBlocker),
   mkEdge("ona_automation", "implementation_codex", automationHandoffStatus, [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
-    args.onaImplementationSession && `Implementation session: ${args.onaImplementationSession}`,
+    implementationSessionId && `Implementation session: ${implementationSessionId}`,
+    implementationAgentAccepted && "Agent mode: Ona Platform Codex",
+    implementationReadbackInfo && args.onaImplementationReadback,
   ], nodeStatus.ona_automation === "blocked" ? globalBlocker : codexBlocker),
   mkEdge("implementation_codex", "branch_commit", implementationStatus === "passed" ? nodeStatus.branch_commit : "blocked", [
     `Branch: ${args.branch}`,
@@ -512,7 +578,7 @@ const rawEdges = [
   ]),
   mkEdge("acceptance_video", "video_verifier", edgeStatus(nodeStatus.video_verifier), [
     reviewInfo && args.videoReview,
-  ]),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback} and approve the current acceptance artifacts.` : ""),
   mkEdge("video_verifier", "release_gate", edgeStatus(nodeStatus.release_gate), [
     releaseInfo && args.videoReleaseGate,
   ]),
@@ -679,3 +745,17 @@ await fs.mkdir(path.dirname(args.jsonOutput), { recursive: true });
 await fs.writeFile(args.jsonOutput, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
 console.log(`Agent factory chain report wrote ${args.output} and ${args.jsonOutput}`);
+
+if (requirePlatformCodexImplementation && implementationStatus !== "passed") {
+  console.error(
+    `Required Ona Platform Codex implementation evidence is missing or invalid. See ${args.output}.`,
+  );
+  process.exit(1);
+}
+
+if (requirePlatformCodexVerifier && verifierStatus !== "passed") {
+  console.error(
+    `Required Ona Platform Codex verifier evidence is missing or invalid. See ${args.output}.`,
+  );
+  process.exit(1);
+}

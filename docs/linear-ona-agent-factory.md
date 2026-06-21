@@ -274,6 +274,36 @@ hash-based `video-review-request.md` without re-rendering the MP4, checks the
 existing artifacts, and finalizes status/PR output. If
 `.minelink-dev/reports/artifacts/video-review.md` is missing or does not
 declare `Verifier: Ona Platform Codex`, the automation must fail before release.
+Before validation or PR finalization, the CLI automation also requires an
+implementation-session readback at:
+
+```text
+.minelink-dev/reports/ona-codex-implementation-session.md
+```
+
+That file must be produced by the implementation session and include:
+
+```text
+Agent mode: Ona Platform Codex
+Session id: <Ona session id>
+Result: passed
+```
+
+Generic Ona automation, task, SSH, or default-agent evidence must not satisfy
+this gate. The chain reporter enforces this with
+`--require-platform-codex-implementation`, so a dispatcher can queue the
+finalizer but cannot produce green validation/PR evidence until the accepted
+Platform Codex implementation session has written its readback.
+
+The dedicated video verifier has the same explicit readback requirement:
+
+```text
+.minelink-dev/reports/ona-codex-video-verifier-session.md
+```
+
+It must identify `Agent mode: Ona Platform Codex`, the verifier `Session id`,
+and `Result: passed`, in addition to the hash-checked
+`.minelink-dev/reports/artifacts/video-review.md` markers.
 
 If the Ona session shows `Codex authentication failed: the LLM request was
 rejected as unauthenticated`, stop the task as `Blocked`. This failure happens

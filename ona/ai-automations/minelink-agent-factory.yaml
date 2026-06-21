@@ -27,6 +27,7 @@ action:
           --ona-automation-status partial
           --branch "{{ .Parameters.branch }}"
           --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --require-platform-codex-implementation
     - task:
         command: >
           node scripts/dev/sync-linear-status.mjs
