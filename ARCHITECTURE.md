@@ -227,10 +227,15 @@ larger maps are rejected by the Ona automation API before the factory can start.
 The final flow should use the Ona Platform Codex agent option for implementation
 and the separate video-verifier pass, not the default Ona Agent and not manual
 SSH. Manual `ona environment ssh` remains useful for debugging or verification,
-but it is not the product delivery path. The finalizer must not re-render the
-MP4 after video review; it prepares the hash-based `video-review-request.md`
-from existing artifacts and then checks the existing artifact hashes. Linear
-status sync is handled by
+but it is not the product delivery path. The Ona UI can create Codex sessions
+for this project, and current project/environment metadata shows the
+`codex/minelink-mvp-engineering` clone target plus a project-scoped
+`codex_auth` secret. That proves the project can be prepared for UI-selected
+Codex work, but it is not enough to prove the automated chain unless the task
+run also records the specific Codex session or another readable provider-mode
+identifier. The finalizer must not re-render the MP4 after video review; it
+prepares the hash-based `video-review-request.md` from existing artifacts and
+then checks the existing artifact hashes. Linear status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
 If Ona repository webhooks are unavailable for the account, the GitHub Actions
@@ -238,6 +243,9 @@ dispatcher and scheduled Linear watcher are the active automation bridge. If
 Ona Platform Codex cannot be started automatically or rejects LLM
 authentication, the chain report must stop at that edge and record the blocker
 instead of falling back to generic Ona Agent evidence.
+If the UI can start Codex but CLI readback for sessions is disabled, the
+blocked edge is `ready prebuild -> readable Platform Codex task session`, not
+`Codex unavailable`.
 `scripts/dev/report-agent-factory-chain.mjs` is the durable node/edge report
 for that bridge. Its first blocked edge must carry the actionable blocker text
 directly on the edge row, because later nodes can have valid local evidence
@@ -421,6 +429,13 @@ The release gate writes
 missing, the verifier is not marked `Ona Platform Codex`, or the task/video
 match markers and summary/MP4 hashes are not passing. A ready
 `video-review-request.md` never releases a task by itself.
+
+Gate 3 perception smoke uses stable vanilla fixture blocks for repeatable real
+NeoForge evidence: glass/leaves for translucent, torch for empty-collision
+decorative, water for fluid, fence for partial occluder, stone for opaque, and a
+hidden diamond ore negative behind the stone. Avoid vegetation blocks for
+decorative fixture assertions because vanilla/NeoForge neighbor updates can
+make those blocks disappear before observation.
 
 ## Current Product State
 
