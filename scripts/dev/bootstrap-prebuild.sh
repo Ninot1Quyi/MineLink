@@ -3,6 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}"
+
 log() {
   printf '[minelink-prebuild] %s\n' "$*"
 }
@@ -32,6 +34,8 @@ install_os_packages() {
 }
 
 check_runtime_versions() {
+  log "devcontainer image: ${MINELINK_DEVCONTAINER_IMAGE:-unreported}"
+  log "Gradle user home: $GRADLE_USER_HOME"
   run node --version
   run npm --version
   run python3 --version
@@ -47,6 +51,30 @@ check_runtime_versions() {
     log "LINEAR_API_KEY present"
   else
     log "LINEAR_API_KEY missing; Linear sync will be skipped until the Ona secret is attached"
+  fi
+}
+
+report_cache_state() {
+  local npm_cache="$HOME/.npm"
+  local gradle_modules="$GRADLE_USER_HOME/caches/modules-2"
+  local gradle_transforms="$GRADLE_USER_HOME/caches/transforms-4"
+
+  if [[ -d "$npm_cache" ]]; then
+    log "npm cache present at $npm_cache"
+  else
+    log "npm cache missing at $npm_cache; npm ci will cold-fill it"
+  fi
+
+  if [[ -d "$gradle_modules" ]]; then
+    log "Gradle module cache present at $gradle_modules"
+  else
+    log "Gradle module cache missing at $gradle_modules; Gradle will cold-fill it"
+  fi
+
+  if [[ -d "$gradle_transforms" ]]; then
+    log "Gradle transform cache present at $gradle_transforms"
+  else
+    log "Gradle transform cache missing at $gradle_transforms; NeoForge userdev may run cold transforms"
   fi
 }
 
@@ -95,6 +123,7 @@ run_repo_guards() {
 
 install_os_packages
 check_runtime_versions
+report_cache_state
 warm_node_workspace
 warm_neoforge_workspace
 prepare_dev_minecraft_runtime

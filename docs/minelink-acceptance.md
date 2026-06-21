@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is now scriptable through `scripts/dev/install-smoke.sh` and CI artifact collection; Ona Platform Codex delivery is specified but not fully proven end-to-end; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; a reproducible GHCR devcontainer image path is staged for cache prewarm, but it is not yet the default Ona image and Ona Platform Codex delivery is not fully proven end-to-end; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -610,6 +610,16 @@ Current status:
 - `.github/workflows/install-smoke.yml` runs the same fresh-clone proof for
   install/workbench/bootstrap changes and uploads
   `minelink-install-smoke-evidence`.
+- `.github/workflows/devcontainer-image.yml` builds `.devcontainer/Dockerfile`
+  and publishes `ghcr.io/ninot1quyi/minelink-devcontainer` with Node 22, Java
+  21, GitHub CLI, `ffmpeg`, npm cache, and Gradle user-home cache. Branch
+  builds publish immutable `sha-*` tags; `main` additionally publishes `main`
+  and `latest`. This is a reproducible cache-prewarm path, not a hand-uploaded
+  local container. It must not contain EULA files, tokens, secrets,
+  `mod/neoforge/run` state, or local generated server output. Because NeoForge
+  project-local `.gradle` and generated workspace outputs are
+  checkout-sensitive, this image does not replace the Ona prebuild hard gate and
+  must not become the default Ona image until GHCR pull access has been verified.
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
   fast verification, real NeoForge guard smoke, and acceptance artifact
   rendering plus video-review request preparation and a separate video-release

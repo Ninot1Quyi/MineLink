@@ -36,9 +36,33 @@ proves a fresh clone of a committed ref. Its report is written to
 commit, environment versions, command exit codes, and copied verifier summary.
 
 Ona worktrees should rebuild from `.devcontainer/devcontainer.json`. The
-devcontainer intentionally uses the prebuilt Node 22 image, Java 21 feature,
-and image or OS provided `python3`; do not add a pinned Python feature that
-forces source compilation during cloud rebuilds.
+default devcontainer intentionally keeps using the published Node 22
+devcontainer base image until the MineLink GHCR image has been built and pull
+access has been verified in Ona. It retains the Java 21 feature as an explicit
+contract and uses image or OS provided `python3`; do not add a pinned Python
+feature that forces source compilation during cloud rebuilds.
+
+The prewarmed image is built by GitHub Actions:
+
+```bash
+gh workflow run devcontainer-image.yml
+```
+
+The workflow `.github/workflows/devcontainer-image.yml` builds
+`.devcontainer/Dockerfile` and pushes
+`ghcr.io/ninot1quyi/minelink-devcontainer`. Branch builds publish immutable
+`sha-*` tags; `main` additionally publishes `main` and `latest`. The image
+warms npm cache and Gradle user-home cache from a clean checkout, but it is not
+a release artifact and is not product evidence. Do not bake EULA files, tokens,
+admission secrets, Microsoft credentials, local `mod/neoforge/run` state, or a
+hand-uploaded local container into it. NeoForge project-local `.gradle` state
+and generated workspace outputs are checkout-sensitive, so the image does not
+replace Ona's final prebuild bootstrap.
+
+Do not switch `.devcontainer/devcontainer.json` to the GHCR image in the same
+change that first introduces the image workflow. First publish a branch image,
+verify the GHCR pull path and Ona registry access, then switch the default
+image in a follow-up change.
 
 Ona prebuilds use two bootstrap entry points:
 
@@ -62,6 +86,11 @@ owner has authorized development EULA acceptance for these private
 Ona/devcontainer environments, the bootstrap also writes ignored local
 `mod/neoforge/run/eula.txt` and `server.properties` files so NeoForge can start
 without another setup step. It does not start a Minecraft server.
+
+When the GHCR image is present, the same bootstrap should report warm npm and
+Gradle cache paths, then still run the final `npm ci`, TypeScript checks,
+NeoForge Gradle build, dev-only EULA/server property generation, and docs
+verification. A fast cache hit is useful only if the hard gate still passes.
 
 CI and PR review evidence can be summarized with:
 
