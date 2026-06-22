@@ -532,6 +532,13 @@ bash scripts/dev/verify-agent-task.sh --scope install
 The script writes a summary to
 `.minelink-dev/reports/agent-task-summary.md` for PR evidence.
 
+`scripts/dev/e2e.sh` also wraps the agent execution phase with
+`scripts/dev/run-with-timeout.py` so a stuck replay, MCP request, or agent
+process fails with normal e2e logs instead of consuming the full workflow job
+timeout. The wall-clock guard is configurable through
+`MINELINK_AGENT_TIMEOUT_SECONDS` and does not change tool assertions or
+Minecraft authority.
+
 Workflow evidence is indexed by:
 
 ```bash

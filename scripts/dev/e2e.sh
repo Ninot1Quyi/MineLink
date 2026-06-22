@@ -182,9 +182,12 @@ trap on_exit EXIT
 
 if [ "$runtime" = "neoforge" ]; then
   start_timeout="${MINELINK_SERVER_START_TIMEOUT:-240}"
+  agent_timeout="${MINELINK_AGENT_TIMEOUT_SECONDS:-300}"
 else
   start_timeout="${MINELINK_SERVER_START_TIMEOUT:-25}"
+  agent_timeout="${MINELINK_AGENT_TIMEOUT_SECONDS:-120}"
 fi
+agent_timeout_grace="${MINELINK_AGENT_TIMEOUT_GRACE_SECONDS:-10}"
 
 MINELINK_RUNTIME="$runtime" bash scripts/dev/start-server.sh > "$work_dir/logs/server.stdout.log" 2> "$work_dir/logs/server.stderr.log" &
 server_pid="$!"
@@ -231,7 +234,11 @@ PY
   fi
 fi
 
-scripts/dev/run-agent.sh "$scenario" > "$work_dir/logs/agent.log" 2>&1
+python3 scripts/dev/run-with-timeout.py \
+  --timeout "$agent_timeout" \
+  --grace "$agent_timeout_grace" \
+  --label "MineLink agent scenario '$scenario'" \
+  -- scripts/dev/run-agent.sh "$scenario" > "$work_dir/logs/agent.log" 2>&1
 
 python3 - "$report" <<'PY'
 import json

@@ -329,6 +329,12 @@ These are still smoke gates; complete server menu, Create, social runtime, and
 long release soak coverage remain separate product gates. This path
 is intentionally separate from the fast mock CI path because first-run
 Minecraft/NeoForge dependency resolution and server startup are much slower.
+The e2e harness has two independent wall-clock guards: server startup uses
+`MINELINK_SERVER_START_TIMEOUT`, and the agent replay phase uses
+`MINELINK_AGENT_TIMEOUT_SECONDS` with `MINELINK_AGENT_TIMEOUT_GRACE_SECONDS`
+before force-kill. The agent timeout defaults to 300 seconds for NeoForge and
+120 seconds for mock runtime so a stuck MCP request or replay fails with the
+normal e2e log bundle instead of waiting for the full workflow job timeout.
 
 Short stability soak runs repeat e2e scenarios and writes structured evidence:
 
