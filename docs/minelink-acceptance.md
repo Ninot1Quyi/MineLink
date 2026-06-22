@@ -828,8 +828,10 @@ Current status:
   gate passes, it calls `scripts/dev/create-agent-factory-pr.mjs`, creates or
   updates a draft PR from the canary branch, writes
   `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
-  report with `--pr-url`. That remains chain evidence only; PR CI and human
-  acceptance are separate downstream gates.
+  report with `--pr-url`. That edge requires the `AGENT_FACTORY_GITHUB_TOKEN`
+  repository secret because the default Actions `GITHUB_TOKEN` can be blocked
+  from creating pull requests. That remains chain evidence only; PR CI and
+  human acceptance are separate downstream gates.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only

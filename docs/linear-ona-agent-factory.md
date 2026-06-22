@@ -150,8 +150,9 @@ Before debugging a failed dispatcher run, run the secret-safe preflight:
 npm run agent-factory:secrets -- --require-github-secrets --require-ona-context
 ```
 
-The preflight checks only credential presence and Ona CLI context. It never
-prints `ONA_TOKEN`, `LINEAR_API_KEY`, GitHub tokens, or any other secret value.
+The preflight checks only credential presence and Ona CLI context. For full PR
+canaries it expects `ONA_TOKEN`, `LINEAR_API_KEY`, and
+`AGENT_FACTORY_GITHUB_TOKEN`; it never prints those values or any other secret.
 
 Manual pilot command:
 
@@ -443,8 +444,10 @@ manual rehearsal needs to prove `release_gate -> pr`, run the same workflow with
 `mode=full-chain-canary` and `create_pr=true`. That optional step calls
 `scripts/dev/create-agent-factory-pr.mjs`, creates or updates a draft PR from
 the canary branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,
-and refreshes `agent-factory-chain.json` with the PR URL. The next downstream
-edge is PR CI/status collection, not product acceptance.
+and refreshes `agent-factory-chain.json` with the PR URL. This PR edge requires
+the `AGENT_FACTORY_GITHUB_TOKEN` repository secret; the default Actions
+`GITHUB_TOKEN` can be blocked by repository policy from creating pull requests.
+The next downstream edge is PR CI/status collection, not product acceptance.
 Before validation or PR finalization, the CLI automation also requires an
 implementation-session readback at:
 

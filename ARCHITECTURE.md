@@ -218,7 +218,8 @@ by `scripts/dev/dispatch-agent-factory.mjs`,
 `scripts/dev/report-agent-factory-chain.mjs`.
 `scripts/dev/check-agent-factory-secrets.mjs` is the secret-safe preflight for
 this bridge: it checks GitHub secret presence, local/runner `LINEAR_API_KEY`
-presence, and Ona CLI active-context status without printing credential values.
+presence, the `AGENT_FACTORY_GITHUB_TOKEN` PR-creation token, and Ona CLI
+active-context status without printing credential values.
 `scripts/dev/setup-linear-agent-factory.mjs` is the repeatable Linear setup
 entry point for the `MineLink` project, required labels, and agent-factory
 workflow states. It records setup evidence without printing `LINEAR_API_KEY`.
@@ -363,7 +364,10 @@ artifact hashes. The GitHub Actions `full-chain-canary` can also run the
 release-gate-to-PR edge when `create_pr=true`; it calls
 `scripts/dev/create-agent-factory-pr.mjs`, records
 `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
-report with the created draft PR URL. Linear status sync is handled by
+report with the created draft PR URL. That edge requires the
+`AGENT_FACTORY_GITHUB_TOKEN` repository secret because repository policy can
+block the default Actions `GITHUB_TOKEN` from creating pull requests. Linear
+status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
 If Ona repository webhooks are unavailable for the account, the GitHub Actions
