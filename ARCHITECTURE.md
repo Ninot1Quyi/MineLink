@@ -423,8 +423,11 @@ copies the upload report back for PR commenting. The bridge fetches finalizer
 scripts from the workflow/source ref inside the Ona environment instead of
 injecting large script bodies through `ona environment exec`, because the Ona
 exec path is shell-mediated and has practical argument-size limits. This bridge
-is accepted only as finalizer/artifact transport; Platform Codex API readback
-and task-bound branch commits remain the implementation and verifier evidence.
+also deletes stale verifier/release/upload artifacts before the implementation
+finalizer stages so old `video-review.md` files cannot be mistaken for the
+current same-session verifier result. This bridge is accepted only as
+finalizer/artifact transport; Platform Codex API readback and task-bound branch
+commits remain the implementation and verifier evidence.
 Terminal factory paths run
 `scripts/dev/cleanup-ona-resources.mjs` after success or failure so task
 environments are stopped automatically when they are in the MineLink project

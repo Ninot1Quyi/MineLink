@@ -328,6 +328,9 @@ if (failures.length === 0) {
       hasValue(args.sourceRef) ? "finalizer_source_ref=FETCH_HEAD" : "finalizer_source_ref=HEAD",
       `git fetch origin ${shellQuote(args.branch)}`,
       `git checkout -B ${shellQuote(args.branch)} ${shellQuote(`origin/${args.branch}`)}`,
+      args.stageGroup === "implementation-finalize"
+        ? "rm -f .minelink-dev/reports/artifacts/video-review.md .minelink-dev/reports/artifacts/video-release-gate.md .minelink-dev/reports/video-storage-upload.md .minelink-dev/reports/video-storage-upload.json"
+        : "",
       ...sourceScripts.map((filePath) =>
         [
           `mkdir -p ${shellQuote(path.posix.dirname(filePath))}`,
