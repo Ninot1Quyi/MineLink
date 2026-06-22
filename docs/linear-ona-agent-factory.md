@@ -353,6 +353,12 @@ only the programmatic Platform Codex launch/readback edge. It does not satisfy
 the implementation readback, video verifier, PR, CI, or product acceptance
 gates until the task-bound Codex session performs the work and writes the
 normal `.minelink-dev/reports/ona-codex-implementation-session.md`.
+GitHub Actions can run the same probe through
+`.github/workflows/ona-platform-codex-probe.yml`. Use `mode=discover` to prove
+the repository `ONA_TOKEN` can read Ona policy/API state. Use
+`mode=identity-canary` only after supplying the real Codex app agent id through
+workflow input or the `MINELINK_ONA_CODEX_AGENT_ID` repository secret; without
+that id, the launch edge remains blocked even when `ONA_TOKEN` is present.
 After the fail-closed spec was uploaded, remote canary execution
 `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
 `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and a spec containing

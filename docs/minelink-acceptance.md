@@ -795,7 +795,10 @@ Current status:
   remains blocked until `GITPOD_API_KEY` or `ONA_TOKEN` is available as an Ona
   PAT and `MINELINK_ONA_CODEX_AGENT_ID` is known for the Codex app agent; it
   also does not replace the task-bound implementation and verifier readback
-  files required by the finalizer.
+  files required by the finalizer. `.github/workflows/ona-platform-codex-probe.yml`
+  can now prove the repository-secret token/API edge in `discover` mode, then
+  run the launch canary in `identity-canary` mode once the Codex app agent id is
+  supplied.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only

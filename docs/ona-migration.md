@@ -152,6 +152,11 @@ MineLink uses automation to reduce agent memory load:
   writes `.minelink-dev/reports/ona-platform-codex-api-session.{md,json}` with
   `GetAgentExecution` readback. This is launch/readback evidence only; it does
   not replace the implementation-session or video-verifier readbacks.
+- `.github/workflows/ona-platform-codex-probe.yml` runs that probe from GitHub
+  Actions with repository secrets. `discover` mode proves only the repository
+  token/API policy edge. `identity-canary` mode is the launch proof and requires
+  the real Codex app agent id through workflow input or
+  `MINELINK_ONA_CODEX_AGENT_ID`.
 - `.ona/automations.yaml` defines Ona-native environment tasks.
 - `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
   finalizer that should be started by manual pilot, GitHub dispatch, or Linear

@@ -1,0 +1,89 @@
+name: Ona Platform Codex Probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Probe mode
+        required: true
+        default: discover
+        type: choice
+        options:
+          - discover
+          - identity-canary
+      codex_agent_id:
+        description: Optional Codex app agent id for identity-canary mode
+        required: false
+      wait_seconds:
+        description: Readback wait seconds for identity-canary mode
+        required: false
+        default: "30"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe Ona Platform Codex API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Ona CLI
+        run: |
+          tmp_ona="$(mktemp)"
+          curl -o "$tmp_ona" -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')" 
+          chmod +x "$tmp_ona"
+          sudo mv "$tmp_ona" /usr/local/bin/ona
+
+      - name: Authenticate Ona CLI
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+        run: |
+          if [ -z "${ONA_TOKEN:-}" ]; then
+            echo "ONA_TOKEN is missing; cannot probe Ona Platform Codex API."
+            exit 1
+          fi
+          ona login
+
+      - name: Report credential context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          node scripts/dev/check-agent-factory-secrets.mjs --repo "$GITHUB_REPOSITORY" --require-github-secrets --require-ona-context
+
+      - name: Probe Ona Platform Codex API
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+          MINELINK_ONA_ORGANIZATION_ID: ${{ vars.MINELINK_ONA_ORGANIZATION_ID }}
+          MINELINK_ONA_CODEX_AGENT_ID: ${{ secrets.MINELINK_ONA_CODEX_AGENT_ID }}
+          INPUT_CODEX_AGENT_ID: ${{ inputs.codex_agent_id }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds }}
+        run: |
+          args=(scripts/dev/start-ona-platform-codex.mjs --discover-policies)
+          if [ "$INPUT_MODE" = "identity-canary" ]; then
+            codex_agent_id="${INPUT_CODEX_AGENT_ID:-${MINELINK_ONA_CODEX_AGENT_ID:-}}"
+            if [ -z "$codex_agent_id" ]; then
+              echo "identity-canary mode requires inputs.codex_agent_id or secret MINELINK_ONA_CODEX_AGENT_ID."
+              exit 1
+            fi
+            args+=(--start --identity-canary --codex-agent-id "$codex_agent_id" --wait-seconds "${INPUT_WAIT_SECONDS:-30}")
+          fi
+          node "${args[@]}"
+
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-ona-platform-codex-probe
+          path: .minelink-dev/reports/
+          include-hidden-files: true
