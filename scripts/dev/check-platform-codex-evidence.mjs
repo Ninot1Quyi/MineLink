@@ -32,6 +32,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
 Fails unless the requested Ona Platform Codex readback files identify:
 
 Agent mode: Ona Platform Codex
+Identity: I am Codex running in Ona Platform Codex
 Session id: <Ona session id>
 Result: passed
 Task id: <expected task id>
@@ -88,6 +89,11 @@ function agentModeAccepted(text) {
   return /Ona Platform Codex/i.test(mode);
 }
 
+function identityAccepted(text) {
+  const identity = markerValue(text, "Identity");
+  return /\bCodex\b/i.test(identity) && /Ona Platform Codex/i.test(identity);
+}
+
 function resultPassed(text) {
   const result = markerValue(text, ["Result", "Status", "Release decision"]);
   return /^(passed|pass|completed|complete|succeeded|success)$/i.test(result);
@@ -120,6 +126,12 @@ async function checkReadback(label, filePath) {
     failures.push(`${label} readback must contain Agent mode: Ona Platform Codex`);
   } else {
     evidence.push(`${label} agent mode accepted`);
+  }
+
+  if (!identityAccepted(text)) {
+    failures.push(`${label} readback must contain Identity: I am Codex running in Ona Platform Codex`);
+  } else {
+    evidence.push(`${label} identity statement present`);
   }
 
   const sessionId = markerValue(text, "Session id") || markerValue(text, "Session");

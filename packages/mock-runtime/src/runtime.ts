@@ -2195,7 +2195,7 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
       },
       {
         id: "minecraft:torch",
-        pos: [0, 64, 2],
+        pos: [0, 64, 1],
         tags: ["minecraft:torch", "minelink:vision_decorative"],
         visibleFaces: ["north", "up"]
       },
@@ -2207,7 +2207,7 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
       },
       {
         id: "minecraft:oak_fence",
-        pos: [0, 64, 4],
+        pos: [0, 64, 5],
         tags: ["minecraft:fences", "minelink:vision_partial_occluder"],
         visibleFaces: ["north", "up"]
       },

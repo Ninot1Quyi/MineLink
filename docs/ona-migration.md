@@ -196,11 +196,14 @@ Ona Platform Codex is the target execution surface for implementation and video
 verification. `ona environment ssh` is only for debugging and readback. The
 checked-in Ona CLI automation now contains the implementation and verifier
 `agent` handoff steps plus guarded task finalizers. The implementation agent
-must write task/branch/commit-bound Platform Codex readback before validation
-or acceptance video rendering can run; the verifier agent must write matching
-readback and `video-review.md` before release/PR finalization can run. The
-release finalizer does not re-render the MP4 after review. A valid validation
-pilot starts
+must first identify itself in the session and readback as
+`Identity: I am Codex running in Ona Platform Codex`, then write
+task/branch/commit-bound Platform Codex readback before validation or
+acceptance video rendering can run; the verifier agent must write matching
+identity/readback and `video-review.md` before release/PR finalization can run.
+The identity line is a diagnostic signal only, not a substitute for task-bound
+validation or video review. The release finalizer does not re-render the MP4
+after review. A valid validation pilot starts
 `ona/ai-automations/minelink-agent-factory.yaml` through:
 
 ```bash

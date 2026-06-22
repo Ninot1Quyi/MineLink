@@ -22,6 +22,7 @@ action:
 
           Required execution surface:
           - Use Ona Platform Codex, not the default Ona Agent.
+          - First, identify yourself in the session and in the readback as Codex running in Ona Platform Codex. This identity statement is a diagnostic signal only; the task is not accepted until validation and task-bound readback pass.
           - If this session is not running as Ona Platform Codex, or you cannot confirm that it is, write `.minelink-dev/reports/ona-codex-implementation-session.md` with `Result: blocked`, explain the blocker, and stop without claiming completion.
 
           Task context:
@@ -49,6 +50,7 @@ action:
 
           ```text
           Agent mode: Ona Platform Codex
+          Identity: I am Codex running in Ona Platform Codex
           Session id: <this Ona Codex session id or the closest platform-visible session id>
           Result: passed
           Task id: {{ .Parameters.task_id }}
@@ -80,6 +82,7 @@ action:
 
           Required execution surface:
           - Use Ona Platform Codex, not the default Ona Agent.
+          - First, identify yourself in the session and in the verifier readback as Codex running in Ona Platform Codex. This identity statement is a diagnostic signal only; release still requires hash-checked video review.
           - Do not edit product code, do not re-render the video, and do not change validation reports.
           - If this verifier session is not running as Ona Platform Codex, or you cannot confirm that it is, write `.minelink-dev/reports/ona-codex-video-verifier-session.md` with `Result: blocked` and stop.
 
@@ -99,6 +102,7 @@ action:
 
           ```text
           Agent mode: Ona Platform Codex
+          Identity: I am Codex running in Ona Platform Codex
           Session id: <this Ona Codex verifier session id or the closest platform-visible session id>
           Result: passed
           Task id: {{ .Parameters.task_id }}

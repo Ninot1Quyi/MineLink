@@ -342,6 +342,7 @@ That file must be produced by the implementation session and include:
 
 ```text
 Agent mode: Ona Platform Codex
+Identity: I am Codex running in Ona Platform Codex
 Session id: <Ona session id>
 Result: passed
 Task id: <current task id>
@@ -350,8 +351,10 @@ Commit: <current commit>
 ```
 
 Generic Ona automation, task, SSH, stale readback, wrong branch, wrong commit,
-or default-agent evidence must not satisfy this gate. The chain reporter
-enforces this with
+or default-agent evidence must not satisfy this gate. The identity line is a
+session-liveness diagnostic only; the readback still must match the current
+task, branch, and commit and must be followed by validation evidence. The chain
+reporter enforces this with
 `--require-platform-codex-implementation`, and
 `scripts/dev/run-agent-factory-stage.mjs` prevents every downstream finalizer
 stage from producing green validation/PR evidence until the accepted Platform
@@ -363,7 +366,8 @@ The dedicated video verifier has the same explicit readback requirement:
 .minelink-dev/reports/ona-codex-video-verifier-session.md
 ```
 
-It must identify `Agent mode: Ona Platform Codex`, the verifier `Session id`,
+It must identify `Agent mode: Ona Platform Codex`,
+`Identity: I am Codex running in Ona Platform Codex`, the verifier `Session id`,
 `Result: passed`, `Task id`, `Branch`, and `Commit`, in addition to the
 hash-checked
 `.minelink-dev/reports/artifacts/video-review.md` markers.

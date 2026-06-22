@@ -253,7 +253,17 @@ Current status:
   behind that stone wall remains absent from `observe.scene`.
 - Real NeoForge decorative/fluid perception uses stable native block state:
   torch proves empty-collision decorative classification and water proves
-  `FluidState` classification without relying on random world vegetation.
+  `FluidState` classification without relying on random world vegetation. The
+  water fixture is isolated by native solid blocks so server fluid ticks cannot
+  wash away the torch before observation.
+- Regression note: GitHub Actions run `27923213057` exposed the original real
+  NeoForge fixture bug where water at `base.south(3)` flowed into the torch at
+  `base.south(2)` before observation. The fixture now boxes the water source
+  with native solid blocks and moves the torch/fence outside the flow path.
+  Local verification on 2026-06-22 passed
+  `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes`
+  with `torch_is_classified_decorative`, `water_is_classified_fluid`, and
+  `opaque_wall_hides_diamond_ore` all passing.
 - This is not the full Gate 3 release surface yet. General raycast/shape-based
   occlusion for arbitrary block shapes, complex modded blocks, and long-running
   perception cache behavior remains to be implemented.
@@ -758,10 +768,13 @@ Current status:
 - The finalizer now fails closed before validation/PR finalization unless
   `scripts/dev/report-agent-factory-chain.mjs` can read accepted implementation
   evidence from `.minelink-dev/reports/ona-codex-implementation-session.md`.
-  The readback must identify `Agent mode: Ona Platform Codex`, a `Session id`,
+  The readback must identify `Agent mode: Ona Platform Codex`,
+  `Identity: I am Codex running in Ona Platform Codex`, a `Session id`,
   `Result: passed`, `Task id`, `Branch`, and `Commit`; generic Ona automation,
   SSH, task, stale local artifact, wrong branch, wrong commit, or default-agent
-  output is not accepted for the implementation edge. The separate video
+  output is not accepted for the implementation edge. The identity line is a
+  liveness diagnostic for the Ona Platform Codex session, not acceptance
+  evidence by itself. The separate video
   verifier must likewise provide task/branch/commit-bound
   `.minelink-dev/reports/ona-codex-video-verifier-session.md` in addition to
   the hash-checked `video-review.md` and release gate.

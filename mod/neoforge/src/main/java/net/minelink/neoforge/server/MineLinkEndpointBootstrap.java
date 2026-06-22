@@ -3752,9 +3752,13 @@ public final class MineLinkEndpointBootstrap {
             }
             level.setBlockAndUpdate(base.east(2), Blocks.GLASS.defaultBlockState());
             level.setBlockAndUpdate(base.east(2).above(), Blocks.OAK_LEAVES.defaultBlockState());
-            level.setBlockAndUpdate(base.south(2), Blocks.TORCH.defaultBlockState());
+            level.setBlockAndUpdate(base.south(1), Blocks.TORCH.defaultBlockState());
+            level.setBlockAndUpdate(base.south(2), Blocks.STONE.defaultBlockState());
             level.setBlockAndUpdate(base.south(3), Blocks.WATER.defaultBlockState());
-            level.setBlockAndUpdate(base.south(4), Blocks.OAK_FENCE.defaultBlockState());
+            level.setBlockAndUpdate(base.south(3).east(), Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(base.south(3).west(), Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(base.south(4), Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(base.south(5), Blocks.OAK_FENCE.defaultBlockState());
             level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());
             level.setBlockAndUpdate(base.east(4), Blocks.DIAMOND_ORE.defaultBlockState());
         }
@@ -4022,9 +4026,9 @@ public final class MineLinkEndpointBootstrap {
                 return new BlockPos[] {
                     fixtureBase.east(2),
                     fixtureBase.east(2).above(),
-                    fixtureBase.south(2),
+                    fixtureBase.south(1),
                     fixtureBase.south(3),
-                    fixtureBase.south(4),
+                    fixtureBase.south(5),
                     fixtureBase.east(3),
                     fixtureBase.east(4)
                 };

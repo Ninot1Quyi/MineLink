@@ -314,12 +314,14 @@ When the baseline is available, the prebuild edge is considered ready; the
 first true blocker should then move to the automation-to-Platform-Codex handoff
 unless a concrete Codex session readback exists. The chain reporter and Ona
 finalizer require `.minelink-dev/reports/ona-codex-implementation-session.md`
-to identify `Agent mode: Ona Platform Codex`, a `Session id`,
-`Result: passed`, the current `Task id`, the expected `Branch`, and the current
-`Commit` before validation or PR finalization can be treated as downstream
-evidence. Generic Ona automation, SSH, task, stale readback, wrong branch, or
-default-agent output must not satisfy this implementation edge. The separate
-video-verifier session uses the same task/branch/commit-bound pattern through
+to identify `Agent mode: Ona Platform Codex`, `Identity: I am Codex running in
+Ona Platform Codex`, a `Session id`, `Result: passed`, the current `Task id`,
+the expected `Branch`, and the current `Commit` before validation or PR
+finalization can be treated as downstream evidence. The identity line is a
+liveness diagnostic, not acceptance by itself. Generic Ona automation, SSH,
+task, stale readback, wrong branch, or default-agent output must not satisfy
+this implementation edge. The separate video-verifier session uses the same
+task/branch/commit-bound pattern through
 `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the
 hash-checked video review artifacts.
 `scripts/dev/check-platform-codex-evidence.mjs` is the fail-closed evidence
@@ -562,7 +564,9 @@ NeoForge evidence: glass/leaves for translucent, torch for empty-collision
 decorative, water for fluid, fence for partial occluder, stone for opaque, and a
 hidden diamond ore negative behind the stone. Avoid vegetation blocks for
 decorative fixture assertions because vanilla/NeoForge neighbor updates can
-make those blocks disappear before observation.
+make those blocks disappear before observation. Keep the water source boxed by
+native solid blocks so fluid ticks cannot wash away adjacent decorative fixtures
+before `observe.scene` runs.
 
 ## Current Product State
 

@@ -201,6 +201,11 @@ function readbackAgentAccepted(explicitAgent, text) {
   return /Ona Platform Codex/i.test(explicitAgent) || /^(Agent mode|Agent|Verifier):\s*Ona Platform Codex\s*$/im.test(text);
 }
 
+function readbackIdentityAccepted(text) {
+  const identity = markerValue(text, "Identity");
+  return /\bCodex\b/i.test(identity) && /Ona Platform Codex/i.test(identity);
+}
+
 function readbackSessionId(explicitSession, text) {
   if (hasValue(explicitSession)) return explicitSession;
   return markerValue(text, "Session id") || markerValue(text, "Session");
@@ -228,6 +233,11 @@ function readbackMatchesExpected(text, expected) {
   const taskId = markerValue(text, ["Task id", "Task"]);
   const branch = markerValue(text, "Branch");
   const commit = markerValue(text, "Commit");
+  if (!readbackIdentityAccepted(text)) {
+    failures.push("Identity marker must say Codex running in Ona Platform Codex");
+  } else {
+    evidence.push("Identity: Codex on Ona Platform Codex");
+  }
 
   if (expectedValuePresent(expected.taskId)) {
     if (taskId !== expected.taskId) {
@@ -562,10 +572,10 @@ const statusSyncStatus = ciStatus === "passed" && hasValue(args.githubStatusUrl)
 const codexBlocker = codexAuthFailed
   ? "Ona Platform Codex rejected the LLM request as unauthenticated before repository commands could run."
   : implementationStatus === "blocked"
-    ? `Implementation evidence must identify Agent mode: Ona Platform Codex, Session id, Result: passed, Task id, Branch, and Commit in ${args.onaImplementationReadback}; generic Ona automation, task, stale readback, wrong branch, or default-agent evidence is not accepted.${implementationReadbackBound.failures.length ? ` ${implementationReadbackBound.failures.join(" ")}` : ""}`
+    ? `Implementation evidence must identify Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Session id, Result: passed, Task id, Branch, and Commit in ${args.onaImplementationReadback}; generic Ona automation, task, stale readback, wrong branch, or default-agent evidence is not accepted.${implementationReadbackBound.failures.length ? ` ${implementationReadbackBound.failures.join(" ")}` : ""}`
     : implementationStatus === "missing"
-      ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Session id, Result: passed, Task id, Branch, and Commit.`
-    : "";
+      ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Session id, Result: passed, Task id, Branch, and Commit.`
+      : "";
 const globalBlocker = args.blocker || codexBlocker;
 const prebuildBlocker =
   prebuildStatus === "blocked"
@@ -597,6 +607,7 @@ const nodes = [
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
+    implementationReadbackInfo && readbackIdentityAccepted(implementationReadbackText) && "Identity: Codex on Ona Platform Codex",
     ...implementationReadbackBound.evidence,
     implementationReadbackInfo && args.onaImplementationReadback,
   ], codexBlocker),
@@ -614,6 +625,7 @@ const nodes = [
   mkNode("video_verifier", "Dedicated video verifier", verifierStatus, [
     verifierSessionId && `Verifier session: ${verifierSessionId}`,
     verifierAgentAccepted && "Agent mode: Ona Platform Codex",
+    verifierReadbackInfo && readbackIdentityAccepted(verifierReadbackText) && "Identity: Codex on Ona Platform Codex",
     ...verifierReadbackBound.evidence,
     verifierReadbackInfo && args.onaVerifierReadback,
     reviewInfo && args.videoReview,
