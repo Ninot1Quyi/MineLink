@@ -7,6 +7,14 @@ scenario="${1:-mine_tree}"
 port="${MINELINK_PORT:-}"
 runtime="${MINELINK_RUNTIME:-mock}"
 work_dir="${MINELINK_WORK_DIR:-.minelink-dev/$scenario}"
+record_client="${MINELINK_RECORD_CLIENT:-0}"
+
+truthy_value() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 case "$scenario" in
   mine_tree)
@@ -98,9 +106,21 @@ fi
 export MINELINK_REPORT="$report"
 export MINELINK_LOG_DIR="$work_dir/logs"
 export MINELINK_TRACE="$work_dir/replays/latest-action-trace.jsonl"
+if truthy_value "$record_client"; then
+  if [ "$runtime" != "neoforge" ]; then
+    echo "MINELINK_RECORD_CLIENT=1 requires MINELINK_RUNTIME=neoforge." >&2
+    exit 2
+  fi
+  export MINELINK_RECORDER_ENABLED="${MINELINK_RECORDER_ENABLED:-1}"
+  export MINELINK_RECORDER_PLAYER_NAME="${MINELINK_RECORDER_PLAYER_NAME:-MineLinkRecorder}"
+fi
 
 server_pid=""
 gateway_pid=""
+client_pid=""
+ffmpeg_pid=""
+xvfb_pid=""
+client_capture=""
 kill_tree() {
   pid="$1"
   if command -v pgrep >/dev/null 2>&1; then
@@ -149,6 +169,10 @@ PY
   fi
   for log_file in \
     "$work_dir/logs/agent.log" \
+    "$work_dir/logs/client.stdout.log" \
+    "$work_dir/logs/client.stderr.log" \
+    "$work_dir/logs/recorder-ffmpeg.log" \
+    "$work_dir/logs/recorder-xvfb.log" \
     "$work_dir/logs/gateway.stdout.log" \
     "$work_dir/logs/gateway.stderr.log" \
     "$work_dir/logs/server.stdout.log" \
@@ -161,6 +185,20 @@ PY
 }
 
 cleanup() {
+  if [ -n "$ffmpeg_pid" ] && kill -0 "$ffmpeg_pid" >/dev/null 2>&1; then
+    kill -INT "$ffmpeg_pid" >/dev/null 2>&1 || true
+    sleep 1
+    kill_tree "$ffmpeg_pid"
+    wait "$ffmpeg_pid" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$client_pid" ] && kill -0 "$client_pid" >/dev/null 2>&1; then
+    kill_tree "$client_pid"
+    wait "$client_pid" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$xvfb_pid" ] && kill -0 "$xvfb_pid" >/dev/null 2>&1; then
+    kill_tree "$xvfb_pid"
+    wait "$xvfb_pid" >/dev/null 2>&1 || true
+  fi
   if [ -n "$gateway_pid" ] && kill -0 "$gateway_pid" >/dev/null 2>&1; then
     kill_tree "$gateway_pid"
     wait "$gateway_pid" >/dev/null 2>&1 || true
@@ -180,6 +218,123 @@ on_exit() {
 }
 trap on_exit EXIT
 
+wait_for_log_text() {
+  log_file="$1"
+  text="$2"
+  timeout_seconds="$3"
+  deadline=$((SECONDS + timeout_seconds))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if [ -f "$log_file" ] && grep -Fq "$text" "$log_file"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for '$text' in $log_file" >&2
+  return 1
+}
+
+wait_for_any_log_text() {
+  text="$1"
+  timeout_seconds="$2"
+  shift 2
+  deadline=$((SECONDS + timeout_seconds))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    for log_file in "$@"; do
+      if [ -f "$log_file" ] && grep -Fq "$text" "$log_file"; then
+        return 0
+      fi
+    done
+    sleep 1
+  done
+  echo "Timed out waiting for '$text' in logs: $*" >&2
+  return 1
+}
+
+start_recorder_client() {
+  if ! truthy_value "$record_client"; then
+    return 0
+  fi
+  if [ "$runtime" != "neoforge" ]; then
+    echo "MINELINK_RECORD_CLIENT=1 requires MINELINK_RUNTIME=neoforge." >&2
+    exit 2
+  fi
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ffmpeg is required for MineLink client acceptance recording." >&2
+    exit 2
+  fi
+
+  recorder_display="${MINELINK_RECORDER_DISPLAY:-${DISPLAY:-:99}}"
+  recorder_video_size="${MINELINK_RECORDER_VIDEO_SIZE:-960x720}"
+  recorder_fps="${MINELINK_RECORDER_FPS:-15}"
+  if [ -z "${DISPLAY:-}" ] || [ "${MINELINK_RECORDER_FORCE_XVFB:-0}" = "1" ]; then
+    if ! command -v Xvfb >/dev/null 2>&1; then
+      echo "Xvfb is required for headless Minecraft client recording when DISPLAY is not set." >&2
+      exit 2
+    fi
+    Xvfb "$recorder_display" -screen 0 "${recorder_video_size}x24" \
+      > "$work_dir/logs/recorder-xvfb.log" \
+      2>&1 &
+    xvfb_pid="$!"
+    export DISPLAY="$recorder_display"
+    sleep 2
+  else
+    export DISPLAY="$recorder_display"
+  fi
+
+  client_capture="$work_dir/reports/client-capture.mp4"
+  ffmpeg -y -hide_banner -loglevel warning \
+    -f x11grab \
+    -video_size "$recorder_video_size" \
+    -framerate "$recorder_fps" \
+    -i "$DISPLAY" \
+    -an \
+    -pix_fmt yuv420p \
+    "$client_capture" \
+    > "$work_dir/logs/recorder-ffmpeg.log" \
+    2>&1 &
+  ffmpeg_pid="$!"
+
+  export MINELINK_RECORDER_CLIENT_ENABLED="${MINELINK_RECORDER_CLIENT_ENABLED:-1}"
+  export MINELINK_RECORDER_CLIENT_USERNAME="${MINELINK_RECORDER_CLIENT_USERNAME:-MineLinkRecorder}"
+  export MINELINK_RECORDER_CLIENT_ADDRESS="${MINELINK_RECORDER_CLIENT_ADDRESS:-127.0.0.1:$minecraft_port}"
+  export MINELINK_RECORDER_CLIENT_WIDTH="${MINELINK_RECORDER_CLIENT_WIDTH:-960}"
+  export MINELINK_RECORDER_CLIENT_HEIGHT="${MINELINK_RECORDER_CLIENT_HEIGHT:-720}"
+  export MINELINK_RECORDER_CLIENT_CONNECT_DELAY_TICKS="${MINELINK_RECORDER_CLIENT_CONNECT_DELAY_TICKS:-40}"
+  export MINELINK_RECORDER_CLIENT_GAME_DIR="${MINELINK_RECORDER_CLIENT_GAME_DIR:-run-client}"
+  mkdir -p "mod/neoforge/$MINELINK_RECORDER_CLIENT_GAME_DIR"
+
+  (
+    cd mod/neoforge
+    if truthy_value "${MINELINK_ENABLE_CREATE:-0}"; then
+      exec ./gradlew --no-daemon -PenableCreateAdapter=true runClient
+    fi
+    exec ./gradlew --no-daemon runClient
+  ) > "$work_dir/logs/client.stdout.log" 2> "$work_dir/logs/client.stderr.log" &
+  client_pid="$!"
+
+  wait_for_any_log_text \
+    "MineLink recorder client joined" \
+    "${MINELINK_RECORDER_CLIENT_JOIN_TIMEOUT:-120}" \
+    "$work_dir/logs/client.stdout.log" \
+    "$work_dir/logs/client.stderr.log"
+}
+
+stop_recorder_client() {
+  if ! truthy_value "$record_client"; then
+    return 0
+  fi
+  if [ -n "$ffmpeg_pid" ] && kill -0 "$ffmpeg_pid" >/dev/null 2>&1; then
+    kill -INT "$ffmpeg_pid" >/dev/null 2>&1 || true
+    wait "$ffmpeg_pid" >/dev/null 2>&1 || true
+    ffmpeg_pid=""
+  fi
+  if [ -n "$client_pid" ] && kill -0 "$client_pid" >/dev/null 2>&1; then
+    kill_tree "$client_pid"
+    wait "$client_pid" >/dev/null 2>&1 || true
+    client_pid=""
+  fi
+}
+
 if [ "$runtime" = "neoforge" ]; then
   start_timeout="${MINELINK_SERVER_START_TIMEOUT:-240}"
   agent_timeout="${MINELINK_AGENT_TIMEOUT_SECONDS:-300}"
@@ -193,6 +348,10 @@ MINELINK_RUNTIME="$runtime" bash scripts/dev/start-server.sh > "$work_dir/logs/s
 server_pid="$!"
 
 scripts/dev/wait-for-port.py 127.0.0.1 "$port" "$start_timeout"
+if truthy_value "$record_client"; then
+  scripts/dev/wait-for-port.py 127.0.0.1 "$minecraft_port" "$start_timeout"
+  start_recorder_client
+fi
 
 mcp_transport="${MINELINK_MCP_TRANSPORT:-stdio}"
 if [ "$mcp_transport" = "http" ] || [ "$mcp_transport" = "streamable-http" ] || [ "$mcp_transport" = "gateway" ]; then
@@ -251,3 +410,17 @@ if not payload.get("passed"):
     raise SystemExit(f"scenario failed: {payload}")
 print(json.dumps({"scenario": payload.get("scenario"), "passed": True, "report": str(report)}, ensure_ascii=False))
 PY
+
+if truthy_value "$record_client"; then
+  stop_recorder_client
+  branch_name="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf '%s' unknown)"
+  node scripts/dev/render-client-capture-video.mjs \
+    --client-video "$client_capture" \
+    --report "$report" \
+    --log-dir "$work_dir/logs" \
+    --output-dir "${MINELINK_ACCEPTANCE_VIDEO_OUTPUT_DIR:-.minelink-dev/reports/artifacts}" \
+    --task-id "${MINELINK_TASK_ID:-$scenario}" \
+    --branch "$branch_name" \
+    --producer "${MINELINK_ACCEPTANCE_VIDEO_PRODUCER:-ona-task-finalizer}" \
+    --require-mp4
+fi

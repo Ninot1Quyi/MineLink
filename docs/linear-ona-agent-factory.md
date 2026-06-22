@@ -371,7 +371,7 @@ MINELINK_ONA_PROJECT_ID              Ona project id, defaults to the MineLink pr
 MINELINK_ONA_ENVIRONMENT_ID          Optional explicit running environment id
 MINELINK_ONA_CREATE_ENVIRONMENT      Optional 1 to create a task environment
 MINELINK_ONA_CODEX_REASONING_EFFORT  Optional override; default is EXTRA_HIGH
-MINELINK_ONA_CODEX_AGENT_MODE        Optional override; default is AGENT_MODE_RALPH
+MINELINK_ONA_CODEX_AGENT_MODE        Optional override; default is AGENT_MODE_GOAL
 ```
 
 The script refuses to omit `agentId` and refuses the known default automation
@@ -379,9 +379,9 @@ agent id `00000000-0000-0000-0000-000000007100`. It writes
 `.minelink-dev/reports/ona-platform-codex-api-session.{md,json}` and accepts a
 launch probe only when `GetAgentExecution` reads back the requested Codex
 `spec.agentId` plus `spec.codexSettings` or `status.codexSettings`. MineLink
-requests `AGENT_MODE_RALPH`, the public SDK enum that maps to the persistent
-Goal selector, and task readbacks must include
-`Agent execution mode: AGENT_MODE_RALPH`. If `GetAgentExecution` also exposes a
+requests `AGENT_MODE_GOAL`, the explicit persistent Goal selector, and task
+readbacks must include
+`Agent execution mode: AGENT_MODE_GOAL`. If `GetAgentExecution` also exposes a
 mode field, it must match the requested mode. This proves only the programmatic
 Platform Codex launch/readback edge. It does not satisfy the implementation
 readback, video verifier, PR, CI, or product acceptance gates until the
@@ -479,7 +479,7 @@ implementation AgentService execution, waits for
 `docs/agent-factory-canaries/<task>-video-verifier.md`, then runs
 `scripts/dev/fetch-platform-codex-video-verifier.mjs`. The fetch script is the
 canonical bridge for canary video review: it requires the verifier AgentService
-API readback to show the configured Codex agent id, `AGENT_MODE_RALPH`, and
+API readback to show the configured Codex agent id, `AGENT_MODE_GOAL`, and
 `codexSettings`, checks the verifier canary against the current task, branch,
 reviewed commit, summary hash, MP4 hash, and video producer, writes
 `.minelink-dev/reports/ona-codex-video-verifier-session.md`, materializes

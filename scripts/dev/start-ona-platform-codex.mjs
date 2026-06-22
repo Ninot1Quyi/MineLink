@@ -25,7 +25,7 @@ const defaults = {
   model: process.env.MINELINK_ONA_CODEX_MODEL ?? "CODEX_OPEN_AI_MODEL_GPT_5_5",
   reasoningEffort: process.env.MINELINK_ONA_CODEX_REASONING_EFFORT ?? "CODEX_REASONING_EFFORT_EXTRA_HIGH",
   serviceTier: process.env.MINELINK_ONA_CODEX_SERVICE_TIER ?? "CODEX_SERVICE_TIER_FAST",
-  agentMode: process.env.MINELINK_ONA_CODEX_AGENT_MODE ?? "AGENT_MODE_RALPH",
+  agentMode: process.env.MINELINK_ONA_CODEX_AGENT_MODE ?? "AGENT_MODE_GOAL",
   name: process.env.MINELINK_ONA_CODEX_RUN_NAME ?? "",
   prompt: "",
   promptFile: "",
@@ -104,8 +104,7 @@ Options:
   --project-id <uuid>          Ona project id. Defaults to the MineLink project id.
   --organization-id <uuid>     Ona organization id for --discover-policies.
   --environment-id <uuid>      Explicit running Ona environment id for in-environment agents.
-  --agent-mode <enum>          AgentService mode. Defaults to AGENT_MODE_RALPH,
-                                which maps to the persistent Goal selector.
+  --agent-mode <enum>          AgentService mode. Defaults to AGENT_MODE_GOAL.
   --create-environment         Create and poll a fresh task environment before StartAgent.
   --dry-run                    Validate inputs and write the request body without API calls.
 
@@ -232,6 +231,8 @@ async function videoVerifierCanaryPrompt(context = {}) {
   const summaryHash = requestValue(request, "Summary sha256") || "missing";
   const mp4Hash = requestValue(request, "MP4 sha256") || "missing";
   const videoProducer = requestValue(request, "Video producer") || "unknown";
+  const clientGuiCapture = requestValue(request, "Client GUI capture") || "unknown";
+  const clientGuiCaptureRequired = requestValue(request, "Client GUI capture required") || "no";
   const requestTaskId = requestValue(request, "Task id") || args.taskId;
   const requestBranch = requestValue(request, "Branch") || args.branch;
   const canaryContent = [
@@ -247,6 +248,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     "Task matched: yes",
     "Video matched: yes",
     `Video producer: ${videoProducer}`,
+    `Client GUI capture: ${clientGuiCaptureRequired === "yes" ? "yes" : clientGuiCapture}`,
     `Summary sha256: ${summaryHash}`,
     `MP4 sha256: ${mp4Hash}`,
     `Task id: ${args.taskId}`,
@@ -278,6 +280,8 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- Acceptance summary sha256: ${summaryHash}`,
     `- Acceptance MP4 sha256: ${mp4Hash}`,
     `- Acceptance video producer: ${videoProducer}`,
+    `- Client GUI capture: ${clientGuiCapture}`,
+    `- Client GUI capture required: ${clientGuiCaptureRequired}`,
     "",
     "Critical path:",
     "1. Launch a bounded native Codex subagent/verifier inside this same implementation session.",

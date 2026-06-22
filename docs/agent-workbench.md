@@ -14,12 +14,12 @@ one environment = one task = one branch = one PR
 The local Codex thread remains the integration and acceptance owner. Cloud
 agents should take narrow tasks with explicit write scopes and validation.
 When the task runs in Ona, select the platform **Codex** agent in Goal mode.
-The programmatic path requests that mode as `AGENT_MODE_RALPH`. The default Ona
+The programmatic path requests that mode as `AGENT_MODE_GOAL`. The default Ona
 Agent mode and one-shot `AGENT_MODE_EXECUTION` are not accepted as MineLink
 implementation or verifier evidence. Self-reported identity is not enough: the
 default Ona Agent can echo `Identity: I am Codex running in Ona Platform Codex`.
 Accepted Ona evidence must include platform-side Codex selector/API evidence,
-`Agent execution mode: AGENT_MODE_RALPH`, and task/branch/commit-bound readback.
+`Agent execution mode: AGENT_MODE_GOAL`, and task/branch/commit-bound readback.
 Use `docs/ona-migration.md` for the migration runbook and
 `docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona agent factory.
 Use `docs/agent-task-queue.md` for ready tasks.
@@ -44,7 +44,7 @@ sets are disjoint and a human or lead agent is integrating.
 Every agent-ready issue or PR must state:
 
 - Task: the one-sentence outcome.
-- Required agent mode: Ona Platform Codex Goal mode (`AGENT_MODE_RALPH`) for Ona tasks.
+- Required agent mode: Ona Platform Codex Goal mode (`AGENT_MODE_GOAL`) for Ona tasks.
 - Scope: exact modules or files the agent may change.
 - Forbidden: assertions, boundaries, or files the agent must not weaken.
 - Acceptance gate: which gate in `docs/minelink-acceptance.md` is affected.

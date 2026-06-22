@@ -237,10 +237,10 @@ function apiSessionEvidence(report) {
   } else {
     evidence.push("codexSettings present");
   }
-  if (requestedAgentMode !== "AGENT_MODE_RALPH") {
-    failures.push(`Ona Platform Codex API session did not request Goal/Ralph mode: ${requestedAgentMode || "missing"}.`);
+  if (requestedAgentMode !== "AGENT_MODE_GOAL") {
+    failures.push(`Ona Platform Codex API session did not request Goal mode: ${requestedAgentMode || "missing"}.`);
   } else {
-    evidence.push("requested Goal/Ralph mode");
+    evidence.push("requested Goal mode");
   }
   if (hasValue(readbackMode)) {
     if (readbackMode !== requestedAgentMode) {

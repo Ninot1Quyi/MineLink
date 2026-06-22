@@ -18,6 +18,11 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+def truthyEnv = { String name ->
+    def value = System.getenv(name)
+    return value != null && ["1", "true", "yes", "on"].contains(value.toLowerCase(Locale.ROOT))
+}
+
 sourceSets.main.resources {
     srcDir('src/generated/resources')
     exclude("src/generated/**/.cache")
@@ -46,6 +51,16 @@ neoForge {
         client {
             client()
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            if (truthyEnv("MINELINK_RECORDER_CLIENT_ENABLED")) {
+                programArgument '--gameDir'
+                programArgument(System.getenv("MINELINK_RECORDER_CLIENT_GAME_DIR") ?: 'run-client')
+                programArgument '--username'
+                programArgument(System.getenv("MINELINK_RECORDER_CLIENT_USERNAME") ?: 'MineLinkRecorder')
+                programArgument '--width'
+                programArgument(System.getenv("MINELINK_RECORDER_CLIENT_WIDTH") ?: '960')
+                programArgument '--height'
+                programArgument(System.getenv("MINELINK_RECORDER_CLIENT_HEIGHT") ?: '720')
+            }
         }
 
         gameTestServer {

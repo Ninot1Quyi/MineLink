@@ -791,9 +791,9 @@ Current status:
   AgentService candidate path for programmatic Codex launch: `StartAgent` with
   an explicit Codex `agentId` and `codexSettings`, `SendToAgentExecution` for
   the task prompt, and `GetAgentExecution` for `spec.agentId` plus
-  Codex-settings readback. The launcher now requests `AGENT_MODE_RALPH`, the
-  Ona SDK enum behind the persistent Goal selector; generated task readbacks
-  must include `Agent execution mode: AGENT_MODE_RALPH`, while one-shot
+  Codex-settings readback. The launcher now requests `AGENT_MODE_GOAL`, the
+  explicit persistent Goal selector; generated task readbacks
+  must include `Agent execution mode: AGENT_MODE_GOAL`, while one-shot
   `AGENT_MODE_EXECUTION` evidence remains insufficient for factory delivery.
   This is not accepted product evidence yet. It does not replace the
   task-bound implementation and verifier readback files required by the
@@ -972,6 +972,13 @@ Current status:
   acceptance requires the MP4 to be produced in the Ona task/finalizer
   environment with producer `ona-task-finalizer`; the release gate must require
   that producer and the verifier must review that exact hash.
+  For Minecraft/NeoForge product-video tasks, trace-driven MP4s remain
+  diagnostic only. The accepted path is `MINELINK_RECORD_CLIENT=1` with a real
+  NeoForge `runClient` recorder and
+  `scripts/dev/render-client-capture-video.mjs`, which writes
+  `clientGuiCapture=true` in `acceptance-video-origin.json`. The release gate
+  must include `--require-client-gui-capture`; otherwise a static card, reports
+  digest, or server-observation-only video cannot be final acceptance evidence.
 - `scripts/dev/prepare-video-review-request.mjs` generates
   `.minelink-dev/reports/artifacts/video-review-request.md` with the current
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This

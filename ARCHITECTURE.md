@@ -299,9 +299,9 @@ execution. MineLink tracks that experiment through
 `scripts/dev/start-ona-platform-codex.mjs`, which refuses to omit `agentId` or
 use the known default automation agent id. The launcher defaults to GPT-5.5,
 `CODEX_REASONING_EFFORT_EXTRA_HIGH`, the fast service tier, and
-`AGENT_MODE_RALPH`. Public Ona SDKs name the persistent Goal selector as
-`AGENT_MODE_RALPH`; `AGENT_MODE_EXECUTION` remains the one-shot Agent selector
-and is not accepted for MineLink long-running factory tasks. The launcher
+`AGENT_MODE_GOAL`. The Ona AgentService `mode` field defaults to the one-shot
+`AGENT_MODE_EXECUTION` path if omitted, so MineLink must pass
+`AGENT_MODE_GOAL` explicitly for long-running factory tasks. The launcher
 allows environment overrides only for controlled diagnostics. Ona's current
 `codexSettings` surface exposes model, reasoning effort, and service tier; the
 visible context-window capacity is provided by the selected model rather than
@@ -313,7 +313,7 @@ client preference, not a server-side Ona API override. This API path is not
 accepted until a task-bound readback
 from `AgentService/GetAgentExecution` proves `spec.agentId` is the configured
 Codex agent id, `spec.codexSettings` or `status.codexSettings` is present, and
-the generated task readback records `Agent execution mode: AGENT_MODE_RALPH`.
+the generated task readback records `Agent execution mode: AGENT_MODE_GOAL`.
 `.github/workflows/ona-platform-codex-probe.yml` runs the same probe inside
 GitHub Actions with repository `ONA_TOKEN` access. Its default `discover` mode
 only proves token/API policy readback and resolves organization context from
@@ -744,7 +744,18 @@ Codex probe workflow install `ffmpeg` and require the MP4 before uploading
 evidence, so missing video support is a workflow failure instead of a silent
 `.unavailable` artifact. This artifact is not proof of client GUI perception and
 not a gate-status upgrade unless the task also supplies a real client-capture
-artifact. Pull request workflows call the Ona release finalizer, which runs
+artifact. For Minecraft/NeoForge product-video tasks, the finalizer must use
+`MINELINK_RECORD_CLIENT=1`, which starts a real NeoForge `runClient`, records
+the Minecraft window through Xvfb/ffmpeg, and then runs
+`scripts/dev/render-client-capture-video.mjs` to compose the normal client view
+with terminal evidence. That renderer is the only path allowed to set
+`clientGuiCapture=true`; `scripts/dev/check-video-review.mjs
+--require-client-gui-capture` rejects trace-driven videos for these tasks. The
+recorder client is an observer only: the server creates a visible
+`server_agent` marker and an invisible camera anchor that continuously follows
+the agent for recording, but it does not add MCP tools, world-query authority,
+materials, or any bypass around server-side checks. Pull request workflows call
+the Ona release finalizer, which runs
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the task environment
 after `check-video-review.mjs` passes, to upload the verifier-approved
 `acceptance.mp4` to the configured S3-compatible video store, currently

@@ -15,6 +15,7 @@ let taskId = process.env.MINELINK_TASK_ID ?? "local";
 let branch = process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "";
 let taskRequirements = process.env.MINELINK_TASK_REQUIREMENTS ?? "";
 let requireMp4 = false;
+let requireClientGuiCapture = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -34,8 +35,10 @@ for (let index = 2; index < process.argv.length; index += 1) {
     taskRequirements = process.argv[++index] ?? "";
   } else if (arg === "--require-mp4") {
     requireMp4 = true;
+  } else if (arg === "--require-client-gui-capture") {
+    requireClientGuiCapture = true;
   } else if (arg === "-h" || arg === "--help") {
-    console.log(`Usage: node scripts/dev/prepare-video-review-request.mjs [--require-mp4]
+    console.log(`Usage: node scripts/dev/prepare-video-review-request.mjs [--require-mp4] [--require-client-gui-capture]
 
 Creates the handoff package for the dedicated Ona Platform Codex video
 verifier. The request includes current artifact hashes and the exact verifier
@@ -126,7 +129,19 @@ const mp4Hash = mp4Stat?.isFile() ? await sha256(mp4Path) : "missing";
 const mp4Metadata = mp4Stat?.isFile() ? await ffprobe(mp4Path) : "missing";
 const origin = await readJson(originPath);
 const producer = origin?.producer ?? "unknown";
+const videoKind = origin?.videoKind ?? "unknown";
+const clientGuiCapture = origin?.clientGuiCapture === true;
 const resolvedBranch = await gitBranch();
+
+if (requireClientGuiCapture) {
+  if (!origin) {
+    failures.push(`Missing acceptance video origin metadata: ${originPath}`);
+  } else if (!clientGuiCapture) {
+    failures.push(
+      `Acceptance video is ${videoKind} with clientGuiCapture=false; normal Minecraft client footage is required`,
+    );
+  }
+}
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
@@ -141,6 +156,9 @@ const lines = [
   `- Acceptance MP4: \`${mp4Path}\``,
   `- Acceptance video origin: \`${originPath}\``,
   `- Video producer: \`${md(producer)}\``,
+  `- Video kind: \`${md(videoKind)}\``,
+  `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
+  `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Summary sha256: \`${summaryHash}\``,
   `- MP4 sha256: \`${mp4Hash}\``,
   `- MP4 metadata: \`${md(mp4Metadata).replaceAll("\n", "; ")}\``,
@@ -158,6 +176,7 @@ const lines = [
   "Task matched: yes|no",
   "Video matched: yes|no",
   `Video producer: ${producer}`,
+  `Client GUI capture: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Summary sha256: ${summaryHash}`,
   `MP4 sha256: ${mp4Hash}`,
   "```",
@@ -165,7 +184,7 @@ const lines = [
   "After `video-review.md` is written, run:",
   "",
   "```bash",
-  "node scripts/dev/check-video-review.mjs --require-mp4",
+  `node scripts/dev/check-video-review.mjs --require-mp4${requireClientGuiCapture ? " --require-client-gui-capture" : ""}`,
   "```",
   "",
   "## Release Boundary",

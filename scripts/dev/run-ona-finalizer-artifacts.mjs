@@ -26,6 +26,9 @@ const defaults = {
     process.env.MINELINK_ACCEPTANCE_VIDEO_REQUIRED_PRODUCER ??
     process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ??
     "ona-task-finalizer",
+  requireClientGuiCapture:
+    process.env.MINELINK_REQUIRE_CLIENT_GUI_CAPTURE === "1" ||
+    process.env.MINELINK_REQUIRE_CLIENT_GUI_CAPTURE === "true",
   runId: process.env.GITHUB_RUN_ID ?? process.env.MINELINK_RUN_ID ?? "local",
   videoStorageProvider: process.env.MINELINK_VIDEO_STORAGE_PROVIDER ?? "",
   videoStorageEndpoint: process.env.MINELINK_VIDEO_STORAGE_ENDPOINT ?? "",
@@ -67,6 +70,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--stage-group") args.stageGroup = readValue();
   else if (arg === "--video-producer") args.videoProducer = readValue();
   else if (arg === "--required-video-producer") args.requiredVideoProducer = readValue();
+  else if (arg === "--require-client-gui-capture") args.requireClientGuiCapture = true;
   else if (arg === "--run-id") args.runId = readValue();
   else if (arg === "--video-storage-provider") args.videoStorageProvider = readValue();
   else if (arg === "--video-storage-endpoint") args.videoStorageEndpoint = readValue();
@@ -200,6 +204,7 @@ function stageCommand(stage) {
     args.videoProducer || "ona-task-finalizer",
     "--required-video-producer",
     args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
+    ...(args.requireClientGuiCapture ? ["--require-client-gui-capture"] : []),
   ];
   return command.map(shellQuote).join(" ");
 }
@@ -278,6 +283,7 @@ const report = {
   stages: stageList(),
   videoProducer: args.videoProducer,
   requiredVideoProducer: args.requiredVideoProducer,
+  requireClientGuiCapture: args.requireClientGuiCapture,
   tarOutput: args.tarOutput,
   injectedSourceScripts: [],
   extractedFiles: [],

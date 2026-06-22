@@ -10,6 +10,7 @@ let originPath = ".minelink-dev/reports/artifacts/acceptance-video-origin.json";
 let outputPath = ".minelink-dev/reports/artifacts/video-release-gate.md";
 let requireMp4 = false;
 let requireProducer = "";
+let requireClientGuiCapture = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -27,8 +28,10 @@ for (let index = 2; index < process.argv.length; index += 1) {
     requireProducer = process.argv[++index] ?? "";
   } else if (arg === "--require-mp4") {
     requireMp4 = true;
+  } else if (arg === "--require-client-gui-capture") {
+    requireClientGuiCapture = true;
   } else if (arg === "-h" || arg === "--help") {
-    console.log(`Usage: node scripts/dev/check-video-review.mjs [--require-mp4]
+    console.log(`Usage: node scripts/dev/check-video-review.mjs [--require-mp4] [--require-client-gui-capture]
 
 Checks the same-session acceptance-video verifier report before release. The
 verifier report must explicitly contain:
@@ -42,7 +45,9 @@ MP4 sha256: <current acceptance.mp4 sha256>
 
 Any missing video, missing report, negative marker, or non-pass decision fails
 the release gate. Use --require-producer <producer> to require a specific video
-origin such as ona-environment.`);
+origin such as ona-environment. Use --require-client-gui-capture for Minecraft
+product video gates that must show a real Minecraft client view rather than a
+trace-driven server-observation composite.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -101,6 +106,8 @@ const summaryStat = await stat(summaryPath);
 const mp4Stat = await stat(mp4Path);
 const origin = await readJson(originPath);
 const producer = origin?.producer ?? "unknown";
+const videoKind = origin?.videoKind ?? "unknown";
+const clientGuiCapture = origin?.clientGuiCapture === true;
 const review = await readText(reviewPath);
 const summary = await readText(summaryPath);
 const scenarioReportCount = summaryCount(summary, "Scenario reports");
@@ -124,6 +131,16 @@ if (requireMp4 && (!mp4Stat || !mp4Stat.isFile() || mp4Stat.size === 0)) {
   failures.push(`Missing required acceptance MP4: ${mp4Path}`);
 }
 
+if (requireClientGuiCapture) {
+  if (!origin) {
+    failures.push(`Missing acceptance video origin metadata: ${originPath}`);
+  } else if (!clientGuiCapture) {
+    failures.push(
+      `Acceptance video is ${videoKind} with clientGuiCapture=false; Minecraft product gates require normal Minecraft client footage`,
+    );
+  }
+}
+
 if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   failures.push(`Missing same-session video verifier report: ${reviewPath}`);
 } else {
@@ -131,6 +148,7 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const taskMatched = marker(review, "Task matched");
   const videoMatched = marker(review, "Video matched");
   const reviewedProducer = marker(review, "Video producer");
+  const reviewedClientGuiCapture = marker(review, "Client GUI capture");
   const verifier = marker(review, "Verifier");
   const reviewedSummaryHash = marker(review, "Summary sha256");
   const reviewedMp4Hash = marker(review, "MP4 sha256");
@@ -151,6 +169,11 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   }
   if (requireProducer && producer !== requireProducer) {
     failures.push(`Acceptance video producer is ${producer}, expected ${requireProducer}`);
+  }
+  if (requireClientGuiCapture && reviewedClientGuiCapture !== "yes") {
+    failures.push(
+      `Video verifier did not confirm normal Minecraft client footage: ${reviewedClientGuiCapture || "missing"}`,
+    );
   }
   if (/^Release decision:\s*fail/im.test(review)) {
     failures.push("Video verifier reported fail");
@@ -184,8 +207,11 @@ const lines = [
   `- Acceptance MP4: \`${mp4Path}\``,
   `- Acceptance video origin: \`${originPath}\``,
   `- Video producer: \`${producer}\``,
+  `- Video kind: \`${videoKind}\``,
   `- Required producer: \`${requireProducer || "none"}\``,
   `- MP4 required: \`${requireMp4 ? "yes" : "no"}\``,
+  `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
+  `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Scenario reports: \`${scenarioReportCount ?? "unknown"}\``,
   `- Result: \`${failures.length === 0 ? "passed" : "failed"}\``,
   "",

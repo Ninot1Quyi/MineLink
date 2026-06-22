@@ -20,6 +20,9 @@ const defaults = {
     process.env.MINELINK_ACCEPTANCE_VIDEO_REQUIRED_PRODUCER ??
     process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ??
     "ona-task-finalizer",
+  requireClientGuiCapture:
+    process.env.MINELINK_REQUIRE_CLIENT_GUI_CAPTURE === "1" ||
+    process.env.MINELINK_REQUIRE_CLIENT_GUI_CAPTURE === "true",
   outputDir: ".minelink-dev/reports",
 };
 const videoReviewRequestArtifact = ".minelink-dev/reports/artifacts/video-review-request.md";
@@ -67,6 +70,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--scenarios") args.scenarios = readValue();
   else if (arg === "--video-producer") args.videoProducer = readValue();
   else if (arg === "--required-video-producer") args.requiredVideoProducer = readValue();
+  else if (arg === "--require-client-gui-capture") args.requireClientGuiCapture = true;
   else if (arg === "--output-dir") args.outputDir = readValue();
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/run-agent-factory-stage.mjs --stage <stage> [context]
@@ -93,6 +97,10 @@ scheduling overhead in manual diagnostics.`);
   }
 }
 
+function requiresClientGuiCapture() {
+  return args.requireClientGuiCapture || String(args.validationScope || "").toLowerCase() === "neoforge";
+}
+
 function sanitize(text) {
   return String(text ?? "")
     .replace(/(lin_api_)[A-Za-z0-9]+/g, "$1[redacted]")
@@ -100,6 +108,18 @@ function sanitize(text) {
     .replace(/(ghp_)[A-Za-z0-9_]+/g, "$1[redacted]")
     .slice(0, 6000)
     .trim();
+}
+
+function shellQuote(value) {
+  return `'${String(value ?? "").replace(/'/g, `'\\''`)}'`;
+}
+
+function firstScenario(value) {
+  const scenario = String(value ?? "")
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .find((item) => item && item !== "none");
+  return scenario || "mine_tree";
 }
 
 function selfInvocationArgs(stage) {
@@ -131,6 +151,7 @@ function selfInvocationArgs(stage) {
     args.videoProducer || "ona-task-finalizer",
     "--required-video-producer",
     args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
+    ...(requiresClientGuiCapture() ? ["--require-client-gui-capture"] : []),
     "--output-dir",
     args.outputDir,
   ];
@@ -360,29 +381,45 @@ switch (args.stage) {
     );
     break;
   case "render-video":
-    await runCommandStage(
-      args.stage,
-      process.execPath,
-      [
-        "scripts/dev/render-acceptance-video.mjs",
-        "--task-id",
-        args.taskId,
-        "--branch",
-        args.branch || "unknown",
-        "--task-requirements",
-        "docs/minelink-acceptance.md",
-        "--producer",
-        args.videoProducer || "ona-task-finalizer",
-        "--require-mp4",
-      ],
-      { requireImplementation: true },
-    );
+    if (requiresClientGuiCapture()) {
+      {
+        const scenario = firstScenario(args.scenarios);
+        const workDir = `.minelink-dev/client-capture-${scenario}`;
+        const command = [
+          "MINELINK_RUNTIME=neoforge",
+          "MINELINK_ACCEPT_EULA=1",
+          "MINELINK_RECORD_CLIENT=1",
+          "MINELINK_RECORDER_FORCE_XVFB=1",
+          `MINELINK_TASK_ID=${shellQuote(args.taskId)}`,
+          `MINELINK_ACCEPTANCE_VIDEO_PRODUCER=${shellQuote(args.videoProducer || "ona-task-finalizer")}`,
+          `MINELINK_WORK_DIR=${shellQuote(workDir)}`,
+          `bash scripts/dev/e2e.sh ${shellQuote(scenario)}`,
+        ].join(" ");
+        await runCommandStage(args.stage, "bash", ["-lc", command], { requireImplementation: true });
+      }
+    } else {
+      await runCommandStage(
+        args.stage,
+        process.execPath,
+        [
+          "scripts/dev/render-acceptance-video.mjs",
+          "--task-id",
+          args.taskId,
+          "--branch",
+          args.branch || "unknown",
+          "--task-requirements",
+          "docs/minelink-acceptance.md",
+          "--producer",
+          args.videoProducer || "ona-task-finalizer",
+          "--require-mp4",
+        ],
+        { requireImplementation: true },
+      );
+    }
     break;
   case "prepare-video":
-    await runCommandStage(
-      args.stage,
-      process.execPath,
-      [
+    {
+      const commandArgs = [
         "scripts/dev/prepare-video-review-request.mjs",
         "--task-id",
         args.taskId,
@@ -391,22 +428,25 @@ switch (args.stage) {
         "--task-requirements",
         "docs/minelink-acceptance.md",
         "--require-mp4",
-      ],
-      { requireImplementation: true },
-    );
+      ];
+      if (requiresClientGuiCapture()) commandArgs.push("--require-client-gui-capture");
+      await runCommandStage(args.stage, process.execPath, commandArgs, { requireImplementation: true });
+    }
     break;
   case "check-video-release":
-    await runCommandStage(
-      args.stage,
-      process.execPath,
-      [
+    {
+      const commandArgs = [
         "scripts/dev/check-video-review.mjs",
         "--require-mp4",
         "--require-producer",
         args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
-      ],
-      { requireImplementation: true, requireVerifier: true },
-    );
+      ];
+      if (requiresClientGuiCapture()) commandArgs.push("--require-client-gui-capture");
+      await runCommandStage(args.stage, process.execPath, commandArgs, {
+        requireImplementation: true,
+        requireVerifier: true,
+      });
+    }
     break;
   case "upload-video":
     await runCommandStage(

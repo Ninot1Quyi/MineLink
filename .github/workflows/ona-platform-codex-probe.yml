@@ -114,7 +114,7 @@ jobs:
       - name: Install acceptance video renderer
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg xvfb libgl1 libgl1-mesa-dri libxcursor1 libxi6 libxinerama1 libxrandr2 libxxf86vm1
 
       - name: Install Ona CLI
         run: |
@@ -169,7 +169,7 @@ jobs:
                 --start
                 --identity-canary
                 --codex-agent-id "$codex_agent_id"
-                --agent-mode AGENT_MODE_RALPH
+                --agent-mode AGENT_MODE_GOAL
                 --create-environment
                 --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
                 --wait-seconds "${INPUT_WAIT_SECONDS:-30}"
@@ -185,7 +185,7 @@ jobs:
                 --start
                 --implementation-canary
                 --codex-agent-id "$codex_agent_id"
-                --agent-mode AGENT_MODE_RALPH
+                --agent-mode AGENT_MODE_GOAL
                 --task-id "$task_id"
                 --branch "$target_branch"
                 --github-issue "${INPUT_GITHUB_ISSUE:-}"
@@ -246,6 +246,10 @@ jobs:
             echo "MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT=$reviewed_commit"
             echo "MINELINK_ONA_FINALIZER_ENVIRONMENT_ID=$environment_id"
           } >> "$GITHUB_ENV"
+          client_gui_args=()
+          if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ]; then
+            client_gui_args+=(--require-client-gui-capture)
+          fi
           node scripts/dev/run-ona-finalizer-artifacts.mjs \
             --environment-id "$environment_id" \
             --task-id "$task_id" \
@@ -257,7 +261,8 @@ jobs:
             --validation-scope "${INPUT_VALIDATION_SCOPE:-docs}" \
             --scenarios "${INPUT_SCENARIOS:-none}" \
             --video-producer ona-task-finalizer \
-            --required-video-producer ona-task-finalizer
+            --required-video-producer ona-task-finalizer \
+            "${client_gui_args[@]}"
 
       - name: Request implementation Codex verifier subagent
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
@@ -287,7 +292,7 @@ jobs:
             --readback-execution "$implementation_execution" \
             --video-verifier-canary \
             --codex-agent-id "$codex_agent_id" \
-            --agent-mode AGENT_MODE_RALPH \
+            --agent-mode AGENT_MODE_GOAL \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
@@ -303,6 +308,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_MODE: ${{ inputs.mode || 'identity-canary' }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
           INPUT_BRANCH_WAIT_SECONDS: ${{ inputs.branch_wait_seconds || '300' }}
         run: |
           node scripts/dev/fetch-platform-codex-video-verifier.mjs \
@@ -311,7 +317,11 @@ jobs:
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
             --wait-seconds "${INPUT_BRANCH_WAIT_SECONDS:-300}"
-          node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer
+          client_gui_args=()
+          if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ]; then
+            client_gui_args+=(--require-client-gui-capture)
+          fi
+          node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer "${client_gui_args[@]}"
           evidence_args=(--verifier)
           chain_args=(--require-platform-codex-verifier)
           if [ "$INPUT_MODE" = "full-chain-canary" ]; then
@@ -358,6 +368,10 @@ jobs:
             echo "Missing Ona finalizer environment id for verifier-approved video release."
             exit 1
           fi
+          client_gui_args=()
+          if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ]; then
+            client_gui_args+=(--require-client-gui-capture)
+          fi
           node scripts/dev/run-ona-finalizer-artifacts.mjs \
             --environment-id "$environment_id" \
             --stage-group release-upload \
@@ -377,7 +391,8 @@ jobs:
             --video-storage-region "${MINELINK_VIDEO_STORAGE_REGION:-auto}" \
             --video-storage-bucket "${MINELINK_VIDEO_STORAGE_BUCKET:-}" \
             --video-storage-public-base-url "${MINELINK_VIDEO_PUBLIC_BASE_URL:-}" \
-            --video-storage-prefix "${MINELINK_VIDEO_STORAGE_PREFIX:-minelink/acceptance-videos}"
+            --video-storage-prefix "${MINELINK_VIDEO_STORAGE_PREFIX:-minelink/acceptance-videos}" \
+            "${client_gui_args[@]}"
           video_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/video-storage-upload.json','utf8')); console.log(report.videoUrl || '')")"
           if [ -z "$video_url" ]; then
             echo "Ona finalizer upload did not report a playable video URL."

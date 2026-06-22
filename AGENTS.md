@@ -216,9 +216,9 @@ Reports must distinguish:
   default Ona automation agent id, and do not treat a launch probe as task
   implementation evidence.
 - Ona Platform Codex task execution must request Goal mode through
-  `AGENT_MODE_RALPH` unless the task is an explicitly documented diagnostic.
+  `AGENT_MODE_GOAL` unless the task is an explicitly documented diagnostic.
   Accepted task and verifier readbacks must include
-  `Agent execution mode: AGENT_MODE_RALPH`; one-shot `AGENT_MODE_EXECUTION`
+  `Agent execution mode: AGENT_MODE_GOAL`; one-shot `AGENT_MODE_EXECUTION`
   evidence is not accepted for long-running factory delivery.
 - Self-reported `Identity: I am Codex running in Ona Platform Codex` is a
   diagnostic only. The default Ona Agent can echo it. Ona work is accepted only

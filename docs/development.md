@@ -186,6 +186,21 @@ node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-tas
 The release gate rejects zero-report summaries even when the verifier report is
 otherwise marked `pass`.
 
+Minecraft/NeoForge product-video tasks require real client footage, not the
+trace-driven server-observation renderer:
+
+```bash
+MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_RECORD_CLIENT=1 bash scripts/dev/e2e.sh mine_tree
+node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer --require-client-gui-capture
+```
+
+`MINELINK_RECORD_CLIENT=1` starts the NeoForge `runClient` recorder, joins the
+local dev server as `MineLinkRecorder`, records the actual Minecraft window with
+Xvfb/ffmpeg, and composes that client view with terminal evidence through
+`scripts/dev/render-client-capture-video.mjs`. The server-side recorder helper
+only moves an observer camera anchor and visible marker for video review; it
+does not grant the agent new MCP tools or bypass any server validation.
+
 Full-chain canaries use the Platform Codex task environment as the artifact
 producer. After the implementation readback exists, GitHub Actions runs:
 
@@ -205,7 +220,7 @@ for task content, then fetches finalizer scripts from the workflow/source ref so
 stale task branches cannot regenerate review requests with old defaults. It is
 an artifact/finalizer bridge only; Platform Codex API readback and branch
 evidence remain the implementation and verifier proof. Platform Codex launch
-commands default to `AGENT_MODE_RALPH`, which maps to the Goal mode used for
+commands default to `AGENT_MODE_GOAL`, the explicit Goal mode used for
 persistent delivery. Repeated canary runs may reuse the same branch evidence
 paths; the fetch steps wait for the current Goal-mode session markers, reviewed
 commit, and artifact hashes before releasing instead of accepting stale branch

@@ -266,10 +266,10 @@ function apiSessionEvidence(report) {
   } else {
     evidence.push("codexSettings present");
   }
-  if (requestedAgentMode !== "AGENT_MODE_RALPH") {
-    failures.push(`Ona Platform Codex API session did not request Goal/Ralph mode: ${requestedAgentMode || "missing"}.`);
+  if (requestedAgentMode !== "AGENT_MODE_GOAL") {
+    failures.push(`Ona Platform Codex API session did not request Goal mode: ${requestedAgentMode || "missing"}.`);
   } else {
-    evidence.push("requested Goal/Ralph mode");
+    evidence.push("requested Goal mode");
   }
   if (hasValue(readbackMode)) {
     if (readbackMode !== requestedAgentMode) {
@@ -289,6 +289,8 @@ function reviewRequestEvidence(text) {
   const summaryHash = markerValue(text, "Summary sha256");
   const mp4Hash = markerValue(text, "MP4 sha256");
   const videoProducer = markerValue(text, "Video producer");
+  const clientGuiCapture = markerValue(text, "Client GUI capture");
+  const clientGuiCaptureRequired = markerValue(text, "Client GUI capture required");
   const status = markerValue(text, "Request status");
   const failures = [];
   const evidence = [];
@@ -310,9 +312,13 @@ function reviewRequestEvidence(text) {
   else evidence.push("Review request MP4 hash present");
   if (!hasValue(videoProducer) || videoProducer === "unknown") failures.push("Video review request is missing Video producer.");
   else evidence.push(`Review request producer ${videoProducer}`);
+  if (/^yes$/i.test(clientGuiCaptureRequired)) {
+    if (!/^yes$/i.test(clientGuiCapture)) failures.push(`Video review request requires client GUI capture but got ${clientGuiCapture || "missing"}.`);
+    else evidence.push("Review request client GUI capture present");
+  }
   if (status && status !== "ready") failures.push(`Video review request status is not ready: ${status}.`);
 
-  return { failures, evidence, summaryHash, mp4Hash, videoProducer };
+  return { failures, evidence, summaryHash, mp4Hash, videoProducer, clientGuiCapture, clientGuiCaptureRequired };
 }
 
 function validateVerifierCanary(text, agentExecutionId, expected) {
@@ -330,6 +336,7 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const videoMatched = markerValue(text, "Video matched");
   const summaryHash = markerValue(text, "Summary sha256");
   const mp4Hash = markerValue(text, "MP4 sha256");
+  const clientGuiCapture = markerValue(text, "Client GUI capture");
   const result = markerValue(text, ["Result", "Status"]);
   const boundary = markerValue(text, "Boundary");
 
@@ -374,6 +381,11 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   else evidence.push("summary hash matches review request");
   if (mp4Hash !== expected.mp4Hash) failures.push(`Verifier canary MP4 sha256 mismatch: expected ${expected.mp4Hash || "missing"}, got ${mp4Hash || "missing"}.`);
   else evidence.push("MP4 hash matches review request");
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(clientGuiCapture)) {
+    failures.push(`Verifier canary Client GUI capture is not yes: ${clientGuiCapture || "missing"}.`);
+  } else if (/^yes$/i.test(clientGuiCapture)) {
+    evidence.push("verifier canary client GUI capture accepted");
+  }
   if (!/^(passed|pass|success|succeeded)$/i.test(result)) failures.push(`Verifier canary Result is not passed: ${result || "missing"}.`);
   else evidence.push("verifier canary result passed");
   if (!/video-verifier-canary only/i.test(boundary)) {
@@ -441,6 +453,7 @@ const reviewLines = [
   `Task matched: ${failures.length === 0 ? "yes" : "no"}`,
   `Video matched: ${failures.length === 0 ? "yes" : "no"}`,
   `Video producer: ${request.videoProducer || "missing"}`,
+  `Client GUI capture: ${request.clientGuiCapture || "missing"}`,
   `Summary sha256: ${request.summaryHash || "missing"}`,
   `MP4 sha256: ${request.mp4Hash || "missing"}`,
   `Task id: ${args.taskId}`,
@@ -503,6 +516,8 @@ await fs.writeFile(
       summaryHash: request.summaryHash,
       mp4Hash: request.mp4Hash,
       videoProducer: request.videoProducer,
+      clientGuiCapture: request.clientGuiCapture,
+      clientGuiCaptureRequired: request.clientGuiCaptureRequired,
       evidence,
       failures,
       boundary:
