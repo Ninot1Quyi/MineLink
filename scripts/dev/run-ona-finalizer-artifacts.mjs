@@ -423,7 +423,7 @@ if (failures.length === 0) {
       "mkdir -p .minelink-dev/reports",
       ...transferredFiles.map(([filePath, base64]) => decodeRemoteFile(filePath, base64)).filter(Boolean),
       hasValue(args.sourceRef) ? `git fetch origin ${shellQuote(args.sourceRef)}` : "",
-      hasValue(args.sourceRef) ? "finalizer_source_ref=FETCH_HEAD" : "finalizer_source_ref=HEAD",
+      hasValue(args.sourceRef) ? "finalizer_source_ref=$(git rev-parse FETCH_HEAD)" : "finalizer_source_ref=HEAD",
       hasValue(remoteBranchName(args.base))
         ? `git fetch origin ${shellQuote(remoteBranchName(args.base))}:${shellQuote(`refs/remotes/origin/${remoteBranchName(args.base)}`)} || git fetch origin ${shellQuote(remoteBranchName(args.base))}`
         : "",

@@ -484,7 +484,9 @@ but injects the workflow/source-commit finalizer scripts after checkout, so an
 old task branch cannot regenerate `video-review-request.md` with stale local
 defaults. For NeoForge client-video tasks, that injection also includes the
 current `e2e.sh`, client-video renderer, recorder dependency bootstrap, and
-matching `ARCHITECTURE.md`; otherwise the finalizer could validate a hybrid
+matching `ARCHITECTURE.md` from a pinned source commit; otherwise later Git
+fetches can overwrite `FETCH_HEAD` and make the finalizer inject stale task
+branch scripts. Without that pinning, the finalizer could validate a hybrid
 worktree with new orchestration scripts but an old architecture map, or fail
 client recording only because the already-created Ona environment predates
 `Xvfb`. The finalizer receives the workflow PR base and passes it to

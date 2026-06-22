@@ -773,8 +773,10 @@ self-bootstrap path is a compatibility guard for already-created task
 environments, not a replacement for the prebuild baseline.
 The Ona finalizer checks out the task branch for task content, then injects the
 current workflow-source finalizer scripts, `e2e.sh`, client-video renderer,
-recorder dependency bootstrap, and matching `ARCHITECTURE.md` from the source
-ref before running validation. Injecting the architecture map with the scripts
+recorder dependency bootstrap, and matching `ARCHITECTURE.md` from the pinned
+source commit before running validation. The source ref must be resolved to a
+commit SHA before the finalizer fetches the PR base or task branch, because
+later fetches overwrite Git's transient `FETCH_HEAD`. Injecting the architecture map with the scripts
 keeps `check-architecture-guard.sh` meaningful: the finalizer no longer tests a
 hybrid worktree where architecture-sensitive scripts changed without their
 source-commit architecture update. The finalizer also receives the PR base
