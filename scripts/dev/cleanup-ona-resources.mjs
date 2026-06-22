@@ -188,6 +188,7 @@ async function cleanupEnvironment(environmentId) {
     reason: "",
     output: "",
     error: "",
+    warning: "",
   };
 
   if (getResult.status !== 0) {
@@ -214,8 +215,8 @@ async function cleanupEnvironment(environmentId) {
   const stopArgs = ["environment", "stop", environmentId];
   if (args.dontWait) stopArgs.push("--dont-wait");
   const stopResult = run(stopArgs);
-  record.output = sanitize(stopResult.stdout);
-  record.error = sanitize(stopResult.stderr);
+  record.output = sanitize([stopResult.stdout, stopResult.status === 0 ? stopResult.stderr : ""].filter(Boolean).join("\n"));
+  record.error = stopResult.status === 0 ? "" : sanitize(stopResult.stderr);
 
   const afterResult = run(["environment", "get", environmentId, "-o", "json"]);
   if (afterResult.status === 0) {
@@ -228,6 +229,8 @@ async function cleanupEnvironment(environmentId) {
   }
   if (stopResult.status !== 0 && isStopped(record.after)) {
     record.reason = "stop_reported_error_but_environment_stopped";
+    record.warning = record.error;
+    record.error = "";
   }
   record.result = "stopped";
   return record;
@@ -298,6 +301,13 @@ const lines = [
     .filter((record) => record.error)
     .map((record) => `- \`${record.environmentId}\`: ${md(record.error)}`),
   records.some((record) => record.error) ? "" : "- none",
+  "",
+  "## Warnings",
+  "",
+  ...records
+    .filter((record) => record.warning)
+    .map((record) => `- \`${record.environmentId}\`: ${md(record.warning)}`),
+  records.some((record) => record.warning) ? "" : "- none",
   "",
 ];
 

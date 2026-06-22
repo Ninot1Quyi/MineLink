@@ -391,7 +391,9 @@ artifact hashes. Terminal factory paths run
 `scripts/dev/cleanup-ona-resources.mjs` after success or failure so task
 environments are stopped automatically when they are in the MineLink project
 and have no uncommitted workspace changes. Cleanup is resource hygiene only; it
-does not change task acceptance. The GitHub Actions `full-chain-canary` can also run the
+does not change task acceptance, and Ona CLI stop-watch messages are reported
+as cleanup output or warnings rather than validation errors when the final
+environment readback is stopped. The GitHub Actions `full-chain-canary` can also run the
 release-gate-to-PR edge when `create_pr=true`; it calls
 `scripts/dev/create-agent-factory-pr.mjs`, records
 `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
