@@ -359,7 +359,11 @@ but it is not enough to prove the automated chain unless the task run records
 the specific Codex session and platform-mode evidence. The implementation
 finalizer renders the trace-driven MP4 before the verifier runs; the release
 finalizer must not re-render the MP4 after video review. It checks the existing
-artifact hashes. Linear status sync is handled by
+artifact hashes. The GitHub Actions `full-chain-canary` can also run the
+release-gate-to-PR edge when `create_pr=true`; it calls
+`scripts/dev/create-agent-factory-pr.mjs`, records
+`.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
+report with the created draft PR URL. Linear status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
 If Ona repository webhooks are unavailable for the account, the GitHub Actions

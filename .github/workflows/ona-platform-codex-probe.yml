@@ -43,6 +43,21 @@ on:
       reviewed_commit:
         description: Reviewed commit for video-verifier-canary mode
         required: false
+      create_pr:
+        description: Create or update a draft PR after full-chain release gate passes
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      pr_base_branch:
+        description: Base branch for create_pr=true
+        required: false
+        default: codex/minelink-mvp-engineering
+      pr_title:
+        description: Optional PR title for create_pr=true
+        required: false
       branch_wait_seconds:
         description: GitHub branch evidence wait seconds for implementation/video-verifier canary modes
         required: false
@@ -50,6 +65,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   probe:
@@ -245,6 +261,47 @@ jobs:
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             "${chain_args[@]}"
+
+      - name: Create or update canary PR after release gate
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_PR_BASE_BRANCH: ${{ inputs.pr_base_branch || 'codex/minelink-mvp-engineering' }}
+          INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+        run: |
+          pr_title="${INPUT_PR_TITLE:-Advance ${MINELINK_PLATFORM_CODEX_TASK_ID}}"
+          node scripts/dev/create-agent-factory-pr.mjs \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --base "${INPUT_PR_BASE_BRANCH:-codex/minelink-mvp-engineering}" \
+            --title "$pr_title" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --linear-issue none \
+            --acceptance-gate unspecified \
+            --validation-scope docs
+          pr_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/agent-factory-pr.json','utf8')); console.log(report.prUrl || '')")"
+          if [ -z "$pr_url" ]; then
+            echo "create-agent-factory-pr did not report a PR URL."
+            exit 1
+          fi
+          echo "MINELINK_AGENT_FACTORY_PR_URL=$pr_url" >> "$GITHUB_ENV"
+
+      - name: Refresh chain report after canary PR
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
+        run: |
+          node scripts/dev/report-agent-factory-chain.mjs \
+            --github-issue "${{ inputs.github_issue }}" \
+            --github-dispatcher-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --ona-prebuild-status passed \
+            --ona-automation-status partial \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --pr-report .minelink-dev/reports/agent-factory-pr.md \
+            --require-platform-codex-implementation \
+            --require-platform-codex-verifier
 
       - name: Upload probe evidence
         if: always()

@@ -438,7 +438,13 @@ hash, and MP4 hash, writes
 `.minelink-dev/reports/ona-codex-video-verifier-session.md`, materializes
 `.minelink-dev/reports/artifacts/video-review.md`, and lets
 `check-video-review.mjs --require-mp4` create the release gate. This is still
-automation-chain evidence only; it does not prove product acceptance.
+automation-chain evidence only; it does not prove product acceptance. When a
+manual rehearsal needs to prove `release_gate -> pr`, run the same workflow with
+`mode=full-chain-canary` and `create_pr=true`. That optional step calls
+`scripts/dev/create-agent-factory-pr.mjs`, creates or updates a draft PR from
+the canary branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,
+and refreshes `agent-factory-chain.json` with the PR URL. The next downstream
+edge is PR CI/status collection, not product acceptance.
 Before validation or PR finalization, the CLI automation also requires an
 implementation-session readback at:
 

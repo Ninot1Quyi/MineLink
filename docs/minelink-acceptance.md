@@ -822,8 +822,14 @@ Current status:
   `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the local
   hash-checked `video-review.md`. This can upgrade only the
   `acceptance_video -> video_verifier` automation-chain edge for a canary task;
-  it does not prove real product implementation, real Minecraft behavior, PR
-  release, or any `product-accepted` gate.
+  it does not prove real product implementation, real Minecraft behavior, or
+  any `product-accepted` gate. The same workflow can now be run with
+  `create_pr=true` to prove the next automation-chain edge: after the release
+  gate passes, it calls `scripts/dev/create-agent-factory-pr.mjs`, creates or
+  updates a draft PR from the canary branch, writes
+  `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
+  report with `--pr-url`. That remains chain evidence only; PR CI and human
+  acceptance are separate downstream gates.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only
