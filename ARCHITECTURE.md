@@ -417,20 +417,23 @@ finalizer must not re-render the MP4 after video review. It checks the existing
 artifact hashes. In GitHub-driven full-chain canaries, the runner uses
 `scripts/dev/run-ona-finalizer-artifacts.mjs` to execute the validation,
 summary, `render-video`, and `prepare-video` finalizer stages inside the same
-Ona task environment through `ona environment exec`, then copies
-`.minelink-dev/reports` back for verifier prompting. After the same Platform
-Codex implementation execution writes `video-review.md`, the runner calls the
-same bridge again with `release-upload`; that release finalizer checks the
-existing MP4/review hashes, uploads the verified MP4 to external storage, and
-copies the upload report back for PR commenting. The bridge fetches finalizer
-scripts from the workflow/source ref inside the Ona environment instead of
-injecting large script bodies through `ona environment exec`, because the Ona
-exec path is shell-mediated and has practical argument-size limits. This bridge
-also deletes stale verifier/release/upload artifacts before the implementation
-finalizer stages so old `video-review.md` files cannot be mistaken for the
-current same-session verifier result, runs the upload step directly after the
-release gate so old task-branch stage runners cannot block the uploader, and
-reports extracted files only after the current tarball is decoded successfully.
+Ona task environment. The bridge starts a background runner through a short
+`ona environment exec` call, polls it with short follow-up exec calls, and then
+copies `.minelink-dev/reports` back for verifier prompting. This avoids the Ona
+gateway timeout that can cut off long NeoForge/client video captures before
+artifacts can be returned. After the same Platform Codex implementation
+execution writes `video-review.md`, the runner calls the same bridge again with
+`release-upload`; that release finalizer checks the existing MP4/review hashes,
+uploads the verified MP4 to external storage, and copies the upload report back
+for PR commenting. The bridge fetches finalizer scripts from the
+workflow/source ref inside the Ona environment instead of injecting large script
+bodies through `ona environment exec`, because the Ona exec path is
+shell-mediated and has practical argument-size limits. This bridge also deletes
+stale verifier/release/upload artifacts before the implementation finalizer
+stages so old `video-review.md` files cannot be mistaken for the current
+same-session verifier result, runs the upload step directly after the release
+gate so old task-branch stage runners cannot block the uploader, and reports
+extracted files only after the current tarball is decoded successfully.
 This bridge is accepted only as
 finalizer/artifact transport; Platform Codex API readback and task-bound branch
 commits remain the implementation and verifier evidence.

@@ -7,6 +7,8 @@ const defaults = {
   environmentId: process.env.MINELINK_ONA_ENVIRONMENT_ID ?? "",
   workingDir: process.env.MINELINK_ONA_WORKING_DIR ?? "/workspaces/MineLink",
   timeoutSeconds: Number(process.env.MINELINK_ONA_FINALIZER_TIMEOUT_SECONDS ?? 900),
+  execTimeoutSeconds: Number(process.env.MINELINK_ONA_FINALIZER_EXEC_TIMEOUT_SECONDS ?? 45),
+  pollSeconds: Number(process.env.MINELINK_ONA_FINALIZER_POLL_SECONDS ?? 15),
   taskId: process.env.MINELINK_TASK_ID ?? "manual",
   githubIssue: process.env.MINELINK_GITHUB_ISSUE ?? "none",
   linearIssue: process.env.MINELINK_LINEAR_ISSUE ?? "none",
@@ -58,6 +60,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   if (arg === "--environment-id") args.environmentId = readValue();
   else if (arg === "--working-dir") args.workingDir = readValue();
   else if (arg === "--timeout-seconds") args.timeoutSeconds = Number(readValue());
+  else if (arg === "--exec-timeout-seconds") args.execTimeoutSeconds = Number(readValue());
+  else if (arg === "--poll-seconds") args.pollSeconds = Number(readValue());
   else if (arg === "--task-id") args.taskId = readValue();
   else if (arg === "--github-issue") args.githubIssue = readValue();
   else if (arg === "--linear-issue") args.linearIssue = readValue();
@@ -260,6 +264,44 @@ function stageList() {
     .filter(Boolean);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function runOnaExec(remoteScript, timeoutSeconds = args.execTimeoutSeconds) {
+  const result = spawnSync(
+    "ona",
+    [
+      "environment",
+      "exec",
+      args.environmentId,
+      "--timeout",
+      String(timeoutSeconds),
+      "--working-dir",
+      args.workingDir,
+      "--format",
+      "json",
+      "--",
+      "bash",
+      "-lc",
+      shellDoubleQuote(remoteScript),
+    ],
+    { encoding: "utf8", stdio: "pipe" },
+  );
+  const payload = extractJsonOutput(result.stdout);
+  const stdout = String(outputText(payload, result.stdout) ?? "");
+  const stderr = [payload?.stderr, payload?.result?.stderr, result.stderr].filter(Boolean).join("\n");
+  return {
+    result,
+    payload,
+    stdout,
+    stderr,
+    cliExitCode: result.status ?? 0,
+    remoteExitCode: exitCode(payload, result.status),
+    text: sanitize([stdout, stderr].filter(Boolean).join("\n")),
+  };
+}
+
 const failures = [];
 if (!hasValue(args.environmentId)) failures.push("--environment-id is required");
 if (!hasValue(args.branch)) failures.push("--branch is required");
@@ -269,6 +311,12 @@ if (!["implementation-finalize", "release-upload"].includes(args.stageGroup) && 
 }
 if (!Number.isFinite(args.timeoutSeconds) || args.timeoutSeconds < 1) {
   failures.push("--timeout-seconds must be at least 1");
+}
+if (!Number.isFinite(args.execTimeoutSeconds) || args.execTimeoutSeconds < 1) {
+  failures.push("--exec-timeout-seconds must be at least 1");
+}
+if (!Number.isFinite(args.pollSeconds) || args.pollSeconds < 1) {
+  failures.push("--poll-seconds must be at least 1");
 }
 
 const report = {
@@ -281,6 +329,9 @@ const report = {
   sourceRef: args.sourceRef,
   stageGroup: args.stageGroup,
   stages: stageList(),
+  execTimeoutSeconds: args.execTimeoutSeconds,
+  pollSeconds: args.pollSeconds,
+  pollAttempts: 0,
   videoProducer: args.videoProducer,
   requiredVideoProducer: args.requiredVideoProducer,
   requireClientGuiCapture: args.requireClientGuiCapture,
@@ -289,6 +340,7 @@ const report = {
   extractedFiles: [],
   failures,
   commandExitCode: null,
+  remotePid: "",
   execOutput: "",
   boundary:
     "Ona finalizer artifact bridge only. Platform Codex API readback remains the implementation/verifier evidence.",
@@ -334,7 +386,13 @@ if (failures.length === 0) {
   report.injectedSourceScripts = sourceScripts;
 
   if (failures.length === 0) {
-    const remoteScript = [
+    const remoteTarball = ".minelink-dev/ona-finalizer-artifacts.tar.gz";
+    const remoteRunner = ".minelink-dev/ona-finalizer-runner.sh";
+    const remoteLog = ".minelink-dev/reports/ona-finalizer-remote.log";
+    const remoteDone = ".minelink-dev/reports/ona-finalizer-remote.done";
+    const remoteExitCode = ".minelink-dev/reports/ona-finalizer-remote-exit-code";
+    const remotePid = ".minelink-dev/reports/ona-finalizer-remote.pid";
+    const finalizerBody = [
       "set -euo pipefail",
       `export ONA_ENVIRONMENT_ID=${shellQuote(args.environmentId)}`,
       `export MINELINK_RUN_ID=${shellQuote(args.runId)}`,
@@ -366,72 +424,131 @@ if (failures.length === 0) {
         ? "test -s .minelink-dev/reports/artifacts/video-review-request.md"
         : "",
       args.stageGroup === "release-upload" ? "test -s .minelink-dev/reports/video-storage-upload.json" : "",
-      `printf '\\n${markerStart}\\n'`,
-      "tar -C .minelink-dev -czf - reports | base64 | tr -d '\\n'",
-      `printf '\\n${markerEnd}\\n'`,
     ]
       .filter(Boolean)
       .join("\n");
 
-    const result = spawnSync(
-      "ona",
-      [
-        "environment",
-        "exec",
-        args.environmentId,
-        "--timeout",
-        String(args.timeoutSeconds),
-        "--working-dir",
-        args.workingDir,
-        "--format",
-        "json",
-        "--",
-        "bash",
-        "-lc",
-        shellDoubleQuote(remoteScript),
-      ],
-      { encoding: "utf8", stdio: "pipe" },
-    );
-    const payload = extractJsonOutput(result.stdout);
-    const stdout = String(outputText(payload, result.stdout) ?? "");
-    report.commandExitCode = exitCode(payload, result.status);
-    report.execOutput = sanitize(
-      [
-        stdout,
-        payload?.stderr,
-        payload?.result?.stderr,
-        result.stderr,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    );
+    const runnerScript = [
+      "#!/usr/bin/env bash",
+      "set -u -o pipefail",
+      "mkdir -p .minelink-dev/reports .minelink-dev/reports/artifacts",
+      `rm -f ${shellQuote(remoteDone)} ${shellQuote(remoteExitCode)} ${shellQuote(remoteTarball)}`,
+      `(`,
+      finalizerBody,
+      `) > ${shellQuote(remoteLog)} 2>&1`,
+      "status=$?",
+      `printf '%s\\n' "$status" > ${shellQuote(remoteExitCode)}`,
+      `tar -C .minelink-dev -czf ${shellQuote(remoteTarball)} reports >> ${shellQuote(remoteLog)} 2>&1 || true`,
+      `touch ${shellQuote(remoteDone)}`,
+      "exit 0",
+    ].join("\n");
+    const runnerBase64 = Buffer.from(runnerScript, "utf8").toString("base64");
+    const startScript = [
+      "set -euo pipefail",
+      "mkdir -p .minelink-dev/reports",
+      `printf %s ${shellQuote(runnerBase64)} | base64 -d > ${shellQuote(remoteRunner)}`,
+      `chmod +x ${shellQuote(remoteRunner)}`,
+      `nohup bash ${shellQuote(remoteRunner)} >/dev/null 2>&1 < /dev/null &`,
+      `printf '%s\\n' "$!" > ${shellQuote(remotePid)}`,
+      `cat ${shellQuote(remotePid)}`,
+    ].join("\n");
 
-    const start = stdout.indexOf(markerStart);
-    const end = stdout.indexOf(markerEnd);
-    if (result.status !== 0 || report.commandExitCode !== 0) {
-      failures.push(`ona environment exec exited ${result.status ?? report.commandExitCode ?? 1}`);
+    const start = runOnaExec(startScript);
+    report.execOutput = start.text;
+    report.commandExitCode = start.remoteExitCode;
+    report.remotePid = start.stdout.trim().split(/\s+/).pop() ?? "";
+    if (start.cliExitCode !== 0 || start.remoteExitCode !== 0) {
+      failures.push(`ona environment exec failed to start finalizer runner: ${start.cliExitCode || start.remoteExitCode}`);
     }
-    if (start < 0 || end < 0 || end <= start) {
-      failures.push("Ona finalizer output did not contain artifact tar markers.");
-    } else {
-      const base64 = stdout.slice(start + markerStart.length, end).replace(/\s+/g, "");
-      try {
-        const tarball = Buffer.from(base64, "base64");
-        await fs.mkdir(path.dirname(args.tarOutput), { recursive: true });
-        await fs.writeFile(args.tarOutput, tarball);
-        const tar = spawnSync("tar", ["-xzf", args.tarOutput, "-C", ".minelink-dev"], {
-          encoding: "utf8",
-          stdio: "pipe",
-        });
-        if (tar.status !== 0) {
-          failures.push(`tar extraction failed: ${sanitize(tar.stderr || tar.stdout)}`);
-        } else {
-          extractedCurrentTarball = true;
-        }
-      } catch (error) {
-        failures.push(`Failed to decode/extract artifact tarball: ${error instanceof Error ? error.message : error}`);
+
+    let done = false;
+    let lastPollOutput = start.text;
+    const deadline = Date.now() + args.timeoutSeconds * 1000;
+    while (failures.length === 0 && !done) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) break;
+      await sleep(Math.min(args.pollSeconds * 1000, remainingMs));
+      const pollScript = [
+        "set -euo pipefail",
+        `if test -f ${shellQuote(remoteDone)}; then`,
+        "  echo __MINELINK_FINALIZER_REMOTE_DONE__",
+        `  printf 'exit_code='; cat ${shellQuote(remoteExitCode)} 2>/dev/null || printf missing`,
+        "  echo",
+        "else",
+        "  echo __MINELINK_FINALIZER_REMOTE_RUNNING__",
+        `  printf 'pid='; cat ${shellQuote(remotePid)} 2>/dev/null || printf missing`,
+        "  echo",
+        "fi",
+        "echo __MINELINK_FINALIZER_REMOTE_LOG_TAIL__",
+        `tail -n 200 ${shellQuote(remoteLog)} 2>/dev/null || true`,
+      ].join("\n");
+      const poll = runOnaExec(pollScript);
+      report.pollAttempts += 1;
+      lastPollOutput = poll.text;
+      if (poll.cliExitCode !== 0 || poll.remoteExitCode !== 0) {
+        failures.push(`ona environment exec failed while polling finalizer runner: ${poll.cliExitCode || poll.remoteExitCode}`);
+        break;
+      }
+      if (poll.stdout.includes("__MINELINK_FINALIZER_REMOTE_DONE__")) {
+        done = true;
+        const match = poll.stdout.match(/exit_code=(\d+)/);
+        report.commandExitCode = match ? Number(match[1]) : 1;
       }
     }
+
+    if (!done && failures.length === 0) {
+      failures.push(`Ona finalizer remote runner timed out after ${args.timeoutSeconds}s.`);
+      report.commandExitCode = 124;
+    }
+
+    if (done || failures.some((failure) => failure.includes("timed out"))) {
+      const fetchScript = [
+        "set -euo pipefail",
+        `if test -s ${shellQuote(remoteTarball)}; then`,
+        `  printf '\\n${markerStart}\\n'`,
+        `  base64 ${shellQuote(remoteTarball)} | tr -d '\\n'`,
+        `  printf '\\n${markerEnd}\\n'`,
+        "else",
+        "  echo __MINELINK_FINALIZER_REMOTE_NO_TARBALL__",
+        "  echo __MINELINK_FINALIZER_REMOTE_LOG_TAIL__",
+        `  tail -n 240 ${shellQuote(remoteLog)} 2>/dev/null || true`,
+        "  exit 2",
+        "fi",
+      ].join("\n");
+      const fetch = runOnaExec(fetchScript, Math.max(args.execTimeoutSeconds, 55));
+      const start = fetch.stdout.indexOf(markerStart);
+      const end = fetch.stdout.indexOf(markerEnd);
+      if (fetch.cliExitCode !== 0 || fetch.remoteExitCode !== 0) {
+        failures.push(`ona environment exec failed while fetching finalizer artifacts: ${fetch.cliExitCode || fetch.remoteExitCode}`);
+      }
+      if (start < 0 || end < 0 || end <= start) {
+        failures.push("Ona finalizer output did not contain artifact tar markers.");
+        lastPollOutput = [lastPollOutput, fetch.text].filter(Boolean).join("\n");
+      } else {
+        const base64 = fetch.stdout.slice(start + markerStart.length, end).replace(/\s+/g, "");
+        try {
+          const tarball = Buffer.from(base64, "base64");
+          await fs.mkdir(path.dirname(args.tarOutput), { recursive: true });
+          await fs.writeFile(args.tarOutput, tarball);
+          const tar = spawnSync("tar", ["-xzf", args.tarOutput, "-C", ".minelink-dev"], {
+            encoding: "utf8",
+            stdio: "pipe",
+          });
+          if (tar.status !== 0) {
+            failures.push(`tar extraction failed: ${sanitize(tar.stderr || tar.stdout)}`);
+          } else {
+            extractedCurrentTarball = true;
+          }
+        } catch (error) {
+          failures.push(`Failed to decode/extract artifact tarball: ${error instanceof Error ? error.message : error}`);
+        }
+      }
+    }
+
+    if (report.commandExitCode !== 0) {
+      failures.push(`Ona finalizer remote runner exited ${report.commandExitCode}`);
+    }
+    report.execOutput = sanitize(lastPollOutput);
   }
 }
 
