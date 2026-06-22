@@ -303,11 +303,13 @@ mode is required to prove programmatic Codex launch and still needs a real
 While this pilot branch is active, push-triggered probe runs use
 `identity-canary` so launch proof can be collected before the workflow exists
 on the default branch; this still does not count as task implementation
-evidence. GitHub Actions run `27927522899` is the current accepted launch-edge
+evidence. GitHub Actions run `27928149039` is the current accepted launch-edge
 proof for this API path: it completed policy readback, `StartAgent`,
 `SendToAgentExecution`, and `GetAgentExecution` with the requested Codex agent
-id and Codex settings. The next edge is still a task-bound Platform Codex
-implementation session, not another launch canary.
+id, Codex settings, `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`,
+conversation URLs, and token-usage readback. `status.outputs` was still empty,
+so the next edge must be a task-bound Platform Codex implementation session
+that writes durable workspace/branch/PR evidence, not another launch canary.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform

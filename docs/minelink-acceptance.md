@@ -793,14 +793,15 @@ Current status:
   the task prompt, and `GetAgentExecution` for `spec.agentId` plus
   Codex-settings readback. This is not accepted product evidence yet. It
   does not replace the task-bound implementation and verifier readback files
-  required by the finalizer. GitHub Actions run `27927522899` proved the
+  required by the finalizer. GitHub Actions run `27928149039` proved the
   repository-secret `ONA_TOKEN` path, policy readback, `StartAgent`,
   `SendToAgentExecution`, and `GetAgentExecution` for the allowed Codex app
   agent id. The readback reported a matching `spec.agentId`, present
-  `codexSettings`, and conversation/transcript URLs. This upgrades only the
-  `platform_codex_launch` chain edge; the downstream implementation session,
-  validation, acceptance MP4 review, PR finalization, and status writeback
-  remain unaccepted.
+  `codexSettings`, `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`,
+  conversation URLs, and token-usage counters. It did not expose structured
+  `status.outputs`, so this upgrades only the `platform_codex_launch` chain
+  edge; the downstream implementation session, validation, acceptance MP4
+  review, PR finalization, and status writeback remain unaccepted.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only

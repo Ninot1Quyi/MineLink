@@ -322,6 +322,10 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function terminalAgentPhase(phase) {
+  return /^PHASE_(STOPPED|FAILED|CANCELLED|DELETED)$/i.test(String(phase ?? ""));
+}
+
 async function pollReadback(agentExecutionId) {
   const attempts = [];
   const deadline = Date.now() + args.waitSeconds * 1000;
@@ -329,13 +333,14 @@ async function pollReadback(agentExecutionId) {
   do {
     latest = await post("gitpod.v1.AgentService/GetAgentExecution", { agentExecutionId });
     const execution = latest.agentExecution ?? {};
+    const phase = execution.status?.phase ?? "unknown";
     attempts.push({
       at: new Date().toISOString(),
-      phase: execution.status?.phase ?? "unknown",
+      phase,
       agentId: execution.spec?.agentId ?? "",
       supportedModel: execution.status?.supportedModel ?? "",
     });
-    if (Date.now() >= deadline || args.waitSeconds === 0) break;
+    if (terminalAgentPhase(phase) || Date.now() >= deadline || args.waitSeconds === 0) break;
     await sleep(args.pollSeconds * 1000);
   } while (Date.now() < deadline);
   return { latest, attempts };
@@ -363,9 +368,16 @@ function evaluateReadback(readback, expectedAgentId) {
   } else {
     evidence.push("Codex settings are present in execution readback");
   }
+  if (hasValue(status.phase)) evidence.push(`phase=${status.phase}`);
   if (hasValue(status.supportedModel)) evidence.push(`supportedModel=${status.supportedModel}`);
   if (hasValue(status.conversationUrl)) evidence.push("conversationUrl present");
   if (hasValue(status.transcriptUrl)) evidence.push("transcriptUrl present");
+  if (hasValue(status.conversationUrls?.history)) evidence.push("conversation history URL present");
+  if (hasValue(status.conversationUrls?.live)) evidence.push("conversation live URL present");
+  if (hasValue(status.conversationUrls?.blobs)) evidence.push("conversation blobs URL present");
+  if (hasValue(status.inputTokensUsed)) evidence.push(`inputTokensUsed=${status.inputTokensUsed}`);
+  if (hasValue(status.outputTokensUsed)) evidence.push(`outputTokensUsed=${status.outputTokensUsed}`);
+  if (hasValue(status.iterations)) evidence.push(`iterations=${status.iterations}`);
   if (hasValue(status.failureMessage)) failures.push(`failureMessage: ${status.failureMessage}`);
   return { failures, evidence };
 }
