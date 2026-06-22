@@ -290,7 +290,11 @@ with `CODEX_REASONING_EFFORT_EXTRA_HIGH` and the fast service tier, while
 allowing environment overrides. Ona's current `codexSettings` surface exposes
 model, reasoning effort, and service tier; the visible context-window capacity
 is provided by the selected model rather than by a separate launcher-side
-window-size knob. This API path is not accepted until a task-bound readback
+window-size knob. The repository also carries `.codex/config.toml` to pin
+trusted Codex clients to the GPT-5.5 project default, the current 258400-token
+context window shown by the UI, and a high auto-compaction threshold; this is a
+client preference, not a server-side Ona API override. This API path is not
+accepted until a task-bound readback
 from `AgentService/GetAgentExecution` proves `spec.agentId` is the configured
 Codex agent id and `spec.codexSettings` or `status.codexSettings` is present.
 `.github/workflows/ona-platform-codex-probe.yml` runs the same probe inside

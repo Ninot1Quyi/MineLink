@@ -357,7 +357,11 @@ normal `.minelink-dev/reports/ona-codex-implementation-session.md`.
 The launcher uses the model's available context window and defaults the
 configurable reasoning effort to `CODEX_REASONING_EFFORT_EXTRA_HIGH`; no
 separate launcher-side context-window-size field is currently part of the
-accepted `codexSettings` contract.
+accepted `codexSettings` contract. `.codex/config.toml` pins trusted Codex
+clients to the GPT-5.5 project default, the 258400-token context window visible
+in the UI, and a high auto-compaction threshold. Treat that as a Codex client
+preference only; the Ona API launch remains accepted only by `agentId` and
+`codexSettings` readback.
 GitHub Actions can run the same probe through
 `.github/workflows/ona-platform-codex-probe.yml`. Use `mode=discover` to prove
 the repository `ONA_TOKEN` can read Ona policy/API state. Use
