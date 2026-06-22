@@ -689,8 +689,16 @@ workflow and the Ona Platform Codex probe workflow install `ffmpeg` and require
 the MP4 before uploading evidence, so missing video support is a workflow
 failure instead of a silent `.unavailable` artifact. This artifact is a review
 visualization, not proof of client GUI perception and not a gate-status
-upgrade. Video-required tasks must then send a verifier request back to the
-current Ona Platform Codex implementation execution. That implementation
+upgrade. Pull request workflows call
+`scripts/dev/publish-pr-video-evidence.mjs` to copy `acceptance.mp4` to the
+dedicated `minelink-evidence` branch, then call
+`scripts/dev/comment-pr-evidence.mjs` after artifact upload so reviewers can
+open a GitHub file page that plays the MP4 directly from the PR. The uploaded
+artifact remains the raw evidence bundle. These PR-visible links are review
+convenience only; the video producer metadata still decides whether an artifact
+is GitHub canary evidence or final Ona task evidence. Video-required tasks must
+then send a verifier request back to the current Ona Platform Codex
+implementation execution. That implementation
 session must launch a bounded native Codex verifier subagent rather than
 starting a second Ona agent session. The review request generator writes
 `.minelink-dev/reports/artifacts/video-review-request.md` with the current

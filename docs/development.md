@@ -179,6 +179,17 @@ The release gate is:
 node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer
 ```
 
+For PR review visibility, CI can publish the rendered MP4 to a dedicated
+GitHub evidence branch and update the PR with a playable GitHub file-page link:
+
+```bash
+node scripts/dev/publish-pr-video-evidence.mjs --repository owner/repo --pr 123 --require-video
+node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --artifact-url URL --video-url URL
+```
+
+The playable link is for review ergonomics. It does not make a GitHub canary
+video equivalent to final Ona task acceptance.
+
 Agent-factory runs should also stop task environments after terminal success or
 failure:
 
