@@ -383,10 +383,13 @@ requests `AGENT_MODE_GOAL`, the explicit persistent Goal selector, and task
 readbacks must include
 `Agent execution mode: AGENT_MODE_GOAL`. If `GetAgentExecution` also exposes a
 mode field, it must match the requested mode. This proves only the programmatic
-Platform Codex launch/readback edge. It does not satisfy the implementation
-readback, video verifier, PR, CI, or product acceptance gates until the
-task-bound Codex session performs the work and writes the normal
-`.minelink-dev/reports/ona-codex-implementation-session.md`.
+Platform Codex launch/readback edge. Because Goal-mode sessions may stay
+running, launch/readback is allowed before the execution reaches a terminal
+phase. It does not satisfy the implementation readback, acceptance MP4, video
+verifier, PR, CI, or product acceptance gates until the task-bound Codex session
+performs the work, writes the normal
+`.minelink-dev/reports/ona-codex-implementation-session.md`, and the video
+release gate passes.
 When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
 ignore stopped historical task environments. It may pass an auto-discovered
 environment only when that environment is currently running; otherwise it passes

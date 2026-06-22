@@ -796,11 +796,18 @@ followed by:
 node scripts/dev/check-video-review.mjs --require-mp4
 ```
 
-Implementation and `full-chain-canary` dispatches must use an AgentService
-readback wait long enough for the Codex implementation execution to reach a
-terminal phase. The workflow default is 600 seconds; a 30 second wait is only
-appropriate for narrow identity probes and can falsely mark a healthy
-Goal-mode Codex run as blocked while it is still in `PHASE_RUNNING`.
+Implementation and `full-chain-canary` dispatches use `AGENT_MODE_GOAL`.
+Because Goal-mode Codex sessions can remain in `PHASE_RUNNING` while pursuing
+a persistent objective, `scripts/dev/start-ona-platform-codex.mjs` accepts a
+non-terminal Goal-mode readback once AgentService proves the requested Codex
+agent id and Codex settings. Task completion is then proven by the separate
+task-bound branch/commit readback from
+`scripts/dev/fetch-platform-codex-canary.mjs`, not by waiting for the Goal
+session to become terminal. For video-required work, the Goal-mode task release
+gate is stricter than launch/readback: the Ona finalizer must produce
+`acceptance.mp4`, the same implementation session must run the bounded Codex
+verifier subagent, and `scripts/dev/check-video-review.mjs` must pass before PR
+publication or status writeback can claim release evidence.
 
 The release gate writes
 `.minelink-dev/reports/artifacts/video-release-gate.md` and fails if the MP4 is

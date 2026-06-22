@@ -220,6 +220,11 @@ Reports must distinguish:
   Accepted task and verifier readbacks must include
   `Agent execution mode: AGENT_MODE_GOAL`; one-shot `AGENT_MODE_EXECUTION`
   evidence is not accepted for long-running factory delivery.
+- Goal-mode `StartAgent` launch/readback evidence proves only that the intended
+  Codex Goal session started. It is not a task release gate. For video-required
+  work, the Goal-mode release gate passes only after the Ona task finalizer has
+  produced `acceptance.mp4`, the same implementation session's Codex verifier
+  has written `video-review.md`, and `check-video-review.mjs` has passed.
 - Self-reported `Identity: I am Codex running in Ona Platform Codex` is a
   diagnostic only. The default Ona Agent can echo it. Ona work is accepted only
   with platform-side Codex selector/API evidence plus task/branch/commit-bound

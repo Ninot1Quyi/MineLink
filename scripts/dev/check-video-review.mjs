@@ -33,7 +33,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   } else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/check-video-review.mjs [--require-mp4] [--require-client-gui-capture]
 
-Checks the same-session acceptance-video verifier report before release. The
+Checks the Goal-mode acceptance-video release gate before release. The
 verifier report must explicitly contain:
 
 Verifier: Ona Platform Codex
@@ -200,8 +200,9 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 const lines = [
-  "# MineLink Acceptance Video Release Gate",
+  "# MineLink Goal-Mode Acceptance Video Release Gate",
   "",
+  "- Boundary: `Goal-mode task release requires the Ona-produced acceptance.mp4 plus same-session Codex verifier approval; StartAgent launch/readback alone is not release evidence`",
   `- Review report: \`${reviewPath}\``,
   `- Acceptance summary: \`${summaryPath}\``,
   `- Acceptance MP4: \`${mp4Path}\``,

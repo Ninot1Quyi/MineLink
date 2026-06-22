@@ -658,6 +658,21 @@ function failedAgentPhase(phase) {
   return /^PHASE_(FAILED|CANCELLED|DELETED)$/i.test(String(phase ?? ""));
 }
 
+function isGoalMode() {
+  return String(args.agentMode ?? "").toUpperCase() === "AGENT_MODE_GOAL";
+}
+
+function goalModeReadbackReady(execution) {
+  const spec = execution?.spec ?? {};
+  const status = execution?.status ?? {};
+  return (
+    isGoalMode() &&
+    hasValue(execution?.id) &&
+    hasValue(spec.agentId) &&
+    (hasValue(spec.codexSettings) || hasValue(status.codexSettings))
+  );
+}
+
 async function pollReadback(agentExecutionId) {
   const attempts = [];
   const deadline = Date.now() + args.waitSeconds * 1000;
@@ -672,7 +687,9 @@ async function pollReadback(agentExecutionId) {
       agentId: execution.spec?.agentId ?? "",
       supportedModel: execution.status?.supportedModel ?? "",
     });
-    if (terminalAgentPhase(phase) || Date.now() >= deadline || args.waitSeconds === 0) break;
+    if (terminalAgentPhase(phase) || goalModeReadbackReady(execution) || Date.now() >= deadline || args.waitSeconds === 0) {
+      break;
+    }
     await sleep(args.pollSeconds * 1000);
   } while (Date.now() < deadline);
   return { latest, attempts };
@@ -717,6 +734,10 @@ function evaluateReadback(readback, expectedAgentId) {
     evidence.push(`phase=${status.phase}`);
     if (failedAgentPhase(status.phase)) {
       failures.push(`Agent execution ended in ${status.phase}.`);
+    } else if (!terminalAgentPhase(status.phase) && isGoalMode()) {
+      evidence.push(
+        `Goal-mode launch/readback accepted without terminal phase: ${status.phase}; task release still requires acceptance.mp4 and verifier approval`,
+      );
     } else if (!terminalAgentPhase(status.phase) && args.waitSeconds > 0) {
       failures.push(
         `Agent execution did not reach a terminal phase before --wait-seconds=${args.waitSeconds}: ${status.phase}.`,
@@ -769,7 +790,7 @@ const report = {
   readback: null,
   readbackAttempts: [],
   boundary:
-    "Ona AgentService API launch/readback evidence only. This does not prove MineLink product acceptance or task implementation by itself.",
+    "Ona AgentService API launch/readback evidence only. This does not prove MineLink task release, acceptance video production, verifier approval, product acceptance, or task implementation by itself.",
 };
 
 const failures = [];
