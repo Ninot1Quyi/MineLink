@@ -160,6 +160,21 @@ function exportIfValue(name, value) {
 }
 
 function stageCommand(stage) {
+  if (stage === "upload-video") {
+    const command = [
+      "node",
+      "scripts/dev/upload-acceptance-video-storage.mjs",
+      "--task-id",
+      args.taskId,
+      "--branch",
+      args.branch,
+      "--run-id",
+      args.runId,
+      "--require-upload",
+    ];
+    return command.map(shellQuote).join(" ");
+  }
+
   const command = [
     "node",
     "scripts/dev/run-agent-factory-stage.mjs",
