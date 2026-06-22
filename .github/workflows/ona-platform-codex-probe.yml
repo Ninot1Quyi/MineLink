@@ -103,7 +103,7 @@ jobs:
   probe:
     name: Probe Ona Platform Codex API
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 

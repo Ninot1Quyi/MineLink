@@ -315,8 +315,11 @@ from `AgentService/GetAgentExecution` proves `spec.agentId` is the configured
 Codex agent id, `spec.codexSettings` or `status.codexSettings` is present, and
 the generated task readback records `Agent execution mode: AGENT_MODE_GOAL`.
 `.github/workflows/ona-platform-codex-probe.yml` runs the same probe inside
-GitHub Actions with repository `ONA_TOKEN` access. Its default `discover` mode
-only proves token/API policy readback and resolves organization context from
+GitHub Actions with repository `ONA_TOKEN` access. Its job timeout is sized for
+full-chain NeoForge client-video runs, because those runs must start Ona
+Platform Codex, run the finalizer in the task environment, record a Minecraft
+client MP4, request same-session verifier review, and optionally create a PR. Its default `discover` mode only proves token/API
+policy readback and resolves organization context from
 the logged-in Ona CLI config. When no explicit
 `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the probe uses that explicit
 environment. Otherwise it auto-selects only a currently running MineLink
