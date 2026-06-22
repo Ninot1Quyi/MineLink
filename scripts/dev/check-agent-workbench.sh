@@ -325,6 +325,8 @@ require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink ac
 require_text "scripts/dev/render-acceptance-video.mjs" "acceptance-video-origin.json"
 require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "injectedSourceScripts"
 require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "injectedSourceFiles"
+require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "client-capture-*"
+require_text "scripts/dev/run-agent-factory-stage.mjs" "verifyBaseRef"
 require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "overwriteSourceScript"
 require_text "scripts/dev/publish-pr-video-evidence.mjs" "minelink-evidence"
 require_text "scripts/dev/publish-pr-video-evidence.mjs" "Playable video file"

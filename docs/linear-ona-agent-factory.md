@@ -487,7 +487,11 @@ current `e2e.sh`, client-video renderer, recorder dependency bootstrap, and
 matching `ARCHITECTURE.md`; otherwise the finalizer could validate a hybrid
 worktree with new orchestration scripts but an old architecture map, or fail
 client recording only because the already-created Ona environment predates
-`Xvfb`. The workflow then sends `--video-verifier-canary` back to the same
+`Xvfb`. The finalizer receives the workflow PR base and passes it to
+`verify-agent-task.sh --base`, and its artifact tarball includes
+`.minelink-dev/client-capture-*` logs so failed recorder runs expose the real
+Minecraft/client/MCP log tail. The workflow then sends
+`--video-verifier-canary` back to the same
 implementation AgentService execution, waits for
 `docs/agent-factory-canaries/<task>-video-verifier.md`, then runs
 `scripts/dev/fetch-platform-codex-video-verifier.mjs`. The fetch script is the

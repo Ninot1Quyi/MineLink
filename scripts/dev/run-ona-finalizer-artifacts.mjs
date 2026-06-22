@@ -13,6 +13,7 @@ const defaults = {
   githubIssue: process.env.MINELINK_GITHUB_ISSUE ?? "none",
   linearIssue: process.env.MINELINK_LINEAR_ISSUE ?? "none",
   branch: process.env.MINELINK_BRANCH ?? "",
+  base: process.env.MINELINK_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
   sourceRef:
     process.env.MINELINK_FINALIZER_SOURCE_REF ??
     process.env.GITHUB_REF_NAME ??
@@ -66,6 +67,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--github-issue") args.githubIssue = readValue();
   else if (arg === "--linear-issue") args.linearIssue = readValue();
   else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--base") args.base = readValue();
   else if (arg === "--source-ref") args.sourceRef = readValue();
   else if (arg === "--pr-title") args.prTitle = readValue();
   else if (arg === "--acceptance-gate") args.acceptanceGate = readValue();
@@ -196,6 +198,8 @@ function stageCommand(stage) {
     args.linearIssue || "none",
     "--branch",
     args.branch,
+    "--base",
+    args.base || "codex/minelink-mvp-engineering",
     "--pr-title",
     args.prTitle || `Advance ${args.taskId}`,
     "--acceptance-gate",
@@ -211,6 +215,12 @@ function stageCommand(stage) {
     ...(args.requireClientGuiCapture ? ["--require-client-gui-capture"] : []),
   ];
   return command.map(shellQuote).join(" ");
+}
+
+function remoteBranchName(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
+  return normalized.startsWith("origin/") ? normalized.slice("origin/".length) : normalized;
 }
 
 function extractJsonOutput(stdout) {
@@ -328,6 +338,7 @@ const report = {
   branch: args.branch,
   sourceRef: args.sourceRef,
   stageGroup: args.stageGroup,
+  base: args.base,
   stages: stageList(),
   execTimeoutSeconds: args.execTimeoutSeconds,
   pollSeconds: args.pollSeconds,
@@ -413,6 +424,9 @@ if (failures.length === 0) {
       ...transferredFiles.map(([filePath, base64]) => decodeRemoteFile(filePath, base64)).filter(Boolean),
       hasValue(args.sourceRef) ? `git fetch origin ${shellQuote(args.sourceRef)}` : "",
       hasValue(args.sourceRef) ? "finalizer_source_ref=FETCH_HEAD" : "finalizer_source_ref=HEAD",
+      hasValue(remoteBranchName(args.base))
+        ? `git fetch origin ${shellQuote(remoteBranchName(args.base))}:${shellQuote(`refs/remotes/origin/${remoteBranchName(args.base)}`)} || git fetch origin ${shellQuote(remoteBranchName(args.base))}`
+        : "",
       `git fetch origin ${shellQuote(args.branch)}`,
       `git checkout -B ${shellQuote(args.branch)} ${shellQuote(`origin/${args.branch}`)}`,
       args.stageGroup === "implementation-finalize"
@@ -445,7 +459,11 @@ if (failures.length === 0) {
       `) > ${shellQuote(remoteLog)} 2>&1`,
       "status=$?",
       `printf '%s\\n' "$status" > ${shellQuote(remoteExitCode)}`,
-      `tar -C .minelink-dev -czf ${shellQuote(remoteTarball)} reports >> ${shellQuote(remoteLog)} 2>&1 || true`,
+      "tar_paths=(reports)",
+      "for candidate in client-capture-*; do",
+      "  if [ -e \"$candidate\" ]; then tar_paths+=(\"$candidate\"); fi",
+      "done",
+      `tar -C .minelink-dev -czf ${shellQuote(remoteTarball)} "\${tar_paths[@]}" >> ${shellQuote(remoteLog)} 2>&1 || true`,
       `touch ${shellQuote(remoteDone)}`,
       "exit 0",
     ].join("\n");

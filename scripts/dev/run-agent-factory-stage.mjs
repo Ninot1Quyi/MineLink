@@ -11,6 +11,7 @@ const defaults = {
   onaProject: process.env.MINELINK_ONA_PROJECT ?? "",
   onaAutomation: process.env.MINELINK_ONA_AUTOMATION ?? "",
   branch: process.env.MINELINK_BRANCH ?? "",
+  base: process.env.MINELINK_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
   prTitle: process.env.MINELINK_PR_TITLE ?? "",
   acceptanceGate: process.env.MINELINK_ACCEPTANCE_GATE ?? "unspecified",
   validationScope: process.env.MINELINK_VALIDATION_SCOPE ?? "docs",
@@ -64,6 +65,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-project") args.onaProject = readValue();
   else if (arg === "--ona-automation") args.onaAutomation = readValue();
   else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--base") args.base = readValue();
   else if (arg === "--pr-title") args.prTitle = readValue();
   else if (arg === "--acceptance-gate") args.acceptanceGate = readValue();
   else if (arg === "--validation-scope") args.validationScope = readValue();
@@ -102,12 +104,19 @@ function requiresClientGuiCapture() {
 }
 
 function sanitize(text) {
-  return String(text ?? "")
+  const sanitized = String(text ?? "")
     .replace(/(lin_api_)[A-Za-z0-9]+/g, "$1[redacted]")
     .replace(/(github_pat_)[A-Za-z0-9_]+/g, "$1[redacted]")
     .replace(/(ghp_)[A-Za-z0-9_]+/g, "$1[redacted]")
-    .slice(0, 6000)
     .trim();
+  if (sanitized.length <= 12000) return sanitized;
+  return [
+    sanitized.slice(0, 4000),
+    "",
+    "... output truncated; preserving tail for failure diagnosis ...",
+    "",
+    sanitized.slice(-8000),
+  ].join("\n");
 }
 
 function shellQuote(value) {
@@ -120,6 +129,13 @@ function firstScenario(value) {
     .map((item) => item.trim())
     .find((item) => item && item !== "none");
   return scenario || "mine_tree";
+}
+
+function verifyBaseRef() {
+  const value = String(args.base || "codex/minelink-mvp-engineering").trim();
+  if (!value) return "origin/codex/minelink-mvp-engineering";
+  if (/^(origin\/|refs\/|HEAD\b|[0-9a-f]{7,40}$)/.test(value)) return value;
+  return `origin/${value}`;
 }
 
 function selfInvocationArgs(stage) {
@@ -139,6 +155,8 @@ function selfInvocationArgs(stage) {
     args.onaAutomation || "",
     "--branch",
     args.branch || "",
+    "--base",
+    args.base || "codex/minelink-mvp-engineering",
     "--pr-title",
     args.prTitle || "",
     "--acceptance-gate",
@@ -368,6 +386,8 @@ switch (args.stage) {
         args.validationScope || "docs",
         "--scenarios",
         args.scenarios || "none",
+        "--base",
+        verifyBaseRef(),
       ],
       { requireImplementation: true },
     );
@@ -489,6 +509,8 @@ switch (args.stage) {
         "scripts/dev/create-agent-factory-pr.mjs",
         "--branch",
         args.branch || "unknown",
+        "--base",
+        args.base || "codex/minelink-mvp-engineering",
         "--title",
         args.prTitle || `Advance ${args.taskId}`,
         "--task-id",

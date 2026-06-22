@@ -245,6 +245,7 @@ jobs:
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
           INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
           INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_PR_BASE_BRANCH: ${{ inputs.pr_base_branch || 'codex/minelink-mvp-engineering' }}
           INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
           INPUT_SCENARIOS: ${{ inputs.scenarios || 'none' }}
         run: |
@@ -270,6 +271,7 @@ jobs:
             --environment-id "$environment_id" \
             --task-id "$task_id" \
             --branch "$target_branch" \
+            --base "${INPUT_PR_BASE_BRANCH:-codex/minelink-mvp-engineering}" \
             --source-ref "$GITHUB_REF_NAME" \
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
             --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
@@ -370,6 +372,7 @@ jobs:
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
           INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
           INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_PR_BASE_BRANCH: ${{ inputs.pr_base_branch || 'codex/minelink-mvp-engineering' }}
           INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
           INPUT_SCENARIOS: ${{ inputs.scenarios || 'none' }}
           MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
@@ -393,6 +396,7 @@ jobs:
             --stage-group release-upload \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --base "${INPUT_PR_BASE_BRANCH:-codex/minelink-mvp-engineering}" \
             --source-ref "$GITHUB_REF_NAME" \
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
             --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
