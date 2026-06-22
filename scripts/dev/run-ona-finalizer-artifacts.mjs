@@ -275,6 +275,7 @@ const report = {
 
 const markerStart = "__MINELINK_FINALIZER_ARTIFACTS_TAR_BASE64_START__";
 const markerEnd = "__MINELINK_FINALIZER_ARTIFACTS_TAR_BASE64_END__";
+let extractedCurrentTarball = false;
 
 if (failures.length === 0) {
   const transferredFiles = [
@@ -403,6 +404,8 @@ if (failures.length === 0) {
         });
         if (tar.status !== 0) {
           failures.push(`tar extraction failed: ${sanitize(tar.stderr || tar.stdout)}`);
+        } else {
+          extractedCurrentTarball = true;
         }
       } catch (error) {
         failures.push(`Failed to decode/extract artifact tarball: ${error instanceof Error ? error.message : error}`);
@@ -426,7 +429,7 @@ async function walk(dir) {
   }
 }
 
-report.extractedFiles = await walk(".minelink-dev/reports/artifacts");
+report.extractedFiles = extractedCurrentTarball ? await walk(".minelink-dev/reports/artifacts") : [];
 report.failures = failures;
 report.result = failures.length === 0 ? "passed" : "failed";
 

@@ -425,7 +425,8 @@ injecting large script bodies through `ona environment exec`, because the Ona
 exec path is shell-mediated and has practical argument-size limits. This bridge
 also deletes stale verifier/release/upload artifacts before the implementation
 finalizer stages so old `video-review.md` files cannot be mistaken for the
-current same-session verifier result. This bridge is accepted only as
+current same-session verifier result, and it reports extracted files only after
+the current tarball is decoded successfully. This bridge is accepted only as
 finalizer/artifact transport; Platform Codex API readback and task-bound branch
 commits remain the implementation and verifier evidence.
 Terminal factory paths run
