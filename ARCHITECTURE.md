@@ -734,14 +734,17 @@ node scripts/dev/render-acceptance-video.mjs --require-mp4
 node scripts/dev/prepare-video-review-request.mjs --require-mp4
 ```
 
-The script writes a trace-driven
+The script writes a trace-driven composite
 `.minelink-dev/reports/artifacts/acceptance-summary.md` and
-`.minelink-dev/reports/artifacts/acceptance.mp4`. GitHub's real NeoForge
-workflow and the Ona Platform Codex probe workflow install `ffmpeg` and require
-the MP4 before uploading evidence, so missing video support is a workflow
-failure instead of a silent `.unavailable` artifact. This artifact is a review
-visualization, not proof of client GUI perception and not a gate-status
-upgrade. Pull request workflows call the Ona release finalizer, which runs
+`.minelink-dev/reports/artifacts/acceptance.mp4`. The MP4 is a report/log
+visualization: the left panel renders MineLink server-observation and
+assertion evidence, while the right panel renders command paths, tool timelines,
+and terminal log excerpts. GitHub's real NeoForge workflow and the Ona Platform
+Codex probe workflow install `ffmpeg` and require the MP4 before uploading
+evidence, so missing video support is a workflow failure instead of a silent
+`.unavailable` artifact. This artifact is not proof of client GUI perception and
+not a gate-status upgrade unless the task also supplies a real client-capture
+artifact. Pull request workflows call the Ona release finalizer, which runs
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the task environment
 after `check-video-review.mjs` passes, to upload the verifier-approved
 `acceptance.mp4` to the configured S3-compatible video store, currently
@@ -782,7 +785,10 @@ Goal-mode Codex run as blocked while it is still in `PHASE_RUNNING`.
 The release gate writes
 `.minelink-dev/reports/artifacts/video-release-gate.md` and fails if the MP4 is
 missing, the verifier is not marked `Ona Platform Codex`, or the task/video
-match markers and summary/MP4 hashes are not passing. A ready
+match markers and summary/MP4 hashes are not passing. The release gate also
+rejects zero-report placeholder videos: an `acceptance-summary.md` with
+`Scenario reports: 0` or `No scenario reports found` cannot be final acceptance
+evidence, even if a verifier report says `Release decision: pass`. A ready
 `video-review-request.md` never releases a task by itself.
 
 Gate 3 perception smoke uses stable vanilla fixture blocks for repeatable real

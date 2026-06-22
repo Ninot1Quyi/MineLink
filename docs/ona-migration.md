@@ -134,14 +134,18 @@ MineLink uses automation to reduce agent memory load:
   stability reports into a Markdown index without changing workflow pass/fail
   semantics.
 - `scripts/dev/render-acceptance-video.mjs` turns existing reports into a
-  trace-driven acceptance summary and optional MP4 artifact.
+  trace-driven composite acceptance summary and MP4 artifact. The video is only
+  releasable when it contains at least one scenario report and shows task
+  evidence, command/timeline context, and terminal log excerpts; `Reports: 0`
+  placeholder videos are blocked by the release gate.
 - `scripts/dev/prepare-video-review-request.mjs` turns the current summary and
   MP4 hashes into a verifier handoff file for the same-session Ona Platform
   Codex verifier subagent.
 - `scripts/dev/check-video-review.mjs` blocks release unless the same-session
   Ona Platform Codex verifier report confirms `Release decision: pass`,
   `Task matched: yes`, `Video matched: yes`, and current summary/MP4 SHA-256
-  hashes against the rendered MP4.
+  hashes against the rendered MP4. The gate also rejects zero-report summaries
+  so a verifier cannot accidentally publish a static placeholder card.
 - `scripts/dev/sync-linear-status.mjs` uses `LINEAR_API_KEY` from the Ona
   environment to update Linear issue status, comments, and evidence links
   without printing the secret.

@@ -159,9 +159,13 @@ node scripts/dev/prepare-video-review-request.mjs --require-mp4
 
 The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and
 `.minelink-dev/reports/artifacts/acceptance.mp4`; `--require-mp4` makes missing
-`ffmpeg` support fail the command. For final video-required tasks, render from
-the Ona task/finalizer environment with producer `ona-task-finalizer`; a
-`github-actions-canary` producer is only chain-test evidence. Use
+`ffmpeg` support fail the command. The MP4 is a composite evidence video: it
+must include at least one scenario report, MineLink server-observation or
+assertion evidence, command/timeline context, and terminal log excerpts. A
+`Reports: 0` static card is not releasable final evidence. For final
+video-required tasks, render from the Ona task/finalizer environment with
+producer `ona-task-finalizer`; a `github-actions-canary` producer is only
+chain-test evidence. Use
 `--task-requirements` to embed the bounded task contract. The review-request script writes
 `.minelink-dev/reports/artifacts/video-review-request.md` with the current
 summary and MP4 hashes plus the exact markers that the release gate will
@@ -178,6 +182,9 @@ The release gate is:
 ```bash
 node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer
 ```
+
+The release gate rejects zero-report summaries even when the verifier report is
+otherwise marked `pass`.
 
 Full-chain canaries use the Platform Codex task environment as the artifact
 producer. After the implementation readback exists, GitHub Actions runs:

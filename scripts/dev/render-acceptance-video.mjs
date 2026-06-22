@@ -223,21 +223,74 @@ function drawText(buffer, width, height, x, y, text, scale, color) {
   }
 }
 
-async function writePpmFrame(filePath, linesForFrame) {
-  const width = 1280;
-  const height = 720;
-  const background = [16, 24, 32];
-  const foreground = [238, 244, 248];
-  const accent = [112, 202, 168];
+function fillRect(buffer, width, height, x, y, rectWidth, rectHeight, color) {
+  const left = Math.max(0, Math.floor(x));
+  const top = Math.max(0, Math.floor(y));
+  const right = Math.min(width, Math.ceil(x + rectWidth));
+  const bottom = Math.min(height, Math.ceil(y + rectHeight));
+  for (let py = top; py < bottom; py += 1) {
+    for (let px = left; px < right; px += 1) {
+      setPixel(buffer, width, px, py, color);
+    }
+  }
+}
+
+function strokeRect(buffer, width, height, x, y, rectWidth, rectHeight, color) {
+  fillRect(buffer, width, height, x, y, rectWidth, 2, color);
+  fillRect(buffer, width, height, x, y + rectHeight - 2, rectWidth, 2, color);
+  fillRect(buffer, width, height, x, y, 2, rectHeight, color);
+  fillRect(buffer, width, height, x + rectWidth - 2, y, 2, rectHeight, color);
+}
+
+function wrapText(value, maxChars) {
+  const words = ffmpegText(value).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  for (const word of words) {
+    if (!current) {
+      current = word.slice(0, maxChars);
+    } else if (current.length + 1 + word.length <= maxChars) {
+      current = `${current} ${word}`;
+    } else {
+      lines.push(current);
+      current = word.slice(0, maxChars);
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [""];
+}
+
+function drawTextBlock(buffer, width, height, x, y, textLines, options = {}) {
+  const scale = options.scale ?? 2;
+  const color = options.color ?? [238, 244, 248];
+  const maxWidth = options.maxWidth ?? width - x - 20;
+  const lineGap = options.lineGap ?? Math.ceil(9 * scale);
+  const maxLines = options.maxLines ?? 12;
+  const maxChars = Math.max(1, Math.floor(maxWidth / (6 * scale)));
+  let cursorY = y;
+  let drawn = 0;
+  for (const rawLine of textLines) {
+    for (const line of wrapText(rawLine, maxChars)) {
+      if (drawn >= maxLines) return cursorY;
+      drawText(buffer, width, height, x, cursorY, line, scale, color);
+      cursorY += lineGap;
+      drawn += 1;
+    }
+  }
+  return cursorY;
+}
+
+function createFrameBuffer(width, height, background) {
   const buffer = Buffer.alloc(width * height * 3);
   for (let index = 0; index < buffer.length; index += 3) {
     buffer[index] = background[0];
     buffer[index + 1] = background[1];
     buffer[index + 2] = background[2];
   }
-  linesForFrame.slice(0, 16).forEach((line, index) => {
-    drawText(buffer, width, height, 60, 58 + index * 40, line, index === 0 ? 4 : 3, index === 0 ? accent : foreground);
-  });
+  return buffer;
+}
+
+async function writePpmBuffer(filePath, width, height, buffer) {
   const header = Buffer.from(`P6\n${width} ${height}\n255\n`, "ascii");
   await fs.writeFile(filePath, Buffer.concat([header, buffer]));
 }
@@ -263,6 +316,137 @@ function collectToolTimeline(report) {
   return timeline;
 }
 
+function toolName(result) {
+  return (
+    result?.tool ??
+    result?.name ??
+    result?.request?.tool ??
+    result?.request?.name ??
+    result?.call?.tool ??
+    "tool"
+  );
+}
+
+function extractObservation(report) {
+  for (const result of report.tool_results ?? []) {
+    const payload = result?.result ?? result?.response ?? {};
+    const scene = payload?.visible_scene ?? payload?.scene ?? {};
+    const visibleBlocks = Array.isArray(scene?.visible_blocks) ? scene.visible_blocks : [];
+    if (visibleBlocks.length === 0 && !payload?.self && !scene?.self) continue;
+    return {
+      tool: toolName(result),
+      self: payload?.self ?? scene?.self ?? null,
+      visibleBlocks,
+    };
+  }
+  return {
+    tool: "none",
+    self: null,
+    visibleBlocks: [],
+  };
+}
+
+function summarizeInventory(report) {
+  const inventory = report.final_inventory;
+  if (!inventory) return [];
+  if (Array.isArray(inventory)) {
+    return inventory
+      .filter((item) => item && (item.id || item.item || item.count))
+      .slice(0, 8)
+      .map((item) => `${item.id ?? item.item ?? "item"} x${item.count ?? "?"}`);
+  }
+  if (typeof inventory === "object") {
+    return Object.entries(inventory)
+      .slice(0, 8)
+      .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value).slice(0, 36) : value}`);
+  }
+  return [String(inventory).slice(0, 80)];
+}
+
+function reportDirectory(filePath) {
+  return path.dirname(path.dirname(filePath));
+}
+
+function resolveEvidencePath(reportFile, evidencePath) {
+  if (!evidencePath) return "";
+  if (path.isAbsolute(evidencePath)) return evidencePath;
+  const reportRoot = reportDirectory(reportFile);
+  const normalized = evidencePath.replaceAll("\\", "/");
+  if (normalized.startsWith(".minelink-dev/")) {
+    return path.join(root, normalized.slice(".minelink-dev/".length));
+  }
+  return path.resolve(reportRoot, evidencePath);
+}
+
+function inferLogPaths(reportFile, report) {
+  const candidates = [];
+  for (const key of [
+    "agent_log",
+    "host_log",
+    "server_stdout_log",
+    "server_stderr_log",
+    "gateway_stdout_log",
+    "gateway_stderr_log",
+    "server_log",
+  ]) {
+    const value = report.evidence_paths?.[key];
+    if (value) candidates.push(resolveEvidencePath(reportFile, value));
+  }
+  const logsDir = path.join(reportDirectory(reportFile), "logs");
+  for (const name of [
+    "agent.log",
+    "host.log",
+    "server.stdout.log",
+    "server.stderr.log",
+    "gateway.stdout.log",
+    "gateway.stderr.log",
+    "server.log",
+  ]) {
+    candidates.push(path.join(logsDir, name));
+  }
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+async function readTail(filePath, maxLines) {
+  try {
+    const text = await fs.readFile(filePath, "utf8");
+    return text
+      .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(-maxLines);
+  } catch {
+    return [];
+  }
+}
+
+async function collectTerminalLines(reportFile, report) {
+  const lines = [];
+  lines.push(`COMMAND PATH: scripts/dev/e2e.sh ${report.scenario ?? "scenario"}`);
+  lines.push(`RUNTIME: ${report.runtime ?? report.connect?.hello?.server?.loader ?? "unknown"}`);
+  lines.push(`RESULT: ${status(report.passed)}`);
+  lines.push(`ASSERTIONS: ${(report.final_assertions ?? []).length}`);
+  for (const entry of collectToolTimeline(report).slice(0, 8)) {
+    lines.push(`TOOL: ${entry}`);
+  }
+  for (const logPath of inferLogPaths(reportFile, report).slice(0, 5)) {
+    const tail = await readTail(logPath, 3);
+    if (tail.length === 0) continue;
+    lines.push(`[${path.basename(logPath)}]`);
+    lines.push(...tail.map((line) => line.slice(0, 110)));
+  }
+  return lines.slice(0, 28);
+}
+
+function assertionLines(report) {
+  const assertions = Array.isArray(report.final_assertions) ? report.final_assertions : [];
+  return assertions.slice(0, 8).map((assertion) => {
+    const name = assertion?.name ?? assertion?.kind ?? assertion?.id ?? "assertion";
+    return `${status(assertion?.passed)} ${name}`;
+  });
+}
+
 const files = await walk(root);
 const scenarioReports = [];
 for (const file of files) {
@@ -279,9 +463,20 @@ for (const file of files) {
       .filter((assertion) => assertion?.passed === false)
       .map((assertion) => assertion?.name ?? assertion?.kind ?? "unnamed_assertion"),
     timeline: collectToolTimeline(report),
+    terminal: await collectTerminalLines(file, report),
+    observation: extractObservation(report),
+    assertionLines: assertionLines(report),
+    inventory: summarizeInventory(report),
     parseError: report.__parseError,
   });
 }
+scenarioReports.sort((left, right) => {
+  const score = (report) =>
+    (report.observation.visibleBlocks.length > 0 ? 100 : 0) +
+    (report.runtime === "neoforge" ? 10 : 0) +
+    (report.passed ? 1 : 0);
+  return score(right) - score(left) || left.scenario.localeCompare(right.scenario) || left.path.localeCompare(right.path);
+});
 
 const resolvedBranch = await gitBranch();
 await fs.mkdir(outputDir, { recursive: true });
@@ -304,11 +499,13 @@ lines.push(`- Evidence root: \`${root}\``);
 lines.push(`- Scenario reports: \`${scenarioReports.length}\``);
 lines.push(`- Task requirements: \`${taskRequirements || "unspecified"}\``);
 lines.push(`- Video producer: \`${producer}\``);
+lines.push("- Video mode: `composite server-observation + terminal-log evidence`");
+lines.push("- Client GUI capture: `no`");
 lines.push("");
 lines.push("## Acceptance Boundary");
 lines.push("");
 lines.push(
-  "This is a trace-driven evidence artifact. It does not prove client GUI perception, and it does not upgrade mock, replay, smoke, or short-soak evidence to `product-accepted`.",
+  "This is a trace-driven evidence artifact rendered from MineLink reports, tool timelines, server observations, and terminal logs. It is not a Minecraft client GUI recording unless a separate client-capture artifact is attached, and it does not upgrade mock, replay, smoke, or short-soak evidence to `product-accepted`.",
 );
 lines.push("");
 lines.push("## Scenario Results");
@@ -354,6 +551,9 @@ const origin = {
   taskId,
   branch: resolvedBranch,
   producer,
+  videoKind: "composite-report-log-video",
+  clientGuiCapture: false,
+  scenarioReports: scenarioReports.length,
   runtime: {
     githubActions: process.env.GITHUB_ACTIONS === "true",
     githubRunId: process.env.GITHUB_RUN_ID ?? "",
@@ -362,7 +562,7 @@ const origin = {
   },
   boundary:
     producer.startsWith("github-actions")
-      ? "GitHub Actions generated this trace-driven canary video; it is not an Ona-produced final acceptance recording."
+      ? "GitHub Actions generated this trace-driven composite video; it is not an Ona-produced final acceptance recording."
       : "Acceptance video origin metadata; product acceptance still depends on the requested gate evidence.",
 };
 await fs.writeFile(originJsonPath, `${JSON.stringify(origin, null, 2)}\n`, "utf8");
@@ -375,6 +575,9 @@ await fs.writeFile(
     `- Task id: \`${taskId}\``,
     `- Branch: \`${resolvedBranch}\``,
     `- Producer: \`${producer}\``,
+    `- Video kind: \`${origin.videoKind}\``,
+    `- Client GUI capture: \`${origin.clientGuiCapture ? "yes" : "no"}\``,
+    `- Scenario reports: \`${origin.scenarioReports}\``,
     `- GitHub Actions: \`${origin.runtime.githubActions ? "yes" : "no"}\``,
     `- GitHub run id: \`${origin.runtime.githubRunId || "none"}\``,
     `- Ona environment id: \`${origin.runtime.onaEnvironmentId || "none"}\``,
@@ -384,34 +587,211 @@ await fs.writeFile(
   "utf8",
 );
 
-const videoLines = [
-  "MineLink Acceptance Evidence",
-  `Task: ${taskId}`,
-  `Branch: ${resolvedBranch}`,
-  `Producer: ${producer}`,
-  `PR: ${prUrl || "unknown"}`,
-  `Task: ${taskRequirements || "requirements unspecified"}`,
-  `Reports: ${scenarioReports.length}`,
-  ...scenarioReports.slice(0, 8).map((report) => `${report.scenario}: ${status(report.passed)} (${report.runtime})`),
-  "Boundary: trace-driven artifact, not product acceptance",
-];
+const colors = {
+  background: [10, 19, 27],
+  panel: [18, 31, 42],
+  panelAlt: [12, 23, 32],
+  border: [77, 103, 125],
+  text: [238, 244, 248],
+  muted: [145, 164, 178],
+  accent: [112, 202, 168],
+  warning: [242, 160, 96],
+  danger: [240, 96, 96],
+  ok: [120, 210, 136],
+  terminal: [184, 240, 198],
+};
+
+function blockColor(blockId) {
+  const id = String(blockId ?? "");
+  if (id.includes("log")) return [142, 92, 56];
+  if (id.includes("leaves") || id.includes("sapling")) return [78, 155, 86];
+  if (id.includes("chest") || id.includes("crafting_table")) return [191, 145, 74];
+  if (id.includes("furnace") || id.includes("lava")) return [225, 111, 64];
+  if (id.includes("water")) return [80, 146, 220];
+  if (id.includes("obsidian") || id.includes("portal")) return [120, 84, 180];
+  if (id.includes("create:")) return [82, 154, 184];
+  return [150, 160, 165];
+}
+
+function drawPanel(buffer, width, height, x, y, rectWidth, rectHeight, title) {
+  fillRect(buffer, width, height, x, y, rectWidth, rectHeight, colors.panel);
+  strokeRect(buffer, width, height, x, y, rectWidth, rectHeight, colors.border);
+  fillRect(buffer, width, height, x, y, rectWidth, 36, colors.panelAlt);
+  drawText(buffer, width, height, x + 14, y + 10, title, 2, colors.accent);
+}
+
+function drawObservationMap(buffer, width, height, report, x, y, rectWidth, rectHeight) {
+  fillRect(buffer, width, height, x, y, rectWidth, rectHeight, [8, 15, 20]);
+  strokeRect(buffer, width, height, x, y, rectWidth, rectHeight, [46, 72, 88]);
+  const observation = report?.observation;
+  const self = observation?.self;
+  const blocks = observation?.visibleBlocks ?? [];
+  const centerX = x + Math.floor(rectWidth / 2);
+  const centerY = y + Math.floor(rectHeight / 2);
+  fillRect(buffer, width, height, centerX - 6, centerY - 6, 12, 12, colors.accent);
+  drawText(buffer, width, height, x + 12, y + 12, "TOP DOWN SERVER OBSERVATION", 1, colors.muted);
+  if (!self || blocks.length === 0) {
+    drawTextBlock(buffer, width, height, x + 24, y + 64, ["NO OBSERVE.SCENE BLOCK MAP FOUND"], {
+      scale: 2,
+      color: colors.warning,
+      maxWidth: rectWidth - 48,
+      maxLines: 2,
+    });
+    return;
+  }
+  for (const block of blocks.slice(0, 48)) {
+    const position = block.position ?? {};
+    const dx = Number(position.x ?? 0) - Number(self.x ?? 0);
+    const dz = Number(position.z ?? 0) - Number(self.z ?? 0);
+    const px = Math.round(centerX + dx * 8);
+    const py = Math.round(centerY + dz * 8);
+    fillRect(buffer, width, height, px - 4, py - 4, 8, 8, blockColor(block.id));
+  }
+  drawText(buffer, width, height, centerX + 10, centerY - 4, "AGENT", 1, colors.accent);
+}
+
+function formatPosition(position) {
+  if (!position) return "unknown";
+  return `x${Number(position.x ?? 0).toFixed(1)} y${Number(position.y ?? 0).toFixed(1)} z${Number(position.z ?? 0).toFixed(1)}`;
+}
+
+function drawCompositeFrame(filePath, frameIndex, frameCount) {
+  const width = 1280;
+  const height = 720;
+  const buffer = createFrameBuffer(width, height, colors.background);
+  const report = scenarioReports.length > 0 ? scenarioReports[frameIndex % scenarioReports.length] : null;
+  const titleColor = scenarioReports.length > 0 ? colors.accent : colors.danger;
+  drawText(buffer, width, height, 28, 24, "MINELINK ACCEPTANCE EVIDENCE", 3, titleColor);
+  drawTextBlock(
+    buffer,
+    width,
+    height,
+    28,
+    62,
+    [
+      `TASK ${taskId}`,
+      `BRANCH ${resolvedBranch}`,
+      `PRODUCER ${producer}`,
+      `REPORTS ${scenarioReports.length}`,
+    ],
+    { scale: 1, color: colors.muted, maxWidth: 800, maxLines: 3, lineGap: 14 },
+  );
+  drawText(buffer, width, height, 1092, 30, `FRAME ${frameIndex + 1}/${frameCount}`, 2, colors.muted);
+
+  drawPanel(buffer, width, height, 28, 102, 790, 572, "GAME / SERVER EVIDENCE");
+  drawPanel(buffer, width, height, 846, 102, 406, 572, "TERMINAL / ASSERTIONS");
+
+  if (!report) {
+    drawTextBlock(
+      buffer,
+      width,
+      height,
+      64,
+      176,
+      [
+        "BLOCKED PLACEHOLDER VIDEO",
+        "NO SCENARIO REPORTS WERE FOUND",
+        "RELEASE GATE MUST FAIL THIS ARTIFACT",
+      ],
+      { scale: 3, color: colors.danger, maxWidth: 700, maxLines: 5, lineGap: 34 },
+    );
+    drawTextBlock(
+      buffer,
+      width,
+      height,
+      872,
+      160,
+      [
+        "Scenario reports: 0",
+        "No action timeline entries found",
+        "This cannot be final acceptance evidence",
+      ],
+      { scale: 2, color: colors.terminal, maxWidth: 350, maxLines: 12, lineGap: 22 },
+    );
+    return writePpmBuffer(filePath, width, height, buffer);
+  }
+
+  const resultColor = report.passed ? colors.ok : colors.danger;
+  drawText(buffer, width, height, 54, 154, `SCENARIO ${report.scenario}`, 2, colors.text);
+  drawText(buffer, width, height, 54, 180, `RUNTIME ${report.runtime}`, 2, colors.muted);
+  drawText(buffer, width, height, 54, 206, `RESULT ${status(report.passed)}`, 2, resultColor);
+  drawText(buffer, width, height, 54, 232, `ASSERTIONS ${report.assertions}`, 2, colors.muted);
+
+  drawObservationMap(buffer, width, height, report, 54, 270, 360, 220);
+  const observation = report.observation;
+  const blockLines = [
+    `OBSERVE TOOL ${observation?.tool ?? "none"}`,
+    `SELF ${formatPosition(observation?.self)}`,
+    `VISIBLE BLOCKS ${(observation?.visibleBlocks ?? []).length}`,
+    ...(observation?.visibleBlocks ?? [])
+      .slice(0, 8)
+      .map((block) => `${block.id ?? "block"} d${Number(block.distance ?? 0).toFixed(1)} ${block.block_ref ?? ""}`),
+  ];
+  drawTextBlock(buffer, width, height, 438, 270, blockLines, {
+    scale: 2,
+    color: colors.text,
+    maxWidth: 342,
+    maxLines: 11,
+    lineGap: 22,
+  });
+
+  const assertionPanelLines = [
+    "KEY ASSERTIONS",
+    ...(report.assertionLines.length > 0 ? report.assertionLines : ["no final assertions listed"]),
+    "FINAL INVENTORY",
+    ...(report.inventory.length > 0 ? report.inventory : ["inventory not recorded"]),
+  ];
+  drawTextBlock(buffer, width, height, 54, 518, assertionPanelLines, {
+    scale: 2,
+    color: colors.text,
+    maxWidth: 720,
+    maxLines: 7,
+    lineGap: 22,
+  });
+
+  const terminalLines = report.terminal.length > 0 ? report.terminal : ["no terminal log lines found"];
+  const scroll = terminalLines.length > 19 ? (frameIndex * 2) % terminalLines.length : 0;
+  const visibleTerminal = [...terminalLines.slice(scroll), ...terminalLines.slice(0, scroll)].slice(0, 20);
+  drawTextBlock(buffer, width, height, 870, 154, visibleTerminal, {
+    scale: 2,
+    color: colors.terminal,
+    maxWidth: 350,
+    maxLines: 20,
+    lineGap: 22,
+  });
+
+  fillRect(buffer, width, height, 846, 656, 406, 18, [7, 13, 18]);
+  fillRect(buffer, width, height, 846, 656, Math.floor((406 * (frameIndex + 1)) / frameCount), 18, colors.accent);
+  return writePpmBuffer(filePath, width, height, buffer);
+}
 
 try {
-  await writePpmFrame(framePath, videoLines);
+  const framesDir = path.join(outputDir, "acceptance-frames");
+  await fs.rm(framesDir, { recursive: true, force: true });
+  await fs.mkdir(framesDir, { recursive: true });
+  const frameCount = Math.max(10, Math.min(24, scenarioReports.length * 3 || 10));
+  for (let index = 0; index < frameCount; index += 1) {
+    const numberedFramePath = path.join(framesDir, `frame-${String(index + 1).padStart(3, "0")}.ppm`);
+    await drawCompositeFrame(numberedFramePath, index, frameCount);
+    if (index === 0) {
+      await fs.copyFile(numberedFramePath, framePath);
+    }
+  }
   await execFileAsync("ffmpeg", [
     "-y",
-    "-loop",
+    "-framerate",
     "1",
-    "-t",
-    "10",
     "-i",
-    framePath,
+    path.join(framesDir, "frame-%03d.ppm"),
+    "-r",
+    "24",
     "-pix_fmt",
     "yuv420p",
     "-movflags",
     "+faststart",
     mp4Path,
   ]);
+  await fs.rm(framesDir, { recursive: true, force: true });
   await fs.rm(unavailablePath, { force: true });
   console.log(`Wrote ${summaryPath}`);
   console.log(`Wrote ${mp4Path}`);

@@ -89,6 +89,12 @@ function marker(text, label) {
   return match?.[1]?.trim().toLowerCase() ?? "";
 }
 
+function summaryCount(text, label) {
+  const match = text.match(new RegExp(`^-\\s*${label}:\\s*\`?(\\d+)\`?\\s*$`, "im"));
+  if (!match) return null;
+  return Number.parseInt(match[1], 10);
+}
+
 const failures = [];
 const reviewStat = await stat(reviewPath);
 const summaryStat = await stat(summaryPath);
@@ -96,9 +102,22 @@ const mp4Stat = await stat(mp4Path);
 const origin = await readJson(originPath);
 const producer = origin?.producer ?? "unknown";
 const review = await readText(reviewPath);
+const summary = await readText(summaryPath);
+const scenarioReportCount = summaryCount(summary, "Scenario reports");
 
 if (!summaryStat || !summaryStat.isFile() || summaryStat.size === 0) {
   failures.push(`Missing acceptance summary: ${summaryPath}`);
+} else {
+  if (scenarioReportCount === null) {
+    failures.push("Acceptance summary does not declare Scenario reports");
+  } else if (scenarioReportCount <= 0) {
+    failures.push(
+      "Acceptance video has zero scenario reports; placeholder videos cannot be released as final evidence",
+    );
+  }
+  if (/^\s*-\s*No scenario reports found\./im.test(summary)) {
+    failures.push("Acceptance summary contains no scenario reports");
+  }
 }
 
 if (requireMp4 && (!mp4Stat || !mp4Stat.isFile() || mp4Stat.size === 0)) {
@@ -167,6 +186,7 @@ const lines = [
   `- Video producer: \`${producer}\``,
   `- Required producer: \`${requireProducer || "none"}\``,
   `- MP4 required: \`${requireMp4 ? "yes" : "no"}\``,
+  `- Scenario reports: \`${scenarioReportCount ?? "unknown"}\``,
   `- Result: \`${failures.length === 0 ? "passed" : "failed"}\``,
   "",
   "## Failures",

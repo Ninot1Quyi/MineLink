@@ -958,11 +958,14 @@ Current status:
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.
-- `scripts/dev/render-acceptance-video.mjs` generates a trace-driven
+- `scripts/dev/render-acceptance-video.mjs` generates a trace-driven composite
   `.minelink-dev/reports/artifacts/acceptance-summary.md` and
   `.minelink-dev/reports/artifacts/acceptance.mp4`; the real NeoForge GitHub
   workflow installs `ffmpeg` and runs the renderer with `--require-mp4`.
-  The renderer also writes `acceptance-video-origin.{json,md}`. A
+  The MP4 must contain task evidence, not a static placeholder: the current
+  renderer shows MineLink server-observation/assertion evidence on the left and
+  command paths, tool timelines, and terminal log excerpts on the right. The
+  renderer also writes `acceptance-video-origin.{json,md}`. A
   `github-actions-canary` producer is chain evidence only; final task
   acceptance requires the MP4 to be produced in the Ona task/finalizer
   environment with producer `ona-task-finalizer`; the release gate must require
@@ -980,7 +983,9 @@ Current status:
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
   match markers, the required Ona video producer, and current summary/MP4
-  hashes. The gate writes
+  hashes. The gate also fails final publication when the summary has
+  `Scenario reports: 0` or `No scenario reports found`; a pure text/card MP4 is
+  never sufficient final evidence for video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
 - `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at
   terminal factory cleanup when they belong to the MineLink project and have no
