@@ -23,6 +23,7 @@ const args = {
 };
 let dryRun = false;
 let requireComment = false;
+let allowArtifactOnly = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -44,12 +45,14 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--dry-run") dryRun = true;
   else if (arg === "--require-comment") requireComment = true;
+  else if (arg === "--allow-artifact-only") allowArtifactOnly = true;
   else if (arg === "-h" || arg === "--help") {
-    console.log(`Usage: node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr N --artifact-url URL
+    console.log(`Usage: node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr N --video-url URL [--artifact-url URL]
 
 Upserts a PR comment that links to the GitHub artifact containing
-.minelink-dev/reports/artifacts/acceptance.mp4. This is a review-surface helper
-only; it does not alter acceptance gate status.`);
+.minelink-dev/reports/artifacts/acceptance.mp4 and, by default, requires a
+playable GitHub video URL. This is a review-surface helper only; it does not
+alter acceptance gate status.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -76,6 +79,9 @@ function validate() {
   if (!/^[^/\s]+\/[^/\s]+$/.test(args.repository)) failures.push("--repository must be owner/repo");
   if (!/^\d+$/.test(String(args.pr))) failures.push("--pr must be a pull request number");
   if (!hasValue(args.artifactName)) failures.push("--artifact-name cannot be empty");
+  if (!hasValue(args.videoUrl) && !allowArtifactOnly) {
+    failures.push("--video-url is required unless --allow-artifact-only is set");
+  }
   if (!hasValue(args.artifactUrl) && !hasValue(args.videoUrl)) {
     failures.push("at least one of --artifact-url or --video-url is required");
   }
@@ -169,6 +175,7 @@ const report = {
   rawVideoUrl: args.rawVideoUrl,
   videoPath: args.videoPath,
   producer: args.producer,
+  allowArtifactOnly,
   commentUrl: "",
   action: "",
   dryRun,

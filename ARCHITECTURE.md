@@ -373,6 +373,11 @@ acceptance-video evidence must identify the video producer. A
 task-acceptance video must be produced in the Ona task/finalizer environment
 with producer `ona-task-finalizer`, then verified by hash against that exact
 artifact with `check-video-review.mjs --require-producer ona-task-finalizer`.
+PR-visible video evidence must include a playable GitHub blob page for
+`acceptance.mp4` published on the dedicated `minelink-evidence` branch. Actions
+artifact zip links are useful for logs and reports, but they are not accepted as
+the visible video surface by themselves, and automated PR video comments skip or
+fail when the playable URL is missing.
 Manual `ona environment ssh`
 remains useful for debugging or verification,
 but it is not the product delivery path. Self-reported identity is not accepted:

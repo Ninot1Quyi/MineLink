@@ -147,7 +147,7 @@ jobs:
             mod/neoforge/run/logs/
           include-hidden-files: true
       - name: Comment PR video evidence
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.upload-evidence.outputs.artifact-url != ''
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.upload-evidence.outputs.artifact-url != '' && steps.publish-video.outputs.video-url != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}

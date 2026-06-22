@@ -187,6 +187,9 @@ node scripts/dev/publish-pr-video-evidence.mjs --repository owner/repo --pr 123 
 node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --artifact-url URL --video-url URL
 ```
 
+The PR comment helper now requires a playable GitHub video URL by default. Use
+`--allow-artifact-only` only for local debugging, not for automated PR evidence
+comments.
 The playable link is for review ergonomics. It does not make a GitHub canary
 video equivalent to final Ona task acceptance.
 
