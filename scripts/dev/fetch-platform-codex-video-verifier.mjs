@@ -165,14 +165,16 @@ async function fetchRemoteVerifier() {
   };
 }
 
-async function loadVerifier() {
+async function loadVerifier(validateRemote) {
   if (hasValue(args.verifierFile)) {
     const text = await fs.readFile(args.verifierFile, "utf8");
-    return {
+    const candidate = {
       text,
       commit: args.branchCommit,
       htmlUrl: args.verifierFile,
     };
+    if (validateRemote) candidate.remoteCheck = validateRemote(candidate);
+    return candidate;
   }
 
   if (!hasValue(args.repository)) throw new Error("--repository or GITHUB_REPOSITORY is required.");
@@ -180,16 +182,39 @@ async function loadVerifier() {
 
   const deadline = Date.now() + args.waitSeconds * 1000;
   let lastError = null;
+  let lastCandidate = null;
+  let lastCheck = null;
   do {
     try {
-      return await fetchRemoteVerifier();
+      const candidate = await fetchRemoteVerifier();
+      if (validateRemote) {
+        const check = validateRemote(candidate);
+        if (check.failures.length === 0) {
+          return { ...candidate, remoteCheck: check };
+        }
+        lastCandidate = candidate;
+        lastCheck = check;
+        lastError = new Error(
+          `Verifier branch evidence for ${args.verifierPath} is not current yet: ${check.failures.join("; ")}`,
+        );
+      } else {
+        return candidate;
+      }
     } catch (error) {
       lastError = error;
-      if (Date.now() >= deadline || args.waitSeconds === 0) break;
-      await sleep(Math.max(1, args.pollSeconds) * 1000);
     }
+    if (Date.now() >= deadline || args.waitSeconds === 0) break;
+    await sleep(Math.max(1, args.pollSeconds) * 1000);
   } while (Date.now() < deadline);
 
+  if (lastCandidate) {
+    return {
+      ...lastCandidate,
+      remoteCheck: lastCheck,
+      remoteWaitFailure:
+        lastError?.message ?? `Timed out waiting for current Platform Codex verifier evidence at ${args.verifierPath}.`,
+    };
+  }
   throw lastError ?? new Error("Timed out waiting for Platform Codex verifier branch evidence.");
 }
 
@@ -374,18 +399,29 @@ evidence.push(...request.evidence);
 
 let verifier = null;
 try {
-  verifier = await loadVerifier();
+  const verifierExpectation = {
+    ...request,
+    agentMode: api.agentMode,
+  };
+  const validateRemote =
+    api.failures.length === 0 && request.failures.length === 0
+      ? (candidate) => validateVerifierCanary(candidate.text, api.agentExecutionId, verifierExpectation)
+      : null;
+  verifier = await loadVerifier(validateRemote);
   evidence.push(`verifier file ${args.verifierPath}`);
   if (verifier.htmlUrl) evidence.push(`verifier URL ${verifier.htmlUrl}`);
+  if (verifier.remoteWaitFailure) failures.push(verifier.remoteWaitFailure);
 } catch (error) {
   failures.push(error.message);
 }
 
 if (verifier?.text) {
-  const verifierCheck = validateVerifierCanary(verifier.text, api.agentExecutionId, {
-    ...request,
-    agentMode: api.agentMode,
-  });
+  const verifierCheck =
+    verifier.remoteCheck ??
+    validateVerifierCanary(verifier.text, api.agentExecutionId, {
+      ...request,
+      agentMode: api.agentMode,
+    });
   failures.push(...verifierCheck.failures);
   evidence.push(...verifierCheck.evidence);
 }

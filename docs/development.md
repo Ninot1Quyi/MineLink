@@ -195,7 +195,10 @@ scripts so stale task branches cannot regenerate review requests with old
 defaults. It is an artifact/finalizer bridge only; Platform Codex API readback
 and branch evidence remain the implementation and verifier proof. Platform
 Codex launch commands default to `AGENT_MODE_RALPH`, which maps to the Goal mode
-used for persistent delivery.
+used for persistent delivery. Repeated canary runs may reuse the same branch
+evidence paths; the fetch steps wait for the current Goal-mode session markers,
+reviewed commit, and artifact hashes before releasing instead of accepting stale
+branch files.
 
 For PR review visibility, CI can publish the rendered MP4 to a dedicated
 GitHub evidence branch and update the PR with a playable GitHub file-page link:

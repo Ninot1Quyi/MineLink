@@ -484,7 +484,10 @@ API readback to show the configured Codex agent id, `AGENT_MODE_RALPH`, and
 reviewed commit, summary hash, MP4 hash, and video producer, writes
 `.minelink-dev/reports/ona-codex-video-verifier-session.md`, materializes
 `.minelink-dev/reports/artifacts/video-review.md`, and lets
-`check-video-review.mjs --require-mp4` create the release gate. This is still
+`check-video-review.mjs --require-mp4` create the release gate. If the canary
+path already exists from an earlier run, the fetch script polls until the file
+contains the current Goal-mode execution id, reviewed commit, and artifact
+hashes; stale branch content is a timeout failure, not release evidence. This is still
 automation-chain evidence only; it does not prove product acceptance. When a
 canary run renders the MP4 on the GitHub runner, the artifact origin must say
 `github-actions-canary`; that video is acceptable for chain testing only. Final

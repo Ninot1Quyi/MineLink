@@ -142,14 +142,16 @@ async function fetchRemoteCanary() {
   };
 }
 
-async function loadCanary() {
+async function loadCanary(validateRemote) {
   if (hasValue(args.canaryFile)) {
     const text = await fs.readFile(args.canaryFile, "utf8");
-    return {
+    const candidate = {
       text,
       commit: args.branchCommit,
       htmlUrl: args.canaryFile,
     };
+    if (validateRemote) candidate.remoteCheck = validateRemote(candidate);
+    return candidate;
   }
 
   if (!hasValue(args.repository)) throw new Error("--repository or GITHUB_REPOSITORY is required.");
@@ -157,16 +159,39 @@ async function loadCanary() {
 
   const deadline = Date.now() + args.waitSeconds * 1000;
   let lastError = null;
+  let lastCandidate = null;
+  let lastCheck = null;
   do {
     try {
-      return await fetchRemoteCanary();
+      const candidate = await fetchRemoteCanary();
+      if (validateRemote) {
+        const check = validateRemote(candidate);
+        if (check.failures.length === 0) {
+          return { ...candidate, remoteCheck: check };
+        }
+        lastCandidate = candidate;
+        lastCheck = check;
+        lastError = new Error(
+          `Implementation branch evidence for ${args.canaryPath} is not current yet: ${check.failures.join("; ")}`,
+        );
+      } else {
+        return candidate;
+      }
     } catch (error) {
       lastError = error;
-      if (Date.now() >= deadline || args.waitSeconds === 0) break;
-      await sleep(Math.max(1, args.pollSeconds) * 1000);
     }
+    if (Date.now() >= deadline || args.waitSeconds === 0) break;
+    await sleep(Math.max(1, args.pollSeconds) * 1000);
   } while (Date.now() < deadline);
 
+  if (lastCandidate) {
+    return {
+      ...lastCandidate,
+      remoteCheck: lastCheck,
+      remoteWaitFailure:
+        lastError?.message ?? `Timed out waiting for current Platform Codex implementation evidence at ${args.canaryPath}.`,
+    };
+  }
   throw lastError ?? new Error("Timed out waiting for Platform Codex canary branch evidence.");
 }
 
@@ -290,15 +315,18 @@ evidence.push(...api.evidence);
 
 let canary = null;
 try {
-  canary = await loadCanary();
+  const validateRemote =
+    api.failures.length === 0 ? (candidate) => validateCanary(candidate.text, api.agentExecutionId, api.agentMode) : null;
+  canary = await loadCanary(validateRemote);
   evidence.push(`canary file ${args.canaryPath}`);
   if (canary.htmlUrl) evidence.push(`canary URL ${canary.htmlUrl}`);
+  if (canary.remoteWaitFailure) failures.push(canary.remoteWaitFailure);
 } catch (error) {
   failures.push(error.message);
 }
 
 if (canary?.text) {
-  const canaryCheck = validateCanary(canary.text, api.agentExecutionId, api.agentMode);
+  const canaryCheck = canary.remoteCheck ?? validateCanary(canary.text, api.agentExecutionId, api.agentMode);
   failures.push(...canaryCheck.failures);
   evidence.push(...canaryCheck.evidence);
 }
