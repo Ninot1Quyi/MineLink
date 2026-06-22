@@ -512,6 +512,10 @@ function terminalAgentPhase(phase) {
   return /^PHASE_(STOPPED|FAILED|CANCELLED|DELETED)$/i.test(String(phase ?? ""));
 }
 
+function failedAgentPhase(phase) {
+  return /^PHASE_(FAILED|CANCELLED|DELETED)$/i.test(String(phase ?? ""));
+}
+
 async function pollReadback(agentExecutionId) {
   const attempts = [];
   const deadline = Date.now() + args.waitSeconds * 1000;
@@ -554,7 +558,18 @@ function evaluateReadback(readback, expectedAgentId) {
   } else {
     evidence.push("Codex settings are present in execution readback");
   }
-  if (hasValue(status.phase)) evidence.push(`phase=${status.phase}`);
+  if (hasValue(status.phase)) {
+    evidence.push(`phase=${status.phase}`);
+    if (failedAgentPhase(status.phase)) {
+      failures.push(`Agent execution ended in ${status.phase}.`);
+    } else if (!terminalAgentPhase(status.phase) && args.waitSeconds > 0) {
+      failures.push(
+        `Agent execution did not reach a terminal phase before --wait-seconds=${args.waitSeconds}: ${status.phase}.`,
+      );
+    }
+  } else {
+    failures.push("GetAgentExecution did not expose status.phase.");
+  }
   if (hasValue(status.supportedModel)) evidence.push(`supportedModel=${status.supportedModel}`);
   if (hasValue(status.conversationUrl)) evidence.push("conversationUrl present");
   if (hasValue(status.transcriptUrl)) evidence.push("transcriptUrl present");
