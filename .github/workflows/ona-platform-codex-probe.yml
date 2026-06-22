@@ -205,33 +205,41 @@ jobs:
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --commit "$branch_commit"
 
-      - name: Render canary acceptance video request
+      - name: Run Ona finalizer acceptance video request
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
         env:
           INPUT_TASK_ID: ${{ inputs.task_id }}
           INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
           INPUT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+          INPUT_PR_TITLE: ${{ inputs.pr_title }}
         run: |
           task_id="${MINELINK_PLATFORM_CODEX_TASK_ID:-${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}}"
           target_branch="${MINELINK_PLATFORM_CODEX_TARGET_BRANCH:-${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}}"
           reviewed_commit="${MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT:-${INPUT_REVIEWED_COMMIT:-$(git rev-parse --short HEAD)}}"
+          environment_id="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-platform-codex-api-session.json','utf8')); console.log(report.environmentId || '')")"
+          if [ -z "$environment_id" ]; then
+            echo "Ona Platform Codex API session did not report an environment id for finalizer artifacts."
+            exit 1
+          fi
           {
             echo "MINELINK_PLATFORM_CODEX_TASK_ID=$task_id"
             echo "MINELINK_PLATFORM_CODEX_TARGET_BRANCH=$target_branch"
             echo "MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT=$reviewed_commit"
+            echo "MINELINK_ONA_FINALIZER_ENVIRONMENT_ID=$environment_id"
           } >> "$GITHUB_ENV"
-          bash scripts/dev/verify-agent-task.sh --scope docs
-          node scripts/dev/render-acceptance-video.mjs \
+          node scripts/dev/run-ona-finalizer-artifacts.mjs \
+            --environment-id "$environment_id" \
             --task-id "$task_id" \
             --branch "$target_branch" \
-            --task-requirements docs/minelink-acceptance.md \
-            --producer github-actions-canary \
-            --require-mp4
-          node scripts/dev/prepare-video-review-request.mjs \
-            --task-id "$task_id" \
-            --branch "$target_branch" \
-            --task-requirements docs/minelink-acceptance.md \
-            --require-mp4
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
+            --pr-title "${INPUT_PR_TITLE:-Advance ${task_id}}" \
+            --validation-scope docs \
+            --scenarios none \
+            --video-producer ona-task-finalizer \
+            --required-video-producer ona-task-finalizer
 
       - name: Request implementation Codex verifier subagent
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
@@ -284,7 +292,7 @@ jobs:
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
             --wait-seconds "${INPUT_BRANCH_WAIT_SECONDS:-300}"
-          node scripts/dev/check-video-review.mjs --require-mp4
+          node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer
           evidence_args=(--verifier)
           chain_args=(--require-platform-codex-verifier)
           if [ "$INPUT_MODE" = "full-chain-canary" ]; then
@@ -304,6 +312,7 @@ jobs:
             --ona-automation-status partial \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --require-video-producer ona-task-finalizer \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             "${chain_args[@]}"
 
@@ -396,6 +405,7 @@ jobs:
             --ona-automation-status partial \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --require-video-producer ona-task-finalizer \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
             --pr-report .minelink-dev/reports/agent-factory-pr.md \
@@ -411,7 +421,7 @@ jobs:
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
-          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: github-actions-canary
+          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer
         run: |
           pr_number="$(node -e "const url=process.env.MINELINK_AGENT_FACTORY_PR_URL||''; const m=url.match(/\\/pull\\/(\\d+)/); console.log(m?m[1]:'')")"
           if [ -z "$pr_number" ]; then
@@ -451,8 +461,8 @@ jobs:
         if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.publish-video.outputs.video-url != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
-          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: github-actions-canary
-          MINELINK_ACCEPTANCE_VIDEO_BOUNDARY: Full-chain canary video for PR review. Final product tasks still require Ona task/finalizer producer ona-task-finalizer and same-session Codex verifier approval.
+          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer
+          MINELINK_ACCEPTANCE_VIDEO_BOUNDARY: Full-chain canary video produced by the Ona task finalizer and reviewed by the same Platform Codex implementation session. Product acceptance still depends on task scope and MineLink gate evidence.
         run: |
           pr_number="$(node -e "const url=process.env.MINELINK_AGENT_FACTORY_PR_URL||''; const m=url.match(/\\/pull\\/(\\d+)/); console.log(m?m[1]:'')")"
           if [ -z "$pr_number" ]; then

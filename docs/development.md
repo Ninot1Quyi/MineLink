@@ -179,6 +179,20 @@ The release gate is:
 node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer
 ```
 
+Full-chain canaries use the Platform Codex task environment as the artifact
+producer. After the implementation readback exists, GitHub Actions runs:
+
+```bash
+node scripts/dev/run-ona-finalizer-artifacts.mjs --environment-id <ona-env> --task-id gh-123 --branch codex/gh-123-task
+```
+
+That command uses `ona environment exec` to run the validation, summary,
+`render-video`, and `prepare-video` finalizer stages inside the Ona
+devcontainer, then copies `.minelink-dev/reports` back to the runner for video
+review, PR creation, and publication. It is an artifact/finalizer bridge only;
+Platform Codex API readback and branch evidence remain the implementation and
+verifier proof.
+
 For PR review visibility, CI can publish the rendered MP4 to a dedicated
 GitHub evidence branch and update the PR with a playable GitHub file-page link:
 

@@ -32,6 +32,15 @@ the dedicated video-review report, and opens or updates the review PR. It does
 not replace the Ona Platform Codex agent session, and it does not re-render the
 MP4 after the verifier has reviewed it.
 
+For GitHub-driven full-chain canaries, GitHub Actions uses
+`scripts/dev/run-ona-finalizer-artifacts.mjs` after the Platform Codex
+implementation readback exists. The script executes the validation, summary,
+`render-video`, and `prepare-video` finalizer stages inside the same Ona task
+environment with `ona environment exec`, copies `.minelink-dev/reports` back to
+the runner, and requires the MP4 origin producer to be `ona-task-finalizer`.
+This is artifact transport only; the accepted implementation and verifier
+evidence remains the Platform Codex API readback plus task-bound branch commits.
+
 The repository has two source dispatchers into that same downstream flow:
 
 ```text

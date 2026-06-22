@@ -392,7 +392,14 @@ but it is not enough to prove the automated chain unless the task run records
 the specific Codex session and platform-mode evidence. The implementation
 finalizer renders the trace-driven MP4 before the verifier runs; the release
 finalizer must not re-render the MP4 after video review. It checks the existing
-artifact hashes. Terminal factory paths run
+artifact hashes. In GitHub-driven full-chain canaries, the runner uses
+`scripts/dev/run-ona-finalizer-artifacts.mjs` to execute the validation,
+summary, `render-video`, and `prepare-video` finalizer stages inside the same
+Ona task environment through `ona environment exec`, then copies
+`.minelink-dev/reports` back for verifier prompting, PR publication, and CI
+status. This bridge is accepted only as finalizer/artifact transport; Platform
+Codex API readback and task-bound branch commits remain the implementation and
+verifier evidence. Terminal factory paths run
 `scripts/dev/cleanup-ona-resources.mjs` after success or failure so task
 environments are stopped automatically when they are in the MineLink project
 and have no uncommitted workspace changes. Cleanup is resource hygiene only; it
