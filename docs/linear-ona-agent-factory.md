@@ -421,6 +421,20 @@ file markers to match task, branch, session id, and docs validation, and writes
 `.minelink-dev/reports/ona-codex-implementation-session.md` with the fetched
 branch head as `Commit:`. The canary markdown file by itself is not accepted
 implementation readback and this mode does not count as product acceptance.
+`full-chain-canary` extends that pilot to the next edge. The workflow renders
+the trace-driven acceptance summary/MP4, writes the video-review request,
+starts a second configured Ona Platform Codex session with
+`--video-verifier-canary`, waits for
+`docs/agent-factory-canaries/<task>-video-verifier.md`, then runs
+`scripts/dev/fetch-platform-codex-video-verifier.mjs`. The fetch script is the
+canonical bridge for canary video review: it requires the verifier AgentService
+API readback to show the configured Codex agent id plus `codexSettings`, checks
+the verifier canary against the current task, branch, reviewed commit, summary
+hash, and MP4 hash, writes
+`.minelink-dev/reports/ona-codex-video-verifier-session.md`, materializes
+`.minelink-dev/reports/artifacts/video-review.md`, and lets
+`check-video-review.mjs --require-mp4` create the release gate. This is still
+automation-chain evidence only; it does not prove product acceptance.
 Before validation or PR finalization, the CLI automation also requires an
 implementation-session readback at:
 

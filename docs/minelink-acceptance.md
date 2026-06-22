@@ -814,6 +814,16 @@ Current status:
   video review, PR release, or `product-accepted` gate. The canary file alone
   must not be used as the final readback because the canonical `Commit:` value
   is the fetched branch head.
+  The next canary slice adds `full-chain-canary` to the same workflow. It runs
+  the implementation canary, renders trace-driven acceptance artifacts, starts
+  a separate Platform Codex `video-verifier-canary` session, fetches
+  `docs/agent-factory-canaries/<task>-video-verifier.md`, and uses
+  `scripts/dev/fetch-platform-codex-video-verifier.mjs` to write
+  `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the local
+  hash-checked `video-review.md`. This can upgrade only the
+  `acceptance_video -> video_verifier` automation-chain edge for a canary task;
+  it does not prove real product implementation, real Minecraft behavior, PR
+  release, or any `product-accepted` gate.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only

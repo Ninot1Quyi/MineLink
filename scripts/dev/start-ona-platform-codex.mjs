@@ -18,6 +18,7 @@ const defaults = {
   commit: process.env.MINELINK_COMMIT ?? "",
   githubIssue: process.env.MINELINK_GITHUB_ISSUE ?? "",
   linearIssue: process.env.MINELINK_LINEAR_ISSUE ?? "",
+  videoReviewRequest: process.env.MINELINK_VIDEO_REVIEW_REQUEST ?? ".minelink-dev/reports/artifacts/video-review-request.md",
   model: process.env.MINELINK_ONA_CODEX_MODEL ?? "CODEX_OPEN_AI_MODEL_GPT_5_5",
   reasoningEffort: process.env.MINELINK_ONA_CODEX_REASONING_EFFORT ?? "CODEX_REASONING_EFFORT_EXTRA_HIGH",
   serviceTier: process.env.MINELINK_ONA_CODEX_SERVICE_TIER ?? "CODEX_SERVICE_TIER_FAST",
@@ -47,6 +48,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--no-send") sendPrompt = false;
   else if (arg === "--identity-canary") promptMode = "identity-canary";
   else if (arg === "--implementation-canary") promptMode = "implementation-canary";
+  else if (arg === "--video-verifier-canary") promptMode = "video-verifier-canary";
   else if (arg === "--api-base") args.apiBase = readValue();
   else if (arg === "--organization-id") args.organizationId = readValue();
   else if (arg === "--project-id") args.projectId = readValue();
@@ -58,6 +60,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--commit") args.commit = readValue();
   else if (arg === "--github-issue") args.githubIssue = readValue();
   else if (arg === "--linear-issue") args.linearIssue = readValue();
+  else if (arg === "--video-review-request") args.videoReviewRequest = readValue();
   else if (arg === "--model") args.model = readValue();
   else if (arg === "--reasoning-effort") args.reasoningEffort = readValue();
   else if (arg === "--service-tier") args.serviceTier = readValue();
@@ -81,6 +84,7 @@ Options:
   --start                      Call StartAgent with --codex-agent-id and codexSettings.
   --identity-canary            Send a read-only identity canary prompt after StartAgent.
   --implementation-canary      Send a bounded docs-only task canary prompt.
+  --video-verifier-canary      Send a bounded video-verifier canary prompt.
   --prompt <text>              Prompt to send via SendToAgentExecution.
   --prompt-file <path>         Prompt file to send via SendToAgentExecution.
   --readback-execution <id>    Call GetAgentExecution for an existing execution id.
@@ -124,6 +128,24 @@ function pathSegment(value) {
 
 function implementationCanaryPath() {
   return `docs/agent-factory-canaries/${pathSegment(args.taskId)}.md`;
+}
+
+function videoVerifierCanaryPath() {
+  return `docs/agent-factory-canaries/${pathSegment(args.taskId)}-video-verifier.md`;
+}
+
+async function readTextIfPresent(filePath) {
+  try {
+    return await fs.readFile(filePath, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function requestValue(text, label) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(text ?? "").match(new RegExp(`^-?\\s*${escaped}:\\s*` + "`?(.+?)`?\\s*$", "im"));
+  return match?.[1]?.trim() ?? "";
 }
 
 function implementationCanaryPrompt(context = {}) {
@@ -171,6 +193,81 @@ function implementationCanaryPrompt(context = {}) {
     "",
     "Git:",
     "- Commit the canary file with an English Lore commit message explaining that this proves a bounded Platform Codex task handoff.",
+    "- Push the target branch to origin.",
+    "- Do not create a PR for this canary unless the user explicitly asks.",
+  ].join("\n");
+}
+
+async function videoVerifierCanaryPrompt(context = {}) {
+  const sessionId = context.agentExecutionId || "<agentExecutionId>";
+  const canaryPath = videoVerifierCanaryPath();
+  const request = await readTextIfPresent(args.videoReviewRequest);
+  const summaryHash = requestValue(request, "Summary sha256") || "missing";
+  const mp4Hash = requestValue(request, "MP4 sha256") || "missing";
+  const requestTaskId = requestValue(request, "Task id") || args.taskId;
+  const requestBranch = requestValue(request, "Branch") || args.branch;
+  const requestExcerpt = request
+    .split("\n")
+    .slice(0, 220)
+    .join("\n")
+    .trim() || "missing";
+
+  return [
+    "This is a MineLink Platform Codex video-verifier canary.",
+    "You must use Ona Platform Codex, not the default Ona Agent.",
+    "First reply in the session with exactly this line:",
+    "Identity: I am Codex running in Ona Platform Codex",
+    "",
+    "Task:",
+    `- Task id: ${args.taskId}`,
+    `- Review request task id: ${requestTaskId}`,
+    `- Target branch: ${args.branch}`,
+    `- Review request branch: ${requestBranch}`,
+    `- Reviewed commit: ${args.commit}`,
+    `- GitHub issue: ${args.githubIssue || "none"}`,
+    `- Linear issue: ${args.linearIssue || "none"}`,
+    `- Ona AgentService execution id: ${sessionId}`,
+    `- Video-verifier canary file: ${canaryPath}`,
+    `- Acceptance summary sha256: ${summaryHash}`,
+    `- Acceptance MP4 sha256: ${mp4Hash}`,
+    "",
+    "Scope:",
+    `- Create or switch to branch ${args.branch}.`,
+    `- Add or update only ${canaryPath}.`,
+    "- Do not edit runtime code, schemas, tests, CI, acceptance gates, secrets, EULA files, product docs outside that canary file, or .minelink-dev artifacts.",
+    "- Do not re-render the video. Do not claim MineLink product acceptance.",
+    "",
+    "Review request excerpt:",
+    "```md",
+    requestExcerpt,
+    "```",
+    "",
+    "Required canary file content:",
+    "- Include a heading: MineLink Platform Codex Video Verifier Canary.",
+    "- Include these exact marker lines with the current values:",
+    "  Agent mode: Ona Platform Codex",
+    "  Identity: I am Codex running in Ona Platform Codex",
+    `  Session id: ${sessionId}`,
+    "  Platform evidence: Ona AgentService StartAgent launched the configured Codex agent id with codexSettings; GitHub runner will verify the API readback separately.",
+    "  Verifier: Ona Platform Codex",
+    "  Release decision: pass",
+    "  Task matched: yes",
+    "  Video matched: yes",
+    `  Summary sha256: ${summaryHash}`,
+    `  MP4 sha256: ${mp4Hash}`,
+    `  Task id: ${args.taskId}`,
+    `  Branch: ${args.branch}`,
+    `  Commit: ${args.commit}`,
+    "  Result: passed",
+    "  Boundary: video-verifier-canary only; does not prove MineLink product acceptance.",
+    "- Include a short Remaining gaps line saying PR release, status writeback, and full product acceptance are still separate gates.",
+    "",
+    "Validation:",
+    "- Run: bash scripts/dev/verify-agent-task.sh --scope docs",
+    "- If validation fails, fix only the canary file if the failure is caused by the canary file. Otherwise stop and write Result: blocked in the canary file with the blocker.",
+    "",
+    "Git:",
+    "- Commit the canary file with an English Lore commit message explaining that this proves a bounded Platform Codex video verifier handoff.",
     "- Push the target branch to origin.",
     "- Do not create a PR for this canary unless the user explicitly asks.",
   ].join("\n");
@@ -279,6 +376,7 @@ async function readPrompt(context = {}) {
   if (hasValue(args.promptFile)) return fs.readFile(args.promptFile, "utf8");
   if (hasValue(args.prompt)) return args.prompt;
   if (promptMode === "implementation-canary") return implementationCanaryPrompt(context);
+  if (promptMode === "video-verifier-canary") return videoVerifierCanaryPrompt(context);
   return identityCanaryPrompt();
 }
 
@@ -382,13 +480,16 @@ function validateStartInputs(failures) {
   if (!Number.isFinite(args.pollSeconds) || args.pollSeconds < 1) {
     failures.push("--poll-seconds must be at least 1.");
   }
-  if (promptMode === "implementation-canary") {
+  if (promptMode === "implementation-canary" || promptMode === "video-verifier-canary") {
     if (!hasValue(args.taskId) || ["manual", "unknown"].includes(String(args.taskId).trim().toLowerCase())) {
-      failures.push("--implementation-canary requires a non-manual --task-id for task-bound evidence.");
+      failures.push(`--${promptMode} requires a non-manual --task-id for task-bound evidence.`);
     }
     if (!hasValue(args.branch) || ["manual", "unknown"].includes(String(args.branch).trim().toLowerCase())) {
-      failures.push("--implementation-canary requires an explicit --branch for task-bound evidence.");
+      failures.push(`--${promptMode} requires an explicit --branch for task-bound evidence.`);
     }
+  }
+  if (promptMode === "video-verifier-canary" && !hasValue(args.commit)) {
+    failures.push("--video-verifier-canary requires --commit for task-bound video review evidence.");
   }
 }
 

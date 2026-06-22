@@ -62,6 +62,7 @@ require_file "scripts/dev/summarize-evidence.mjs"
 require_file "scripts/dev/sync-linear-status.mjs"
 require_file "scripts/dev/verify-agent-task.sh"
 require_file "scripts/dev/watch-linear-agent-tasks.mjs"
+require_file "scripts/dev/fetch-platform-codex-video-verifier.mjs"
 
 require_text "AGENTS.md" "docs/agent-workbench.md"
 require_text "AGENTS.md" "docs/linear-ona-agent-factory.md"
@@ -158,6 +159,9 @@ require_text ".github/workflows/ona-platform-codex-probe.yml" "MINELINK_ONA_CODE
 require_text ".github/workflows/ona-platform-codex-probe.yml" "identity-canary"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "implementation-canary"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "fetch-platform-codex-canary.mjs"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "video-verifier-canary"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "full-chain-canary"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "fetch-platform-codex-video-verifier.mjs"
 require_text ".github/workflows/ona-prebuild.yml" "codex/minelink-mvp-engineering"
 require_text ".github/workflows/ona-prebuild.yml" "paths:"
 require_text ".github/workflows/ona-prebuild.yml" "secrets.ONA_TOKEN"
@@ -242,9 +246,12 @@ require_text "scripts/dev/start-ona-platform-codex.mjs" "MINELINK_ONA_CODEX_AGEN
 require_text "scripts/dev/start-ona-platform-codex.mjs" "codexSettings"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "default Ona automation agent id"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "implementation-canary"
+require_text "scripts/dev/start-ona-platform-codex.mjs" "video-verifier-canary"
 require_file "scripts/dev/fetch-platform-codex-canary.mjs"
 require_text "scripts/dev/fetch-platform-codex-canary.mjs" "implementation-canary handoff evidence only"
 require_text "scripts/dev/fetch-platform-codex-canary.mjs" "spec.agentId matched configured Codex agent id"
+require_text "scripts/dev/fetch-platform-codex-video-verifier.mjs" "video-verifier-canary handoff evidence only"
+require_text "scripts/dev/fetch-platform-codex-video-verifier.mjs" "spec.agentId matched configured Codex agent id"
 require_text "scripts/dev/render-acceptance-video.mjs" "trace-driven MineLink acceptance artifacts"
 require_text "scripts/dev/report-agent-factory-chain.mjs" "automation-chain evidence only"
 require_text "scripts/dev/report-agent-factory-chain.mjs" "First Blocking Edge"
@@ -338,6 +345,7 @@ PY
     "scripts/dev/prepare-video-review-request.mjs" \
     "scripts/dev/render-acceptance-video.mjs" \
     "scripts/dev/report-agent-factory-chain.mjs" \
+    "scripts/dev/fetch-platform-codex-video-verifier.mjs" \
     "scripts/dev/summarize-evidence.mjs" \
     "scripts/dev/sync-linear-status.mjs" \
     "scripts/dev/watch-linear-agent-tasks.mjs" \

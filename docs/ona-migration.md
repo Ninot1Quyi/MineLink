@@ -168,6 +168,13 @@ MineLink uses automation to reduce agent memory load:
   `scripts/dev/fetch-platform-codex-canary.mjs` to write the canonical
   implementation readback with the fetched branch head commit. This only proves
   `platform_codex_launch -> implementation_codex` for the canary task.
+  `full-chain-canary` continues with a second Platform Codex
+  `video-verifier-canary` session and
+  `scripts/dev/fetch-platform-codex-video-verifier.mjs`, which checks the
+  review request hashes and writes
+  `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus
+  `.minelink-dev/reports/artifacts/video-review.md`. This only proves the
+  canary `acceptance_video -> video_verifier` edge.
 - `.ona/automations.yaml` defines Ona-native environment tasks.
 - `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
   finalizer that should be started by manual pilot, GitHub dispatch, or Linear
