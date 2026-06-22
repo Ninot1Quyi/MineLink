@@ -302,13 +302,15 @@ Codex agent id and `spec.codexSettings` or `status.codexSettings` is present.
 GitHub Actions with repository `ONA_TOKEN` access. Its default `discover` mode
 only proves token/API policy readback and resolves organization context from
 the logged-in Ona CLI config. When no explicit
-`MINELINK_ONA_ENVIRONMENT_ID` is supplied, the probe selects the newest
-non-deleting environment for the MineLink project and passes that environment
-context to `StartAgent`, because the Codex app agent is an in-environment
-agent. The API treats `projectId` and `environmentId` as a oneof context, so the
-probe sends only `environmentId` when one is available. Its `identity-canary`
-mode is required to prove programmatic Codex launch and still needs a real
-`MINELINK_ONA_CODEX_AGENT_ID` or workflow input for the Codex app agent id.
+`MINELINK_ONA_ENVIRONMENT_ID` is supplied, the probe uses that explicit
+environment. Otherwise it auto-selects only a currently running MineLink
+environment; stopped historical task environments are ignored so new Codex tasks
+fall back to `projectId` and let Ona create or schedule a fresh environment from
+the project baseline. The API treats `projectId` and `environmentId` as a oneof
+context, so the probe sends only `environmentId` when a usable running
+environment is available. Its `identity-canary` mode is required to prove
+programmatic Codex launch and still needs a real `MINELINK_ONA_CODEX_AGENT_ID`
+or workflow input for the Codex app agent id.
 While this pilot branch is active, push-triggered probe runs use
 `identity-canary` so launch proof can be collected before the workflow exists
 on the default branch; this still does not count as task implementation

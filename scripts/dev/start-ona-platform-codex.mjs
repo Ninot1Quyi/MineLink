@@ -349,7 +349,14 @@ function environmentRank(environment) {
   return 3;
 }
 
-function discoverEnvironmentId(projectId) {
+function isRunningEnvironment(environment) {
+  return (
+    /^ENVIRONMENT_PHASE_RUNNING$/i.test(environmentPhase(environment)) &&
+    /^PHASE_RUNNING$/i.test(environment?.status?.machine?.phase ?? "")
+  );
+}
+
+function discoverRunningEnvironmentId(projectId) {
   if (!hasValue(projectId)) return "";
   const result = run("ona", ["environment", "list", "-o", "json", "--limit", "1000"]);
   if (result.status !== 0) return "";
@@ -360,6 +367,7 @@ function discoverEnvironmentId(projectId) {
       .filter((environment) => environmentProjectId(environment) === projectId)
       .filter((environment) => hasValue(environment?.id))
       .filter((environment) => !/DELETING|DELETED/i.test(environmentPhase(environment)))
+      .filter((environment) => isRunningEnvironment(environment))
       .sort((left, right) => {
         const rankDelta = environmentRank(left) - environmentRank(right);
         if (rankDelta !== 0) return rankDelta;
@@ -377,11 +385,11 @@ function git(argsList) {
 }
 
 const onaConfig = readOnaConfig();
+const explicitEnvironmentId = hasValue(args.environmentId);
 if (!args.organizationId) args.organizationId = onaConfig.organizationId ?? "";
-if (!args.environmentId) args.environmentId = onaConfig.environmentId ?? "";
 if (!args.branch) args.branch = git(["rev-parse", "--abbrev-ref", "HEAD"]) || "unknown";
 if (!args.commit) args.commit = git(["rev-parse", "--short", "HEAD"]) || "unknown";
-if (!args.environmentId) args.environmentId = discoverEnvironmentId(args.projectId);
+if (!explicitEnvironmentId) args.environmentId = discoverRunningEnvironmentId(args.projectId);
 
 async function readPrompt(context = {}) {
   if (hasValue(args.promptFile)) return fs.readFile(args.promptFile, "utf8");

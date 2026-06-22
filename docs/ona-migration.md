@@ -168,8 +168,8 @@ MineLink uses automation to reduce agent memory load:
   `scripts/dev/fetch-platform-codex-canary.mjs` to write the canonical
   implementation readback with the fetched branch head commit. This only proves
   `platform_codex_launch -> implementation_codex` for the canary task.
-  `full-chain-canary` continues with a second Platform Codex
-  `video-verifier-canary` session and
+  `full-chain-canary` continues by sending a same-session verifier-subagent
+  request to the implementation Codex execution and
   `scripts/dev/fetch-platform-codex-video-verifier.mjs`, which checks the
   review request hashes and writes
   `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus

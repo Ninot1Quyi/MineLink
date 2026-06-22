@@ -344,6 +344,7 @@ Required environment:
 GITPOD_API_KEY or ONA_TOKEN          Ona personal access token
 MINELINK_ONA_CODEX_AGENT_ID          Codex app agent id, never the default agent id
 MINELINK_ONA_PROJECT_ID              Ona project id, defaults to the MineLink project
+MINELINK_ONA_ENVIRONMENT_ID          Optional explicit running environment id
 MINELINK_ONA_CODEX_REASONING_EFFORT  Optional override; default is EXTRA_HIGH
 ```
 
@@ -356,6 +357,12 @@ only the programmatic Platform Codex launch/readback edge. It does not satisfy
 the implementation readback, video verifier, PR, CI, or product acceptance
 gates until the task-bound Codex session performs the work and writes the
 normal `.minelink-dev/reports/ona-codex-implementation-session.md`.
+When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
+ignore stopped historical task environments. It may pass an auto-discovered
+environment only when that environment is currently running; otherwise it passes
+the project id so Ona can create or schedule a fresh task environment from the
+project/prebuild baseline. This avoids binding new Codex executions to stale
+stopped environments whose old branch can leave the agent execution pending.
 The launcher uses the model's available context window and defaults the
 configurable reasoning effort to `CODEX_REASONING_EFFORT_EXTRA_HIGH`; no
 separate launcher-side context-window-size field is currently part of the
@@ -371,7 +378,7 @@ the repository `ONA_TOKEN` can read Ona policy/API state. Use
 workflow input or the `MINELINK_ONA_CODEX_AGENT_ID` repository secret. Remote
 run `27928149039` proved the identity-canary launch/readback edge from GitHub
 Actions: policy readback allowed the Codex app agent id, `StartAgent` and
-`SendToAgentExecution` succeeded with environment context, and
+`SendToAgentExecution` succeeded, and
 `GetAgentExecution` returned the requested `spec.agentId`, `codexSettings`,
 `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`, conversation URLs, and
 token-usage counters. The readback did not expose structured `status.outputs`,
