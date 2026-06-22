@@ -380,7 +380,16 @@ switch (args.stage) {
     await runCommandStage(
       args.stage,
       process.execPath,
-      ["scripts/dev/prepare-video-review-request.mjs", "--require-mp4"],
+      [
+        "scripts/dev/prepare-video-review-request.mjs",
+        "--task-id",
+        args.taskId,
+        "--branch",
+        args.branch || "unknown",
+        "--task-requirements",
+        "docs/minelink-acceptance.md",
+        "--require-mp4",
+      ],
       { requireImplementation: true },
     );
     break;

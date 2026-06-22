@@ -207,6 +207,7 @@ if (failures.length === 0) {
   if (failures.length === 0) {
     const remoteScript = [
       "set -euo pipefail",
+      `export ONA_ENVIRONMENT_ID=${shellQuote(args.environmentId)}`,
       "mkdir -p .minelink-dev/reports",
       ...transferredFiles.map(([filePath, base64]) => decodeRemoteFile(filePath, base64)).filter(Boolean),
       `git fetch origin ${shellQuote(args.branch)}`,
