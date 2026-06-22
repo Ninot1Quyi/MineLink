@@ -10,7 +10,8 @@ PRs, CI evidence, and acceptance artifacts.
 ```text
 Linear issue or GitHub issue
   -> agent task contract
-  -> Ona Platform Codex agent session
+  -> Ona Platform Codex API launch/readback
+  -> Ona Platform Codex implementation session
   -> one Ona environment / one branch
   -> validation and evidence automation
   -> acceptance MP4
@@ -323,6 +324,35 @@ with `agent_id:"00000000-0000-0000-0000-000000007100"` and
 `failed_precondition: agent is disabled by organization policy`. That proves the
 policy disables the default automation agent; it does not make automation
 fallback to Codex.
+Separate from the public automation YAML behavior, Ona's public AgentService API
+now documents a lower-level candidate path for programmatic Codex launch:
+`StartAgent` accepts an explicit `agentId`, `codeContext`, `codexSettings`,
+`mode`, and `sessionId`; `SendToAgentExecution` sends the user prompt to that
+execution; `GetAgentExecution` returns `spec.agentId`,
+`spec.codexSettings`, `status.codexSettings`, conversation URLs, phase, and
+failure details. MineLink captures this candidate path in:
+
+```bash
+npm run agent-factory:start-codex -- --start --identity-canary
+```
+
+Required environment:
+
+```text
+GITPOD_API_KEY or ONA_TOKEN          Ona personal access token
+MINELINK_ONA_CODEX_AGENT_ID          Codex app agent id, never the default agent id
+MINELINK_ONA_PROJECT_ID              Ona project id, defaults to the MineLink project
+```
+
+The script refuses to omit `agentId` and refuses the known default automation
+agent id `00000000-0000-0000-0000-000000007100`. It writes
+`.minelink-dev/reports/ona-platform-codex-api-session.{md,json}` and accepts a
+launch probe only when `GetAgentExecution` reads back the requested Codex
+`spec.agentId` plus `spec.codexSettings` or `status.codexSettings`. This proves
+only the programmatic Platform Codex launch/readback edge. It does not satisfy
+the implementation readback, video verifier, PR, CI, or product acceptance
+gates until the task-bound Codex session performs the work and writes the
+normal `.minelink-dev/reports/ona-codex-implementation-session.md`.
 After the fail-closed spec was uploaded, remote canary execution
 `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
 `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and a spec containing

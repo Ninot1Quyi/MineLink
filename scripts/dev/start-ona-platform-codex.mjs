@@ -1,0 +1,480 @@
+#!/usr/bin/env node
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+
+const DEFAULT_ONA_AGENT_ID = "00000000-0000-0000-0000-000000007100";
+const DEFAULT_PROJECT_ID = "019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb";
+
+const defaults = {
+  apiBase: process.env.MINELINK_ONA_API_BASE ?? "https://app.gitpod.io/api",
+  organizationId: process.env.MINELINK_ONA_ORGANIZATION_ID ?? "",
+  projectId: process.env.MINELINK_ONA_PROJECT_ID ?? DEFAULT_PROJECT_ID,
+  environmentId: process.env.MINELINK_ONA_ENVIRONMENT_ID ?? "",
+  sessionId: process.env.MINELINK_ONA_SESSION_ID ?? "",
+  codexAgentId: process.env.MINELINK_ONA_CODEX_AGENT_ID ?? "",
+  taskId: process.env.MINELINK_TASK_ID ?? "manual",
+  branch: process.env.MINELINK_BRANCH ?? "",
+  commit: process.env.MINELINK_COMMIT ?? "",
+  githubIssue: process.env.MINELINK_GITHUB_ISSUE ?? "",
+  linearIssue: process.env.MINELINK_LINEAR_ISSUE ?? "",
+  model: process.env.MINELINK_ONA_CODEX_MODEL ?? "CODEX_OPEN_AI_MODEL_GPT_5_5",
+  reasoningEffort: process.env.MINELINK_ONA_CODEX_REASONING_EFFORT ?? "CODEX_REASONING_EFFORT_HIGH",
+  serviceTier: process.env.MINELINK_ONA_CODEX_SERVICE_TIER ?? "CODEX_SERVICE_TIER_FAST",
+  name: process.env.MINELINK_ONA_CODEX_RUN_NAME ?? "",
+  prompt: "",
+  promptFile: "",
+  readbackExecution: process.env.MINELINK_ONA_AGENT_EXECUTION_ID ?? "",
+  waitSeconds: Number(process.env.MINELINK_ONA_CODEX_WAIT_SECONDS ?? 30),
+  pollSeconds: Number(process.env.MINELINK_ONA_CODEX_POLL_SECONDS ?? 5),
+  output: ".minelink-dev/reports/ona-platform-codex-api-session.md",
+  jsonOutput: ".minelink-dev/reports/ona-platform-codex-api-session.json",
+};
+
+const args = { ...defaults };
+let discoverPolicies = false;
+let startAgent = false;
+let sendPrompt = true;
+let dryRun = false;
+
+for (let index = 2; index < process.argv.length; index += 1) {
+  const arg = process.argv[index];
+  const readValue = () => process.argv[++index] ?? "";
+  if (arg === "--discover-policies") discoverPolicies = true;
+  else if (arg === "--start") startAgent = true;
+  else if (arg === "--dry-run") dryRun = true;
+  else if (arg === "--no-send") sendPrompt = false;
+  else if (arg === "--identity-canary") args.prompt = identityCanaryPrompt();
+  else if (arg === "--api-base") args.apiBase = readValue();
+  else if (arg === "--organization-id") args.organizationId = readValue();
+  else if (arg === "--project-id") args.projectId = readValue();
+  else if (arg === "--environment-id") args.environmentId = readValue();
+  else if (arg === "--session-id") args.sessionId = readValue();
+  else if (arg === "--codex-agent-id") args.codexAgentId = readValue();
+  else if (arg === "--task-id") args.taskId = readValue();
+  else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--commit") args.commit = readValue();
+  else if (arg === "--github-issue") args.githubIssue = readValue();
+  else if (arg === "--linear-issue") args.linearIssue = readValue();
+  else if (arg === "--model") args.model = readValue();
+  else if (arg === "--reasoning-effort") args.reasoningEffort = readValue();
+  else if (arg === "--service-tier") args.serviceTier = readValue();
+  else if (arg === "--name") args.name = readValue();
+  else if (arg === "--prompt") args.prompt = readValue();
+  else if (arg === "--prompt-file") args.promptFile = readValue();
+  else if (arg === "--readback-execution") args.readbackExecution = readValue();
+  else if (arg === "--wait-seconds") args.waitSeconds = Number(readValue());
+  else if (arg === "--poll-seconds") args.pollSeconds = Number(readValue());
+  else if (arg === "--output") args.output = readValue();
+  else if (arg === "--json-output") args.jsonOutput = readValue();
+  else if (arg === "-h" || arg === "--help") {
+    console.log(`Usage: node scripts/dev/start-ona-platform-codex.mjs [options]
+
+Starts or inspects an Ona Platform Codex agent execution through the documented
+Ona AgentService API. The script never omits agentId and refuses the known
+default Ona automation agent id.
+
+Options:
+  --discover-policies          Call GetOrganizationPolicies for allowed Codex settings.
+  --start                      Call StartAgent with --codex-agent-id and codexSettings.
+  --identity-canary            Send a read-only identity canary prompt after StartAgent.
+  --prompt <text>              Prompt to send via SendToAgentExecution.
+  --prompt-file <path>         Prompt file to send via SendToAgentExecution.
+  --readback-execution <id>    Call GetAgentExecution for an existing execution id.
+  --codex-agent-id <uuid>      Required for --start; also read from MINELINK_ONA_CODEX_AGENT_ID.
+  --project-id <uuid>          Ona project id. Defaults to the MineLink project id.
+  --organization-id <uuid>     Ona organization id for --discover-policies.
+  --dry-run                    Validate inputs and write the request body without API calls.
+
+Environment:
+  GITPOD_API_KEY or ONA_TOKEN must contain an Ona personal access token for
+  non-dry-run API calls. Secret values are never printed.
+`);
+    process.exit(0);
+  } else {
+    console.error(`Unknown argument: ${arg}`);
+    process.exit(2);
+  }
+}
+
+if (!discoverPolicies && !startAgent && !args.readbackExecution) {
+  discoverPolicies = true;
+}
+
+function identityCanaryPrompt() {
+  return [
+    "This is a MineLink platform identity canary.",
+    "Use Ona Platform Codex, not the default Ona Agent.",
+    "First reply in the session with exactly this line:",
+    "Identity: I am Codex running in Ona Platform Codex",
+    "Then stop. Do not edit files, do not run validation, and do not create a PR.",
+  ].join(" ");
+}
+
+function token() {
+  return process.env.GITPOD_API_KEY || process.env.ONA_TOKEN || process.env.GITPOD_TOKEN || "";
+}
+
+function sanitize(value) {
+  return String(value ?? "")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
+    .replace(/(gitpod_pat_)[A-Za-z0-9._-]+/gi, "$1[redacted]")
+    .replace(/(ona_pat_)[A-Za-z0-9._-]+/gi, "$1[redacted]")
+    .replace(/(lin_api_)[A-Za-z0-9]+/g, "$1[redacted]")
+    .replace(/(github_pat_)[A-Za-z0-9_]+/g, "$1[redacted]")
+    .replace(/(ghp_)[A-Za-z0-9_]+/g, "$1[redacted]")
+    .replace(/(sk-[A-Za-z0-9_-]+)/g, "[redacted]")
+    .slice(0, 5000)
+    .trim();
+}
+
+function hasValue(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized.length > 0 && !["none", "null", "undefined", "-"].includes(normalized.toLowerCase());
+}
+
+function run(command, commandArgs) {
+  return spawnSync(command, commandArgs, { encoding: "utf8", stdio: "pipe" });
+}
+
+function readOnaConfig() {
+  const result = run("ona", ["config", "get", "-o", "json"]);
+  if (result.status !== 0) return {};
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return {};
+  }
+}
+
+function git(argsList) {
+  const result = run("git", argsList);
+  return result.status === 0 ? result.stdout.trim() : "";
+}
+
+const onaConfig = readOnaConfig();
+if (!args.organizationId) args.organizationId = onaConfig.organizationId ?? "";
+if (!args.environmentId) args.environmentId = onaConfig.environmentId ?? "";
+if (!args.branch) args.branch = git(["rev-parse", "--abbrev-ref", "HEAD"]) || "unknown";
+if (!args.commit) args.commit = git(["rev-parse", "--short", "HEAD"]) || "unknown";
+
+async function readPrompt() {
+  if (hasValue(args.promptFile)) return fs.readFile(args.promptFile, "utf8");
+  if (hasValue(args.prompt)) return args.prompt;
+  return identityCanaryPrompt();
+}
+
+function codexSettings() {
+  return {
+    model: args.model,
+    reasoningEffort: args.reasoningEffort,
+    serviceTier: args.serviceTier,
+  };
+}
+
+function annotations() {
+  return Object.fromEntries(
+    [
+      ["minelink/task-id", args.taskId],
+      ["minelink/branch", args.branch],
+      ["minelink/commit", args.commit],
+      ["minelink/github-issue", args.githubIssue],
+      ["minelink/linear-issue", args.linearIssue],
+      ["minelink/agent-mode", "ona-platform-codex"],
+    ].filter(([, value]) => hasValue(value)),
+  );
+}
+
+function startBody() {
+  const codeContext = {};
+  if (hasValue(args.projectId)) codeContext.projectId = args.projectId;
+  if (hasValue(args.environmentId)) codeContext.environmentId = args.environmentId;
+  const body = {
+    agentId: args.codexAgentId,
+    annotations: annotations(),
+    codeContext,
+    codexSettings: codexSettings(),
+    mode: "AGENT_MODE_EXECUTION",
+    name: args.name || `MineLink ${args.taskId} Platform Codex`,
+  };
+  if (hasValue(args.sessionId)) body.sessionId = args.sessionId;
+  return body;
+}
+
+function sendBody(agentExecutionId, prompt) {
+  return {
+    agentExecutionId,
+    userInput: {
+      text: {
+        content: prompt,
+      },
+    },
+    codexSettings: codexSettings(),
+  };
+}
+
+function methodUrl(method) {
+  return `${args.apiBase.replace(/\/+$/u, "")}/${method}`;
+}
+
+async function post(method, body) {
+  const bearer = token();
+  if (!hasValue(bearer)) {
+    const err = new Error("Missing GITPOD_API_KEY or ONA_TOKEN personal access token.");
+    err.status = "missing_token";
+    throw err;
+  }
+  const response = await fetch(methodUrl(method), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${bearer}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    json = { raw: sanitize(text) };
+  }
+  if (!response.ok) {
+    const err = new Error(`${method} failed with HTTP ${response.status}: ${sanitize(text)}`);
+    err.status = response.status;
+    err.body = json;
+    throw err;
+  }
+  return json;
+}
+
+function validateStartInputs(failures) {
+  if (!hasValue(args.codexAgentId)) {
+    failures.push("MINELINK_ONA_CODEX_AGENT_ID or --codex-agent-id is required; agentId must never be omitted.");
+  }
+  if (args.codexAgentId === DEFAULT_ONA_AGENT_ID) {
+    failures.push(`Refusing default Ona automation agent id ${DEFAULT_ONA_AGENT_ID}.`);
+  }
+  if (!hasValue(args.projectId) && !hasValue(args.environmentId)) {
+    failures.push("StartAgent requires --project-id or --environment-id in codeContext.");
+  }
+  if (!Number.isFinite(args.waitSeconds) || args.waitSeconds < 0) {
+    failures.push("--wait-seconds must be a non-negative number.");
+  }
+  if (!Number.isFinite(args.pollSeconds) || args.pollSeconds < 1) {
+    failures.push("--poll-seconds must be at least 1.");
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollReadback(agentExecutionId) {
+  const attempts = [];
+  const deadline = Date.now() + args.waitSeconds * 1000;
+  let latest = null;
+  do {
+    latest = await post("gitpod.v1.AgentService/GetAgentExecution", { agentExecutionId });
+    const execution = latest.agentExecution ?? {};
+    attempts.push({
+      at: new Date().toISOString(),
+      phase: execution.status?.phase ?? "unknown",
+      agentId: execution.spec?.agentId ?? "",
+      supportedModel: execution.status?.supportedModel ?? "",
+    });
+    if (Date.now() >= deadline || args.waitSeconds === 0) break;
+    await sleep(args.pollSeconds * 1000);
+  } while (Date.now() < deadline);
+  return { latest, attempts };
+}
+
+function evaluateReadback(readback, expectedAgentId) {
+  const execution = readback?.agentExecution ?? {};
+  const spec = execution.spec ?? {};
+  const status = execution.status ?? {};
+  const failures = [];
+  const evidence = [];
+  const actualAgentId = spec.agentId ?? "";
+  if (!hasValue(execution.id)) failures.push("GetAgentExecution did not return an agentExecution id.");
+  else evidence.push(`execution=${execution.id}`);
+  if (actualAgentId !== expectedAgentId) {
+    failures.push(`spec.agentId mismatch: expected ${expectedAgentId || "none"}, got ${actualAgentId || "missing"}.`);
+  } else {
+    evidence.push("spec.agentId matches requested Codex agent id");
+  }
+  if (actualAgentId === DEFAULT_ONA_AGENT_ID) {
+    failures.push(`spec.agentId is the default Ona automation agent id ${DEFAULT_ONA_AGENT_ID}.`);
+  }
+  if (!spec.codexSettings && !status.codexSettings) {
+    failures.push("GetAgentExecution did not expose spec.codexSettings or status.codexSettings.");
+  } else {
+    evidence.push("Codex settings are present in execution readback");
+  }
+  if (hasValue(status.supportedModel)) evidence.push(`supportedModel=${status.supportedModel}`);
+  if (hasValue(status.conversationUrl)) evidence.push("conversationUrl present");
+  if (hasValue(status.transcriptUrl)) evidence.push("transcriptUrl present");
+  if (hasValue(status.failureMessage)) failures.push(`failureMessage: ${status.failureMessage}`);
+  return { failures, evidence };
+}
+
+const report = {
+  generatedAt: new Date().toISOString(),
+  dryRun,
+  apiBase: args.apiBase,
+  organizationId: args.organizationId,
+  projectId: args.projectId,
+  environmentId: args.environmentId,
+  codexAgentId: args.codexAgentId,
+  taskId: args.taskId,
+  branch: args.branch,
+  commit: args.commit,
+  codexSettings: codexSettings(),
+  result: "pending",
+  steps: [],
+  blockers: [],
+  evidence: [],
+  requests: {},
+  policies: null,
+  agentExecutionId: args.readbackExecution || "",
+  readback: null,
+  readbackAttempts: [],
+  boundary:
+    "Ona AgentService API launch/readback evidence only. This does not prove MineLink product acceptance or task implementation by itself.",
+};
+
+const failures = [];
+if (!dryRun && (discoverPolicies || startAgent || args.readbackExecution) && !hasValue(token())) {
+  failures.push("Missing GITPOD_API_KEY or ONA_TOKEN personal access token for Ona API calls.");
+}
+if (discoverPolicies && !hasValue(args.organizationId)) {
+  failures.push("GetOrganizationPolicies requires --organization-id or an active Ona CLI config with organizationId.");
+}
+if (startAgent) validateStartInputs(failures);
+
+if (failures.length === 0 && dryRun) {
+  if (startAgent) report.requests.startAgent = startBody();
+  if (startAgent && sendPrompt) report.requests.sendPrompt = sendBody("<agentExecutionId>", await readPrompt());
+  if (discoverPolicies) {
+    report.requests.getOrganizationPolicies = { organizationId: args.organizationId };
+  }
+  if (args.readbackExecution) {
+    report.requests.getAgentExecution = { agentExecutionId: args.readbackExecution };
+  }
+  report.result = "dry-run";
+  report.evidence.push("Request bodies generated without API calls.");
+} else if (failures.length === 0) {
+  try {
+    if (discoverPolicies) {
+      const policies = await post("gitpod.v1.OrganizationService/GetOrganizationPolicies", {
+        organizationId: args.organizationId,
+      });
+      report.steps.push("GetOrganizationPolicies");
+      report.policies = {
+        allowedAgentIds: policies.policies?.agentPolicy?.allowedAgentIds ?? [],
+        allowedCodexModels: policies.policies?.agentPolicy?.allowedCodexModels ?? [],
+        allowedCodexReasoningEfforts: policies.policies?.agentPolicy?.allowedCodexReasoningEfforts ?? [],
+        allowedCodexServiceTiers: policies.policies?.agentPolicy?.allowedCodexServiceTiers ?? [],
+      };
+      report.evidence.push("Organization policy readback completed.");
+    }
+
+    if (startAgent) {
+      const started = await post("gitpod.v1.AgentService/StartAgent", startBody());
+      report.steps.push("StartAgent");
+      report.agentExecutionId = started.agentExecutionId ?? "";
+      if (!hasValue(report.agentExecutionId)) failures.push("StartAgent did not return agentExecutionId.");
+      if (hasValue(report.agentExecutionId) && sendPrompt) {
+        await post("gitpod.v1.AgentService/SendToAgentExecution", sendBody(report.agentExecutionId, await readPrompt()));
+        report.steps.push("SendToAgentExecution");
+      }
+    }
+
+    if (hasValue(report.agentExecutionId)) {
+      const { latest, attempts } = await pollReadback(report.agentExecutionId);
+      report.steps.push("GetAgentExecution");
+      report.readback = latest;
+      report.readbackAttempts = attempts;
+      const evaluation = evaluateReadback(latest, args.codexAgentId || latest?.agentExecution?.spec?.agentId || "");
+      failures.push(...evaluation.failures);
+      report.evidence.push(...evaluation.evidence);
+    }
+  } catch (error) {
+    failures.push(sanitize(error.message));
+    if (error.body) report.errorBody = error.body;
+  }
+}
+
+report.blockers = failures;
+report.result = report.result === "dry-run" ? report.result : failures.length === 0 ? "passed" : "blocked";
+
+function escapeMd(value) {
+  return String(value ?? "")
+    .replaceAll("|", "\\|")
+    .replaceAll("\n", " ")
+    .trim();
+}
+
+function code(value) {
+  return `\`${escapeMd(value || "none")}\``;
+}
+
+const lines = [
+  "# MineLink Ona Platform Codex API Session",
+  "",
+  `- Generated: ${code(report.generatedAt)}`,
+  `- Result: ${code(report.result)}`,
+  `- Boundary: ${code(report.boundary)}`,
+  `- API base: ${code(report.apiBase)}`,
+  `- Organization: ${code(report.organizationId)}`,
+  `- Project: ${code(report.projectId)}`,
+  `- Environment: ${code(report.environmentId)}`,
+  `- Requested Codex agent id: ${code(report.codexAgentId)}`,
+  `- Agent execution id: ${code(report.agentExecutionId)}`,
+  `- Task id: ${code(report.taskId)}`,
+  `- Branch: ${code(report.branch)}`,
+  `- Commit: ${code(report.commit)}`,
+  `- Codex model: ${code(report.codexSettings.model)}`,
+  `- Reasoning effort: ${code(report.codexSettings.reasoningEffort)}`,
+  `- Service tier: ${code(report.codexSettings.serviceTier)}`,
+  "",
+  "## Steps",
+  "",
+  ...(report.steps.length > 0 ? report.steps.map((step) => `- ${escapeMd(step)}`) : ["- none"]),
+  "",
+  "## Evidence",
+  "",
+  ...(report.evidence.length > 0 ? report.evidence.map((item) => `- ${escapeMd(item)}`) : ["- none"]),
+  "",
+  "## Blockers",
+  "",
+  ...(failures.length === 0 ? ["- none"] : failures.map((failure) => `- ${escapeMd(failure)}`)),
+  "",
+  "## Policy Readback",
+  "",
+  report.policies
+    ? `- allowedAgentIds: ${code((report.policies.allowedAgentIds ?? []).join(", ") || "empty/all")}`
+    : "- none",
+  report.policies
+    ? `- allowedCodexModels: ${code((report.policies.allowedCodexModels ?? []).join(", ") || "empty/all")}`
+    : "",
+  report.policies
+    ? `- allowedCodexReasoningEfforts: ${code((report.policies.allowedCodexReasoningEfforts ?? []).join(", ") || "empty/all")}`
+    : "",
+  report.policies
+    ? `- allowedCodexServiceTiers: ${code((report.policies.allowedCodexServiceTiers ?? []).join(", ") || "empty/all")}`
+    : "",
+  "",
+].filter((line) => line !== "");
+
+await fs.mkdir(path.dirname(args.output), { recursive: true });
+await fs.writeFile(args.output, `${lines.join("\n")}\n`, "utf8");
+await fs.mkdir(path.dirname(args.jsonOutput), { recursive: true });
+await fs.writeFile(args.jsonOutput, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
+if (report.result === "blocked") {
+  console.error(`Ona Platform Codex API session blocked; wrote ${args.output}`);
+  process.exit(1);
+}
+
+console.log(`Ona Platform Codex API session ${report.result}; wrote ${args.output}`);

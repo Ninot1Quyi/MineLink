@@ -196,7 +196,8 @@ MineLink product work is fed by a repo-native delivery factory:
 Linear or GitHub task
   -> GitHub Actions dispatcher or Linear watcher
   -> Ona automation queue
-  -> Ona Platform Codex agent
+  -> Ona Platform Codex API launch/readback
+  -> Ona Platform Codex implementation agent
   -> branch
   -> validation automation
   -> acceptance MP4
@@ -278,7 +279,16 @@ skip side effects until real Platform Codex evidence exists. If a future Ona
 CLI/API exposes a documented Codex automation provider, this fail-closed shim is
 the place to replace with true Codex launch. Until then, the dispatcher timeout
 cleanup is only the repository-side stale-work path after artifact capture,
-while active agent sessions are kept for inspection.
+while active agent sessions are kept for inspection. Public Ona API docs now
+expose a narrower candidate launch path: `AgentService/StartAgent` accepts an
+explicit `agentId`, `codeContext`, and `codexSettings`, and
+`AgentService/SendToAgentExecution` can send the task prompt to the resulting
+execution. MineLink tracks that experiment through
+`scripts/dev/start-ona-platform-codex.mjs`, which refuses to omit `agentId` or
+use the known default automation agent id. This API path is not accepted until
+a task-bound readback from `AgentService/GetAgentExecution` proves
+`spec.agentId` is the configured Codex agent id and `spec.codexSettings` or
+`status.codexSettings` is present.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform
@@ -312,6 +322,19 @@ public automation `agent` steps select Codex; a read-only canary still called
 `StartAgent` for agent id `00000000-0000-0000-0000-000000007100` and failed
 with `agent is disabled by organization policy`. Treat that as a blocked launch
 edge, not as a Codex execution.
+The next actionable blocker is to supply an Ona personal access token through
+`GITPOD_API_KEY` or `ONA_TOKEN` and the Codex app agent id through
+`MINELINK_ONA_CODEX_AGENT_ID`, then run:
+
+```bash
+npm run agent-factory:start-codex -- --start --identity-canary
+```
+
+That command writes
+`.minelink-dev/reports/ona-platform-codex-api-session.{md,json}`. Passing it
+only proves the programmatic Platform Codex launch/readback edge; it does not
+prove MineLink task implementation, validation, video review, or product
+acceptance.
 If the UI can start Codex but CLI readback for sessions is disabled, the
 blocked edge is `ready prebuild -> readable Platform Codex task session`, not
 `Codex unavailable`.

@@ -145,6 +145,13 @@ MineLink uses automation to reduce agent memory load:
 - `scripts/dev/sync-linear-status.mjs` uses `LINEAR_API_KEY` from the Ona
   environment to update Linear issue status, comments, and evidence links
   without printing the secret.
+- `scripts/dev/start-ona-platform-codex.mjs` probes the documented Ona
+  AgentService API path for programmatic Platform Codex launch. It requires an
+  Ona PAT through `GITPOD_API_KEY` or `ONA_TOKEN`, refuses the known default Ona
+  automation agent id, sends a read-only identity canary when requested, and
+  writes `.minelink-dev/reports/ona-platform-codex-api-session.{md,json}` with
+  `GetAgentExecution` readback. This is launch/readback evidence only; it does
+  not replace the implementation-session or video-verifier readbacks.
 - `.ona/automations.yaml` defines Ona-native environment tasks.
 - `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
   finalizer that should be started by manual pilot, GitHub dispatch, or Linear
