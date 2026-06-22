@@ -39,7 +39,7 @@ on:
       wait_seconds:
         description: AgentService readback wait seconds for canary modes
         required: false
-        default: "30"
+        default: "600"
       environment_wait_seconds:
         description: Ona task environment wait seconds before StartAgent
         required: false

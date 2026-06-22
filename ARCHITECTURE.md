@@ -773,6 +773,12 @@ followed by:
 node scripts/dev/check-video-review.mjs --require-mp4
 ```
 
+Implementation and `full-chain-canary` dispatches must use an AgentService
+readback wait long enough for the Codex implementation execution to reach a
+terminal phase. The workflow default is 600 seconds; a 30 second wait is only
+appropriate for narrow identity probes and can falsely mark a healthy
+Goal-mode Codex run as blocked while it is still in `PHASE_RUNNING`.
+
 The release gate writes
 `.minelink-dev/reports/artifacts/video-release-gate.md` and fails if the MP4 is
 missing, the verifier is not marked `Ona Platform Codex`, or the task/video
