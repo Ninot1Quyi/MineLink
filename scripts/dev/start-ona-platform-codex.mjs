@@ -239,8 +239,8 @@ function annotations() {
 
 function startBody() {
   const codeContext = {};
-  if (hasValue(args.projectId)) codeContext.projectId = args.projectId;
   if (hasValue(args.environmentId)) codeContext.environmentId = args.environmentId;
+  else if (hasValue(args.projectId)) codeContext.projectId = args.projectId;
   const body = {
     agentId: args.codexAgentId,
     annotations: annotations(),

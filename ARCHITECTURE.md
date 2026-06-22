@@ -296,12 +296,14 @@ the logged-in Ona CLI config. When no explicit
 `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the probe selects the newest
 non-deleting environment for the MineLink project and passes that environment
 context to `StartAgent`, because the Codex app agent is an in-environment
-agent. Its `identity-canary` mode is required to prove programmatic Codex
-launch and still needs a real `MINELINK_ONA_CODEX_AGENT_ID` or workflow input
-for the Codex app agent id. While this pilot branch is active, push-triggered
-probe runs use `identity-canary` so launch proof can be collected before the
-workflow exists on the default branch; this still does not count as task
-implementation evidence.
+agent. The API treats `projectId` and `environmentId` as a oneof context, so the
+probe sends only `environmentId` when one is available. Its `identity-canary`
+mode is required to prove programmatic Codex launch and still needs a real
+`MINELINK_ONA_CODEX_AGENT_ID` or workflow input for the Codex app agent id.
+While this pilot branch is active, push-triggered probe runs use
+`identity-canary` so launch proof can be collected before the workflow exists
+on the default branch; this still does not count as task implementation
+evidence.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform
