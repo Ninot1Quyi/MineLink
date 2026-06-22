@@ -461,7 +461,12 @@ hash, and MP4 hash, writes
 `.minelink-dev/reports/artifacts/video-review.md`, and lets
 `check-video-review.mjs --require-mp4` create the release gate. This is still
 automation-chain evidence only; it does not prove product acceptance. When a
-manual rehearsal needs to prove `release_gate -> pr`, run the same workflow with
+canary run renders the MP4 on the GitHub runner, the artifact origin must say
+`github-actions-canary`; that video is acceptable for chain testing only. Final
+task acceptance requires an Ona-produced video artifact, with
+`acceptance-video-origin.json` showing the Ona producer and the verifier
+reviewing that exact MP4 hash. When a manual rehearsal needs to prove
+`release_gate -> pr`, run the same workflow with
 `mode=full-chain-canary` and `create_pr=true`. That optional step calls
 `scripts/dev/create-agent-factory-pr.mjs`, creates or updates a draft PR from
 the canary branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,

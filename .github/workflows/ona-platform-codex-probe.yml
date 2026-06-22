@@ -223,6 +223,7 @@ jobs:
             --task-id "$task_id" \
             --branch "$target_branch" \
             --task-requirements docs/minelink-acceptance.md \
+            --producer github-actions-canary \
             --require-mp4
           node scripts/dev/prepare-video-review-request.mjs \
             --task-id "$task_id" \

@@ -148,6 +148,7 @@ if (failures.length === 0) {
     ghOutput = `dry-run: gh ${workflowArgs.join(" ")}`;
     runUrl = `dry-run:${args.workflow}:${taskId}`;
   } else {
+    const triggerStartedAt = new Date();
     const result = runGh(workflowArgs);
     ghOutput = compact(result.stdout || result.stderr);
     if (result.status !== 0) {
@@ -173,7 +174,11 @@ if (failures.length === 0) {
         ]);
         if (listed.status === 0) {
           try {
-            const run = JSON.parse(listed.stdout)?.[0] ?? null;
+            const runs = JSON.parse(listed.stdout) ?? [];
+            const run = runs.find((candidate) => {
+              const createdAt = Date.parse(candidate?.createdAt ?? "");
+              return Number.isFinite(createdAt) && createdAt >= triggerStartedAt.getTime() - 5000;
+            }) ?? null;
             runId = run?.databaseId ? String(run.databaseId) : "";
             runUrl = workflowRunUrl(run);
           } catch {

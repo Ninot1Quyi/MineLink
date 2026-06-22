@@ -225,6 +225,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
   const request = await readTextIfPresent(args.videoReviewRequest);
   const summaryHash = requestValue(request, "Summary sha256") || "missing";
   const mp4Hash = requestValue(request, "MP4 sha256") || "missing";
+  const videoProducer = requestValue(request, "Video producer") || "unknown";
   const requestTaskId = requestValue(request, "Task id") || args.taskId;
   const requestBranch = requestValue(request, "Branch") || args.branch;
   const canaryContent = [
@@ -238,6 +239,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     "Release decision: pass",
     "Task matched: yes",
     "Video matched: yes",
+    `Video producer: ${videoProducer}`,
     `Summary sha256: ${summaryHash}`,
     `MP4 sha256: ${mp4Hash}`,
     `Task id: ${args.taskId}`,
@@ -267,6 +269,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- Video-verifier canary file: ${canaryPath}`,
     `- Acceptance summary sha256: ${summaryHash}`,
     `- Acceptance MP4 sha256: ${mp4Hash}`,
+    `- Acceptance video producer: ${videoProducer}`,
     "",
     "Critical path:",
     "1. Launch a bounded native Codex subagent/verifier inside this same implementation session.",

@@ -6,8 +6,10 @@ import path from "node:path";
 let reviewPath = ".minelink-dev/reports/artifacts/video-review.md";
 let summaryPath = ".minelink-dev/reports/artifacts/acceptance-summary.md";
 let mp4Path = ".minelink-dev/reports/artifacts/acceptance.mp4";
+let originPath = ".minelink-dev/reports/artifacts/acceptance-video-origin.json";
 let outputPath = ".minelink-dev/reports/artifacts/video-release-gate.md";
 let requireMp4 = false;
+let requireProducer = "";
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -17,8 +19,12 @@ for (let index = 2; index < process.argv.length; index += 1) {
     summaryPath = process.argv[++index] ?? "";
   } else if (arg === "--mp4") {
     mp4Path = process.argv[++index] ?? "";
+  } else if (arg === "--origin") {
+    originPath = process.argv[++index] ?? "";
   } else if (arg === "--output") {
     outputPath = process.argv[++index] ?? "";
+  } else if (arg === "--require-producer") {
+    requireProducer = process.argv[++index] ?? "";
   } else if (arg === "--require-mp4") {
     requireMp4 = true;
   } else if (arg === "-h" || arg === "--help") {
@@ -35,7 +41,8 @@ Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 
 Any missing video, missing report, negative marker, or non-pass decision fails
-the release gate.`);
+the release gate. Use --require-producer <producer> to require a specific video
+origin such as ona-environment.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -69,6 +76,14 @@ async function sha256(filePath) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
+async function readJson(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function marker(text, label) {
   const match = text.match(new RegExp(`^${label}:\\s*(.+)$`, "im"));
   return match?.[1]?.trim().toLowerCase() ?? "";
@@ -78,6 +93,8 @@ const failures = [];
 const reviewStat = await stat(reviewPath);
 const summaryStat = await stat(summaryPath);
 const mp4Stat = await stat(mp4Path);
+const origin = await readJson(originPath);
+const producer = origin?.producer ?? "unknown";
 const review = await readText(reviewPath);
 
 if (!summaryStat || !summaryStat.isFile() || summaryStat.size === 0) {
@@ -94,6 +111,7 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const releaseDecision = marker(review, "Release decision");
   const taskMatched = marker(review, "Task matched");
   const videoMatched = marker(review, "Video matched");
+  const reviewedProducer = marker(review, "Video producer");
   const verifier = marker(review, "Verifier");
   const reviewedSummaryHash = marker(review, "Summary sha256");
   const reviewedMp4Hash = marker(review, "MP4 sha256");
@@ -108,6 +126,12 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   }
   if (videoMatched !== "yes") {
     failures.push(`Video verifier video match is not yes: ${videoMatched || "missing"}`);
+  }
+  if (reviewedProducer && reviewedProducer !== String(producer).toLowerCase()) {
+    failures.push(`Video verifier producer mismatch: ${reviewedProducer}`);
+  }
+  if (requireProducer && producer !== requireProducer) {
+    failures.push(`Acceptance video producer is ${producer}, expected ${requireProducer}`);
   }
   if (/^Release decision:\s*fail/im.test(review)) {
     failures.push("Video verifier reported fail");
@@ -139,6 +163,9 @@ const lines = [
   `- Review report: \`${reviewPath}\``,
   `- Acceptance summary: \`${summaryPath}\``,
   `- Acceptance MP4: \`${mp4Path}\``,
+  `- Acceptance video origin: \`${originPath}\``,
+  `- Video producer: \`${producer}\``,
+  `- Required producer: \`${requireProducer || "none"}\``,
   `- MP4 required: \`${requireMp4 ? "yes" : "no"}\``,
   `- Result: \`${failures.length === 0 ? "passed" : "failed"}\``,
   "",

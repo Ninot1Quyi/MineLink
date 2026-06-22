@@ -367,7 +367,12 @@ Codex readback.
 The final flow must use the Ona Platform Codex agent option for implementation,
 then a same-session native Codex verifier subagent for video review, not the
 default Ona Agent and not manual
-SSH. Manual `ona environment ssh` remains useful for debugging or verification,
+SSH. GitHub Actions may store or publish the MP4 artifact, but final
+acceptance-video evidence must identify the video producer. A
+`github-actions-canary` video proves only the automation chain; a final
+task-acceptance video must be produced in the Ona task/finalizer environment
+and verified by hash against that exact artifact. Manual `ona environment ssh`
+remains useful for debugging or verification,
 but it is not the product delivery path. Self-reported identity is not accepted:
 the default Ona Agent can echo `Identity: I am Codex running in Ona Platform
 Codex`, so the readback must include platform-side evidence such as a readable

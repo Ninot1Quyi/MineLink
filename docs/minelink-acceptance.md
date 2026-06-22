@@ -958,6 +958,10 @@ Current status:
   `.minelink-dev/reports/artifacts/acceptance-summary.md` and
   `.minelink-dev/reports/artifacts/acceptance.mp4`; the real NeoForge GitHub
   workflow installs `ffmpeg` and runs the renderer with `--require-mp4`.
+  The renderer also writes `acceptance-video-origin.{json,md}`. A
+  `github-actions-canary` producer is chain evidence only; final task
+  acceptance requires the MP4 to be produced in the Ona task/finalizer
+  environment and the verifier to review that exact hash.
 - `scripts/dev/prepare-video-review-request.mjs` generates
   `.minelink-dev/reports/artifacts/video-review-request.md` with the current
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
