@@ -353,7 +353,7 @@ require_text ".github/workflows/ona-platform-codex-probe.yml" "--producer \"\$MI
 require_text ".github/workflows/ona-platform-codex-probe.yml" "MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Cleanup Ona task environments"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "cleanup-ona-resources.mjs"
-require_text ".github/workflows/ona-platform-codex-probe.yml" "Upload canary PR video to external storage"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "Run Ona finalizer video release upload"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Comment canary PR video evidence"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "upload-acceptance-video-storage.mjs"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "comment-pr-evidence.mjs"

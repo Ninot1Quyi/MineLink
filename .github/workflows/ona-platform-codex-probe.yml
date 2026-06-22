@@ -240,6 +240,7 @@ jobs:
             --environment-id "$environment_id" \
             --task-id "$task_id" \
             --branch "$target_branch" \
+            --source-ref "$GITHUB_REF_NAME" \
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
             --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
             --pr-title "${INPUT_PR_TITLE:-Advance ${task_id}}" \
@@ -323,6 +324,61 @@ jobs:
             --require-video-producer ona-task-finalizer \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             "${chain_args[@]}"
+
+      - name: Run Ona finalizer video release upload
+        id: ona-video-release
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
+        env:
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+          INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
+          MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
+          MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
+          MINELINK_VIDEO_STORAGE_BUCKET: ${{ vars.MINELINK_VIDEO_STORAGE_BUCKET }}
+          MINELINK_VIDEO_PUBLIC_BASE_URL: ${{ vars.MINELINK_VIDEO_PUBLIC_BASE_URL }}
+          MINELINK_VIDEO_STORAGE_PREFIX: ${{ vars.MINELINK_VIDEO_STORAGE_PREFIX }}
+        run: |
+          environment_id="${MINELINK_ONA_FINALIZER_ENVIRONMENT_ID:-}"
+          if [ -z "$environment_id" ]; then
+            echo "Missing Ona finalizer environment id for verifier-approved video release."
+            exit 1
+          fi
+          node scripts/dev/run-ona-finalizer-artifacts.mjs \
+            --environment-id "$environment_id" \
+            --stage-group release-upload \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --source-ref "$GITHUB_REF_NAME" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
+            --pr-title "${INPUT_PR_TITLE:-Advance ${MINELINK_PLATFORM_CODEX_TASK_ID}}" \
+            --validation-scope docs \
+            --scenarios none \
+            --run-id "$GITHUB_RUN_ID" \
+            --video-producer ona-task-finalizer \
+            --required-video-producer ona-task-finalizer \
+            --video-storage-provider "${MINELINK_VIDEO_STORAGE_PROVIDER:-}" \
+            --video-storage-endpoint "${MINELINK_VIDEO_STORAGE_ENDPOINT:-}" \
+            --video-storage-region "${MINELINK_VIDEO_STORAGE_REGION:-auto}" \
+            --video-storage-bucket "${MINELINK_VIDEO_STORAGE_BUCKET:-}" \
+            --video-storage-public-base-url "${MINELINK_VIDEO_PUBLIC_BASE_URL:-}" \
+            --video-storage-prefix "${MINELINK_VIDEO_STORAGE_PREFIX:-minelink/acceptance-videos}"
+          video_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/video-storage-upload.json','utf8')); console.log(report.videoUrl || '')")"
+          if [ -z "$video_url" ]; then
+            echo "Ona finalizer upload did not report a playable video URL."
+            exit 1
+          fi
+          {
+            echo "video-url=$video_url"
+            echo "raw-video-url=$video_url"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "MINELINK_PLAYABLE_VIDEO_URL=$video_url"
+            echo "MINELINK_RAW_VIDEO_URL=$video_url"
+          } >> "$GITHUB_ENV"
 
       - name: Create or update canary PR after release gate
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
@@ -424,30 +480,6 @@ jobs:
             --require-platform-codex-implementation \
             --require-platform-codex-verifier
 
-      - name: Upload canary PR video to external storage
-        id: upload-video-storage
-        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
-        env:
-          MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
-          MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
-          MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
-          MINELINK_VIDEO_STORAGE_BUCKET: ${{ vars.MINELINK_VIDEO_STORAGE_BUCKET }}
-          MINELINK_VIDEO_PUBLIC_BASE_URL: ${{ vars.MINELINK_VIDEO_PUBLIC_BASE_URL }}
-          MINELINK_VIDEO_STORAGE_PREFIX: ${{ vars.MINELINK_VIDEO_STORAGE_PREFIX }}
-          MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID: ${{ secrets.MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID }}
-          MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY }}
-        run: |
-          pr_number="$(node -e "const url=process.env.MINELINK_AGENT_FACTORY_PR_URL||''; const m=url.match(/\\/pull\\/(\\d+)/); console.log(m?m[1]:'')")"
-          if [ -z "$pr_number" ]; then
-            echo "Could not parse PR number from $MINELINK_AGENT_FACTORY_PR_URL"
-            exit 1
-          fi
-          node scripts/dev/upload-acceptance-video-storage.mjs \
-            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
-            --branch "${INPUT_TARGET_BRANCH:-${GITHUB_REF_NAME}}" \
-            --run-id "$GITHUB_RUN_ID" \
-            --require-upload
-
       - name: Cleanup Ona task environments
         if: always()
         env:
@@ -469,7 +501,7 @@ jobs:
           include-hidden-files: true
 
       - name: Comment canary PR video evidence
-        if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.upload-video-storage.outputs.video-url != '' }}
+        if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
           MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer
@@ -486,8 +518,8 @@ jobs:
             --artifact-name minelink-ona-platform-codex-probe \
             --artifact-id "${{ steps.upload-probe-evidence.outputs.artifact-id }}" \
             --artifact-url "${{ steps.upload-probe-evidence.outputs.artifact-url }}" \
-            --video-url "${{ steps.upload-video-storage.outputs.video-url }}" \
-            --raw-video-url "${{ steps.upload-video-storage.outputs.raw-video-url }}" \
+            --video-url "${{ steps.ona-video-release.outputs.video-url }}" \
+            --raw-video-url "${{ steps.ona-video-release.outputs.raw-video-url }}" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
             --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY"

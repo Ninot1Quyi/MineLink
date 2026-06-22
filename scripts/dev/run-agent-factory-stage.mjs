@@ -31,6 +31,7 @@ const allStages = [
   "render-video",
   "prepare-video",
   "check-video-release",
+  "upload-video",
   "sync-in-review",
   "create-pr",
   "final-report",
@@ -44,7 +45,7 @@ const groupedStages = {
     "render-video",
     "prepare-video",
   ],
-  "release-finalize": ["check-video-release", "sync-in-review", "create-pr", "final-report"],
+  "release-finalize": ["check-video-release", "upload-video", "sync-in-review", "create-pr", "final-report"],
   all: allStages,
 };
 
@@ -78,8 +79,9 @@ Use --stage implementation-finalize to run validation, evidence summary,
 acceptance video rendering, and video-review request preparation after the
 implementation Platform Codex readback exists.
 
-Use --stage release-finalize to run video release, status sync, PR creation,
-and final reporting after both implementation and verifier readbacks exist.
+Use --stage release-finalize to run video release, external video upload,
+status sync, PR creation, and final reporting after both implementation and
+verifier readbacks exist.
 
 Use --stage all to run every guarded finalizer stage inside one Ona task. This
 keeps the evidence gates per stage while avoiding repeated Ona/Codex task
@@ -402,6 +404,23 @@ switch (args.stage) {
         "--require-mp4",
         "--require-producer",
         args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
+      ],
+      { requireImplementation: true, requireVerifier: true },
+    );
+    break;
+  case "upload-video":
+    await runCommandStage(
+      args.stage,
+      process.execPath,
+      [
+        "scripts/dev/upload-acceptance-video-storage.mjs",
+        "--task-id",
+        args.taskId,
+        "--branch",
+        args.branch || "unknown",
+        "--run-id",
+        process.env.MINELINK_RUN_ID || process.env.GITHUB_RUN_ID || "ona-finalizer",
+        "--require-upload",
       ],
       { requireImplementation: true, requireVerifier: true },
     );

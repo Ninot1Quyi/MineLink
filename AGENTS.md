@@ -228,15 +228,17 @@ Reports must distinguish:
   watcher to start the checked-in Ona automation. If the chain cannot
   automatically start the Ona Platform Codex option, record that edge as
   blocked; do not substitute generic Ona Agent evidence.
-- Video-required tasks must produce `acceptance.mp4`, then a separate Ona
-  Platform Codex verifier must compare the task requirements against the
-  summary/video and write `video-review.md`. `check-video-review.mjs` must pass
-  before publishing or merging the video evidence.
+- Video-required tasks must produce `acceptance.mp4`, then the same Ona
+  Platform Codex implementation session must launch a bounded native verifier
+  subagent to compare the task requirements against the summary/video and write
+  `video-review.md`. `check-video-review.mjs` must pass before publishing or
+  merging the video evidence.
 - PR-visible acceptance videos should be uploaded to the configured external
-  video store through `scripts/dev/upload-acceptance-video-storage.mjs` and
-  linked from `scripts/dev/comment-pr-evidence.mjs`. Do not make the GitHub
-  evidence branch the default storage path for video binaries when external
-  storage is configured.
+  video store from the Ona release finalizer through
+  `scripts/dev/upload-acceptance-video-storage.mjs`; GitHub runners may publish
+  the returned public URL but must not re-render or substitute the final task
+  video. Do not make the GitHub evidence branch the default storage path for
+  video binaries when external storage is configured.
 - Do not leak GitHub tokens, admission tokens, Microsoft credentials,
   OpenAI/API keys, EULA files, or server secrets.
 

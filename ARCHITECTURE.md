@@ -384,17 +384,19 @@ Codex readback.
 The final flow must use the Ona Platform Codex agent option for implementation,
 then a same-session native Codex verifier subagent for video review, not the
 default Ona Agent and not manual
-SSH. GitHub Actions may store or publish the MP4 artifact, but final
-acceptance-video evidence must identify the video producer. A
+SSH. GitHub Actions may store or publish CI MP4 artifacts, but final
+task-acceptance video evidence must identify the video producer. A
 `github-actions-canary` video proves only the automation chain; a final
 task-acceptance video must be produced in the Ona task/finalizer environment
 with producer `ona-task-finalizer`, then verified by hash against that exact
 artifact with `check-video-review.mjs --require-producer ona-task-finalizer`.
-PR-visible video evidence must include a playable GitHub blob page for
-`acceptance.mp4` published on the dedicated `minelink-evidence` branch. Actions
-artifact zip links are useful for logs and reports, but they are not accepted as
-the visible video surface by themselves, and automated PR video comments skip or
-fail when the playable URL is missing.
+PR-visible video evidence must include a public playable MP4 URL, preferably
+from the configured external video store. Actions artifact zip links are useful
+for logs and reports, but they are not accepted as the visible video surface by
+themselves, and automated PR video comments skip or fail when the playable URL
+is missing. The external video upload belongs to the verifier-approved Ona
+release finalizer; the GitHub runner may comment with the returned URL, but it
+must not re-render or substitute the final task video.
 Manual `ona environment ssh`
 remains useful for debugging or verification,
 but it is not the product delivery path. Self-reported identity is not accepted:
@@ -413,10 +415,17 @@ artifact hashes. In GitHub-driven full-chain canaries, the runner uses
 `scripts/dev/run-ona-finalizer-artifacts.mjs` to execute the validation,
 summary, `render-video`, and `prepare-video` finalizer stages inside the same
 Ona task environment through `ona environment exec`, then copies
-`.minelink-dev/reports` back for verifier prompting, PR publication, and CI
-status. This bridge is accepted only as finalizer/artifact transport; Platform
-Codex API readback and task-bound branch commits remain the implementation and
-verifier evidence. Terminal factory paths run
+`.minelink-dev/reports` back for verifier prompting. After the same Platform
+Codex implementation execution writes `video-review.md`, the runner calls the
+same bridge again with `release-upload`; that release finalizer checks the
+existing MP4/review hashes, uploads the verified MP4 to external storage, and
+copies the upload report back for PR commenting. The bridge fetches finalizer
+scripts from the workflow/source ref inside the Ona environment instead of
+injecting large script bodies through `ona environment exec`, because the Ona
+exec path is shell-mediated and has practical argument-size limits. This bridge
+is accepted only as finalizer/artifact transport; Platform Codex API readback
+and task-bound branch commits remain the implementation and verifier evidence.
+Terminal factory paths run
 `scripts/dev/cleanup-ona-resources.mjs` after success or failure so task
 environments are stopped automatically when they are in the MineLink project
 and have no uncommitted workspace changes. Cleanup is resource hygiene only; it
@@ -726,13 +735,14 @@ workflow and the Ona Platform Codex probe workflow install `ffmpeg` and require
 the MP4 before uploading evidence, so missing video support is a workflow
 failure instead of a silent `.unavailable` artifact. This artifact is a review
 visualization, not proof of client GUI perception and not a gate-status
-upgrade. Pull request workflows call
-`scripts/dev/upload-acceptance-video-storage.mjs` to upload `acceptance.mp4` to
-the configured S3-compatible video store, currently Cloudflare R2 via
-`MINELINK_VIDEO_STORAGE_*` settings, then call
-`scripts/dev/comment-pr-evidence.mjs` after artifact upload so reviewers can
-open or embed the public MP4 URL from the PR. The GitHub Actions artifact
-remains the raw evidence bundle. The older
+upgrade. Pull request workflows call the Ona release finalizer, which runs
+`scripts/dev/upload-acceptance-video-storage.mjs` inside the task environment
+after `check-video-review.mjs` passes, to upload the verifier-approved
+`acceptance.mp4` to the configured S3-compatible video store, currently
+Cloudflare R2 via `MINELINK_VIDEO_STORAGE_*` settings. The GitHub runner then
+calls `scripts/dev/comment-pr-evidence.mjs` with the returned public MP4 URL so
+reviewers can open or embed the exact Ona-produced video from the PR. The
+GitHub Actions artifact remains the raw evidence bundle. The older
 `scripts/dev/publish-pr-video-evidence.mjs` path is a manual fallback only and
 must not be the default automated path when external video storage is
 configured, because default automation should not commit video binaries to the

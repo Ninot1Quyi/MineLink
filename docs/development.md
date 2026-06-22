@@ -188,27 +188,33 @@ node scripts/dev/run-ona-finalizer-artifacts.mjs --environment-id <ona-env> --ta
 
 That command uses `ona environment exec` to run the validation, summary,
 `render-video`, and `prepare-video` finalizer stages inside the Ona
-devcontainer, then copies `.minelink-dev/reports` back to the runner for video
-review, PR creation, and publication. The finalizer checks out the task branch
-for task content, then injects the current workflow/source-commit finalizer
-scripts so stale task branches cannot regenerate review requests with old
-defaults. It is an artifact/finalizer bridge only; Platform Codex API readback
-and branch evidence remain the implementation and verifier proof. Platform
-Codex launch commands default to `AGENT_MODE_RALPH`, which maps to the Goal mode
-used for persistent delivery. Repeated canary runs may reuse the same branch
-evidence paths; the fetch steps wait for the current Goal-mode session markers,
-reviewed commit, and artifact hashes before releasing instead of accepting stale
-branch files.
+devcontainer, then copies `.minelink-dev/reports` back to the runner for the
+same implementation Codex execution to launch its verifier subagent. After
+`video-review.md` is written, run the bridge again with
+`--stage-group release-upload`; the Ona release finalizer checks the existing
+MP4/review hashes, uploads the verified MP4 to external storage, and copies the
+upload report back for PR comments. The finalizer checks out the task branch
+for task content, then fetches finalizer scripts from the workflow/source ref so
+stale task branches cannot regenerate review requests with old defaults. It is
+an artifact/finalizer bridge only; Platform Codex API readback and branch
+evidence remain the implementation and verifier proof. Platform Codex launch
+commands default to `AGENT_MODE_RALPH`, which maps to the Goal mode used for
+persistent delivery. Repeated canary runs may reuse the same branch evidence
+paths; the fetch steps wait for the current Goal-mode session markers, reviewed
+commit, and artifact hashes before releasing instead of accepting stale branch
+files.
 
-For PR review visibility, CI uploads the rendered MP4 to the configured
-S3-compatible video store and updates the PR with the public MP4 URL:
+For PR review visibility, the Ona release finalizer uploads the verifier
+approved MP4 to the configured S3-compatible video store. GitHub then updates
+the PR with the returned public MP4 URL:
 
 ```bash
-node scripts/dev/upload-acceptance-video-storage.mjs --provider r2 --require-upload
+node scripts/dev/run-ona-finalizer-artifacts.mjs --stage-group release-upload --environment-id <ona-env> --task-id gh-123 --branch codex/gh-123-task
 node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --artifact-url URL --video-url URL
 ```
 
-The storage uploader reads `MINELINK_VIDEO_STORAGE_PROVIDER`,
+The release finalizer calls the storage uploader inside the Ona task
+environment. The storage uploader reads `MINELINK_VIDEO_STORAGE_PROVIDER`,
 `MINELINK_VIDEO_STORAGE_ENDPOINT`, `MINELINK_VIDEO_STORAGE_REGION`,
 `MINELINK_VIDEO_STORAGE_BUCKET`, `MINELINK_VIDEO_PUBLIC_BASE_URL`,
 `MINELINK_VIDEO_STORAGE_PREFIX`, `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID`, and

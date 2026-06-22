@@ -11,19 +11,37 @@ const defaults = {
   githubIssue: process.env.MINELINK_GITHUB_ISSUE ?? "none",
   linearIssue: process.env.MINELINK_LINEAR_ISSUE ?? "none",
   branch: process.env.MINELINK_BRANCH ?? "",
+  sourceRef:
+    process.env.MINELINK_FINALIZER_SOURCE_REF ??
+    process.env.GITHUB_REF_NAME ??
+    process.env.GITHUB_SHA ??
+    "codex/gh-3-agent-factory-pilot",
   prTitle: process.env.MINELINK_PR_TITLE ?? "",
   acceptanceGate: process.env.MINELINK_ACCEPTANCE_GATE ?? "unspecified",
   validationScope: process.env.MINELINK_VALIDATION_SCOPE ?? "docs",
   scenarios: process.env.MINELINK_SCENARIOS ?? "none",
+  stageGroup: process.env.MINELINK_ONA_FINALIZER_STAGE_GROUP ?? "implementation-finalize",
   videoProducer: process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ?? "ona-task-finalizer",
   requiredVideoProducer:
     process.env.MINELINK_ACCEPTANCE_VIDEO_REQUIRED_PRODUCER ??
     process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ??
     "ona-task-finalizer",
+  runId: process.env.GITHUB_RUN_ID ?? process.env.MINELINK_RUN_ID ?? "local",
+  videoStorageProvider: process.env.MINELINK_VIDEO_STORAGE_PROVIDER ?? "",
+  videoStorageEndpoint: process.env.MINELINK_VIDEO_STORAGE_ENDPOINT ?? "",
+  videoStorageRegion: process.env.MINELINK_VIDEO_STORAGE_REGION ?? "auto",
+  videoStorageBucket: process.env.MINELINK_VIDEO_STORAGE_BUCKET ?? "",
+  videoStoragePublicBaseUrl: process.env.MINELINK_VIDEO_PUBLIC_BASE_URL ?? "",
+  videoStoragePrefix: process.env.MINELINK_VIDEO_STORAGE_PREFIX ?? "minelink/acceptance-videos",
   implementationReadback: ".minelink-dev/reports/ona-codex-implementation-session.md",
   implementationReadbackJson: ".minelink-dev/reports/ona-codex-implementation-session.json",
   apiReadback: ".minelink-dev/reports/ona-platform-codex-api-session.md",
   apiReadbackJson: ".minelink-dev/reports/ona-platform-codex-api-session.json",
+  verifierReadback: ".minelink-dev/reports/ona-codex-video-verifier-session.md",
+  verifierReadbackJson: ".minelink-dev/reports/ona-codex-video-verifier-session.json",
+  verifierApiReadback: ".minelink-dev/reports/ona-platform-codex-video-verifier-api-session.md",
+  verifierApiReadbackJson: ".minelink-dev/reports/ona-platform-codex-video-verifier-api-session.json",
+  videoReview: ".minelink-dev/reports/artifacts/video-review.md",
   output: ".minelink-dev/reports/ona-finalizer-artifacts.md",
   jsonOutput: ".minelink-dev/reports/ona-finalizer-artifacts.json",
   tarOutput: ".minelink-dev/reports/ona-finalizer-artifacts.tar.gz",
@@ -41,16 +59,30 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--github-issue") args.githubIssue = readValue();
   else if (arg === "--linear-issue") args.linearIssue = readValue();
   else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--source-ref") args.sourceRef = readValue();
   else if (arg === "--pr-title") args.prTitle = readValue();
   else if (arg === "--acceptance-gate") args.acceptanceGate = readValue();
   else if (arg === "--validation-scope") args.validationScope = readValue();
   else if (arg === "--scenarios") args.scenarios = readValue();
+  else if (arg === "--stage-group") args.stageGroup = readValue();
   else if (arg === "--video-producer") args.videoProducer = readValue();
   else if (arg === "--required-video-producer") args.requiredVideoProducer = readValue();
+  else if (arg === "--run-id") args.runId = readValue();
+  else if (arg === "--video-storage-provider") args.videoStorageProvider = readValue();
+  else if (arg === "--video-storage-endpoint") args.videoStorageEndpoint = readValue();
+  else if (arg === "--video-storage-region") args.videoStorageRegion = readValue();
+  else if (arg === "--video-storage-bucket") args.videoStorageBucket = readValue();
+  else if (arg === "--video-storage-public-base-url") args.videoStoragePublicBaseUrl = readValue();
+  else if (arg === "--video-storage-prefix") args.videoStoragePrefix = readValue();
   else if (arg === "--implementation-readback") args.implementationReadback = readValue();
   else if (arg === "--implementation-readback-json") args.implementationReadbackJson = readValue();
   else if (arg === "--api-readback") args.apiReadback = readValue();
   else if (arg === "--api-readback-json") args.apiReadbackJson = readValue();
+  else if (arg === "--verifier-readback") args.verifierReadback = readValue();
+  else if (arg === "--verifier-readback-json") args.verifierReadbackJson = readValue();
+  else if (arg === "--verifier-api-readback") args.verifierApiReadback = readValue();
+  else if (arg === "--verifier-api-readback-json") args.verifierApiReadbackJson = readValue();
+  else if (arg === "--video-review") args.videoReview = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--tar-output") args.tarOutput = readValue();
@@ -58,10 +90,13 @@ for (let index = 2; index < process.argv.length; index += 1) {
     console.log(`Usage: node scripts/dev/run-ona-finalizer-artifacts.mjs --environment-id ID --task-id gh-123 --branch codex/branch
 
 Runs MineLink finalizer artifact stages inside an existing Ona task
-environment, then copies .minelink-dev/reports back to the local runner. This
-is an artifact/finalizer bridge only; Platform Codex implementation evidence
-must already exist and remains the accepted agent execution proof. Internally
-this uses ona environment exec, not the default Ona Agent.`);
+environment, then copies .minelink-dev/reports back to the local runner. Use
+--stage-group implementation-finalize to render acceptance.mp4 and
+video-review-request.md, then --stage-group release-upload after the same
+Platform Codex execution writes video-review.md. This is an artifact/finalizer
+bridge only; Platform Codex implementation/verifier evidence remains the
+accepted agent execution proof. Internally this uses ona environment exec, not
+the default Ona Agent.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -88,6 +123,14 @@ function shellQuote(value) {
   return `'${String(value ?? "").replace(/'/g, `'\\''`)}'`;
 }
 
+function shellDoubleQuote(value) {
+  return `"${String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$")
+    .replace(/`/g, "\\`")}"`;
+}
+
 async function readBase64IfPresent(filePath) {
   try {
     return (await fs.readFile(filePath)).toString("base64");
@@ -110,6 +153,10 @@ function overwriteSourceScript(filePath, base64) {
     `printf %s ${shellQuote(base64)} | base64 -d > ${shellQuote(filePath)}`,
     `chmod +x ${shellQuote(filePath)}`,
   ].join("\n");
+}
+
+function exportIfValue(name, value) {
+  return hasValue(value) ? `export ${name}=${shellQuote(value)}` : "";
 }
 
 function stageCommand(stage) {
@@ -157,8 +204,10 @@ function outputText(payload, fallback) {
   if (!payload || typeof payload !== "object") return fallback;
   return (
     payload.stdout ??
+    payload.stderr ??
     payload.output ??
     payload.result?.stdout ??
+    payload.result?.stderr ??
     payload.result?.output ??
     payload.logs ??
     fallback
@@ -166,16 +215,38 @@ function outputText(payload, fallback) {
 }
 
 function exitCode(payload, fallbackStatus) {
-  const value = payload?.exitCode ?? payload?.status?.exitCode ?? payload?.result?.exitCode;
+  const value =
+    payload?.exitCode ??
+    payload?.exit_code ??
+    payload?.status?.exitCode ??
+    payload?.status?.exit_code ??
+    payload?.result?.exitCode ??
+    payload?.result?.exit_code;
   const numeric = Number(value);
   if (Number.isFinite(numeric)) return numeric;
   return fallbackStatus ?? 0;
+}
+
+function stageList() {
+  if (args.stageGroup === "implementation-finalize") {
+    return ["validate", "summarize", "render-video", "prepare-video"];
+  }
+  if (args.stageGroup === "release-upload") {
+    return ["check-video-release", "upload-video", "final-report"];
+  }
+  return args.stageGroup
+    .split(",")
+    .map((stage) => stage.trim())
+    .filter(Boolean);
 }
 
 const failures = [];
 if (!hasValue(args.environmentId)) failures.push("--environment-id is required");
 if (!hasValue(args.branch)) failures.push("--branch is required");
 if (!hasValue(args.taskId) || args.taskId === "manual") failures.push("--task-id must be task-bound");
+if (!["implementation-finalize", "release-upload"].includes(args.stageGroup) && stageList().length === 0) {
+  failures.push("--stage-group must be implementation-finalize, release-upload, or a comma-separated stage list");
+}
 if (!Number.isFinite(args.timeoutSeconds) || args.timeoutSeconds < 1) {
   failures.push("--timeout-seconds must be at least 1");
 }
@@ -187,6 +258,9 @@ const report = {
   workingDir: args.workingDir,
   taskId: args.taskId,
   branch: args.branch,
+  sourceRef: args.sourceRef,
+  stageGroup: args.stageGroup,
+  stages: stageList(),
   videoProducer: args.videoProducer,
   requiredVideoProducer: args.requiredVideoProducer,
   tarOutput: args.tarOutput,
@@ -208,9 +282,23 @@ if (failures.length === 0) {
     [".minelink-dev/reports/ona-codex-implementation-session.json", await readBase64IfPresent(args.implementationReadbackJson)],
     [".minelink-dev/reports/ona-platform-codex-api-session.md", await readBase64IfPresent(args.apiReadback)],
     [".minelink-dev/reports/ona-platform-codex-api-session.json", await readBase64IfPresent(args.apiReadbackJson)],
+    [".minelink-dev/reports/ona-codex-video-verifier-session.md", await readBase64IfPresent(args.verifierReadback)],
+    [".minelink-dev/reports/ona-codex-video-verifier-session.json", await readBase64IfPresent(args.verifierReadbackJson)],
+    [
+      ".minelink-dev/reports/ona-platform-codex-video-verifier-api-session.md",
+      await readBase64IfPresent(args.verifierApiReadback),
+    ],
+    [
+      ".minelink-dev/reports/ona-platform-codex-video-verifier-api-session.json",
+      await readBase64IfPresent(args.verifierApiReadbackJson),
+    ],
+    [".minelink-dev/reports/artifacts/video-review.md", await readBase64IfPresent(args.videoReview)],
   ];
   if (!transferredFiles[0][1]) {
     failures.push(`Missing implementation readback to transfer: ${args.implementationReadback}`);
+  }
+  if (args.stageGroup === "release-upload" && !transferredFiles[8][1]) {
+    failures.push(`Missing verifier video review to transfer: ${args.videoReview}`);
   }
 
   const sourceScripts = [
@@ -218,34 +306,47 @@ if (failures.length === 0) {
     "scripts/dev/summarize-evidence.mjs",
     "scripts/dev/render-acceptance-video.mjs",
     "scripts/dev/prepare-video-review-request.mjs",
+    "scripts/dev/check-video-review.mjs",
+    "scripts/dev/upload-acceptance-video-storage.mjs",
   ];
-  const sourceScriptFiles = await Promise.all(
-    sourceScripts.map(async (filePath) => [filePath, await readBase64IfPresent(filePath)]),
-  );
-  for (const [filePath, base64] of sourceScriptFiles) {
-    if (!base64) failures.push(`Missing source finalizer script to inject: ${filePath}`);
-  }
-  report.injectedSourceScripts = sourceScriptFiles.filter(([, base64]) => base64).map(([filePath]) => filePath);
+  report.injectedSourceScripts = sourceScripts;
 
   if (failures.length === 0) {
     const remoteScript = [
       "set -euo pipefail",
       `export ONA_ENVIRONMENT_ID=${shellQuote(args.environmentId)}`,
+      `export MINELINK_RUN_ID=${shellQuote(args.runId)}`,
+      exportIfValue("MINELINK_VIDEO_STORAGE_PROVIDER", args.videoStorageProvider),
+      exportIfValue("MINELINK_VIDEO_STORAGE_ENDPOINT", args.videoStorageEndpoint),
+      exportIfValue("MINELINK_VIDEO_STORAGE_REGION", args.videoStorageRegion),
+      exportIfValue("MINELINK_VIDEO_STORAGE_BUCKET", args.videoStorageBucket),
+      exportIfValue("MINELINK_VIDEO_PUBLIC_BASE_URL", args.videoStoragePublicBaseUrl),
+      exportIfValue("MINELINK_VIDEO_STORAGE_PREFIX", args.videoStoragePrefix),
       "mkdir -p .minelink-dev/reports",
       ...transferredFiles.map(([filePath, base64]) => decodeRemoteFile(filePath, base64)).filter(Boolean),
+      hasValue(args.sourceRef) ? `git fetch origin ${shellQuote(args.sourceRef)}` : "",
+      hasValue(args.sourceRef) ? "finalizer_source_ref=FETCH_HEAD" : "finalizer_source_ref=HEAD",
       `git fetch origin ${shellQuote(args.branch)}`,
       `git checkout -B ${shellQuote(args.branch)} ${shellQuote(`origin/${args.branch}`)}`,
-      ...sourceScriptFiles.map(([filePath, base64]) => overwriteSourceScript(filePath, base64)),
-      stageCommand("validate"),
-      stageCommand("summarize"),
-      stageCommand("render-video"),
-      stageCommand("prepare-video"),
+      ...sourceScripts.map((filePath) =>
+        [
+          `mkdir -p ${shellQuote(path.posix.dirname(filePath))}`,
+          `git show "$finalizer_source_ref:${filePath}" > ${shellQuote(filePath)}`,
+          `chmod +x ${shellQuote(filePath)}`,
+        ].join("\n"),
+      ),
+      ...stageList().map((stage) => stageCommand(stage)),
       "test -s .minelink-dev/reports/artifacts/acceptance.mp4",
-      "test -s .minelink-dev/reports/artifacts/video-review-request.md",
+      args.stageGroup === "implementation-finalize"
+        ? "test -s .minelink-dev/reports/artifacts/video-review-request.md"
+        : "",
+      args.stageGroup === "release-upload" ? "test -s .minelink-dev/reports/video-storage-upload.json" : "",
       `printf '\\n${markerStart}\\n'`,
       "tar -C .minelink-dev -czf - reports | base64 | tr -d '\\n'",
       `printf '\\n${markerEnd}\\n'`,
-    ].join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const result = spawnSync(
       "ona",
@@ -262,14 +363,23 @@ if (failures.length === 0) {
         "--",
         "bash",
         "-lc",
-        remoteScript,
+        shellDoubleQuote(remoteScript),
       ],
       { encoding: "utf8", stdio: "pipe" },
     );
     const payload = extractJsonOutput(result.stdout);
     const stdout = String(outputText(payload, result.stdout) ?? "");
     report.commandExitCode = exitCode(payload, result.status);
-    report.execOutput = sanitize(stdout || result.stderr);
+    report.execOutput = sanitize(
+      [
+        stdout,
+        payload?.stderr,
+        payload?.result?.stderr,
+        result.stderr,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
 
     const start = stdout.indexOf(markerStart);
     const end = stdout.indexOf(markerEnd);
