@@ -74,7 +74,7 @@ jobs:
           MINELINK_ONA_ORGANIZATION_ID: ${{ vars.MINELINK_ONA_ORGANIZATION_ID }}
           MINELINK_ONA_CODEX_AGENT_ID: ${{ secrets.MINELINK_ONA_CODEX_AGENT_ID }}
           INPUT_CODEX_AGENT_ID: ${{ inputs.codex_agent_id }}
-          INPUT_MODE: ${{ inputs.mode || 'discover' }}
+          INPUT_MODE: ${{ inputs.mode || 'identity-canary' }}
           INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '30' }}
         run: |
           args=(scripts/dev/start-ona-platform-codex.mjs --discover-policies)
