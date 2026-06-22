@@ -8,11 +8,12 @@ const defaults = {
   jsonOutput: ".minelink-dev/reports/ona-resource-cleanup.json",
   projectId: process.env.MINELINK_ONA_PROJECT_ID ?? "",
 };
+const defaultReportPath = ".minelink-dev/reports/ona-platform-codex-api-session.json";
 
 const args = {
   ...defaults,
   environmentIds: [],
-  reportPaths: [".minelink-dev/reports/ona-platform-codex-api-session.json"],
+  reportPaths: [],
   stop: false,
   allowDirty: false,
   dontWait: false,
@@ -50,6 +51,10 @@ Options:
     console.error(`Unknown argument: ${arg}`);
     process.exit(2);
   }
+}
+
+if (args.environmentIds.length === 0 && args.reportPaths.length === 0) {
+  args.reportPaths.push(defaultReportPath);
 }
 
 function sanitize(value) {
@@ -106,7 +111,8 @@ async function collectEnvironmentIds() {
 
 function parseEnvironment(stdout) {
   try {
-    return JSON.parse(stdout);
+    const parsed = JSON.parse(stdout);
+    return Array.isArray(parsed) ? parsed[0] : parsed;
   } catch {
     return null;
   }
@@ -166,6 +172,11 @@ function shouldStop(summary) {
   return { ok: true, reason: "" };
 }
 
+function isStopped(summary) {
+  return /STOPPED|STOPPING|DELETED|DELETING/i.test(summary?.phase ?? "") ||
+    /STOPPED|STOPPING|DELETED|DELETING/i.test(summary?.machinePhase ?? "");
+}
+
 async function cleanupEnvironment(environmentId) {
   const getResult = run(["environment", "get", environmentId, "-o", "json"]);
   const record = {
@@ -205,15 +216,18 @@ async function cleanupEnvironment(environmentId) {
   const stopResult = run(stopArgs);
   record.output = sanitize(stopResult.stdout);
   record.error = sanitize(stopResult.stderr);
-  if (stopResult.status !== 0) {
-    record.result = "stop_failed";
-    return record;
-  }
 
   const afterResult = run(["environment", "get", environmentId, "-o", "json"]);
   if (afterResult.status === 0) {
     const after = parseEnvironment(afterResult.stdout);
     record.after = after ? envSummary(after) : null;
+  }
+  if (stopResult.status !== 0 && !isStopped(record.after)) {
+    record.result = "stop_failed";
+    return record;
+  }
+  if (stopResult.status !== 0 && isStopped(record.after)) {
+    record.reason = "stop_reported_error_but_environment_stopped";
   }
   record.result = "stopped";
   return record;
