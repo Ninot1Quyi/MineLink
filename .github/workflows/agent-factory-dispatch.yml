@@ -29,6 +29,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: write
 
 concurrency:
   group: agent-factory-dispatch-${{ github.event.issue.number || github.event.inputs.issue_number || github.event.inputs.linear_issue || github.run_id }}
@@ -98,6 +99,16 @@ jobs:
             args+=(--allow-blocked)
           fi
           node "${args[@]}"
+      - name: Trigger Platform Codex full-chain workflow
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+        run: |
+          node scripts/dev/trigger-agent-factory-full-chain.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --ref "$GITHUB_REF_NAME" \
+            --dispatch-json .minelink-dev/reports/agent-factory-dispatch.json \
+            --pr-base-branch codex/minelink-mvp-engineering \
+            --require-trigger
       - name: Upload dispatch evidence
         if: always()
         uses: actions/upload-artifact@v4

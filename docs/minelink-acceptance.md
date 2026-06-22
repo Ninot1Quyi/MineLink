@@ -945,6 +945,12 @@ Current status:
   `.minelink-dev/reports/github-status.{md,json}` and comments the linked
   GitHub issue or PR with the final chain evidence paths without exposing token
   values.
+- `scripts/dev/trigger-agent-factory-full-chain.mjs` reads
+  `.minelink-dev/reports/agent-factory-dispatch.json` and starts
+  `.github/workflows/ona-platform-codex-probe.yml` in `full-chain-canary` mode
+  for the accepted issue task. This is the current bridge from a GitHub issue
+  source event into the already guarded Platform Codex/video/PR/CI/status
+  canary chain.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

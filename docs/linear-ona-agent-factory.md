@@ -121,11 +121,19 @@ It triggers on `issues` events and manual dispatch. The dispatcher validates the
 task contract, checks `agent-ready` and `agent:ona`, starts the Ona automation
 through `ona ai automation start`, optionally performs a bounded
 `ona ai automation executions get` readback, writes
-`.minelink-dev/reports/agent-factory-dispatch.md`, regenerates
+`.minelink-dev/reports/agent-factory-dispatch.md` and
+`.minelink-dev/reports/agent-factory-dispatch.json`, regenerates
 `.minelink-dev/reports/agent-factory-chain.md`, and comments on the GitHub
 issue. It requires `ONA_TOKEN` in GitHub secrets to start Ona from CI; missing
 Ona authentication is recorded as a blocked edge instead of being treated as a
 MineLink validation failure.
+After a successful GitHub dispatch, the workflow calls
+`scripts/dev/trigger-agent-factory-full-chain.mjs`, which starts
+`.github/workflows/ona-platform-codex-probe.yml` with
+`mode=full-chain-canary`, `create_pr=true`, the accepted task id, target
+branch, GitHub issue URL, and optional Linear issue. This is the current bridge
+from `GitHub issue -> dispatcher` into the Platform Codex implementation,
+video verifier, PR, CI, and status-writeback chain.
 
 When readback is enabled, the dispatcher also writes
 `.minelink-dev/reports/ona-automation-execution.md` and JSON with the Ona

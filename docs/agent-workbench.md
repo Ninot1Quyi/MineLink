@@ -105,10 +105,13 @@ Use automation to reduce agent memory load:
 - `.github/workflows/agent-factory-dispatch.yml` is the GitHub/Linear source
   dispatcher. It validates agent-ready GitHub issues, polls Linear as a
   fallback source, starts the shared Ona automation, and uploads dispatch plus
-  chain reports.
+  chain reports. For GitHub issues it also triggers the Platform Codex
+  full-chain workflow after dispatch acceptance.
 - `dispatch-agent-factory.mjs`, `watch-linear-agent-tasks.mjs`, and
   `report-agent-factory-chain.mjs` keep the full issue-to-PR automation chain
   visible as nodes, edges, blockers, and remaining percentage.
+- `trigger-agent-factory-full-chain.mjs` connects an accepted source dispatch
+  to `ona-platform-codex-probe.yml` in `full-chain-canary` mode.
 - `sync-github-status.mjs` and `sync-linear-status.mjs` are the final
   status-writeback surfaces after PR CI. GitHub-only tasks require GitHub
   comment evidence; linked Linear tasks also require Linear sync evidence.

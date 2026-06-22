@@ -216,6 +216,12 @@ The source dispatcher is `.github/workflows/agent-factory-dispatch.yml`, backed
 by `scripts/dev/dispatch-agent-factory.mjs`,
 `scripts/dev/watch-linear-agent-tasks.mjs`, and
 `scripts/dev/report-agent-factory-chain.mjs`.
+After the source dispatcher accepts a GitHub issue, it writes
+`.minelink-dev/reports/agent-factory-dispatch.json` and
+`scripts/dev/trigger-agent-factory-full-chain.mjs` starts
+`.github/workflows/ona-platform-codex-probe.yml` in `full-chain-canary` mode
+for the same task, branch, issue, and optional Linear key. That second workflow
+is the guarded Platform Codex -> video -> PR -> CI -> status path.
 `scripts/dev/check-agent-factory-secrets.mjs` is the secret-safe preflight for
 this bridge: it checks GitHub secret presence, local/runner `LINEAR_API_KEY`
 presence, the `AGENT_FACTORY_GITHUB_TOKEN` PR-creation token, and Ona CLI
