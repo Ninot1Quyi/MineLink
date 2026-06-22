@@ -366,8 +366,10 @@ release-gate-to-PR edge when `create_pr=true`; it calls
 `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
 report with the created draft PR URL. That edge requires the
 `AGENT_FACTORY_GITHUB_TOKEN` repository secret because repository policy can
-block the default Actions `GITHUB_TOKEN` from creating pull requests. Linear
-status sync is handled by
+block the default Actions `GITHUB_TOKEN` from creating pull requests. When the
+PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits for the GitHub PR
+check rollup and lets the refreshed chain report mark `pr -> ci` with the PR
+checks URL. Linear status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
 If Ona repository webhooks are unavailable for the account, the GitHub Actions

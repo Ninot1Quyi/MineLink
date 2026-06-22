@@ -10,6 +10,7 @@ on:
       - scripts/dev/fetch-platform-codex-canary.mjs
       - scripts/dev/fetch-platform-codex-video-verifier.mjs
       - scripts/dev/check-agent-factory-secrets.mjs
+      - scripts/dev/wait-agent-factory-pr-ci.mjs
       - scripts/dev/check-agent-workbench.sh
   workflow_dispatch:
     inputs:
@@ -62,6 +63,10 @@ on:
         description: GitHub branch evidence wait seconds for implementation/video-verifier canary modes
         required: false
         default: "300"
+      ci_wait_seconds:
+        description: GitHub PR check rollup wait seconds for create_pr=true
+        required: false
+        default: "900"
 
 permissions:
   contents: read
@@ -288,6 +293,23 @@ jobs:
           fi
           echo "MINELINK_AGENT_FACTORY_PR_URL=$pr_url" >> "$GITHUB_ENV"
 
+      - name: Wait for canary PR CI
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          INPUT_CI_WAIT_SECONDS: ${{ inputs.ci_wait_seconds || '900' }}
+        run: |
+          node scripts/dev/wait-agent-factory-pr-ci.mjs \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --wait-seconds "${INPUT_CI_WAIT_SECONDS:-900}"
+          ci_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/agent-factory-pr-ci.json','utf8')); console.log(report.checksUrl || '')")"
+          if [ -z "$ci_url" ]; then
+            echo "wait-agent-factory-pr-ci did not report a checks URL."
+            exit 1
+          fi
+          echo "MINELINK_AGENT_FACTORY_CI_URL=$ci_url" >> "$GITHUB_ENV"
+
       - name: Refresh chain report after canary PR
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
         run: |
@@ -301,6 +323,7 @@ jobs:
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
             --pr-report .minelink-dev/reports/agent-factory-pr.md \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
             --require-platform-codex-implementation \
             --require-platform-codex-verifier
 

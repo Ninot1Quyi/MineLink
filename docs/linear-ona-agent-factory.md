@@ -447,7 +447,11 @@ the canary branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,
 and refreshes `agent-factory-chain.json` with the PR URL. This PR edge requires
 the `AGENT_FACTORY_GITHUB_TOKEN` repository secret; the default Actions
 `GITHUB_TOKEN` can be blocked by repository policy from creating pull requests.
-The next downstream edge is PR CI/status collection, not product acceptance.
+After the draft PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits
+for the PR check rollup, writes
+`.minelink-dev/reports/agent-factory-pr-ci.{md,json}`, and the final chain
+refresh records the PR checks URL for the `pr -> ci` edge. The next downstream
+edge is Linear/GitHub status writeback, not product acceptance.
 Before validation or PR finalization, the CLI automation also requires an
 implementation-session readback at:
 
