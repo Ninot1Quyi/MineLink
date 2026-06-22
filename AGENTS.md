@@ -210,6 +210,10 @@ Reports must distinguish:
   Ona Agent mode, `ona environment ssh`, and the checked-in Ona CLI automation
   are debugging, synchronization, validation, or artifact surfaces only and
   must not be described as final MineLink agent execution evidence.
+- Self-reported `Identity: I am Codex running in Ona Platform Codex` is a
+  diagnostic only. The default Ona Agent can echo it. Ona work is accepted only
+  with platform-side Codex selector/API evidence plus task/branch/commit-bound
+  readback.
 - For AI-native factory work, use the GitHub Actions dispatcher or Linear
   watcher to start the checked-in Ona automation. If the chain cannot
   automatically start the Ona Platform Codex option, record that edge as

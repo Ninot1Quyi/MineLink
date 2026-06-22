@@ -206,6 +206,13 @@ function readbackIdentityAccepted(text) {
   return /\bCodex\b/i.test(identity) && /Ona Platform Codex/i.test(identity);
 }
 
+function readbackPlatformEvidenceAccepted(text) {
+  const evidence = markerValue(text, ["Platform evidence", "Provider evidence", "Agent selector"]);
+  if (/(missing|unavailable|blocked|none|null|unknown)/i.test(evidence)) return false;
+  if (!/\bCodex\b/i.test(evidence)) return false;
+  return !/(Ai-Automations Action Execution|default Ona Agent|Claude)/i.test(evidence);
+}
+
 function readbackSessionId(explicitSession, text) {
   if (hasValue(explicitSession)) return explicitSession;
   return markerValue(text, "Session id") || markerValue(text, "Session");
@@ -236,7 +243,13 @@ function readbackMatchesExpected(text, expected) {
   if (!readbackIdentityAccepted(text)) {
     failures.push("Identity marker must say Codex running in Ona Platform Codex");
   } else {
-    evidence.push("Identity: Codex on Ona Platform Codex");
+    evidence.push("Identity: Codex on Ona Platform Codex diagnostic");
+  }
+
+  if (!readbackPlatformEvidenceAccepted(text)) {
+    failures.push("Platform evidence marker must show the Ona session was created with Codex selected; self-reported identity is not accepted");
+  } else {
+    evidence.push("Platform evidence: Codex selector/API");
   }
 
   if (expectedValuePresent(expected.taskId)) {
@@ -572,9 +585,9 @@ const statusSyncStatus = ciStatus === "passed" && hasValue(args.githubStatusUrl)
 const codexBlocker = codexAuthFailed
   ? "Ona Platform Codex rejected the LLM request as unauthenticated before repository commands could run."
   : implementationStatus === "blocked"
-    ? `Implementation evidence must identify Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Session id, Result: passed, Task id, Branch, and Commit in ${args.onaImplementationReadback}; generic Ona automation, task, stale readback, wrong branch, or default-agent evidence is not accepted.${implementationReadbackBound.failures.length ? ` ${implementationReadbackBound.failures.join(" ")}` : ""}`
+    ? `Implementation evidence must identify Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Platform evidence from the Ona UI/API selector, Session id, Result: passed, Task id, Branch, and Commit in ${args.onaImplementationReadback}; generic Ona automation, task, stale readback, wrong branch, self-reported identity, or default-agent evidence is not accepted.${implementationReadbackBound.failures.length ? ` ${implementationReadbackBound.failures.join(" ")}` : ""}`
     : implementationStatus === "missing"
-      ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Session id, Result: passed, Task id, Branch, and Commit.`
+      ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Platform evidence from the Ona UI/API selector, Session id, Result: passed, Task id, Branch, and Commit.`
       : "";
 const globalBlocker = args.blocker || codexBlocker;
 const prebuildBlocker =
@@ -607,7 +620,8 @@ const nodes = [
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
-    implementationReadbackInfo && readbackIdentityAccepted(implementationReadbackText) && "Identity: Codex on Ona Platform Codex",
+    implementationReadbackInfo && readbackIdentityAccepted(implementationReadbackText) && "Identity: Codex on Ona Platform Codex diagnostic",
+    implementationReadbackInfo && readbackPlatformEvidenceAccepted(implementationReadbackText) && "Platform evidence: Codex selector/API",
     ...implementationReadbackBound.evidence,
     implementationReadbackInfo && args.onaImplementationReadback,
   ], codexBlocker),
@@ -625,11 +639,12 @@ const nodes = [
   mkNode("video_verifier", "Dedicated video verifier", verifierStatus, [
     verifierSessionId && `Verifier session: ${verifierSessionId}`,
     verifierAgentAccepted && "Agent mode: Ona Platform Codex",
-    verifierReadbackInfo && readbackIdentityAccepted(verifierReadbackText) && "Identity: Codex on Ona Platform Codex",
+    verifierReadbackInfo && readbackIdentityAccepted(verifierReadbackText) && "Identity: Codex on Ona Platform Codex diagnostic",
+    verifierReadbackInfo && readbackPlatformEvidenceAccepted(verifierReadbackText) && "Platform evidence: Codex selector/API",
     ...verifierReadbackBound.evidence,
     verifierReadbackInfo && args.onaVerifierReadback,
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
   mkNode("release_gate", "Video release gate", releaseStatus, [
     releaseInfo && args.videoReleaseGate,
   ], releaseStatus === "blocked" ? "Video release gate failed or hashes do not match." : ""),
@@ -690,6 +705,7 @@ const rawEdges = [
     ...automationExecutionEvidence,
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
+    implementationReadbackInfo && readbackPlatformEvidenceAccepted(implementationReadbackText) && "Platform evidence: Codex selector/API",
     ...implementationReadbackBound.evidence,
     implementationReadbackInfo && args.onaImplementationReadback,
   ], nodeStatus.ona_automation === "blocked" ? globalBlocker : codexBlocker),
@@ -704,7 +720,7 @@ const rawEdges = [
   ]),
   mkEdge("acceptance_video", "video_verifier", edgeStatus(nodeStatus.video_verifier), [
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
   mkEdge("video_verifier", "release_gate", edgeStatus(nodeStatus.release_gate), [
     releaseInfo && args.videoReleaseGate,
   ]),

@@ -253,26 +253,32 @@ larger maps are rejected by the Ona automation API before the factory can start.
 After a successful `ona ai automation start`, the dispatcher can also perform a
 bounded `ona ai automation executions get` readback and write
 `.minelink-dev/reports/ona-automation-execution.md` plus JSON. That readback
-records the execution phase, session id when exposed, and `failedActionCount`.
+records the execution phase, session id when exposed, `runningActionCount`, and
+`failedActionCount`.
 The default readback window is 600 seconds so guarded finalizer failures are
 captured as terminal `completed_with_failed_actions` evidence instead of
 misleading short-window `timed_out` evidence. The GitHub dispatcher passes
-`--cancel-ona-execution-on-timeout`; if the execution is still running after the
-bounded readback window, it requests `ona ai automation cancel-execution` and
-records the cancellation status in `.minelink-dev/reports/ona-automation-execution.md`.
-That cancellation prevents stale platform work from looking like an active
-agent task, but it remains only partial bridge evidence until a task-bound
-Platform Codex readback exists. The factory spec now uses four ordered steps:
-an Ona Platform Codex implementation `agent`, a guarded
-`implementation-finalize` task, a separate Ona Platform Codex verifier `agent`,
-and a guarded `release-finalize` task. The two task steps call
-`scripts/dev/run-agent-factory-stage.mjs`; that script still writes per-stage
-reports and enforces the same evidence gates, but avoids paying repeated
-Ona/Codex task scheduling overhead for every finalizer stage. If Ona's Codex
-task layer reports a command failure in its conversation log but does not close
-the automation execution, the run is treated as a platform finalization blocker;
-the dispatcher timeout cancellation is the repository-side cleanup path after
-artifact capture.
+`--cancel-ona-execution-on-timeout`; if the execution has no active running
+action after the bounded readback window, it requests
+`ona ai automation cancel-execution` and records the cancellation status in
+`.minelink-dev/reports/ona-automation-execution.md`. If an Ona agent action is
+still running, the dispatcher records `timed_out`, preserves the session id, and
+leaves the agent alive for follow-up monitoring instead of killing active
+implementation work. That cancellation prevents stale platform work from
+looking like an active agent task, but it remains only partial bridge evidence
+until a task-bound Platform Codex readback exists. Public Ona automation
+`agent` steps currently start the default Ona Agent (`Ai-Automations Action
+Execution`) rather than the Ona Platform Codex conversation selector. The
+checked-in factory therefore fails closed: it first checks for an already
+accepted Platform Codex readback with platform selector/API evidence, writes a
+blocked readback if that evidence is absent, then runs the guarded
+`implementation-finalize` and `release-finalize` task wrappers. Those wrappers
+call `scripts/dev/run-agent-factory-stage.mjs`, write per-stage reports, and
+skip side effects until real Platform Codex evidence exists. If a future Ona
+CLI/API exposes a documented Codex automation provider, this fail-closed shim is
+the place to replace with true Codex launch. Until then, the dispatcher timeout
+cleanup is only the repository-side stale-work path after artifact capture,
+while active agent sessions are kept for inspection.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform
@@ -281,17 +287,19 @@ Codex readback.
 The final flow must use the Ona Platform Codex agent option for implementation
 and the separate video-verifier pass, not the default Ona Agent and not manual
 SSH. Manual `ona environment ssh` remains useful for debugging or verification,
-but it is not the product delivery path. The checked-in `agent` prompts are
-fail-closed: if the session cannot confirm Ona Platform Codex, it must write a
-blocked readback and stop. The Ona UI can create Codex sessions for this
+but it is not the product delivery path. Self-reported identity is not accepted:
+the default Ona Agent can echo `Identity: I am Codex running in Ona Platform
+Codex`, so the readback must include platform-side evidence such as a readable
+Codex selector/API field or a reviewed UI capture showing the session was
+created with Codex selected. The Ona UI can create Codex sessions for this
 project, and current project/environment metadata shows the
 `codex/minelink-mvp-engineering` clone target plus a project-scoped
 `codex_auth` secret. That proves the project can be prepared for Codex work,
 but it is not enough to prove the automated chain unless the task run records
-the specific Codex session or another readable provider-mode identifier. The
-implementation finalizer renders the trace-driven MP4 before the verifier runs;
-the release finalizer must not re-render the MP4 after video review. It checks
-the existing artifact hashes. Linear status sync is handled by
+the specific Codex session and platform-mode evidence. The implementation
+finalizer renders the trace-driven MP4 before the verifier runs; the release
+finalizer must not re-render the MP4 after video review. It checks the existing
+artifact hashes. Linear status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
 If Ona repository webhooks are unavailable for the account, the GitHub Actions
@@ -299,6 +307,11 @@ dispatcher and scheduled Linear watcher are the active automation bridge. If
 Ona Platform Codex cannot be started automatically or rejects LLM
 authentication, the chain report must stop at that edge and record the blocker
 instead of falling back to generic Ona Agent evidence.
+Disabling the default Ona Agent in organization policy does not currently make
+public automation `agent` steps select Codex; a read-only canary still called
+`StartAgent` for agent id `00000000-0000-0000-0000-000000007100` and failed
+with `agent is disabled by organization policy`. Treat that as a blocked launch
+edge, not as a Codex execution.
 If the UI can start Codex but CLI readback for sessions is disabled, the
 blocked edge is `ready prebuild -> readable Platform Codex task session`, not
 `Codex unavailable`.
@@ -315,13 +328,13 @@ first true blocker should then move to the automation-to-Platform-Codex handoff
 unless a concrete Codex session readback exists. The chain reporter and Ona
 finalizer require `.minelink-dev/reports/ona-codex-implementation-session.md`
 to identify `Agent mode: Ona Platform Codex`, `Identity: I am Codex running in
-Ona Platform Codex`, a `Session id`, `Result: passed`, the current `Task id`,
-the expected `Branch`, and the current `Commit` before validation or PR
-finalization can be treated as downstream evidence. The identity line is a
-liveness diagnostic, not acceptance by itself. Generic Ona automation, SSH,
-task, stale readback, wrong branch, or default-agent output must not satisfy
-this implementation edge. The separate video-verifier session uses the same
-task/branch/commit-bound pattern through
+Ona Platform Codex`, `Platform evidence`, a `Session id`, `Result: passed`, the
+current `Task id`, the expected `Branch`, and the current `Commit` before
+validation or PR finalization can be treated as downstream evidence. The
+identity line is a liveness diagnostic, not acceptance by itself. Generic Ona
+automation, SSH, task, stale readback, wrong branch, self-reported identity, or
+default-agent output must not satisfy this implementation edge. The separate
+video-verifier session uses the same task/branch/commit-bound pattern through
 `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the
 hash-checked video review artifacts.
 `scripts/dev/check-platform-codex-evidence.mjs` is the fail-closed evidence

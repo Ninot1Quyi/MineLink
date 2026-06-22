@@ -33,6 +33,7 @@ Fails unless the requested Ona Platform Codex readback files identify:
 
 Agent mode: Ona Platform Codex
 Identity: I am Codex running in Ona Platform Codex
+Platform evidence: <Ona UI/API evidence that this session was created with Codex selected>
 Session id: <Ona session id>
 Result: passed
 Task id: <expected task id>
@@ -40,7 +41,8 @@ Branch: <expected branch>
 Commit: <expected commit>
 
 This is a fail-closed guard for the MineLink factory finalizer.
-Generic Ona automation, SSH, task, or default-agent output must not satisfy it.`);
+Self-reported identity is not sufficient: generic Ona automation, SSH, task,
+or default-agent output must not satisfy it.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -94,6 +96,13 @@ function identityAccepted(text) {
   return /\bCodex\b/i.test(identity) && /Ona Platform Codex/i.test(identity);
 }
 
+function platformEvidenceAccepted(text) {
+  const evidence = markerValue(text, ["Platform evidence", "Provider evidence", "Agent selector"]);
+  if (/(missing|unavailable|blocked|none|null|unknown)/i.test(evidence)) return false;
+  if (!/\bCodex\b/i.test(evidence)) return false;
+  return !/(Ai-Automations Action Execution|default Ona Agent|Claude)/i.test(evidence);
+}
+
 function resultPassed(text) {
   const result = markerValue(text, ["Result", "Status", "Release decision"]);
   return /^(passed|pass|completed|complete|succeeded|success)$/i.test(result);
@@ -131,7 +140,13 @@ async function checkReadback(label, filePath) {
   if (!identityAccepted(text)) {
     failures.push(`${label} readback must contain Identity: I am Codex running in Ona Platform Codex`);
   } else {
-    evidence.push(`${label} identity statement present`);
+    evidence.push(`${label} identity statement present as a diagnostic`);
+  }
+
+  if (!platformEvidenceAccepted(text)) {
+    failures.push(`${label} readback must contain Platform evidence showing the Ona session was created with Codex selected; self-reported identity is not accepted`);
+  } else {
+    evidence.push(`${label} platform Codex selector/API evidence present`);
   }
 
   const sessionId = markerValue(text, "Session id") || markerValue(text, "Session");
@@ -198,7 +213,7 @@ const lines = [
   `- Expected branch: \`${args.branch || "none"}\``,
   `- Expected commit: \`${args.commit || "none"}\``,
   `- Result: \`${failures.length === 0 ? "passed" : "failed"}\``,
-  "- Boundary: `Ona Platform Codex readback only; Generic Ona automation evidence is not accepted`",
+  "- Boundary: `Ona Platform Codex readback plus platform selector/API evidence only; generic Ona automation evidence and self-reported identity are not accepted`",
   "",
   "## Evidence",
   "",

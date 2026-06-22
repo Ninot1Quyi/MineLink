@@ -282,6 +282,11 @@ function executionFailedActionCount(execution) {
   return Number.isFinite(value) ? value : 0;
 }
 
+function executionRunningActionCount(execution) {
+  const value = Number(execution?.status?.runningActionCount ?? execution?.runningActionCount ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function classifyExecution(execution, readbackResult) {
   if (readbackResult === "timed_out") return "timed_out";
   if (readbackResult === "timed_out_cancelled") return "timed_out_cancelled";
@@ -300,7 +305,12 @@ function chainStatusFromExecutionResult(result) {
 }
 
 function executionSessionId(execution) {
-  return execution?.spec?.session ?? execution?.sessionID ?? execution?.sessionId ?? execution?.metadata?.sessionID ?? "";
+  return execution?.status?.session ??
+    execution?.spec?.session ??
+    execution?.sessionID ??
+    execution?.sessionId ??
+    execution?.metadata?.sessionID ??
+    "";
 }
 
 function cancelOnaExecution(executionId) {
@@ -358,7 +368,9 @@ async function readOnaExecution(executionId) {
     const observed = {
       observedAt: new Date().toISOString(),
       phase: executionPhase(lastExecution),
+      runningActionCount: executionRunningActionCount(lastExecution),
       failedActionCount: executionFailedActionCount(lastExecution),
+      sessionId: executionSessionId(lastExecution),
       finishedAt: lastExecution?.metadata?.finishedAt ?? "",
     };
     readbacks.push(observed);
@@ -368,10 +380,21 @@ async function readOnaExecution(executionId) {
     }
 
     if (Date.now() >= deadline) {
-      const cancellation = cancelOnaExecutionOnTimeout ? cancelOnaExecution(executionId) : null;
+      const hasRunningAction = executionRunningActionCount(lastExecution) > 0;
+      const cancellation = cancelOnaExecutionOnTimeout
+        ? hasRunningAction
+          ? {
+              requested: false,
+              status: "skipped_active_agent",
+              output: "",
+              error: "Execution still has a running action; leaving the Ona agent session alive for follow-up monitoring.",
+              execution: null,
+            }
+          : cancelOnaExecution(executionId)
+        : null;
       if (cancellation?.execution) lastExecution = cancellation.execution;
       return {
-        result: cancellation ? "timed_out_cancelled" : "timed_out",
+        result: cancellation?.requested ? "timed_out_cancelled" : "timed_out",
         execution: lastExecution,
         readbacks,
         error: "",
@@ -411,7 +434,7 @@ async function writeOnaExecutionReport(report) {
       ? ["- none"]
       : report.readbacks.map(
           (readback) =>
-            `- \`${readback.observedAt}\` phase=\`${readback.phase}\` failedActionCount=\`${readback.failedActionCount}\` finishedAt=\`${readback.finishedAt || "none"}\``,
+            `- \`${readback.observedAt}\` phase=\`${readback.phase}\` runningActionCount=\`${readback.runningActionCount ?? 0}\` failedActionCount=\`${readback.failedActionCount}\` session=\`${readback.sessionId || "none"}\` finishedAt=\`${readback.finishedAt || "none"}\``,
         )),
     "",
     "## Error",

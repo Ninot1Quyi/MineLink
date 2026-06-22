@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has a manual/path-filtered Ona prebuild refresh fallback for `codex/minelink-mvp-engineering`, but automatic Ona Platform Codex implementation/verifier sessions are not fully proven end-to-end; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has a manual/path-filtered Ona prebuild refresh fallback for `codex/minelink-mvp-engineering`, but public Ona automation `agent` steps currently launch the default Agent rather than Codex, so automatic Ona Platform Codex implementation/verifier launch is blocked until a documented Codex selector/API or externally verified Codex session evidence exists; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -735,13 +735,14 @@ Current status:
   snapshotting. This is the current accepted Ona prebuild baseline evidence.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the evidence check for Ona
   Platform Codex readbacks, and `scripts/dev/run-agent-factory-stage.mjs` is
-  the Ona finalizer wrapper. The checked-in Ona AI automation now runs four
-  ordered steps: an Ona Platform Codex implementation agent, an
-  `implementation-finalize` task, a separate Ona Platform Codex video-verifier
-  agent, and a `release-finalize` task. The grouped task wrappers still run
-  guarded stage lists sequentially and write per-stage reports. Missing
-  implementation or verifier readback, stale readback, or readback bound to the
-  wrong task/branch/commit writes
+  the Ona finalizer wrapper. Public Ona automation `agent` steps currently start
+  the default Ona Agent (`Ai-Automations Action Execution`) rather than the
+  Codex conversation-menu option, so the checked-in Ona AI automation now fails
+  closed unless a separate proven Platform Codex session has already written
+  platform selector/API evidence. The grouped task wrappers still run guarded
+  stage lists sequentially and write per-stage reports. Missing implementation
+  or verifier readback, stale readback, or readback bound to the wrong
+  task/branch/commit writes
   `platform-codex-evidence.md` plus an
   `agent-factory-stage-<stage>.md` blocked report and exits 0 so the Ona
   execution can terminate with readable evidence instead of lingering in a
@@ -763,21 +764,35 @@ Current status:
   implementation/verifier handoff plus guarded finalizers for Linear status
   sync, verification, evidence summaries, acceptance video rendering, video
   review request preparation, release gating, and PR creation after the
-  implementation work is performed by Ona Platform Codex and the MP4 is
-  reviewed by a separate Platform Codex verifier.
+  implementation work is performed by a proven Ona Platform Codex session and
+  the MP4 is reviewed by a separate Platform Codex verifier.
 - The finalizer now fails closed before validation/PR finalization unless
   `scripts/dev/report-agent-factory-chain.mjs` can read accepted implementation
   evidence from `.minelink-dev/reports/ona-codex-implementation-session.md`.
   The readback must identify `Agent mode: Ona Platform Codex`,
-  `Identity: I am Codex running in Ona Platform Codex`, a `Session id`,
-  `Result: passed`, `Task id`, `Branch`, and `Commit`; generic Ona automation,
-  SSH, task, stale local artifact, wrong branch, wrong commit, or default-agent
-  output is not accepted for the implementation edge. The identity line is a
-  liveness diagnostic for the Ona Platform Codex session, not acceptance
-  evidence by itself. The separate video
+  `Identity: I am Codex running in Ona Platform Codex`, `Platform evidence`, a
+  `Session id`, `Result: passed`, `Task id`, `Branch`, and `Commit`; generic
+  Ona automation, SSH, task, stale local artifact, wrong branch, wrong commit,
+  self-reported identity, or default-agent output is not accepted for the
+  implementation edge. The identity line is a liveness diagnostic for the Ona
+  Platform Codex session, not acceptance evidence by itself. The separate video
   verifier must likewise provide task/branch/commit-bound
   `.minelink-dev/reports/ona-codex-video-verifier-session.md` in addition to
   the hash-checked `video-review.md` and release gate.
+  A 2026-06-22 policy retest disabled the default Ona Agent and reran a minimal
+  read-only `ona ai automation execute` canary. The CLI still called
+  `AgentService/StartAgent` with agent id
+  `00000000-0000-0000-0000-000000007100` and name
+  `Ai-Automations Action Execution`, then failed with
+  `failed_precondition: agent is disabled by organization policy`. This is
+  negative launch evidence: policy gating does not switch public automation
+  agent steps to Codex.
+  After uploading the fail-closed automation spec, remote canary execution
+  `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
+  `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only
+  steps. That proves the guard no longer starts the disabled default Agent, but
+  it remains chain evidence only and does not prove Platform Codex
+  implementation.
 - `.github/workflows/agent-factory-dispatch.yml` provides the repository source
   dispatcher for agent-ready GitHub issues plus a scheduled/manual Linear
   polling fallback. It uses `scripts/dev/dispatch-agent-factory.mjs` and
@@ -787,7 +802,9 @@ Current status:
   id is available. The workflow now also passes
   `--cancel-ona-execution-on-timeout`, so a non-terminal Ona execution after the
   bounded readback window is cancelled and recorded as `timed_out_cancelled`
-  instead of being left as a stale active task. GitHub Actions run `27920128911`
+  only when no action is actively running. If an agent action is still running,
+  the execution is recorded as `timed_out`, the exposed session id is preserved,
+  and the agent remains alive for follow-up monitoring. GitHub Actions run `27920128911`
   proved this GitHub issue
   entry path against issue #7: Ona execution
   `019eec65-c9d3-740c-ba01-2460c0b5bb24` completed with
@@ -853,11 +870,20 @@ Current status:
   The resulting chain report was still correctly blocked at
   `ona_automation -> implementation_codex` because no accepted
   `.minelink-dev/reports/ona-codex-implementation-session.md` was present.
-  The current factory slice replaces that pure-task finalizer with the
-  four-step implementation/verifier agent flow plus task-bound readback checks.
-  This is still not product-accepted until a real dispatch proves the
-  implementation agent, validation, MP4, separate verifier, release gate, PR,
-  CI, and status writeback edges end to end.
+  A later issue #7 canary exposed an execution/session but the Ona UI showed the
+  running action was the default Agent backed by Claude, not Codex. That is
+  negative launch evidence: a default agent can echo the Codex identity line but
+  must not satisfy the Platform Codex edge. After the default Ona Agent policy
+  was disabled, a new CLI canary failed at `StartAgent` with
+  `agent is disabled by organization policy`, proving the policy does not make
+  automation fallback to Codex. The current factory slice therefore removes
+  generic automation agent launch from the acceptance path and keeps the chain
+  blocked until a documented or externally verified Codex launch writes platform
+  evidence. Remote execution `019eed14-ed44-7df4-9212-8e1122a7858c` proves the
+  updated fail-closed remote factory can complete task-only wrappers without
+  starting the disabled default Agent. This is still not product-accepted until
+  a real dispatch proves implementation, validation, MP4, separate verifier,
+  release gate, PR, CI, and status writeback edges end to end.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.
@@ -1026,9 +1052,10 @@ Not yet accepted as full product:
 - Multi-agent social runtime.
 - Director UI/service.
 - Installer.
-- Ona Platform Codex end-to-end task execution is not yet accepted. The
-  automation now includes implementation and verifier `agent` steps plus
-  task/branch/commit-bound readback gates, but a real remote canary still must
-  prove the full issue -> implementation agent -> validation -> MP4 -> separate
-  verifier -> release gate -> PR -> CI/status chain without manual repair.
+- Ona Platform Codex end-to-end task execution is not yet accepted. Public Ona
+  automation `agent` steps currently launch the default Ona Agent, not Codex, so
+  a real remote canary still must prove the full issue -> documented Platform
+  Codex launch with platform evidence -> implementation -> validation -> MP4 ->
+  separate verifier -> release gate -> PR -> CI/status chain without manual
+  repair.
 - Long release-length soak/stability run on real Minecraft.

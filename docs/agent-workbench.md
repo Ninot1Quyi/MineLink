@@ -15,7 +15,10 @@ The local Codex thread remains the integration and acceptance owner. Cloud
 agents should take narrow tasks with explicit write scopes and validation.
 When the task runs in Ona, select the platform **Codex** agent mode. The
 default Ona Agent mode is not accepted as MineLink implementation or verifier
-evidence.
+evidence. Self-reported identity is not enough: the default Ona Agent can echo
+`Identity: I am Codex running in Ona Platform Codex`. Accepted Ona evidence must
+include platform-side Codex selector/API evidence and task/branch/commit-bound
+readback.
 Use `docs/ona-migration.md` for the migration runbook and
 `docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona agent factory.
 Use `docs/agent-task-queue.md` for ready tasks.
@@ -93,10 +96,12 @@ Use automation to reduce agent memory load:
   `npm ci`, and records install evidence under `.minelink-dev/install-smoke/`.
 - `.ona/automations.yaml` provides Ona-native environment tasks for docs, fast,
   NeoForge guard, and acceptance artifact commands.
-- `ona/ai-automations/minelink-agent-factory.yaml` is the Ona CLI finalizer for
-  Linear sync, verification, evidence summaries, video-review request
-  preparation, video-release gating, and PR creation after Ona Platform Codex
-  does the bounded work and a separate Codex verifier reviews the MP4.
+- `ona/ai-automations/minelink-agent-factory.yaml` is the Ona CLI finalizer and
+  fail-closed evidence gate for Linear sync, verification, evidence summaries,
+  video-review request preparation, video-release gating, and PR creation after
+  a proven Ona Platform Codex session does the bounded work and a separate
+  Codex verifier reviews the MP4. Public Ona automation `agent` steps currently
+  start the default Ona Agent, so they are not used as implementation evidence.
 - `.github/workflows/agent-factory-dispatch.yml` is the GitHub/Linear source
   dispatcher. It validates agent-ready GitHub issues, polls Linear as a
   fallback source, starts the shared Ona automation, and uploads dispatch plus

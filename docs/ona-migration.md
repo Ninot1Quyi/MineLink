@@ -148,8 +148,9 @@ MineLink uses automation to reduce agent memory load:
 - `.ona/automations.yaml` defines Ona-native environment tasks.
 - `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
   finalizer that should be started by manual pilot, GitHub dispatch, or Linear
-  webhook integration after Platform Codex implementation and video-review
-  sessions have produced the required artifacts.
+  webhook integration. It now fails closed before implementation if the
+  environment lacks a real Platform Codex readback with platform selector/API
+  evidence.
 - `.github/workflows/ci.yml` runs both guards on every push and PR.
 - `.github/workflows/install-smoke.yml` uploads
   `minelink-install-smoke-evidence` for install/workbench/bootstrap changes.
@@ -193,17 +194,22 @@ EULA files.
 ## Automation Readiness
 
 Ona Platform Codex is the target execution surface for implementation and video
-verification. `ona environment ssh` is only for debugging and readback. The
-checked-in Ona CLI automation now contains the implementation and verifier
-`agent` handoff steps plus guarded task finalizers. The implementation agent
-must first identify itself in the session and readback as
-`Identity: I am Codex running in Ona Platform Codex`, then write
-task/branch/commit-bound Platform Codex readback before validation or
-acceptance video rendering can run; the verifier agent must write matching
-identity/readback and `video-review.md` before release/PR finalization can run.
-The identity line is a diagnostic signal only, not a substitute for task-bound
-validation or video review. The release finalizer does not re-render the MP4
-after review. A valid validation pilot starts
+verification. `ona environment ssh` is only for debugging and readback. Public
+Ona automation `agent` steps currently start the default Ona Agent, not the
+Codex conversation-menu option, so the checked-in Ona CLI automation does not
+try to perform implementation through a generic agent step. It first verifies
+whether a separate Platform Codex session has already written task/branch/commit
+bound readback with platform selector/API evidence; without that evidence it
+writes `Result: blocked` and the guarded finalizers skip validation, video
+release, and PR work. The implementation session must identify itself as
+`Identity: I am Codex running in Ona Platform Codex`, include `Platform
+evidence`, and then write task/branch/commit-bound Platform Codex readback
+before validation or acceptance video rendering can run; the verifier session
+must write matching identity/platform evidence/readback and `video-review.md`
+before release/PR finalization can run. The identity line is a diagnostic signal
+only: the default Ona Agent can echo it and still is not accepted as Codex. The
+release finalizer does not re-render the MP4 after review. A valid validation
+pilot starts
 `ona/ai-automations/minelink-agent-factory.yaml` through:
 
 ```bash
@@ -218,10 +224,12 @@ key value.
 
 GitHub Actions dispatcher runs wait for a bounded Ona execution readback and
 then pass `--cancel-ona-execution-on-timeout`. A timed-out execution is cancelled
-with `ona ai automation cancel-execution` and recorded as
-`timed_out_cancelled` in `.minelink-dev/reports/ona-automation-execution.md`.
-This is a stale-work cleanup guard, not implementation evidence; the chain still
-requires the separate Platform Codex implementation and video-verifier readbacks.
+with `ona ai automation cancel-execution` and recorded as `timed_out_cancelled`
+only when no action is actively running. If an Ona agent action is still
+running, the dispatcher records `timed_out`, preserves the session id, and
+leaves the agent alive for follow-up monitoring. This is a stale-work cleanup
+guard, not implementation evidence; the chain still requires the separate
+Platform Codex implementation and video-verifier readbacks.
 
 `LINEAR_API_KEY` does not authenticate the Codex LLM provider. If the Ona UI
 shows `Codex authentication failed: the LLM request was rejected as
@@ -232,15 +240,22 @@ new Platform Codex session, and use the platform support bundle if retrying the
 fresh session still fails.
 
 Linear or GitHub issue webhooks are not proven enabled until a real issue
-creates an Ona Platform Codex session, writes Linear status from inside Ona,
-checks the acceptance MP4 through a separate Codex video verifier, and opens a
-draft PR without manual SSH.
+creates or links a documented Ona Platform Codex session, writes Linear status
+from inside Ona, checks the acceptance MP4 through a separate Codex video
+verifier, and opens a draft PR without manual SSH.
 The checked-in Ona AI automation uses a manual trigger because Ona rejects PR
 triggers until a webhook or integration is configured in the organization.
 
 Generic Ona Agent runs are not accepted as MineLink agent evidence. If a pilot
-accidentally uses the default Ona Agent instead of Platform Codex, record it as
-process smoke only and rerun the task with Codex selected.
+uses `Ai-Automations Action Execution`, the default `Agent` selector, or a
+Claude-backed Ona Agent instead of Platform Codex, record it as process smoke or
+negative launch evidence only. Self-reported identity is not enough; rerun the
+task from a proven Codex surface or wait for a documented automation Codex
+selector/API.
+Disabling the default Ona Agent in organization policy is not enough by itself:
+the public automation `agent` step still requests the default automation agent
+id and fails with `agent is disabled by organization policy` instead of
+falling back to Codex.
 
 Scheduled or bulk Ona automation should wait until all of these are true:
 

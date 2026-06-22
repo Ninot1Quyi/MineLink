@@ -178,8 +178,10 @@ node scripts/dev/check-video-review.mjs --require-mp4
 
 Ona agent-factory implementation and video review must use the Ona Platform
 Codex agent option. The default Ona Agent mode is not accepted as MineLink
-agent evidence. The checked-in Ona CLI automation is only for validation,
-Linear status sync, artifact gating, and PR creation:
+agent evidence, even if it echoes the Codex identity line. Accepted evidence
+must include platform-side Codex selector/API proof plus task/branch/commit
+readback. The checked-in Ona CLI automation is only for validation, Linear
+status sync, artifact gating, and PR creation:
 
 ```bash
 ona automations validate .ona/automations.yaml
