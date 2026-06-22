@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/ona-platform-codex-probe.yml
       - scripts/dev/start-ona-platform-codex.mjs
+      - scripts/dev/fetch-platform-codex-canary.mjs
       - scripts/dev/check-agent-factory-secrets.mjs
       - scripts/dev/check-agent-workbench.sh
   workflow_dispatch:
@@ -19,13 +20,27 @@ on:
         options:
           - discover
           - identity-canary
+          - implementation-canary
       codex_agent_id:
-        description: Optional Codex app agent id for identity-canary mode
+        description: Optional Codex app agent id for canary modes
         required: false
       wait_seconds:
-        description: Readback wait seconds for identity-canary mode
+        description: AgentService readback wait seconds for canary modes
         required: false
         default: "30"
+      task_id:
+        description: Task id for implementation-canary mode
+        required: false
+      target_branch:
+        description: Target branch for implementation-canary mode
+        required: false
+      github_issue:
+        description: Optional GitHub issue URL for implementation-canary mode
+        required: false
+      branch_wait_seconds:
+        description: GitHub branch evidence wait seconds for implementation-canary mode
+        required: false
+        default: "300"
 
 permissions:
   contents: read
@@ -34,7 +49,7 @@ jobs:
   probe:
     name: Probe Ona Platform Codex API
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -76,17 +91,56 @@ jobs:
           INPUT_CODEX_AGENT_ID: ${{ inputs.codex_agent_id }}
           INPUT_MODE: ${{ inputs.mode || 'identity-canary' }}
           INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '30' }}
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
         run: |
           args=(scripts/dev/start-ona-platform-codex.mjs --discover-policies)
-          if [ "$INPUT_MODE" = "identity-canary" ]; then
+          if [ "$INPUT_MODE" = "identity-canary" ] || [ "$INPUT_MODE" = "implementation-canary" ]; then
             codex_agent_id="${INPUT_CODEX_AGENT_ID:-${MINELINK_ONA_CODEX_AGENT_ID:-}}"
             if [ -z "$codex_agent_id" ]; then
-              echo "identity-canary mode requires inputs.codex_agent_id or secret MINELINK_ONA_CODEX_AGENT_ID."
+              echo "$INPUT_MODE mode requires inputs.codex_agent_id or secret MINELINK_ONA_CODEX_AGENT_ID."
               exit 1
             fi
-            args+=(--start --identity-canary --codex-agent-id "$codex_agent_id" --wait-seconds "${INPUT_WAIT_SECONDS:-30}")
+            if [ "$INPUT_MODE" = "identity-canary" ]; then
+              args+=(--start --identity-canary --codex-agent-id "$codex_agent_id" --wait-seconds "${INPUT_WAIT_SECONDS:-30}")
+            else
+              task_id="${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}"
+              target_branch="${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}"
+              {
+                echo "MINELINK_PLATFORM_CODEX_TASK_ID=$task_id"
+                echo "MINELINK_PLATFORM_CODEX_TARGET_BRANCH=$target_branch"
+              } >> "$GITHUB_ENV"
+              args+=(
+                --start
+                --implementation-canary
+                --codex-agent-id "$codex_agent_id"
+                --task-id "$task_id"
+                --branch "$target_branch"
+                --github-issue "${INPUT_GITHUB_ISSUE:-}"
+                --wait-seconds "${INPUT_WAIT_SECONDS:-600}"
+              )
+            fi
           fi
           node "${args[@]}"
+
+      - name: Fetch implementation canary branch evidence
+        if: ${{ (inputs.mode || 'identity-canary') == 'implementation-canary' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_BRANCH_WAIT_SECONDS: ${{ inputs.branch_wait_seconds || '300' }}
+        run: |
+          node scripts/dev/fetch-platform-codex-canary.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --wait-seconds "${INPUT_BRANCH_WAIT_SECONDS:-300}"
+          branch_commit="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-codex-implementation-session.json','utf8')); console.log(report.commit || '')")"
+          node scripts/dev/check-platform-codex-evidence.mjs \
+            --implementation \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$branch_commit"
 
       - name: Upload probe evidence
         if: always()

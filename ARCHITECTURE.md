@@ -285,10 +285,14 @@ explicit `agentId`, `codeContext`, and `codexSettings`, and
 `AgentService/SendToAgentExecution` can send the task prompt to the resulting
 execution. MineLink tracks that experiment through
 `scripts/dev/start-ona-platform-codex.mjs`, which refuses to omit `agentId` or
-use the known default automation agent id. This API path is not accepted until
-a task-bound readback from `AgentService/GetAgentExecution` proves
-`spec.agentId` is the configured Codex agent id and `spec.codexSettings` or
-`status.codexSettings` is present.
+use the known default automation agent id. The launcher defaults to GPT-5.5
+with `CODEX_REASONING_EFFORT_EXTRA_HIGH` and the fast service tier, while
+allowing environment overrides. Ona's current `codexSettings` surface exposes
+model, reasoning effort, and service tier; the visible context-window capacity
+is provided by the selected model rather than by a separate launcher-side
+window-size knob. This API path is not accepted until a task-bound readback
+from `AgentService/GetAgentExecution` proves `spec.agentId` is the configured
+Codex agent id and `spec.codexSettings` or `status.codexSettings` is present.
 `.github/workflows/ona-platform-codex-probe.yml` runs the same probe inside
 GitHub Actions with repository `ONA_TOKEN` access. Its default `discover` mode
 only proves token/API policy readback and resolves organization context from
@@ -310,6 +314,15 @@ id, Codex settings, `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`,
 conversation URLs, and token-usage readback. `status.outputs` was still empty,
 so the next edge must be a task-bound Platform Codex implementation session
 that writes durable workspace/branch/PR evidence, not another launch canary.
+.github/workflows/ona-platform-codex-probe.yml now has an explicit
+`implementation-canary` mode for that edge. It sends a docs-only task prompt to
+the accepted AgentService Codex execution, requires the session to push only
+`docs/agent-factory-canaries/<task>.md` on a task-bound branch, then
+`scripts/dev/fetch-platform-codex-canary.mjs` combines the AgentService API
+readback with the remote branch head commit and canary markers into the normal
+`.minelink-dev/reports/ona-codex-implementation-session.md` file. The canary
+file alone is not accepted readback, because the final `Commit:` marker comes
+from the GitHub branch head fetched by the workflow.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform

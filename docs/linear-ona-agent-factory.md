@@ -342,6 +342,7 @@ Required environment:
 GITPOD_API_KEY or ONA_TOKEN          Ona personal access token
 MINELINK_ONA_CODEX_AGENT_ID          Codex app agent id, never the default agent id
 MINELINK_ONA_PROJECT_ID              Ona project id, defaults to the MineLink project
+MINELINK_ONA_CODEX_REASONING_EFFORT  Optional override; default is EXTRA_HIGH
 ```
 
 The script refuses to omit `agentId` and refuses the known default automation
@@ -353,6 +354,10 @@ only the programmatic Platform Codex launch/readback edge. It does not satisfy
 the implementation readback, video verifier, PR, CI, or product acceptance
 gates until the task-bound Codex session performs the work and writes the
 normal `.minelink-dev/reports/ona-codex-implementation-session.md`.
+The launcher uses the model's available context window and defaults the
+configurable reasoning effort to `CODEX_REASONING_EFFORT_EXTRA_HIGH`; no
+separate launcher-side context-window-size field is currently part of the
+accepted `codexSettings` contract.
 GitHub Actions can run the same probe through
 `.github/workflows/ona-platform-codex-probe.yml`. Use `mode=discover` to prove
 the repository `ONA_TOKEN` can read Ona policy/API state. Use
@@ -403,6 +408,19 @@ finalizer checks the existing artifacts and finalizes status/PR output without
 re-rendering the MP4. If
 `.minelink-dev/reports/artifacts/video-review.md` is missing or does not
 declare `Verifier: Ona Platform Codex`, the automation must fail before release.
+
+For the current implementation-edge pilot, the supported bounded task is
+`implementation-canary` in `.github/workflows/ona-platform-codex-probe.yml`.
+It launches the configured Codex app agent through AgentService, sends a
+docs-only prompt that may change only
+`docs/agent-factory-canaries/<task>.md`, waits for the task branch to appear on
+GitHub, and then runs `scripts/dev/fetch-platform-codex-canary.mjs`. The fetch
+script is the canonical bridge: it requires the AgentService API readback to
+show the configured Codex agent id plus `codexSettings`, requires the canary
+file markers to match task, branch, session id, and docs validation, and writes
+`.minelink-dev/reports/ona-codex-implementation-session.md` with the fetched
+branch head as `Commit:`. The canary markdown file by itself is not accepted
+implementation readback and this mode does not count as product acceptance.
 Before validation or PR finalization, the CLI automation also requires an
 implementation-session readback at:
 

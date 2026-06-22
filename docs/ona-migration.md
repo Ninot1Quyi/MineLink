@@ -162,6 +162,12 @@ MineLink uses automation to reduce agent memory load:
   Codex settings, `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`, conversation
   URLs, and token-usage counters. It is not implementation or video-verifier
   evidence because the readback did not expose structured `status.outputs`.
+  `implementation-canary` mode is the bounded next edge: the workflow sends a
+  docs-only task to the same AgentService Codex path, waits for a task-bound
+  GitHub branch containing `docs/agent-factory-canaries/<task>.md`, and uses
+  `scripts/dev/fetch-platform-codex-canary.mjs` to write the canonical
+  implementation readback with the fetched branch head commit. This only proves
+  `platform_codex_launch -> implementation_codex` for the canary task.
 - `.ona/automations.yaml` defines Ona-native environment tasks.
 - `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
   finalizer that should be started by manual pilot, GitHub dispatch, or Linear

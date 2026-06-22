@@ -31,6 +31,7 @@
     "agent-factory:chain": "node scripts/dev/report-agent-factory-chain.mjs",
     "agent-factory:dispatch": "node scripts/dev/dispatch-agent-factory.mjs",
     "agent-factory:start-codex": "node scripts/dev/start-ona-platform-codex.mjs",
+    "agent-factory:fetch-codex-canary": "node scripts/dev/fetch-platform-codex-canary.mjs",
     "agent-factory:setup-linear": "node scripts/dev/setup-linear-agent-factory.mjs",
     "agent-factory:watch-linear": "node scripts/dev/watch-linear-agent-tasks.mjs"
   },

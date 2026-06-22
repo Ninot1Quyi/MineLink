@@ -802,6 +802,18 @@ Current status:
   `status.outputs`, so this upgrades only the `platform_codex_launch` chain
   edge; the downstream implementation session, validation, acceptance MP4
   review, PR finalization, and status writeback remain unaccepted.
+  The next probe slice adds `implementation-canary` mode to
+  `.github/workflows/ona-platform-codex-probe.yml`. That mode sends a
+  docs-only task to the accepted AgentService Codex execution, expects the
+  session to push only `docs/agent-factory-canaries/<task>.md` on a
+  task-bound branch, and then runs
+  `scripts/dev/fetch-platform-codex-canary.mjs` to combine the API readback,
+  remote branch head commit, and canary markers into the canonical
+  `.minelink-dev/reports/ona-codex-implementation-session.md`. This is still
+  chain handoff evidence only; it does not prove a MineLink product feature,
+  video review, PR release, or `product-accepted` gate. The canary file alone
+  must not be used as the final readback because the canonical `Commit:` value
+  is the fetched branch head.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only
