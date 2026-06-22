@@ -762,7 +762,10 @@ must not be the default automated path when external video storage is
 configured, because default automation should not commit video binaries to the
 repository evidence branch. These PR-visible links are review convenience only;
 the video producer metadata still decides whether an artifact is GitHub canary
-evidence or final Ona task evidence. Video-required tasks must
+evidence or final Ona task evidence. Full-chain dispatches must pass the task's
+validation scope and scenarios through to the Ona finalizer; they must not
+silently downgrade a `neoforge` issue to `docs` or `none` before video
+rendering. Video-required tasks must
 then send a verifier request back to the current Ona Platform Codex
 implementation execution. That implementation
 session must launch a bounded native Codex verifier subagent rather than

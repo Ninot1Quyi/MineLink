@@ -954,7 +954,9 @@ Current status:
   `.github/workflows/ona-platform-codex-probe.yml` in `full-chain-canary` mode
   for the accepted issue task. This is the current bridge from a GitHub issue
   source event into the already guarded Platform Codex/video/PR/CI/status
-  canary chain.
+  canary chain. It must pass the issue-derived `validationScope` and
+  `scenarios` into the full-chain workflow so NeoForge-required tasks produce
+  NeoForge-backed video evidence instead of a docs-only finalizer run.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

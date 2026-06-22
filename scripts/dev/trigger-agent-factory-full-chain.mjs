@@ -14,6 +14,8 @@ const defaults = {
   branchWaitSeconds: "300",
   ciWaitSeconds: "900",
   prBaseBranch: process.env.MINELINK_PR_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
+  validationScope: process.env.MINELINK_VALIDATION_SCOPE ?? "",
+  scenarios: process.env.MINELINK_SCENARIOS ?? "",
   output: ".minelink-dev/reports/agent-factory-full-chain-trigger.md",
   jsonOutput: ".minelink-dev/reports/agent-factory-full-chain-trigger.json",
 };
@@ -35,6 +37,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--branch-wait-seconds") args.branchWaitSeconds = readValue();
   else if (arg === "--ci-wait-seconds") args.ciWaitSeconds = readValue();
   else if (arg === "--pr-base-branch") args.prBaseBranch = readValue();
+  else if (arg === "--validation-scope") args.validationScope = readValue();
+  else if (arg === "--scenarios") args.scenarios = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--dry-run") dryRun = true;
@@ -105,6 +109,8 @@ const branch = dispatch.branch || `codex/${taskId}`;
 const title = dispatch.prTitle || `Advance ${taskId}`;
 const githubIssue = dispatch.githubIssue || "none";
 const linearIssue = dispatch.linearIssue || "none";
+const validationScope = args.validationScope || dispatch.validationScope || dispatch.validation_scope || "docs";
+const scenarios = args.scenarios || dispatch.scenarios || "none";
 
 const workflowArgs = [
   "workflow",
@@ -132,6 +138,10 @@ const workflowArgs = [
   `github_issue=${githubIssue}`,
   "-f",
   `linear_issue=${linearIssue}`,
+  "-f",
+  `validation_scope=${validationScope}`,
+  "-f",
+  `scenarios=${scenarios}`,
   "-f",
   "create_pr=true",
   "-f",
@@ -199,6 +209,8 @@ const report = {
   branch,
   githubIssue,
   linearIssue,
+  validationScope,
+  scenarios,
   prTitle: title,
   runId,
   runUrl,
@@ -217,6 +229,8 @@ const lines = [
   `- Branch: \`${branch}\``,
   `- GitHub issue: ${githubIssue}`,
   `- Linear issue: \`${linearIssue}\``,
+  `- Validation scope: \`${validationScope}\``,
+  `- Scenarios: \`${scenarios}\``,
   `- PR title: \`${title}\``,
   `- Workflow run: ${runUrl || "best-effort-unavailable"}`,
   "",

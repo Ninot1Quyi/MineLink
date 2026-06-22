@@ -138,6 +138,9 @@ MineLink uses automation to reduce agent memory load:
   releasable when it contains at least one scenario report and shows task
   evidence, command/timeline context, and terminal log excerpts; `Reports: 0`
   placeholder videos are blocked by the release gate.
+- Full-chain dispatch must carry the issue's validation scope and scenario list
+  into the Ona finalizer. A `real-neoforge-required` or `neoforge` task must not
+  be finalized with `docs`/`none` because that would produce non-game evidence.
 - `scripts/dev/prepare-video-review-request.mjs` turns the current summary and
   MP4 hashes into a verifier handoff file for the same-session Ona Platform
   Codex verifier subagent.

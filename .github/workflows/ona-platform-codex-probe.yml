@@ -85,6 +85,14 @@ on:
         description: GitHub PR check rollup wait seconds for create_pr=true
         required: false
         default: "900"
+      validation_scope:
+        description: Finalizer validation scope for full-chain canaries
+        required: false
+        default: docs
+      scenarios:
+        description: Comma-separated scenarios for finalizer validation
+        required: false
+        default: none
 
 permissions:
   contents: write
@@ -221,6 +229,8 @@ jobs:
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
           INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
           INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
+          INPUT_SCENARIOS: ${{ inputs.scenarios || 'none' }}
         run: |
           task_id="${MINELINK_PLATFORM_CODEX_TASK_ID:-${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}}"
           target_branch="${MINELINK_PLATFORM_CODEX_TARGET_BRANCH:-${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}}"
@@ -244,8 +254,8 @@ jobs:
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
             --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
             --pr-title "${INPUT_PR_TITLE:-Advance ${task_id}}" \
-            --validation-scope docs \
-            --scenarios none \
+            --validation-scope "${INPUT_VALIDATION_SCOPE:-docs}" \
+            --scenarios "${INPUT_SCENARIOS:-none}" \
             --video-producer ona-task-finalizer \
             --required-video-producer ona-task-finalizer
 
@@ -334,6 +344,8 @@ jobs:
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
           INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
           INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
+          INPUT_SCENARIOS: ${{ inputs.scenarios || 'none' }}
           MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
           MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
           MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
@@ -355,8 +367,8 @@ jobs:
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
             --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
             --pr-title "${INPUT_PR_TITLE:-Advance ${MINELINK_PLATFORM_CODEX_TASK_ID}}" \
-            --validation-scope docs \
-            --scenarios none \
+            --validation-scope "${INPUT_VALIDATION_SCOPE:-docs}" \
+            --scenarios "${INPUT_SCENARIOS:-none}" \
             --run-id "$GITHUB_RUN_ID" \
             --video-producer ona-task-finalizer \
             --required-video-producer ona-task-finalizer \
@@ -388,6 +400,7 @@ jobs:
           INPUT_PR_TITLE: ${{ inputs.pr_title }}
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
           INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
         run: |
           pr_title="${INPUT_PR_TITLE:-Advance ${MINELINK_PLATFORM_CODEX_TASK_ID}}"
           node scripts/dev/create-agent-factory-pr.mjs \
@@ -398,7 +411,7 @@ jobs:
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
             --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
             --acceptance-gate unspecified \
-            --validation-scope docs
+            --validation-scope "${INPUT_VALIDATION_SCOPE:-docs}"
           pr_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/agent-factory-pr.json','utf8')); console.log(report.prUrl || '')")"
           if [ -z "$pr_url" ]; then
             echo "create-agent-factory-pr did not report a PR URL."
