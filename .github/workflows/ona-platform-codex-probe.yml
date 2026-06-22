@@ -63,6 +63,11 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install acceptance video renderer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
       - name: Install Ona CLI
         run: |
           tmp_ona="$(mktemp)"

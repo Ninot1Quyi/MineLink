@@ -625,10 +625,11 @@ node scripts/dev/prepare-video-review-request.mjs --require-mp4
 The script writes a trace-driven
 `.minelink-dev/reports/artifacts/acceptance-summary.md` and
 `.minelink-dev/reports/artifacts/acceptance.mp4`. GitHub's real NeoForge
-workflow installs `ffmpeg` and requires the MP4 before uploading evidence, so
-missing video support is a workflow failure instead of a silent `.unavailable`
-artifact. This artifact is a review visualization, not proof of client GUI
-perception and not a gate-status upgrade. Video-required tasks must then run a
+workflow and the Ona Platform Codex probe workflow install `ffmpeg` and require
+the MP4 before uploading evidence, so missing video support is a workflow
+failure instead of a silent `.unavailable` artifact. This artifact is a review
+visualization, not proof of client GUI perception and not a gate-status
+upgrade. Video-required tasks must then run a
 separate Ona Platform Codex verifier. The review request generator writes
 `.minelink-dev/reports/artifacts/video-review-request.md` with the current
 summary/MP4 paths, hashes, and exact verifier markers. The verifier must inspect
