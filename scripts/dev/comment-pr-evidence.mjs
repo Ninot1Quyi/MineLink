@@ -51,7 +51,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
 
 Upserts a PR comment that links to the GitHub artifact containing
 .minelink-dev/reports/artifacts/acceptance.mp4 and, by default, requires a
-playable GitHub video URL. This is a review-surface helper only; it does not
+playable MP4 URL. This is a review-surface helper only; it does not
 alter acceptance gate status.`);
     process.exit(0);
   } else {
@@ -95,14 +95,19 @@ function marker() {
 
 function body() {
   const shortSha = hasValue(args.headSha) ? args.headSha.slice(0, 12) : "none";
+  const inlineVideoUrl = args.rawVideoUrl || args.videoUrl;
   return [
     marker(),
     "MineLink PR video evidence:",
     "",
+    inlineVideoUrl ? "Inline MP4:" : "",
+    inlineVideoUrl ? "" : "",
+    inlineVideoUrl ? `<video src="${inlineVideoUrl}" controls width="720"></video>` : "",
+    inlineVideoUrl ? "" : "",
     `- Workflow: \`${args.workflowName || "unknown"}\``,
     `- Commit: \`${shortSha}\``,
     `- Run: ${args.runUrl || "none"}`,
-    `- Playable video on GitHub: ${args.videoUrl || "not published"}`,
+    `- Playable video URL: ${args.videoUrl || "not published"}`,
     `- Raw video URL: ${args.rawVideoUrl || "not published"}`,
     hasValue(args.artifactUrl)
       ? `- Artifact: [${args.artifactName}](${args.artifactUrl})`

@@ -54,24 +54,25 @@ jobs:
         run: node scripts/dev/render-acceptance-video.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --pr-url "$MINELINK_PR_URL" --require-mp4
         env:
           MINELINK_PR_URL: ${{ github.event.pull_request.html_url || github.server_url }}
-      - name: Publish playable PR video evidence
-        id: publish-video
+      - name: Upload PR video evidence to external storage
+        id: upload-video-storage
         if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}
-          MINELINK_ARTIFACT_NAME: minelink-dev-evidence
-          MINELINK_WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: github-actions
+          MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
+          MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
+          MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
+          MINELINK_VIDEO_STORAGE_BUCKET: ${{ vars.MINELINK_VIDEO_STORAGE_BUCKET }}
+          MINELINK_VIDEO_PUBLIC_BASE_URL: ${{ vars.MINELINK_VIDEO_PUBLIC_BASE_URL }}
+          MINELINK_VIDEO_STORAGE_PREFIX: ${{ vars.MINELINK_VIDEO_STORAGE_PREFIX }}
+          MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID: ${{ secrets.MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID }}
+          MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY }}
         run: |
-          node scripts/dev/publish-pr-video-evidence.mjs \
-            --repository "$GITHUB_REPOSITORY" \
-            --pr "$MINELINK_PR_NUMBER" \
-            --artifact-name "$MINELINK_ARTIFACT_NAME" \
+          node scripts/dev/upload-acceptance-video-storage.mjs \
+            --task-id "pr-${MINELINK_PR_NUMBER}" \
+            --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
             --run-id "$GITHUB_RUN_ID" \
-            --run-url "$MINELINK_WORKFLOW_RUN_URL" \
-            --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
-            --require-video
+            --require-upload
       - uses: actions/upload-artifact@v4
         id: upload-evidence
         if: always()
@@ -80,7 +81,7 @@ jobs:
           path: .minelink-dev/
           include-hidden-files: true
       - name: Comment PR video evidence
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.upload-evidence.outputs.artifact-url != '' && steps.publish-video.outputs.video-url != ''
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.upload-evidence.outputs.artifact-url != '' && steps.upload-video-storage.outputs.video-url != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -97,8 +98,8 @@ jobs:
             --artifact-name "$MINELINK_ARTIFACT_NAME" \
             --artifact-id "$MINELINK_ARTIFACT_ID" \
             --artifact-url "$MINELINK_ARTIFACT_URL" \
-            --video-url "${{ steps.publish-video.outputs.video-url }}" \
-            --raw-video-url "${{ steps.publish-video.outputs.raw-video-url }}" \
+            --video-url "${{ steps.upload-video-storage.outputs.video-url }}" \
+            --raw-video-url "${{ steps.upload-video-storage.outputs.raw-video-url }}" \
             --run-url "$MINELINK_WORKFLOW_RUN_URL" \
             --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
             --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY"

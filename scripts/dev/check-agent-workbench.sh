@@ -68,6 +68,7 @@ require_file "scripts/dev/dispatch-agent-factory.mjs"
 require_file "scripts/dev/check-video-review.mjs"
 require_file "scripts/dev/prepare-video-review-request.mjs"
 require_file "scripts/dev/render-acceptance-video.mjs"
+require_file "scripts/dev/upload-acceptance-video-storage.mjs"
 require_file "scripts/dev/cleanup-ona-resources.mjs"
 require_file "scripts/dev/report-agent-factory-chain.mjs"
 require_file "scripts/dev/run-ona-finalizer-artifacts.mjs"
@@ -313,7 +314,9 @@ require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "injectedSourceScript
 require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "overwriteSourceScript"
 require_text "scripts/dev/publish-pr-video-evidence.mjs" "minelink-evidence"
 require_text "scripts/dev/publish-pr-video-evidence.mjs" "Playable video file"
-require_text "scripts/dev/comment-pr-evidence.mjs" "Playable video on GitHub"
+require_text "scripts/dev/upload-acceptance-video-storage.mjs" "MINELINK_VIDEO_STORAGE_PROVIDER"
+require_text "scripts/dev/upload-acceptance-video-storage.mjs" "MINELINK_VIDEO_PUBLIC_BASE_URL"
+require_text "scripts/dev/comment-pr-evidence.mjs" "Playable video URL"
 require_text "scripts/dev/comment-pr-evidence.mjs" "minelink-pr-video-evidence"
 require_text "scripts/dev/report-agent-factory-chain.mjs" "automation-chain evidence only"
 require_text "scripts/dev/report-agent-factory-chain.mjs" "First Blocking Edge"
@@ -350,9 +353,9 @@ require_text ".github/workflows/ona-platform-codex-probe.yml" "--producer \"\$MI
 require_text ".github/workflows/ona-platform-codex-probe.yml" "MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Cleanup Ona task environments"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "cleanup-ona-resources.mjs"
-require_text ".github/workflows/ona-platform-codex-probe.yml" "Publish playable canary PR video"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "Upload canary PR video to external storage"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Comment canary PR video evidence"
-require_text ".github/workflows/ona-platform-codex-probe.yml" "publish-pr-video-evidence.mjs"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "upload-acceptance-video-storage.mjs"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "comment-pr-evidence.mjs"
 require_text ".ona/automations.yaml" "ona-task-finalizer"
 require_text ".ona/automations.yaml" "--require-producer"
@@ -364,9 +367,11 @@ require_text "scripts/dev/summarize-evidence.mjs" "Acceptance Boundary"
 require_text "scripts/dev/summarize-evidence.mjs" "GITHUB_STEP_SUMMARY"
 require_text "scripts/dev/sync-github-status.mjs" "GitHub status writeback"
 require_text "scripts/dev/sync-github-status.mjs" 'issues/${target.number}/comments'
-require_text ".github/workflows/ci.yml" "Publish playable PR video evidence"
+require_text ".github/workflows/ci.yml" "Upload PR video evidence to external storage"
+require_text ".github/workflows/ci.yml" "upload-acceptance-video-storage.mjs"
 require_text ".github/workflows/ci.yml" "comment-pr-evidence.mjs"
-require_text ".github/workflows/minecraft-neoforge.yml" "Publish playable PR video evidence"
+require_text ".github/workflows/minecraft-neoforge.yml" "Upload PR video evidence to external storage"
+require_text ".github/workflows/minecraft-neoforge.yml" "upload-acceptance-video-storage.mjs"
 require_text ".github/workflows/minecraft-neoforge.yml" "comment-pr-evidence.mjs"
 require_text "scripts/dev/sync-linear-status.mjs" "LINEAR_API_KEY"
 require_text "scripts/dev/trigger-agent-factory-full-chain.mjs" "mode=full-chain-canary"
@@ -440,6 +445,7 @@ PY
     "scripts/dev/check-video-review.mjs" \
     "scripts/dev/prepare-video-review-request.mjs" \
     "scripts/dev/render-acceptance-video.mjs" \
+    "scripts/dev/upload-acceptance-video-storage.mjs" \
     "scripts/dev/report-agent-factory-chain.mjs" \
     "scripts/dev/fetch-platform-codex-video-verifier.mjs" \
     "scripts/dev/summarize-evidence.mjs" \

@@ -235,7 +235,7 @@ Each card should show or link:
 - Branch.
 - PR.
 - CI run.
-- Acceptance video artifact.
+- Acceptance video URL and artifact bundle.
 - Blocker or remaining gaps.
 
 Linear webhook integration is not enabled by this repository alone. Until an
@@ -487,8 +487,14 @@ reviewed commit, summary hash, MP4 hash, and video producer, writes
 `check-video-review.mjs --require-mp4` create the release gate. If the canary
 path already exists from an earlier run, the fetch script polls until the file
 contains the current Goal-mode execution id, reviewed commit, and artifact
-hashes; stale branch content is a timeout failure, not release evidence. This is still
-automation-chain evidence only; it does not prove product acceptance. When a
+hashes; stale branch content is a timeout failure, not release evidence. This
+is still automation-chain evidence only; it does not prove product acceptance.
+After the release gate, the workflow uploads the MP4 with
+`scripts/dev/upload-acceptance-video-storage.mjs` and writes the public MP4 URL
+into the PR through `scripts/dev/comment-pr-evidence.mjs`. GitHub Actions
+artifacts remain the raw evidence bundle; the default chain must not commit the
+video binary to the repository evidence branch when external storage is
+configured. When a
 canary run renders the MP4 on the GitHub runner, the artifact origin must say
 `github-actions-canary`; that video is acceptable for chain testing only. Final
 task acceptance requires an Ona-produced video artifact, with
@@ -800,6 +806,20 @@ node scripts/dev/check-video-review.mjs --require-mp4
 If the implementation and video do not match the task, the verifier must write
 `Release decision: fail` or omit the pass markers, stop publication, and return
 the task for another implementation iteration.
+
+After the release gate passes, publish the MP4 for PR review:
+
+```bash
+node scripts/dev/upload-acceptance-video-storage.mjs --provider r2 --require-upload
+node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --video-url URL --artifact-url URL
+```
+
+`MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID` and
+`MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY` must be configured only as GitHub or
+Ona secrets. Non-secret settings such as provider, endpoint, bucket, public base
+URL, and prefix can be repository or Ona variables. A GitHub Actions artifact
+URL is still included for the evidence zip, but it is not the playable review
+surface.
 
 ## Remaining Gaps
 

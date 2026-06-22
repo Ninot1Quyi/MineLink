@@ -16,6 +16,7 @@ on:
       - scripts/dev/check-platform-codex-evidence.mjs
       - scripts/dev/wait-agent-factory-pr-ci.mjs
       - scripts/dev/sync-github-status.mjs
+      - scripts/dev/upload-acceptance-video-storage.mjs
       - scripts/dev/publish-pr-video-evidence.mjs
       - scripts/dev/comment-pr-evidence.mjs
       - scripts/dev/check-agent-workbench.sh
@@ -423,26 +424,29 @@ jobs:
             --require-platform-codex-implementation \
             --require-platform-codex-verifier
 
-      - name: Publish playable canary PR video
-        id: publish-video
+      - name: Upload canary PR video to external storage
+        id: upload-video-storage
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
-          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer
+          MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
+          MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
+          MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
+          MINELINK_VIDEO_STORAGE_BUCKET: ${{ vars.MINELINK_VIDEO_STORAGE_BUCKET }}
+          MINELINK_VIDEO_PUBLIC_BASE_URL: ${{ vars.MINELINK_VIDEO_PUBLIC_BASE_URL }}
+          MINELINK_VIDEO_STORAGE_PREFIX: ${{ vars.MINELINK_VIDEO_STORAGE_PREFIX }}
+          MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID: ${{ secrets.MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID }}
+          MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY }}
         run: |
           pr_number="$(node -e "const url=process.env.MINELINK_AGENT_FACTORY_PR_URL||''; const m=url.match(/\\/pull\\/(\\d+)/); console.log(m?m[1]:'')")"
           if [ -z "$pr_number" ]; then
             echo "Could not parse PR number from $MINELINK_AGENT_FACTORY_PR_URL"
             exit 1
           fi
-          node scripts/dev/publish-pr-video-evidence.mjs \
-            --repository "$GITHUB_REPOSITORY" \
-            --pr "$pr_number" \
-            --artifact-name minelink-ona-platform-codex-probe \
+          node scripts/dev/upload-acceptance-video-storage.mjs \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "${INPUT_TARGET_BRANCH:-${GITHUB_REF_NAME}}" \
             --run-id "$GITHUB_RUN_ID" \
-            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
-            --require-video
+            --require-upload
 
       - name: Cleanup Ona task environments
         if: always()
@@ -465,7 +469,7 @@ jobs:
           include-hidden-files: true
 
       - name: Comment canary PR video evidence
-        if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.publish-video.outputs.video-url != '' }}
+        if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.upload-video-storage.outputs.video-url != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
           MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer
@@ -482,8 +486,8 @@ jobs:
             --artifact-name minelink-ona-platform-codex-probe \
             --artifact-id "${{ steps.upload-probe-evidence.outputs.artifact-id }}" \
             --artifact-url "${{ steps.upload-probe-evidence.outputs.artifact-url }}" \
-            --video-url "${{ steps.publish-video.outputs.video-url }}" \
-            --raw-video-url "${{ steps.publish-video.outputs.raw-video-url }}" \
+            --video-url "${{ steps.upload-video-storage.outputs.video-url }}" \
+            --raw-video-url "${{ steps.upload-video-storage.outputs.raw-video-url }}" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
             --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY"

@@ -727,13 +727,18 @@ the MP4 before uploading evidence, so missing video support is a workflow
 failure instead of a silent `.unavailable` artifact. This artifact is a review
 visualization, not proof of client GUI perception and not a gate-status
 upgrade. Pull request workflows call
-`scripts/dev/publish-pr-video-evidence.mjs` to copy `acceptance.mp4` to the
-dedicated `minelink-evidence` branch, then call
+`scripts/dev/upload-acceptance-video-storage.mjs` to upload `acceptance.mp4` to
+the configured S3-compatible video store, currently Cloudflare R2 via
+`MINELINK_VIDEO_STORAGE_*` settings, then call
 `scripts/dev/comment-pr-evidence.mjs` after artifact upload so reviewers can
-open a GitHub file page that plays the MP4 directly from the PR. The uploaded
-artifact remains the raw evidence bundle. These PR-visible links are review
-convenience only; the video producer metadata still decides whether an artifact
-is GitHub canary evidence or final Ona task evidence. Video-required tasks must
+open or embed the public MP4 URL from the PR. The GitHub Actions artifact
+remains the raw evidence bundle. The older
+`scripts/dev/publish-pr-video-evidence.mjs` path is a manual fallback only and
+must not be the default automated path when external video storage is
+configured, because default automation should not commit video binaries to the
+repository evidence branch. These PR-visible links are review convenience only;
+the video producer metadata still decides whether an artifact is GitHub canary
+evidence or final Ona task evidence. Video-required tasks must
 then send a verifier request back to the current Ona Platform Codex
 implementation execution. That implementation
 session must launch a bounded native Codex verifier subagent rather than

@@ -200,17 +200,24 @@ evidence paths; the fetch steps wait for the current Goal-mode session markers,
 reviewed commit, and artifact hashes before releasing instead of accepting stale
 branch files.
 
-For PR review visibility, CI can publish the rendered MP4 to a dedicated
-GitHub evidence branch and update the PR with a playable GitHub file-page link:
+For PR review visibility, CI uploads the rendered MP4 to the configured
+S3-compatible video store and updates the PR with the public MP4 URL:
 
 ```bash
-node scripts/dev/publish-pr-video-evidence.mjs --repository owner/repo --pr 123 --require-video
+node scripts/dev/upload-acceptance-video-storage.mjs --provider r2 --require-upload
 node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --artifact-url URL --video-url URL
 ```
 
-The PR comment helper now requires a playable GitHub video URL by default. Use
-`--allow-artifact-only` only for local debugging, not for automated PR evidence
-comments.
+The storage uploader reads `MINELINK_VIDEO_STORAGE_PROVIDER`,
+`MINELINK_VIDEO_STORAGE_ENDPOINT`, `MINELINK_VIDEO_STORAGE_REGION`,
+`MINELINK_VIDEO_STORAGE_BUCKET`, `MINELINK_VIDEO_PUBLIC_BASE_URL`,
+`MINELINK_VIDEO_STORAGE_PREFIX`, `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID`, and
+`MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY`. The access key and secret must live
+only in GitHub/Ona secrets. The PR comment helper now requires a playable MP4
+URL by default. Use `--allow-artifact-only` only for local debugging, not for
+automated PR evidence comments. The legacy `publish-pr-video-evidence.mjs`
+GitHub evidence-branch path is a manual fallback only when external storage is
+not available.
 The playable link is for review ergonomics. It does not make a GitHub canary
 video equivalent to final Ona task acceptance.
 

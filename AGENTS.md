@@ -232,6 +232,11 @@ Reports must distinguish:
   Platform Codex verifier must compare the task requirements against the
   summary/video and write `video-review.md`. `check-video-review.mjs` must pass
   before publishing or merging the video evidence.
+- PR-visible acceptance videos should be uploaded to the configured external
+  video store through `scripts/dev/upload-acceptance-video-storage.mjs` and
+  linked from `scripts/dev/comment-pr-evidence.mjs`. Do not make the GitHub
+  evidence branch the default storage path for video binaries when external
+  storage is configured.
 - Do not leak GitHub tokens, admission tokens, Microsoft credentials,
   OpenAI/API keys, EULA files, or server secrets.
 
