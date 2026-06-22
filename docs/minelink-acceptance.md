@@ -795,8 +795,9 @@ Current status:
   does not replace the task-bound implementation and verifier readback files
   required by the finalizer. The launcher now ignores stopped historical Ona
   environments unless `MINELINK_ONA_ENVIRONMENT_ID` explicitly names one; without
-  a running environment it sends project context so Ona can schedule a fresh task
-  environment from the completed project/prebuild baseline. GitHub Actions run
+  a running environment, canary workflows create a task environment from the
+  completed project/prebuild baseline and wait for it to reach running before
+  calling `StartAgent`. GitHub Actions run
   `27928149039` proved the
   repository-secret `ONA_TOKEN` path, policy readback, `StartAgent`,
   `SendToAgentExecution`, and `GetAgentExecution` for the allowed Codex app

@@ -306,11 +306,15 @@ the logged-in Ona CLI config. When no explicit
 environment. Otherwise it auto-selects only a currently running MineLink
 environment; stopped historical task environments are ignored so new Codex tasks
 fall back to `projectId` and let Ona create or schedule a fresh environment from
-the project baseline. The API treats `projectId` and `environmentId` as a oneof
-context, so the probe sends only `environmentId` when a usable running
-environment is available. Its `identity-canary` mode is required to prove
-programmatic Codex launch and still needs a real `MINELINK_ONA_CODEX_AGENT_ID`
-or workflow input for the Codex app agent id.
+the project baseline. Because `StartAgent` reports that in-environment agents
+require environment context, canary workflows pass `--create-environment` when
+they need a fresh task context: the launcher creates an Ona environment from the
+project, waits until machine and devcontainer phases are running, then passes
+that environment id to `StartAgent`. The API treats `projectId` and
+`environmentId` as a oneof context, so the probe sends only `environmentId`
+after a usable running environment is available. Its `identity-canary` mode is
+required to prove programmatic Codex launch and still needs a real
+`MINELINK_ONA_CODEX_AGENT_ID` or workflow input for the Codex app agent id.
 While this pilot branch is active, push-triggered probe runs use
 `identity-canary` so launch proof can be collected before the workflow exists
 on the default branch; this still does not count as task implementation

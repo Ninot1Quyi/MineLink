@@ -11,6 +11,9 @@ const defaults = {
   organizationId: process.env.MINELINK_ONA_ORGANIZATION_ID ?? "",
   projectId: process.env.MINELINK_ONA_PROJECT_ID ?? DEFAULT_PROJECT_ID,
   environmentId: process.env.MINELINK_ONA_ENVIRONMENT_ID ?? "",
+  environmentName: process.env.MINELINK_ONA_ENVIRONMENT_NAME ?? "",
+  environmentWaitSeconds: Number(process.env.MINELINK_ONA_ENVIRONMENT_WAIT_SECONDS ?? 600),
+  environmentPollSeconds: Number(process.env.MINELINK_ONA_ENVIRONMENT_POLL_SECONDS ?? 10),
   sessionId: process.env.MINELINK_ONA_SESSION_ID ?? "",
   codexAgentId: process.env.MINELINK_ONA_CODEX_AGENT_ID ?? "",
   taskId: process.env.MINELINK_TASK_ID ?? "manual",
@@ -38,6 +41,7 @@ let startAgent = false;
 let sendPrompt = true;
 let dryRun = false;
 let promptMode = "";
+let createEnvironment = process.env.MINELINK_ONA_CREATE_ENVIRONMENT === "1";
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -53,6 +57,10 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--organization-id") args.organizationId = readValue();
   else if (arg === "--project-id") args.projectId = readValue();
   else if (arg === "--environment-id") args.environmentId = readValue();
+  else if (arg === "--environment-name") args.environmentName = readValue();
+  else if (arg === "--environment-wait-seconds") args.environmentWaitSeconds = Number(readValue());
+  else if (arg === "--environment-poll-seconds") args.environmentPollSeconds = Number(readValue());
+  else if (arg === "--create-environment") createEnvironment = true;
   else if (arg === "--session-id") args.sessionId = readValue();
   else if (arg === "--codex-agent-id") args.codexAgentId = readValue();
   else if (arg === "--task-id") args.taskId = readValue();
@@ -93,6 +101,8 @@ Options:
   --codex-agent-id <uuid>      Required for --start; also read from MINELINK_ONA_CODEX_AGENT_ID.
   --project-id <uuid>          Ona project id. Defaults to the MineLink project id.
   --organization-id <uuid>     Ona organization id for --discover-policies.
+  --environment-id <uuid>      Explicit running Ona environment id for in-environment agents.
+  --create-environment         Create and poll a fresh task environment before StartAgent.
   --dry-run                    Validate inputs and write the request body without API calls.
 
 Environment:
@@ -379,6 +389,103 @@ function discoverRunningEnvironmentId(projectId) {
   }
 }
 
+function environmentName() {
+  const base = args.environmentName || `minelink-${pathSegment(args.taskId)}-${pathSegment(args.commit)}`;
+  return base.slice(0, 80);
+}
+
+function extractEnvironmentId(output) {
+  const text = String(output ?? "").trim();
+  if (!text) return "";
+  try {
+    const parsed = JSON.parse(text);
+    const record = Array.isArray(parsed) ? parsed[0] : parsed;
+    if (hasValue(record?.id)) return record.id;
+  } catch {
+    // Fall back to CLI text output.
+  }
+  return text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? "";
+}
+
+function firstRecord(value) {
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function getEnvironment(environmentId) {
+  const result = run("ona", ["environment", "get", environmentId, "-o", "json"]);
+  if (result.status !== 0) {
+    const err = new Error(`ona environment get ${environmentId} failed: ${sanitize(result.stderr || result.stdout)}`);
+    err.status = result.status;
+    throw err;
+  }
+  return firstRecord(JSON.parse(result.stdout));
+}
+
+async function waitForRunningEnvironment(environmentId) {
+  const attempts = [];
+  const deadline = Date.now() + args.environmentWaitSeconds * 1000;
+  let latest = null;
+  do {
+    latest = getEnvironment(environmentId);
+    attempts.push({
+      at: new Date().toISOString(),
+      phase: environmentPhase(latest),
+      machinePhase: latest?.status?.machine?.phase ?? "",
+      devcontainerPhase: latest?.status?.devcontainer?.phase ?? "",
+      contentPhase: latest?.status?.content?.phase ?? "",
+      branch: latest?.status?.content?.git?.branch ?? "",
+      prebuildId: latest?.metadata?.prebuildId ?? "",
+    });
+    if (isRunningEnvironment(latest) || Date.now() >= deadline || args.environmentWaitSeconds === 0) break;
+    await sleep(args.environmentPollSeconds * 1000);
+  } while (Date.now() < deadline);
+  return { latest, attempts };
+}
+
+async function createTaskEnvironment(report) {
+  const name = environmentName();
+  const result = run("ona", [
+    "environment",
+    "create",
+    args.projectId,
+    "--dont-wait",
+    "--name",
+    name,
+    "--timeout",
+    "60s",
+  ]);
+  if (result.status !== 0) {
+    throw new Error(`ona environment create failed: ${sanitize(result.stderr || result.stdout)}`);
+  }
+  const environmentId = extractEnvironmentId(result.stdout);
+  if (!hasValue(environmentId)) {
+    throw new Error(`ona environment create did not return an environment id: ${sanitize(result.stdout)}`);
+  }
+  args.environmentId = environmentId;
+  report.environmentId = environmentId;
+  report.environmentBootstrap.created = true;
+  report.environmentBootstrap.name = name;
+  report.environmentBootstrap.createOutput = sanitize(result.stdout);
+  report.steps.push("CreateEnvironment");
+
+  const { latest, attempts } = await waitForRunningEnvironment(environmentId);
+  report.steps.push("GetEnvironment");
+  report.environmentBootstrap.readback = latest;
+  report.environmentBootstrap.attempts = attempts;
+  const phase = environmentPhase(latest);
+  const machinePhase = latest?.status?.machine?.phase ?? "";
+  const prebuildId = latest?.metadata?.prebuildId ?? "";
+  report.evidence.push(`environment=${environmentId}`);
+  report.evidence.push(`environmentPhase=${phase || "missing"}`);
+  if (hasValue(machinePhase)) report.evidence.push(`environmentMachinePhase=${machinePhase}`);
+  if (hasValue(prebuildId)) report.evidence.push(`environmentPrebuild=${prebuildId}`);
+  if (!isRunningEnvironment(latest)) {
+    throw new Error(
+      `Created environment ${environmentId} did not reach running state before --environment-wait-seconds=${args.environmentWaitSeconds}: ${phase || "missing"}/${machinePhase || "missing"}.`,
+    );
+  }
+}
+
 function git(argsList) {
   const result = run("git", argsList);
   return result.status === 0 ? result.stdout.trim() : "";
@@ -389,7 +496,7 @@ const explicitEnvironmentId = hasValue(args.environmentId);
 if (!args.organizationId) args.organizationId = onaConfig.organizationId ?? "";
 if (!args.branch) args.branch = git(["rev-parse", "--abbrev-ref", "HEAD"]) || "unknown";
 if (!args.commit) args.commit = git(["rev-parse", "--short", "HEAD"]) || "unknown";
-if (!explicitEnvironmentId) args.environmentId = discoverRunningEnvironmentId(args.projectId);
+if (!explicitEnvironmentId && !createEnvironment) args.environmentId = discoverRunningEnvironmentId(args.projectId);
 
 async function readPrompt(context = {}) {
   if (hasValue(args.promptFile)) return fs.readFile(args.promptFile, "utf8");
@@ -493,11 +600,22 @@ function validateStartInputs(failures) {
   if (startAgent && !hasValue(args.projectId) && !hasValue(args.environmentId)) {
     failures.push("StartAgent requires --project-id or --environment-id in codeContext.");
   }
+  if (startAgent && !hasValue(args.environmentId) && !createEnvironment) {
+    failures.push(
+      "Ona Platform Codex is an in-environment agent; no running environment was discovered. Pass --create-environment or --environment-id before StartAgent.",
+    );
+  }
   if (!Number.isFinite(args.waitSeconds) || args.waitSeconds < 0) {
     failures.push("--wait-seconds must be a non-negative number.");
   }
   if (!Number.isFinite(args.pollSeconds) || args.pollSeconds < 1) {
     failures.push("--poll-seconds must be at least 1.");
+  }
+  if (!Number.isFinite(args.environmentWaitSeconds) || args.environmentWaitSeconds < 0) {
+    failures.push("--environment-wait-seconds must be a non-negative number.");
+  }
+  if (!Number.isFinite(args.environmentPollSeconds) || args.environmentPollSeconds < 1) {
+    failures.push("--environment-poll-seconds must be at least 1.");
   }
   if (promptMode === "implementation-canary" || promptMode === "video-verifier-canary") {
     if (!hasValue(args.taskId) || ["manual", "unknown"].includes(String(args.taskId).trim().toLowerCase())) {
@@ -609,6 +727,14 @@ const report = {
   evidence: [],
   requests: {},
   policies: null,
+  environmentBootstrap: {
+    createRequested: createEnvironment,
+    explicitEnvironmentId,
+    created: false,
+    name: "",
+    attempts: [],
+    readback: null,
+  },
   agentExecutionId: args.readbackExecution || "",
   readback: null,
   readbackAttempts: [],
@@ -626,6 +752,15 @@ if (discoverPolicies && !hasValue(args.organizationId)) {
 if (startAgent || shouldSendPromptToExistingExecution()) validateStartInputs(failures);
 
 if (failures.length === 0 && dryRun) {
+  const previousEnvironmentId = args.environmentId;
+  if (startAgent && createEnvironment && !hasValue(args.environmentId)) {
+    report.requests.createEnvironment = {
+      projectId: args.projectId,
+      name: environmentName(),
+      dontWait: true,
+    };
+    args.environmentId = "<createdEnvironmentId>";
+  }
   if (startAgent) report.requests.startAgent = startBody();
   if (startAgent && sendPrompt) {
     report.requests.sendPrompt = sendBody(
@@ -645,6 +780,8 @@ if (failures.length === 0 && dryRun) {
   if (args.readbackExecution) {
     report.requests.getAgentExecution = { agentExecutionId: args.readbackExecution };
   }
+  args.environmentId = previousEnvironmentId;
+  report.environmentId = args.environmentId;
   report.result = "dry-run";
   report.evidence.push("Request bodies generated without API calls.");
 } else if (failures.length === 0) {
@@ -664,6 +801,9 @@ if (failures.length === 0 && dryRun) {
     }
 
     if (startAgent) {
+      if (createEnvironment && !hasValue(args.environmentId)) {
+        await createTaskEnvironment(report);
+      }
       const started = await post("gitpod.v1.AgentService/StartAgent", startBody());
       report.steps.push("StartAgent");
       report.agentExecutionId = started.agentExecutionId ?? "";
@@ -740,6 +880,24 @@ const lines = [
   "## Evidence",
   "",
   ...(report.evidence.length > 0 ? report.evidence.map((item) => `- ${escapeMd(item)}`) : ["- none"]),
+  "",
+  "## Environment Bootstrap",
+  "",
+  `- Create requested: ${code(report.environmentBootstrap.createRequested ? "yes" : "no")}`,
+  `- Explicit environment id: ${code(report.environmentBootstrap.explicitEnvironmentId ? "yes" : "no")}`,
+  `- Created environment: ${code(report.environmentBootstrap.created ? "yes" : "no")}`,
+  `- Environment name: ${code(report.environmentBootstrap.name)}`,
+  ...(report.environmentBootstrap.attempts.length > 0
+    ? [
+        "",
+        "| at | phase | machine | devcontainer | branch | prebuild |",
+        "| --- | --- | --- | --- | --- | --- |",
+        ...report.environmentBootstrap.attempts.map(
+          (attempt) =>
+            `| ${escapeMd(attempt.at)} | ${escapeMd(attempt.phase)} | ${escapeMd(attempt.machinePhase)} | ${escapeMd(attempt.devcontainerPhase)} | ${escapeMd(attempt.branch)} | ${escapeMd(attempt.prebuildId)} |`,
+        ),
+      ]
+    : []),
   "",
   "## Blockers",
   "",
