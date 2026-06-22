@@ -6,6 +6,9 @@ const defaults = {
   implementationReadback: ".minelink-dev/reports/ona-codex-implementation-session.md",
   verifierReadback: ".minelink-dev/reports/ona-codex-video-verifier-session.md",
   output: ".minelink-dev/reports/platform-codex-evidence.md",
+  taskId: process.env.MINELINK_TASK_ID ?? "",
+  branch: process.env.MINELINK_BRANCH ?? "",
+  commit: process.env.MINELINK_COMMIT ?? "",
 };
 
 const args = { ...defaults };
@@ -20,6 +23,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--implementation-readback") args.implementationReadback = readValue();
   else if (arg === "--verifier-readback") args.verifierReadback = readValue();
   else if (arg === "--output") args.output = readValue();
+  else if (arg === "--task-id") args.taskId = readValue();
+  else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--commit") args.commit = readValue();
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/check-platform-codex-evidence.mjs [--implementation] [--verifier]
 
@@ -28,6 +34,9 @@ Fails unless the requested Ona Platform Codex readback files identify:
 Agent mode: Ona Platform Codex
 Session id: <Ona session id>
 Result: passed
+Task id: <expected task id>
+Branch: <expected branch>
+Commit: <expected commit>
 
 This is a fail-closed guard for the MineLink factory finalizer.
 Generic Ona automation, SSH, task, or default-agent output must not satisfy it.`);
@@ -84,6 +93,17 @@ function resultPassed(text) {
   return /^(passed|pass|completed|complete|succeeded|success)$/i.test(result);
 }
 
+function expectedValuePresent(value) {
+  return hasValue(value) && !["unknown", "manual"].includes(String(value).trim().toLowerCase());
+}
+
+function commitMatches(actual, expected) {
+  if (!hasValue(actual) || !hasValue(expected)) return false;
+  const actualText = String(actual).trim();
+  const expectedText = String(expected).trim();
+  return actualText === expectedText || expectedText.startsWith(actualText) || actualText.startsWith(expectedText);
+}
+
 async function checkReadback(label, filePath) {
   const stat = await statFile(filePath);
   const text = await readText(filePath);
@@ -115,6 +135,33 @@ async function checkReadback(label, filePath) {
     evidence.push(`${label} result passed`);
   }
 
+  const taskId = markerValue(text, ["Task id", "Task"]);
+  if (expectedValuePresent(args.taskId)) {
+    if (taskId !== args.taskId) {
+      failures.push(`${label} readback Task id mismatch: expected ${args.taskId}, got ${taskId || "missing"}`);
+    } else {
+      evidence.push(`${label} task id matches ${args.taskId}`);
+    }
+  }
+
+  const branch = markerValue(text, "Branch");
+  if (expectedValuePresent(args.branch)) {
+    if (branch !== args.branch) {
+      failures.push(`${label} readback Branch mismatch: expected ${args.branch}, got ${branch || "missing"}`);
+    } else {
+      evidence.push(`${label} branch matches ${args.branch}`);
+    }
+  }
+
+  const commit = markerValue(text, "Commit");
+  if (expectedValuePresent(args.commit)) {
+    if (!commitMatches(commit, args.commit)) {
+      failures.push(`${label} readback Commit mismatch: expected ${args.commit}, got ${commit || "missing"}`);
+    } else {
+      evidence.push(`${label} commit matches ${args.commit}`);
+    }
+  }
+
   return { failures, evidence };
 }
 
@@ -135,6 +182,9 @@ const lines = [
   "",
   `- Implementation required: \`${requireImplementation ? "yes" : "no"}\``,
   `- Video verifier required: \`${requireVerifier ? "yes" : "no"}\``,
+  `- Expected task id: \`${args.taskId || "none"}\``,
+  `- Expected branch: \`${args.branch || "none"}\``,
+  `- Expected commit: \`${args.commit || "none"}\``,
   `- Result: \`${failures.length === 0 ? "passed" : "failed"}\``,
   "- Boundary: `Ona Platform Codex readback only; Generic Ona automation evidence is not accepted`",
   "",

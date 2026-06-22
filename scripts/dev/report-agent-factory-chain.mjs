@@ -211,6 +211,51 @@ function readbackPassed(text) {
   return /^(passed|pass|completed|complete|succeeded|success)$/i.test(result);
 }
 
+function expectedValuePresent(value) {
+  return hasValue(value) && !["unknown", "manual"].includes(String(value).trim().toLowerCase());
+}
+
+function commitMatches(actual, expected) {
+  if (!hasValue(actual) || !hasValue(expected)) return false;
+  const actualText = String(actual).trim();
+  const expectedText = String(expected).trim();
+  return actualText === expectedText || expectedText.startsWith(actualText) || actualText.startsWith(expectedText);
+}
+
+function readbackMatchesExpected(text, expected) {
+  const failures = [];
+  const evidence = [];
+  const taskId = markerValue(text, ["Task id", "Task"]);
+  const branch = markerValue(text, "Branch");
+  const commit = markerValue(text, "Commit");
+
+  if (expectedValuePresent(expected.taskId)) {
+    if (taskId !== expected.taskId) {
+      failures.push(`Task id mismatch: expected ${expected.taskId}, got ${taskId || "missing"}`);
+    } else {
+      evidence.push(`Task id: ${expected.taskId}`);
+    }
+  }
+
+  if (expectedValuePresent(expected.branch)) {
+    if (branch !== expected.branch) {
+      failures.push(`Branch mismatch: expected ${expected.branch}, got ${branch || "missing"}`);
+    } else {
+      evidence.push(`Branch: ${expected.branch}`);
+    }
+  }
+
+  if (expectedValuePresent(expected.commit)) {
+    if (!commitMatches(commit, expected.commit)) {
+      failures.push(`Commit mismatch: expected ${expected.commit}, got ${commit || "missing"}`);
+    } else {
+      evidence.push(`Commit: ${expected.commit}`);
+    }
+  }
+
+  return { passed: failures.length === 0, failures, evidence };
+}
+
 function escapeMd(value) {
   return String(value ?? "")
     .replaceAll("|", "\\|")
@@ -445,12 +490,17 @@ const prebuildStatus = normalizeStatus(args.onaPrebuildStatus) !== "missing"
     : "missing";
 const implementationSessionId = readbackSessionId(args.onaImplementationSession, implementationReadbackText);
 const implementationAgentAccepted = readbackAgentAccepted(args.onaImplementationAgent, implementationReadbackText);
+const implementationReadbackBound = readbackMatchesExpected(implementationReadbackText, {
+  taskId: args.taskId,
+  branch: args.branch,
+  commit: args.commit,
+});
 const implementationRequestedStatus = normalizeStatus(args.onaImplementationStatus);
 const implementationClaimsPassed = implementationRequestedStatus === "passed" || readbackPassed(implementationReadbackText);
 const implementationStatus = codexAuthFailed
   ? "blocked"
   : implementationClaimsPassed
-    ? implementationAgentAccepted && hasValue(implementationSessionId)
+    ? implementationAgentAccepted && hasValue(implementationSessionId) && implementationReadbackBound.passed
       ? "passed"
       : "blocked"
     : implementationReadbackInfo || hasValue(implementationSessionId)
@@ -467,13 +517,18 @@ const verifierSessionId = readbackSessionId(args.onaVerifierSession, verifierRea
 const verifierAgentAccepted =
   readbackAgentAccepted(args.onaVerifierAgent, verifierReadbackText) ||
   /Verifier:\s*Ona Platform Codex/im.test(reviewText);
+const verifierReadbackBound = readbackMatchesExpected(verifierReadbackText, {
+  taskId: args.taskId,
+  branch: args.branch,
+  commit: args.commit,
+});
 const verifierClaimsPassed =
   normalizeStatus(args.onaVerifierStatus) === "passed" ||
   readbackPassed(verifierReadbackText) ||
   (reviewInfo && /Release decision:\s*pass/im.test(reviewText));
 const verifierStatus = mp4Status === "passed"
   ? verifierClaimsPassed
-    ? verifierAgentAccepted && hasValue(verifierSessionId)
+    ? verifierAgentAccepted && hasValue(verifierSessionId) && verifierReadbackBound.passed
       ? "passed"
       : "blocked"
     : reviewInfo || verifierReadbackInfo || hasValue(verifierSessionId)
@@ -498,9 +553,9 @@ const statusSyncStatus = ciStatus === "passed" && hasValue(args.githubStatusUrl)
 const codexBlocker = codexAuthFailed
   ? "Ona Platform Codex rejected the LLM request as unauthenticated before repository commands could run."
   : implementationStatus === "blocked"
-    ? `Implementation evidence must identify Agent mode: Ona Platform Codex, Session id, and Result: passed in ${args.onaImplementationReadback}; generic Ona automation, task, or agent evidence is not accepted.`
+    ? `Implementation evidence must identify Agent mode: Ona Platform Codex, Session id, Result: passed, Task id, Branch, and Commit in ${args.onaImplementationReadback}; generic Ona automation, task, stale readback, wrong branch, or default-agent evidence is not accepted.${implementationReadbackBound.failures.length ? ` ${implementationReadbackBound.failures.join(" ")}` : ""}`
     : implementationStatus === "missing"
-      ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Session id, and Result: passed.`
+      ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Session id, Result: passed, Task id, Branch, and Commit.`
     : "";
 const globalBlocker = args.blocker || codexBlocker;
 const prebuildBlocker =
@@ -533,6 +588,7 @@ const nodes = [
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
+    ...implementationReadbackBound.evidence,
     implementationReadbackInfo && args.onaImplementationReadback,
   ], codexBlocker),
   mkNode("branch_commit", "Branch and commit produced", branchStatus, [
@@ -549,9 +605,10 @@ const nodes = [
   mkNode("video_verifier", "Dedicated video verifier", verifierStatus, [
     verifierSessionId && `Verifier session: ${verifierSessionId}`,
     verifierAgentAccepted && "Agent mode: Ona Platform Codex",
+    ...verifierReadbackBound.evidence,
     verifierReadbackInfo && args.onaVerifierReadback,
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback} and approve the current acceptance artifacts.` : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
   mkNode("release_gate", "Video release gate", releaseStatus, [
     releaseInfo && args.videoReleaseGate,
   ], releaseStatus === "blocked" ? "Video release gate failed or hashes do not match." : ""),
@@ -612,6 +669,7 @@ const rawEdges = [
     ...automationExecutionEvidence,
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
+    ...implementationReadbackBound.evidence,
     implementationReadbackInfo && args.onaImplementationReadback,
   ], nodeStatus.ona_automation === "blocked" ? globalBlocker : codexBlocker),
   mkEdge("implementation_codex", "branch_commit", implementationStatus === "passed" ? nodeStatus.branch_commit : "blocked", [
@@ -625,7 +683,7 @@ const rawEdges = [
   ]),
   mkEdge("acceptance_video", "video_verifier", edgeStatus(nodeStatus.video_verifier), [
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback} and approve the current acceptance artifacts.` : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
   mkEdge("video_verifier", "release_gate", edgeStatus(nodeStatus.release_gate), [
     releaseInfo && args.videoReleaseGate,
   ]),

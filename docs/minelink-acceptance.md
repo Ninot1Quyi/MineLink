@@ -725,17 +725,20 @@ Current status:
   snapshotting. This is the current accepted Ona prebuild baseline evidence.
 - `scripts/dev/check-platform-codex-evidence.mjs` is the evidence check for Ona
   Platform Codex readbacks, and `scripts/dev/run-agent-factory-stage.mjs` is
-  the Ona finalizer wrapper. The checked-in Ona AI automation now enters once
-  through `scripts/dev/run-agent-factory-stage.mjs --stage all`; the wrapper
-  still runs the guarded stage list sequentially and writes per-stage reports.
-  Missing implementation or verifier readback writes
+  the Ona finalizer wrapper. The checked-in Ona AI automation now runs four
+  ordered steps: an Ona Platform Codex implementation agent, an
+  `implementation-finalize` task, a separate Ona Platform Codex video-verifier
+  agent, and a `release-finalize` task. The grouped task wrappers still run
+  guarded stage lists sequentially and write per-stage reports. Missing
+  implementation or verifier readback, stale readback, or readback bound to the
+  wrong task/branch/commit writes
   `platform-codex-evidence.md` plus an
   `agent-factory-stage-<stage>.md` blocked report and exits 0 so the Ona
   execution can terminate with readable evidence instead of lingering in a
-  failed Codex task loop. The wrapper still skips validation, video release,
-  Linear final status, PR creation, and final chain reporting until the
-  required Platform Codex readbacks pass. This is automation-chain evidence
-  only and does not upgrade MineLink product gates.
+  failed Codex task loop. The wrappers still skip validation, acceptance video
+  rendering, video release, Linear final status, PR creation, and final chain
+  reporting until the required Platform Codex readbacks pass. This is
+  automation-chain evidence only and does not upgrade MineLink product gates.
 - `.devcontainer/devcontainer.json` now uses
   `ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering` as
   the default image and uses `scripts/dev/bootstrap-prebuild.sh --light` for
@@ -747,7 +750,8 @@ Current status:
   rendering plus video-review request preparation and a separate video-release
   check.
   `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
-  finalizer for Linear status sync, verification, evidence summaries, video
+  implementation/verifier handoff plus guarded finalizers for Linear status
+  sync, verification, evidence summaries, acceptance video rendering, video
   review request preparation, release gating, and PR creation after the
   implementation work is performed by Ona Platform Codex and the MP4 is
   reviewed by a separate Platform Codex verifier.
@@ -755,9 +759,10 @@ Current status:
   `scripts/dev/report-agent-factory-chain.mjs` can read accepted implementation
   evidence from `.minelink-dev/reports/ona-codex-implementation-session.md`.
   The readback must identify `Agent mode: Ona Platform Codex`, a `Session id`,
-  and `Result: passed`; generic Ona automation, SSH, task, stale local artifact,
-  or default-agent output is not accepted for the implementation edge. The
-  separate video verifier must likewise provide
+  `Result: passed`, `Task id`, `Branch`, and `Commit`; generic Ona automation,
+  SSH, task, stale local artifact, wrong branch, wrong commit, or default-agent
+  output is not accepted for the implementation edge. The separate video
+  verifier must likewise provide task/branch/commit-bound
   `.minelink-dev/reports/ona-codex-video-verifier-session.md` in addition to
   the hash-checked `video-review.md` and release gate.
 - `.github/workflows/agent-factory-dispatch.yml` provides the repository source
@@ -820,8 +825,8 @@ Current status:
   the Ona execution was still running. Direct Ona readback showed execution
   `019eec8e-b2d5-7d05-8197-ce41b7f8ec48` finished about 4m43s after start with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED` and `failedActionCount=0`. The
-  dispatcher readback window is now 600 seconds, and the Ona AI automation uses
-  a single `--stage all` task to reduce repeated task scheduling overhead while
+  dispatcher readback window is now 600 seconds. That follow-up used a single
+  `--stage all` task to reduce repeated task scheduling overhead while
   preserving per-stage fail-closed evidence reports.
   GitHub Actions run `27921514822` proved that follow-up path on commit
   `6c642e8`: issue #7 dispatch completed in about 1m13s, Ona execution
@@ -831,6 +836,11 @@ Current status:
   The resulting chain report was still correctly blocked at
   `ona_automation -> implementation_codex` because no accepted
   `.minelink-dev/reports/ona-codex-implementation-session.md` was present.
+  The current factory slice replaces that pure-task finalizer with the
+  four-step implementation/verifier agent flow plus task-bound readback checks.
+  This is still not product-accepted until a real dispatch proves the
+  implementation agent, validation, MP4, separate verifier, release gate, PR,
+  CI, and status writeback edges end to end.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.
@@ -999,9 +1009,9 @@ Not yet accepted as full product:
 - Multi-agent social runtime.
 - Director UI/service.
 - Installer.
-- Ona Platform Codex end-to-end task execution remains blocked at automated
-  implementation-session launch/readback. Recent Ona evidence shows a Codex
-  Exec Agent can start in the prepared environment, but no accepted
-  implementation session has written the required
-  `.minelink-dev/reports/ona-codex-implementation-session.md` readback.
+- Ona Platform Codex end-to-end task execution is not yet accepted. The
+  automation now includes implementation and verifier `agent` steps plus
+  task/branch/commit-bound readback gates, but a real remote canary still must
+  prove the full issue -> implementation agent -> validation -> MP4 -> separate
+  verifier -> release gate -> PR -> CI/status chain without manual repair.
 - Long release-length soak/stability run on real Minecraft.

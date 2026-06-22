@@ -23,12 +23,25 @@ const allStages = [
   "sync-in-progress",
   "validate",
   "summarize",
+  "render-video",
   "prepare-video",
   "check-video-release",
   "sync-in-review",
   "create-pr",
   "final-report",
 ];
+const groupedStages = {
+  "implementation-finalize": [
+    "initial-report",
+    "sync-in-progress",
+    "validate",
+    "summarize",
+    "render-video",
+    "prepare-video",
+  ],
+  "release-finalize": ["check-video-release", "sync-in-review", "create-pr", "final-report"],
+  all: allStages,
+};
 
 const args = { ...defaults };
 
@@ -54,9 +67,16 @@ Runs one MineLink Ona finalizer stage. Missing Ona Platform Codex evidence is
 recorded as a blocked stage and exits 0 so Ona automation terminates with a
 readable report instead of staying in a long-running failed task loop.
 
+Use --stage implementation-finalize to run validation, evidence summary,
+acceptance video rendering, and video-review request preparation after the
+implementation Platform Codex readback exists.
+
+Use --stage release-finalize to run video release, status sync, PR creation,
+and final reporting after both implementation and verifier readbacks exist.
+
 Use --stage all to run every guarded finalizer stage inside one Ona task. This
 keeps the evidence gates per stage while avoiding repeated Ona/Codex task
-scheduling overhead.`);
+scheduling overhead in manual diagnostics.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -113,6 +133,15 @@ function run(command, commandArgs) {
 
 function node(script, scriptArgs = []) {
   return run(process.execPath, [script, ...scriptArgs]);
+}
+
+function git(argsList) {
+  const result = run("git", argsList);
+  return result.status === 0 ? result.stdout.trim() : "";
+}
+
+function currentCommit() {
+  return git(["rev-parse", "--short", "HEAD"]) || process.env.MINELINK_COMMIT || "";
 }
 
 function stageReportPath(stage) {
@@ -182,7 +211,15 @@ function runChain(status, requireVerifier = false) {
 }
 
 function checkGate({ verifier = false } = {}) {
-  const gateArgs = ["--implementation"];
+  const gateArgs = [
+    "--implementation",
+    "--task-id",
+    args.taskId,
+    "--branch",
+    args.branch || git(["rev-parse", "--abbrev-ref", "HEAD"]) || "",
+    "--commit",
+    currentCommit(),
+  ];
   if (verifier) gateArgs.push("--verifier");
   return node("scripts/dev/check-platform-codex-evidence.mjs", gateArgs);
 }
@@ -230,25 +267,29 @@ const commonSyncArgs = [
   "--require-update",
 ];
 
-if (args.stage === "all") {
+async function runStageGroup(groupName, stages) {
   const operations = [];
   const errors = [];
-  for (const stage of allStages) {
+  for (const stage of stages) {
     const stageResult = run(process.execPath, selfInvocationArgs(stage));
     operations.push(`Ran guarded stage ${stage} with exit ${stageResult.status ?? 1}.`);
     if (stageResult.status !== 0) {
       errors.push(`Stage ${stage} exited ${stageResult.status ?? 1}: ${sanitize(stageResult.stderr || stageResult.stdout)}`);
     }
   }
-  await writeStageReport("all", {
+  await writeStageReport(groupName, {
     result: errors.length === 0 ? "completed_guarded_stages" : "blocked",
     operations,
     errors,
     output:
-      "The all stage is a scheduling wrapper only. Inspect agent-factory-stage-<stage>.md and agent-factory-chain.md for accepted or blocked gate evidence.",
+      "This grouped stage is a scheduling wrapper only. Inspect agent-factory-stage-<stage>.md and agent-factory-chain.md for accepted or blocked gate evidence.",
   });
-  console.log(`Agent factory stage all wrote ${stageReportPath("all")}`);
+  console.log(`Agent factory stage ${groupName} wrote ${stageReportPath(groupName)}`);
   process.exit(errors.length === 0 ? 0 : 1);
+}
+
+if (groupedStages[args.stage]) {
+  await runStageGroup(args.stage, groupedStages[args.stage]);
 }
 
 switch (args.stage) {
@@ -300,6 +341,23 @@ switch (args.stage) {
       args.stage,
       process.execPath,
       ["scripts/dev/summarize-evidence.mjs"],
+      { requireImplementation: true },
+    );
+    break;
+  case "render-video":
+    await runCommandStage(
+      args.stage,
+      process.execPath,
+      [
+        "scripts/dev/render-acceptance-video.mjs",
+        "--task-id",
+        args.taskId,
+        "--branch",
+        args.branch || "unknown",
+        "--task-requirements",
+        "docs/minelink-acceptance.md",
+        "--require-mp4",
+      ],
       { requireImplementation: true },
     );
     break;

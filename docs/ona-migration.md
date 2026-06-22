@@ -194,15 +194,18 @@ EULA files.
 
 Ona Platform Codex is the target execution surface for implementation and video
 verification. `ona environment ssh` is only for debugging and readback. The
-checked-in Ona CLI automation is the validation/status/artifact-gate runner that
-executes after the Codex sessions have produced a branch, acceptance MP4, and,
-when video evidence is required, a dedicated video-review report. It does not
-re-render the MP4 after review. A valid validation pilot starts
+checked-in Ona CLI automation now contains the implementation and verifier
+`agent` handoff steps plus guarded task finalizers. The implementation agent
+must write task/branch/commit-bound Platform Codex readback before validation
+or acceptance video rendering can run; the verifier agent must write matching
+readback and `video-review.md` before release/PR finalization can run. The
+release finalizer does not re-render the MP4 after review. A valid validation
+pilot starts
 `ona/ai-automations/minelink-agent-factory.yaml` through:
 
 ```bash
 ona ai automation create ona/ai-automations/minelink-agent-factory.yaml
-ona ai automation start <automation-id> --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb --param task_id=gh-45 --param issue_url=https://github.com/Ninot1Quyi/MineLink/issues/45 --param linear_issue=NIN-7 --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 --param branch=codex/gh-45-short-task --param pr_title="Advance MineLink task gh-45" --param acceptance_gate="Gate 2" --param agent_instruction="Run a bounded validation pilot. Do not edit files unless validation fails." --param validation_scope=docs --param scenarios=none --wait
+ona ai automation start <automation-id> --project 019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb --param task_id=gh-45 --param linear_issue=NIN-7 --param github_issue=https://github.com/Ninot1Quyi/MineLink/issues/45 --param ona_automation=<automation-id> --param ona_project=019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb --param branch=codex/gh-45-short-task --param pr_title="Advance MineLink task gh-45" --param acceptance_gate="Gate 2" --param validation_scope=docs --param scenarios=none --wait
 ```
 
 When `linear_issue` is a real key, the Ona environment must have

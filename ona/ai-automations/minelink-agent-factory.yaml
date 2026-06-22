@@ -1,10 +1,10 @@
 name: minelink-agent-factory
 description: >
-  MineLink issue-to-PR validation factory. Use the Ona Platform Codex agent
-  for implementation and video review; this CLI automation only runs process
-  sync, validation, artifact, and PR steps. The video-review-request.md
-  artifact must be produced before the separate verifier session approves the
-  acceptance video.
+  MineLink issue-to-PR validation factory. The automation first asks an Ona
+  Platform Codex agent to do the bounded task and write the implementation
+  readback, runs guarded validation plus acceptance artifact preparation, asks
+  a separate Ona Platform Codex verifier to review the video, then runs the
+  guarded release and PR finalizer. Required mode: Ona Platform Codex agent.
 triggers:
   - context:
       projects:
@@ -16,10 +16,103 @@ action:
     maxParallel: 1
     maxTotal: 6
   steps:
+    - agent:
+        prompt: |
+          You are the MineLink implementation agent for task "{{ .Parameters.task_id }}".
+
+          Required execution surface:
+          - Use Ona Platform Codex, not the default Ona Agent.
+          - If this session is not running as Ona Platform Codex, or you cannot confirm that it is, write `.minelink-dev/reports/ona-codex-implementation-session.md` with `Result: blocked`, explain the blocker, and stop without claiming completion.
+
+          Task context:
+          - GitHub issue: {{ .Parameters.github_issue }}
+          - Linear issue: {{ .Parameters.linear_issue }}
+          - Branch: {{ .Parameters.branch }}
+          - PR title: {{ .Parameters.pr_title }}
+          - Acceptance gate: {{ .Parameters.acceptance_gate }}
+          - Required validation scope: {{ .Parameters.validation_scope }}
+          - Required scenarios: {{ .Parameters.scenarios }}
+
+          Required repository context:
+          - Read `AGENTS.md`, `ARCHITECTURE.md`, `docs/minelink-acceptance.md`, `docs/minelink-plan.md`, and `docs/minelink-mod-mcp-architecture.md` before editing.
+          - Keep MineLink anti-mock rules intact. Do not add oracle tools, `give`, `setBlock`, arbitrary NBT edits, hidden coordinate lookup, or synthetic outputs that bypass Minecraft/NeoForge authority.
+          - Agent behavior must stay bounded to public MCP tools and server-side validation.
+          - Do not commit secrets, tokens, `eula.txt`, credentials, or generated admission material.
+
+          Work procedure:
+          1. Inspect the linked task and confirm scope, forbidden changes, validation, evidence, acceptance-video requirement, and remaining gaps.
+          2. Check out or create the requested branch `{{ .Parameters.branch }}`.
+          3. Implement only the bounded task. If no product code change is needed, run the requested validation and leave the branch without unrelated edits.
+          4. Run `bash scripts/dev/verify-agent-task.sh --scope {{ .Parameters.validation_scope }} --scenarios {{ .Parameters.scenarios }}`. If the scope requires real NeoForge, use `MINELINK_ACCEPT_EULA=1` for development validation only and do not commit generated EULA files.
+          5. Commit and push meaningful completed changes when there are changes to deliver. Use English Lore commit messages and do not weaken tests or acceptance assertions.
+          6. Write `.minelink-dev/reports/ona-codex-implementation-session.md` with these exact markers:
+
+          ```text
+          Agent mode: Ona Platform Codex
+          Session id: <this Ona Codex session id or the closest platform-visible session id>
+          Result: passed
+          Task id: {{ .Parameters.task_id }}
+          Branch: {{ .Parameters.branch }}
+          Commit: <current git commit after implementation>
+          Validation: <commands run and pass/fail>
+          Evidence: <report paths and CI links if any>
+          Remaining gaps: <honest remaining product or chain gaps>
+          ```
+
+          If validation fails or the session cannot satisfy the required mode, write the same file with `Result: blocked` or `Result: failed` and explain the blocker. Do not write `Result: passed` unless the bounded implementation and required validation actually passed.
     - task:
         command: >
           node scripts/dev/run-agent-factory-stage.mjs
-          --stage all
+          --stage implementation-finalize
+          --task-id "{{ .Parameters.task_id }}"
+          --github-issue "{{ .Parameters.github_issue }}"
+          --linear-issue "{{ .Parameters.linear_issue }}"
+          --ona-project "{{ .Parameters.ona_project }}"
+          --ona-automation "{{ .Parameters.ona_automation }}"
+          --branch "{{ .Parameters.branch }}"
+          --pr-title "{{ .Parameters.pr_title }}"
+          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
+          --validation-scope "{{ .Parameters.validation_scope }}"
+          --scenarios "{{ .Parameters.scenarios }}"
+    - agent:
+        prompt: |
+          You are the separate MineLink acceptance-video verifier for task "{{ .Parameters.task_id }}".
+
+          Required execution surface:
+          - Use Ona Platform Codex, not the default Ona Agent.
+          - Do not edit product code, do not re-render the video, and do not change validation reports.
+          - If this verifier session is not running as Ona Platform Codex, or you cannot confirm that it is, write `.minelink-dev/reports/ona-codex-video-verifier-session.md` with `Result: blocked` and stop.
+
+          Review inputs:
+          - GitHub issue: {{ .Parameters.github_issue }}
+          - Linear issue: {{ .Parameters.linear_issue }}
+          - Branch: {{ .Parameters.branch }}
+          - Video review request: `.minelink-dev/reports/artifacts/video-review-request.md`
+          - Acceptance summary: `.minelink-dev/reports/artifacts/acceptance-summary.md`
+          - Acceptance MP4: `.minelink-dev/reports/artifacts/acceptance.mp4`
+
+          Procedure:
+          1. Read the linked task, `docs/minelink-acceptance.md`, the acceptance summary, the MP4 metadata/hash in `video-review-request.md`, and the validation reports referenced by the summary.
+          2. Decide whether the video and reports match the task requirements, validation commands, pass/fail assertions, and remaining gaps.
+          3. Write `.minelink-dev/reports/artifacts/video-review.md` using the exact markers requested by `video-review-request.md`, including `Verifier: Ona Platform Codex`, `Release decision: pass` only when the artifacts match, and the current summary/MP4 hashes.
+          4. Write `.minelink-dev/reports/ona-codex-video-verifier-session.md` with:
+
+          ```text
+          Agent mode: Ona Platform Codex
+          Session id: <this Ona Codex verifier session id or the closest platform-visible session id>
+          Result: passed
+          Task id: {{ .Parameters.task_id }}
+          Branch: {{ .Parameters.branch }}
+          Commit: <current git commit reviewed>
+          Evidence: .minelink-dev/reports/artifacts/video-review.md
+          Remaining gaps: <honest remaining product or chain gaps>
+          ```
+
+          If the artifacts do not match the task, write `Release decision: block` in `video-review.md`, write the verifier readback with `Result: blocked`, and explain the mismatch.
+    - task:
+        command: >
+          node scripts/dev/run-agent-factory-stage.mjs
+          --stage release-finalize
           --task-id "{{ .Parameters.task_id }}"
           --github-issue "{{ .Parameters.github_issue }}"
           --linear-issue "{{ .Parameters.linear_issue }}"

@@ -256,30 +256,35 @@ bounded `ona ai automation executions get` readback and write
 records the execution phase, session id when exposed, and `failedActionCount`.
 The default readback window is 600 seconds so guarded finalizer failures are
 captured as terminal `completed_with_failed_actions` evidence instead of
-misleading short-window `timed_out` evidence. The factory spec runs one Ona
-task that calls `scripts/dev/run-agent-factory-stage.mjs --stage all`; the
-script still writes per-stage reports and enforces the same evidence gates, but
-avoids paying repeated Ona/Codex task scheduling overhead for every finalizer
-stage. If Ona's Codex task layer reports a command failure in its conversation
-log but does not close the automation execution, the run is treated as a
-platform finalization blocker and the stale workflow environment should be
-cancelled after artifact capture. An execution that completes with failed
-actions proves the repository bridge reached Ona and the guarded finalizer ran,
-but it is still only partial chain evidence; the next accepted edge remains the
-separate Ona Platform Codex implementation session readback.
+misleading short-window `timed_out` evidence. The factory spec now uses four
+ordered steps: an Ona Platform Codex implementation `agent`, a guarded
+`implementation-finalize` task, a separate Ona Platform Codex verifier `agent`,
+and a guarded `release-finalize` task. The two task steps call
+`scripts/dev/run-agent-factory-stage.mjs`; that script still writes per-stage
+reports and enforces the same evidence gates, but avoids paying repeated
+Ona/Codex task scheduling overhead for every finalizer stage. If Ona's Codex
+task layer reports a command failure in its conversation log but does not close
+the automation execution, the run is treated as a platform finalization blocker
+and the stale workflow environment should be cancelled after artifact capture.
+An execution that completes with failed actions proves the repository bridge
+reached Ona and the guarded finalizer ran, but it is still only partial chain
+evidence; accepted implementation evidence requires the task-bound Platform
+Codex readback.
 
-The final flow should use the Ona Platform Codex agent option for implementation
+The final flow must use the Ona Platform Codex agent option for implementation
 and the separate video-verifier pass, not the default Ona Agent and not manual
 SSH. Manual `ona environment ssh` remains useful for debugging or verification,
-but it is not the product delivery path. The Ona UI can create Codex sessions
-for this project, and current project/environment metadata shows the
+but it is not the product delivery path. The checked-in `agent` prompts are
+fail-closed: if the session cannot confirm Ona Platform Codex, it must write a
+blocked readback and stop. The Ona UI can create Codex sessions for this
+project, and current project/environment metadata shows the
 `codex/minelink-mvp-engineering` clone target plus a project-scoped
-`codex_auth` secret. That proves the project can be prepared for UI-selected
-Codex work, but it is not enough to prove the automated chain unless the task
-run also records the specific Codex session or another readable provider-mode
-identifier. The finalizer must not re-render the MP4 after video review; it
-prepares the hash-based `video-review-request.md` from existing artifacts and
-then checks the existing artifact hashes. Linear status sync is handled by
+`codex_auth` secret. That proves the project can be prepared for Codex work,
+but it is not enough to prove the automated chain unless the task run records
+the specific Codex session or another readable provider-mode identifier. The
+implementation finalizer renders the trace-driven MP4 before the verifier runs;
+the release finalizer must not re-render the MP4 after video review. It checks
+the existing artifact hashes. Linear status sync is handled by
 `scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
 environment; the key must never be committed, passed as a parameter, or printed.
 If Ona repository webhooks are unavailable for the account, the GitHub Actions
@@ -302,21 +307,23 @@ When the baseline is available, the prebuild edge is considered ready; the
 first true blocker should then move to the automation-to-Platform-Codex handoff
 unless a concrete Codex session readback exists. The chain reporter and Ona
 finalizer require `.minelink-dev/reports/ona-codex-implementation-session.md`
-to identify `Agent mode: Ona Platform Codex`, a `Session id`, and
-`Result: passed` before validation or PR finalization can be treated as
-downstream evidence. Generic Ona automation, SSH, task, or default-agent output
-must not satisfy this implementation edge. The separate video-verifier session
-uses the same pattern through
+to identify `Agent mode: Ona Platform Codex`, a `Session id`,
+`Result: passed`, the current `Task id`, the expected `Branch`, and the current
+`Commit` before validation or PR finalization can be treated as downstream
+evidence. Generic Ona automation, SSH, task, stale readback, wrong branch, or
+default-agent output must not satisfy this implementation edge. The separate
+video-verifier session uses the same task/branch/commit-bound pattern through
 `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the
 hash-checked video review artifacts.
 `scripts/dev/check-platform-codex-evidence.mjs` is the fail-closed evidence
 check for these readbacks. The checked-in Ona finalizer enters once through
-`scripts/dev/run-agent-factory-stage.mjs --stage all`; that wrapper then runs
-the guarded stage list and writes `agent-factory-stage-<stage>.md` reports.
-Missing implementation or verifier evidence writes a blocked stage report and
-exits 0 so Ona can finish the automation with readable evidence instead of
-leaving a long-running failed Codex task. The wrapper only runs Linear sync,
-validation, evidence summary, video release, PR creation, and final chain
+`scripts/dev/run-agent-factory-stage.mjs --stage implementation-finalize` and
+then through `--stage release-finalize`; each grouped wrapper runs its guarded
+stage list and writes `agent-factory-stage-<stage>.md` reports. Missing
+implementation or verifier evidence writes a blocked stage report and exits 0
+so Ona can finish the automation with readable evidence instead of leaving a
+long-running failed Codex task. The wrappers only run Linear sync, validation,
+acceptance video rendering, video release, PR creation, and final chain
 reporting after the required Platform Codex readbacks pass, so generic
 automation output cannot satisfy later side effects. PR creation uses
 `scripts/dev/create-agent-factory-pr.mjs` and environment GitHub CLI
