@@ -256,16 +256,23 @@ bounded `ona ai automation executions get` readback and write
 records the execution phase, session id when exposed, and `failedActionCount`.
 The default readback window is 600 seconds so guarded finalizer failures are
 captured as terminal `completed_with_failed_actions` evidence instead of
-misleading short-window `timed_out` evidence. The factory spec now uses four
-ordered steps: an Ona Platform Codex implementation `agent`, a guarded
+misleading short-window `timed_out` evidence. The GitHub dispatcher passes
+`--cancel-ona-execution-on-timeout`; if the execution is still running after the
+bounded readback window, it requests `ona ai automation cancel-execution` and
+records the cancellation status in `.minelink-dev/reports/ona-automation-execution.md`.
+That cancellation prevents stale platform work from looking like an active
+agent task, but it remains only partial bridge evidence until a task-bound
+Platform Codex readback exists. The factory spec now uses four ordered steps:
+an Ona Platform Codex implementation `agent`, a guarded
 `implementation-finalize` task, a separate Ona Platform Codex verifier `agent`,
 and a guarded `release-finalize` task. The two task steps call
 `scripts/dev/run-agent-factory-stage.mjs`; that script still writes per-stage
 reports and enforces the same evidence gates, but avoids paying repeated
 Ona/Codex task scheduling overhead for every finalizer stage. If Ona's Codex
 task layer reports a command failure in its conversation log but does not close
-the automation execution, the run is treated as a platform finalization blocker
-and the stale workflow environment should be cancelled after artifact capture.
+the automation execution, the run is treated as a platform finalization blocker;
+the dispatcher timeout cancellation is the repository-side cleanup path after
+artifact capture.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform

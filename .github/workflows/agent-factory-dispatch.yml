@@ -87,6 +87,7 @@ jobs:
             --comment
             --require-ona
             --wait-ona-execution
+            --cancel-ona-execution-on-timeout
             --ona-execution-timeout-seconds 600
             --ona-execution-poll-seconds 5
           )
@@ -157,6 +158,7 @@ jobs:
             --require-key
             --require-ona
             --wait-ona-execution
+            --cancel-ona-execution-on-timeout
             --ona-execution-timeout-seconds 600
             --ona-execution-poll-seconds 5
           )

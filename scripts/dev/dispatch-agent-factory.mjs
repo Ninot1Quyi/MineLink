@@ -32,6 +32,7 @@ let requireOna = false;
 let allowBlocked = false;
 let comment = false;
 let waitOnaExecution = process.env.MINELINK_WAIT_ONA_EXECUTION === "1";
+let cancelOnaExecutionOnTimeout = process.env.MINELINK_CANCEL_ONA_EXECUTION_ON_TIMEOUT === "1";
 let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 600);
 let onaExecutionPollSeconds = Number(process.env.MINELINK_ONA_EXECUTION_POLL_SECONDS ?? 5);
 
@@ -59,6 +60,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-execution-output") args.onaExecutionOutput = readValue();
   else if (arg === "--ona-execution-json-output") args.onaExecutionJsonOutput = readValue();
   else if (arg === "--wait-ona-execution") waitOnaExecution = true;
+  else if (arg === "--cancel-ona-execution-on-timeout") cancelOnaExecutionOnTimeout = true;
   else if (arg === "--ona-execution-timeout-seconds") onaExecutionTimeoutSeconds = Number(readValue());
   else if (arg === "--ona-execution-poll-seconds") onaExecutionPollSeconds = Number(readValue());
   else if (arg === "--dry-run") dryRun = true;
@@ -282,6 +284,7 @@ function executionFailedActionCount(execution) {
 
 function classifyExecution(execution, readbackResult) {
   if (readbackResult === "timed_out") return "timed_out";
+  if (readbackResult === "timed_out_cancelled") return "timed_out_cancelled";
   if (readbackResult === "readback_failed") return "readback_failed";
   if (!execution) return "missing";
   if (!executionFinished(execution)) return "running";
@@ -298,6 +301,35 @@ function chainStatusFromExecutionResult(result) {
 
 function executionSessionId(execution) {
   return execution?.spec?.session ?? execution?.sessionID ?? execution?.sessionId ?? execution?.metadata?.sessionID ?? "";
+}
+
+function cancelOnaExecution(executionId) {
+  if (!executionId) {
+    return {
+      requested: false,
+      status: "skipped",
+      output: "",
+      error: "No execution id was available to cancel.",
+      execution: null,
+    };
+  }
+
+  const cancelResult = run("ona", ["ai", "automation", "cancel-execution", executionId]);
+  const cancellation = {
+    requested: true,
+    status: cancelResult.status === 0 ? "requested" : "failed",
+    output: sanitizeOutput(cancelResult.stdout),
+    error: sanitizeOutput(cancelResult.stderr),
+    execution: null,
+  };
+
+  const readback = run("ona", ["ai", "automation", "executions", "get", executionId, "--format", "json"]);
+  if (readback.status === 0) {
+    cancellation.execution = parseJsonRecord(readback.stdout);
+  } else if (!cancellation.error) {
+    cancellation.error = sanitizeOutput(readback.stderr || readback.stdout);
+  }
+  return cancellation;
 }
 
 async function sleep(seconds) {
@@ -336,7 +368,15 @@ async function readOnaExecution(executionId) {
     }
 
     if (Date.now() >= deadline) {
-      return { result: "timed_out", execution: lastExecution, readbacks, error: "" };
+      const cancellation = cancelOnaExecutionOnTimeout ? cancelOnaExecution(executionId) : null;
+      if (cancellation?.execution) lastExecution = cancellation.execution;
+      return {
+        result: cancellation ? "timed_out_cancelled" : "timed_out",
+        execution: lastExecution,
+        readbacks,
+        error: "",
+        cancellation,
+      };
     }
 
     await sleep(onaExecutionPollSeconds);
@@ -362,6 +402,8 @@ async function writeOnaExecutionReport(report) {
     `- Started: \`${report.startedAt || "unknown"}\``,
     `- Finished: \`${report.finishedAt || "unknown"}\``,
     `- Readback attempts: \`${report.readbacks.length}\``,
+    `- Cancel on timeout: \`${report.cancelOnTimeout ? "yes" : "no"}\``,
+    `- Cancellation status: \`${report.cancellation?.status ?? "none"}\``,
     "",
     "## Readbacks",
     "",
@@ -375,6 +417,19 @@ async function writeOnaExecutionReport(report) {
     "## Error",
     "",
     report.error ? ["```text", report.error, "```"].join("\n") : "- none",
+    "",
+    "## Cancellation",
+    "",
+    report.cancellation
+      ? [
+          `- Requested: \`${report.cancellation.requested ? "yes" : "no"}\``,
+          `- Status: \`${report.cancellation.status}\``,
+          report.cancellation.output ? ["", "Output:", "", "```text", report.cancellation.output, "```"].join("\n") : "",
+          report.cancellation.error ? ["", "Error:", "", "```text", report.cancellation.error, "```"].join("\n") : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "- none",
     "",
     "## Boundary",
     "",
@@ -443,6 +498,8 @@ if (failures.length === 0) {
           finishedAt: execution?.metadata?.finishedAt ?? "",
           readbacks: readback.readbacks,
           error: readback.error,
+          cancelOnTimeout: cancelOnaExecutionOnTimeout,
+          cancellation: readback.cancellation ?? null,
         };
         await writeOnaExecutionReport(onaExecutionReport);
       }

@@ -771,7 +771,11 @@ Current status:
   `scripts/dev/watch-linear-agent-tasks.mjs` to start the shared Ona
   automation, wait briefly for `ona ai automation executions get`, and write
   `.minelink-dev/reports/ona-automation-execution.{md,json}` when an execution
-  id is available. GitHub Actions run `27920128911` proved this GitHub issue
+  id is available. The workflow now also passes
+  `--cancel-ona-execution-on-timeout`, so a non-terminal Ona execution after the
+  bounded readback window is cancelled and recorded as `timed_out_cancelled`
+  instead of being left as a stale active task. GitHub Actions run `27920128911`
+  proved this GitHub issue
   entry path against issue #7: Ona execution
   `019eec65-c9d3-740c-ba01-2460c0b5bb24` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `failedActionCount=0`, session

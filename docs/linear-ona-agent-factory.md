@@ -129,6 +129,11 @@ MineLink validation failure.
 When readback is enabled, the dispatcher also writes
 `.minelink-dev/reports/ona-automation-execution.md` and JSON with the Ona
 execution phase, failed action count, exposed session id, and polling attempts.
+The GitHub/Linear dispatcher workflows enable `--cancel-ona-execution-on-timeout`
+so a run that stays non-terminal after the bounded readback window is cancelled
+through `ona ai automation cancel-execution` and recorded as
+`timed_out_cancelled`. That prevents stale Ona work from consuming the active
+task slot, but it is still only partial bridge evidence.
 If the execution finishes with failed actions, that is treated as partial bridge
 evidence: the dispatcher reached Ona and the guarded finalizer ran, but the
 chain must still stop at the missing Ona Platform Codex implementation readback

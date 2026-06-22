@@ -441,7 +441,7 @@ if (!hasValue(args.onaAutomationExecution) && hasValue(automationExecutionReport
 function statusFromAutomationExecutionReport(report) {
   const result = String(report?.result ?? "").trim().toLowerCase();
   if (result === "completed") return "passed";
-  if (["running", "timed_out", "completed_with_failed_actions"].includes(result)) return "partial";
+  if (["running", "timed_out", "timed_out_cancelled", "completed_with_failed_actions"].includes(result)) return "partial";
   if (result === "missing" || result === "") return "missing";
   return "blocked";
 }
@@ -454,6 +454,9 @@ const automationExecutionEvidence = automationExecutionReportInfo
       Number.isFinite(Number(automationExecutionReport?.failedActionCount)) &&
         `failedActionCount: ${Number(automationExecutionReport.failedActionCount)}`,
       hasValue(automationExecutionReport?.sessionId) && `Automation session: ${automationExecutionReport.sessionId}`,
+      automationExecutionReport?.cancelOnTimeout === true && "Timed-out execution cancellation was enabled",
+      automationExecutionReport?.cancellation?.status &&
+        `Cancellation status: ${automationExecutionReport.cancellation.status}`,
     ].filter(Boolean)
   : [];
 const automationExecutionWarning =
@@ -461,6 +464,12 @@ const automationExecutionWarning =
     ? "Ona automation execution finished with failed actions; the guarded finalizer stopped before downstream side effects."
     : automationExecutionReport?.result === "timed_out"
       ? "Ona automation execution readback timed out before a terminal phase."
+      : automationExecutionReport?.result === "timed_out_cancelled"
+        ? `Ona automation execution readback timed out and cancellation was requested${
+            automationExecutionReport?.cancellation?.status
+              ? ` (${automationExecutionReport.cancellation.status})`
+              : ""
+          }.`
       : "";
 
 const issueStatus = hasValue(args.githubIssue) ? "passed" : hasValue(args.linearIssue) ? "partial" : "missing";
@@ -796,6 +805,8 @@ const report = {
         phase: automationExecutionReport?.phase ?? "unknown",
         failedActionCount: automationExecutionReport?.failedActionCount ?? null,
         sessionId: automationExecutionReport?.sessionId ?? "",
+        cancelOnTimeout: automationExecutionReport?.cancelOnTimeout ?? false,
+        cancellation: automationExecutionReport?.cancellation ?? null,
       }
     : null,
   nextActions,

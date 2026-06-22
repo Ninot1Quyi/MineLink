@@ -213,6 +213,13 @@ When `linear_issue` is a real key, the Ona environment must have
 sync script writes `.minelink-dev/reports/linear-sync.md` without exposing the
 key value.
 
+GitHub Actions dispatcher runs wait for a bounded Ona execution readback and
+then pass `--cancel-ona-execution-on-timeout`. A timed-out execution is cancelled
+with `ona ai automation cancel-execution` and recorded as
+`timed_out_cancelled` in `.minelink-dev/reports/ona-automation-execution.md`.
+This is a stale-work cleanup guard, not implementation evidence; the chain still
+requires the separate Platform Codex implementation and video-verifier readbacks.
+
 `LINEAR_API_KEY` does not authenticate the Codex LLM provider. If the Ona UI
 shows `Codex authentication failed: the LLM request was rejected as
 unauthenticated`, treat the environment as not started: no repository commands
