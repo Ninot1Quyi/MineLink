@@ -464,7 +464,13 @@ After the draft PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits
 for the PR check rollup, writes
 `.minelink-dev/reports/agent-factory-pr-ci.{md,json}`, and the final chain
 refresh records the PR checks URL for the `pr -> ci` edge. The next downstream
-edge is Linear/GitHub status writeback, not product acceptance.
+edge is Linear/GitHub status writeback, not product acceptance. The
+`full-chain-canary` workflow now runs `scripts/dev/sync-github-status.mjs`
+after PR CI, comments the linked GitHub issue or PR with the final evidence
+paths, then runs `scripts/dev/sync-linear-status.mjs` for a linked Linear issue
+when `linear_issue` was supplied. The chain report treats absent sources as
+not-required: GitHub-only tasks need GitHub writeback, Linear-only tasks need
+Linear sync evidence, and linked GitHub+Linear tasks need both.
 Before validation or PR finalization, the CLI automation also requires an
 implementation-session readback at:
 

@@ -936,7 +936,15 @@ Current status:
   updated fail-closed remote factory can complete task-only wrappers without
   starting the disabled default Agent. This is still not product-accepted until
   a real dispatch proves implementation, validation, MP4, separate verifier,
-  release gate, PR, CI, and status writeback edges end to end.
+  release gate, PR, CI, and status writeback edges end to end. The current
+  follow-up adds `scripts/dev/sync-github-status.mjs` and the workflow
+  `Sync final canary status` step so a GitHub-only canary is no longer blocked
+  by an absent Linear issue; linked GitHub+Linear tasks still require both
+  writeback reports.
+- `scripts/dev/sync-github-status.mjs` writes
+  `.minelink-dev/reports/github-status.{md,json}` and comments the linked
+  GitHub issue or PR with the final chain evidence paths without exposing token
+  values.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

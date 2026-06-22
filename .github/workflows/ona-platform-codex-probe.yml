@@ -11,6 +11,7 @@ on:
       - scripts/dev/fetch-platform-codex-video-verifier.mjs
       - scripts/dev/check-agent-factory-secrets.mjs
       - scripts/dev/wait-agent-factory-pr-ci.mjs
+      - scripts/dev/sync-github-status.mjs
       - scripts/dev/check-agent-workbench.sh
   workflow_dispatch:
     inputs:
@@ -45,6 +46,9 @@ on:
       github_issue:
         description: Optional GitHub issue URL for implementation-canary mode
         required: false
+      linear_issue:
+        description: Optional Linear issue key for full-chain status writeback
+        required: false
       reviewed_commit:
         description: Reviewed commit for video-verifier-canary mode
         required: false
@@ -78,6 +82,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 jobs:
   probe:
@@ -135,6 +140,7 @@ jobs:
           INPUT_TASK_ID: ${{ inputs.task_id }}
           INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
         run: |
           args=(scripts/dev/start-ona-platform-codex.mjs --discover-policies)
           if [ "$INPUT_MODE" = "identity-canary" ] || [ "$INPUT_MODE" = "implementation-canary" ] || [ "$INPUT_MODE" = "full-chain-canary" ]; then
@@ -166,6 +172,7 @@ jobs:
                 --task-id "$task_id"
                 --branch "$target_branch"
                 --github-issue "${INPUT_GITHUB_ISSUE:-}"
+                --linear-issue "${INPUT_LINEAR_ISSUE:-none}"
                 --create-environment
                 --environment-name "${task_id:0:80}"
                 --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
@@ -233,6 +240,7 @@ jobs:
           INPUT_CODEX_AGENT_ID: ${{ inputs.codex_agent_id }}
           INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '900' }}
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
           INPUT_IMPLEMENTATION_EXECUTION: ${{ inputs.implementation_execution }}
         run: |
           codex_agent_id="${INPUT_CODEX_AGENT_ID:-${MINELINK_ONA_CODEX_AGENT_ID:-}}"
@@ -254,6 +262,7 @@ jobs:
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
             --github-issue "${INPUT_GITHUB_ISSUE:-}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
             --video-review-request .minelink-dev/reports/artifacts/video-review-request.md \
             --wait-seconds "${INPUT_WAIT_SECONDS:-900}" \
             --output .minelink-dev/reports/ona-platform-codex-video-verifier-api-session.md \
@@ -286,6 +295,7 @@ jobs:
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT"
           node scripts/dev/report-agent-factory-chain.mjs \
             --github-issue "${{ inputs.github_issue }}" \
+            --linear-issue "${{ inputs.linear_issue || 'none' }}" \
             --github-dispatcher-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --ona-prebuild-status passed \
             --ona-automation-status partial \
@@ -301,6 +311,7 @@ jobs:
           INPUT_PR_BASE_BRANCH: ${{ inputs.pr_base_branch || 'codex/minelink-mvp-engineering' }}
           INPUT_PR_TITLE: ${{ inputs.pr_title }}
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
         run: |
           pr_title="${INPUT_PR_TITLE:-Advance ${MINELINK_PLATFORM_CODEX_TASK_ID}}"
           node scripts/dev/create-agent-factory-pr.mjs \
@@ -309,7 +320,7 @@ jobs:
             --title "$pr_title" \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
-            --linear-issue none \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
             --acceptance-gate unspecified \
             --validation-scope docs
           pr_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/agent-factory-pr.json','utf8')); console.log(report.prUrl || '')")"
@@ -336,6 +347,42 @@ jobs:
           fi
           echo "MINELINK_AGENT_FACTORY_CI_URL=$ci_url" >> "$GITHUB_ENV"
 
+      - name: Sync final canary status
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+        run: |
+          node scripts/dev/sync-github-status.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --require-update
+          github_status_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '')")"
+          if [ -z "$github_status_url" ]; then
+            echo "sync-github-status did not report a comment URL."
+            exit 1
+          fi
+          echo "MINELINK_GITHUB_STATUS_URL=$github_status_url" >> "$GITHUB_ENV"
+
+          linear_args=(
+            scripts/dev/sync-linear-status.mjs
+            --issue "${INPUT_LINEAR_ISSUE:-none}"
+            --comment "MineLink agent-factory final status for ${MINELINK_PLATFORM_CODEX_TASK_ID}: PR ${MINELINK_AGENT_FACTORY_PR_URL}; CI ${MINELINK_AGENT_FACTORY_CI_URL}; evidence paths include .minelink-dev/reports/agent-factory-chain.md, .minelink-dev/reports/artifacts/acceptance.mp4, .minelink-dev/reports/artifacts/video-review.md, and .minelink-dev/reports/artifacts/video-release-gate.md."
+            --attachment-title "MineLink agent-factory PR"
+            --attachment-url "$MINELINK_AGENT_FACTORY_PR_URL"
+          )
+          if [ -n "${INPUT_LINEAR_ISSUE:-}" ] && [ "${INPUT_LINEAR_ISSUE:-none}" != "none" ]; then
+            linear_args+=(--require-key --require-update)
+          fi
+          node "${linear_args[@]}"
+
       - name: Refresh chain report after canary PR
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
         run: |
@@ -350,6 +397,9 @@ jobs:
             --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
             --pr-report .minelink-dev/reports/agent-factory-pr.md \
             --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --github-status-url "$MINELINK_GITHUB_STATUS_URL" \
+            --linear-issue "${{ inputs.linear_issue || 'none' }}" \
+            --linear-sync-report .minelink-dev/reports/linear-sync.md \
             --require-platform-codex-implementation \
             --require-platform-codex-verifier
 

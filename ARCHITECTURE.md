@@ -223,6 +223,11 @@ active-context status without printing credential values.
 `scripts/dev/setup-linear-agent-factory.mjs` is the repeatable Linear setup
 entry point for the `MineLink` project, required labels, and agent-factory
 workflow states. It records setup evidence without printing `LINEAR_API_KEY`.
+`scripts/dev/sync-github-status.mjs` and
+`scripts/dev/sync-linear-status.mjs` are the final status-writeback surfaces:
+they comment on the GitHub issue or PR, update/comment/attach the linked Linear
+issue when present, and write secret-free reports consumed by the chain
+tracker.
 The Linear watcher passes the real Linear label set into the dispatcher and
 skips `blocked` tasks by default; `--allow-blocked` is reserved for explicit
 diagnostic dispatches. After a successful dispatch, the watcher marks the
@@ -377,10 +382,15 @@ report with the created draft PR URL. That edge requires the
 `AGENT_FACTORY_GITHUB_TOKEN` repository secret because repository policy can
 block the default Actions `GITHUB_TOKEN` from creating pull requests. When the
 PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits for the GitHub PR
-check rollup and lets the refreshed chain report mark `pr -> ci` with the PR
-checks URL. Linear status sync is handled by
-`scripts/dev/sync-linear-status.mjs` using `LINEAR_API_KEY` from the Ona
-environment; the key must never be committed, passed as a parameter, or printed.
+check rollup, then `scripts/dev/sync-github-status.mjs` comments the linked
+GitHub issue or PR with the final evidence summary and
+`scripts/dev/sync-linear-status.mjs` comments/attaches the linked Linear issue
+when one was supplied. The refreshed chain report marks
+`ci -> status_writeback` as passed only for the task sources that exist: a
+GitHub-only task requires GitHub writeback, a Linear-only task requires Linear
+sync evidence, and a linked GitHub+Linear task requires both. Linear sync uses
+`LINEAR_API_KEY` from the environment; the key must never be committed, passed
+as a parameter, or printed.
 If Ona repository webhooks are unavailable for the account, the GitHub Actions
 dispatcher and scheduled Linear watcher are the active automation bridge. If
 Ona Platform Codex cannot be started automatically or rejects LLM

@@ -109,6 +109,9 @@ Use automation to reduce agent memory load:
 - `dispatch-agent-factory.mjs`, `watch-linear-agent-tasks.mjs`, and
   `report-agent-factory-chain.mjs` keep the full issue-to-PR automation chain
   visible as nodes, edges, blockers, and remaining percentage.
+- `sync-github-status.mjs` and `sync-linear-status.mjs` are the final
+  status-writeback surfaces after PR CI. GitHub-only tasks require GitHub
+  comment evidence; linked Linear tasks also require Linear sync evidence.
 - `check-agent-factory-secrets.mjs` records secret-safe credential and Ona
   context preflight evidence before dispatcher and Linear watcher runs. It
   reports presence and active-context status only, never credential values.

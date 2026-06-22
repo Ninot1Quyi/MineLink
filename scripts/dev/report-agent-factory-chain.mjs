@@ -639,12 +639,15 @@ const releaseStatus = verifierStatus === "passed" && releaseInfo && /Result:\s*`
     : "missing";
 const prStatus = releaseStatus === "passed" && hasValue(args.prUrl) ? "passed" : "missing";
 const ciStatus = prStatus === "passed" && hasValue(args.ciUrl) ? "passed" : "missing";
-const statusSyncStatus = ciStatus === "passed" && hasValue(args.githubStatusUrl) && hasValue(args.linearStatusUrl)
+const githubStatusRequired = hasValue(args.githubIssue) || hasValue(args.prUrl);
+const linearStatusRequired = hasValue(args.linearIssue);
+const linearSyncPassed = linearSyncInfo && /created comment|updated .* status|attached /i.test(linearSyncText);
+const githubStatusPassed = !githubStatusRequired || hasValue(args.githubStatusUrl);
+const linearStatusPassed = !linearStatusRequired || hasValue(args.linearStatusUrl) || linearSyncPassed;
+const statusSyncStatus = ciStatus === "passed" && githubStatusPassed && linearStatusPassed
   ? "passed"
   : ciStatus === "passed" && (hasValue(args.githubStatusUrl) || hasValue(args.linearStatusUrl) || linearSyncInfo)
-    ? /created comment|updated .* status|attached /i.test(linearSyncText)
-      ? "partial"
-      : "partial"
+    ? "partial"
     : "missing";
 
 const codexBlocker = codexAuthFailed

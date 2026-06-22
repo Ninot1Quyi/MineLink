@@ -30,6 +30,7 @@
     "agent-factory:secrets": "node scripts/dev/check-agent-factory-secrets.mjs",
     "agent-factory:chain": "node scripts/dev/report-agent-factory-chain.mjs",
     "agent-factory:dispatch": "node scripts/dev/dispatch-agent-factory.mjs",
+    "agent-factory:sync-github": "node scripts/dev/sync-github-status.mjs",
     "agent-factory:start-codex": "node scripts/dev/start-ona-platform-codex.mjs",
     "agent-factory:fetch-codex-canary": "node scripts/dev/fetch-platform-codex-canary.mjs",
     "agent-factory:fetch-codex-video-verifier": "node scripts/dev/fetch-platform-codex-video-verifier.mjs",
