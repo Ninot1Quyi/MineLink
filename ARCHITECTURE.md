@@ -291,9 +291,10 @@ a task-bound readback from `AgentService/GetAgentExecution` proves
 `status.codexSettings` is present.
 `.github/workflows/ona-platform-codex-probe.yml` runs the same probe inside
 GitHub Actions with repository `ONA_TOKEN` access. Its default `discover` mode
-only proves token/API policy readback. Its `identity-canary` mode is required
-to prove programmatic Codex launch and still needs a real
-`MINELINK_ONA_CODEX_AGENT_ID` or workflow input for the Codex app agent id.
+only proves token/API policy readback and resolves organization context from
+the logged-in Ona CLI config. Its `identity-canary` mode is required to prove
+programmatic Codex launch and still needs a real `MINELINK_ONA_CODEX_AGENT_ID`
+or workflow input for the Codex app agent id.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform

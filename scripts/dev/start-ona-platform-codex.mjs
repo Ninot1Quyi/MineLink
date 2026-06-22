@@ -141,7 +141,9 @@ function readOnaConfig() {
   const result = run("ona", ["config", "get", "-o", "json"]);
   if (result.status !== 0) return {};
   try {
-    return JSON.parse(result.stdout);
+    const parsed = JSON.parse(result.stdout);
+    if (Array.isArray(parsed)) return parsed[0] ?? {};
+    return parsed;
   } catch {
     return {};
   }
