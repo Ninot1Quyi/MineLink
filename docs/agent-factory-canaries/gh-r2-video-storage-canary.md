@@ -3,7 +3,7 @@
 Agent mode: Ona Platform Codex
 Agent execution mode: AGENT_MODE_RALPH
 Identity: I am Codex running in Ona Platform Codex
-Session id: 019eef97-692d-7496-845e-e9f41a7db58c
+Session id: 019eefb1-29e0-7131-9528-879568888a10
 Platform evidence: Ona AgentService StartAgent launched the configured Codex agent id with codexSettings; GitHub runner will verify the API readback separately.
 Task id: gh-r2-video-storage-canary
 Branch: codex/gh-r2-video-storage-canary
