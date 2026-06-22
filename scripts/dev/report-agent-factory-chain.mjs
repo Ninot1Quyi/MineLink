@@ -113,7 +113,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
     console.log(`Usage: node scripts/dev/report-agent-factory-chain.mjs [options]
 
 Writes a stage report for the MineLink AI-native delivery chain:
-GitHub issue -> dispatcher -> Ona Platform Codex -> validation -> acceptance MP4 -> verifier -> PR -> CI -> status.
+GitHub issue -> dispatcher -> Ona Platform Codex -> validation -> acceptance MP4 -> same-session verifier subagent -> PR -> CI -> status.
 
 This report is progress evidence only. It does not upgrade acceptance gates or
 claim MineLink product completion.`);
@@ -713,15 +713,15 @@ const nodes = [
     summaryInfo && args.acceptanceSummary,
     mp4Info && `${args.acceptanceMp4}${mp4Info ? ` (${mp4Info.size} bytes)` : ""}`,
   ]),
-  mkNode("video_verifier", "Dedicated video verifier", verifierStatus, [
-    verifierSessionId && `Verifier session: ${verifierSessionId}`,
+  mkNode("video_verifier", "Same-session verifier subagent", verifierStatus, [
+    verifierSessionId && `Implementation/verifier execution: ${verifierSessionId}`,
     verifierAgentAccepted && "Agent mode: Ona Platform Codex",
     verifierReadbackInfo && readbackIdentityAccepted(verifierReadbackText) && "Identity: Codex on Ona Platform Codex diagnostic",
     verifierReadbackInfo && readbackPlatformEvidenceAccepted(verifierReadbackText) && "Platform evidence: Codex selector/API",
     ...verifierReadbackBound.evidence,
     verifierReadbackInfo && args.onaVerifierReadback,
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include same-session Platform Codex readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
   mkNode("release_gate", "Video release gate", releaseStatus, [
     releaseInfo && args.videoReleaseGate,
   ], releaseStatus === "blocked" ? "Video release gate failed or hashes do not match." : ""),
@@ -808,7 +808,7 @@ const rawEdges = [
   ]),
   mkEdge("acceptance_video", "video_verifier", edgeStatus(nodeStatus.video_verifier), [
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include same-session Platform Codex readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
   mkEdge("video_verifier", "release_gate", edgeStatus(nodeStatus.release_gate), [
     releaseInfo && args.videoReleaseGate,
   ]),
@@ -882,7 +882,7 @@ if (firstBlockedEdge?.to === "issue_contract") {
 } else if (firstBlockedEdge?.to === "acceptance_video") {
   nextActions.push("Render acceptance artifacts with `node scripts/dev/render-acceptance-video.mjs --require-mp4`.");
 } else if (firstBlockedEdge?.to === "video_verifier") {
-  nextActions.push("Start a separate Ona Platform Codex verifier session and have it write `.minelink-dev/reports/artifacts/video-review.md`.");
+  nextActions.push("Send the verifier request to the existing Ona Platform Codex implementation execution, have its native verifier subagent write `.minelink-dev/reports/artifacts/video-review.md`, then rerun the release gate.");
 } else if (firstBlockedEdge?.to === "release_gate") {
   nextActions.push("Run `node scripts/dev/check-video-review.mjs --require-mp4` and fix any hash or verifier mismatch.");
 } else if (firstBlockedEdge?.to === "pr") {

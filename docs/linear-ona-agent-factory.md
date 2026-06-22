@@ -65,7 +65,7 @@ Use these statuses for the Linear board and GitHub issue/PR comments:
 | `PR Open` | Draft PR exists and links the source task. |
 | `CI Running` | GitHub Actions is running required checks. |
 | `Video Rendering` | Acceptance summary/MP4 artifact generation is running. |
-| `Video Review` | A separate Ona Platform Codex verifier is comparing the task requirements against the MP4 and summary. |
+| `Video Review` | The implementation Ona Platform Codex session has launched a bounded native Codex verifier subagent to compare the task requirements against the MP4 and summary. |
 | `Human Review` | Automation is done; reviewer must inspect evidence and gaps. |
 | `Accepted` | Reviewer accepted the PR and updated gate evidence if applicable. |
 | `Blocked` | Agent cannot continue without a real dependency or human decision. |
@@ -299,12 +299,13 @@ After native Ona repository/Linear webhooks are available in the organization,
 add those triggers without changing the downstream evidence requirements.
 
 The factory is intentionally sequential (`maxParallel: 1`). The desired product
-shape is four ordered Ona steps:
+shape keeps implementation and video review inside one Ona Platform Codex
+implementation execution:
 
 ```text
 implementation agent
   -> node scripts/dev/run-agent-factory-stage.mjs --stage implementation-finalize
-  -> video verifier agent
+  -> implementation agent launches native Codex verifier subagent
   -> node scripts/dev/run-agent-factory-stage.mjs --stage release-finalize
 ```
 
@@ -483,7 +484,7 @@ commit, and be followed by validation evidence. The chain reporter enforces this
 stage from producing green validation/PR evidence until the accepted Platform
 Codex implementation session has written its task-bound readback.
 
-The dedicated video verifier has the same explicit readback requirement:
+The same-session video verifier subagent has the same explicit readback requirement:
 
 ```text
 .minelink-dev/reports/ona-codex-video-verifier-session.md
@@ -491,8 +492,8 @@ The dedicated video verifier has the same explicit readback requirement:
 
 It must identify `Agent mode: Ona Platform Codex`,
 `Identity: I am Codex running in Ona Platform Codex`, `Platform evidence`, the
-verifier `Session id`, `Result: passed`, `Task id`, `Branch`, and `Commit`, in
-addition to the hash-checked
+implementation/verifier `Session id`, `Result: passed`, `Task id`, `Branch`,
+and `Commit`, in addition to the hash-checked
 `.minelink-dev/reports/artifacts/video-review.md` markers.
 
 The finalizer creates or updates the draft PR through
@@ -705,8 +706,9 @@ node scripts/dev/prepare-video-review-request.mjs --require-mp4
 
 This writes `.minelink-dev/reports/artifacts/video-review-request.md` with the
 current artifact hashes and verifier assignment. Before publishing or merging
-video evidence, a separate Ona Platform Codex session must inspect that request,
-the task requirements, `acceptance-summary.md`, and `acceptance.mp4`. It writes
+video evidence, the current Ona Platform Codex implementation session must
+launch a bounded native Codex verifier subagent to inspect that request, the
+task requirements, `acceptance-summary.md`, and `acceptance.mp4`. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 
 ```text
@@ -717,6 +719,14 @@ Video matched: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 ```
+
+The full-chain canary may embed the review-request hashes directly so it can
+prove the same-session subagent handoff without moving large media through the
+repository. Real video-required tasks still need the verifier subagent to have
+access to the actual MP4, either because the implementation session rendered it
+in the same workspace or because the workflow published a downloadable artifact
+URL before the verifier runs. Hash-only canary evidence must not be called real
+video inspection.
 
 Then run:
 

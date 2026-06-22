@@ -44,6 +44,9 @@ on:
       reviewed_commit:
         description: Reviewed commit for video-verifier-canary mode
         required: false
+      implementation_execution:
+        description: Existing implementation Codex execution id for same-session video-verifier-canary mode
+        required: false
       create_pr:
         description: Create or update a draft PR after full-chain release gate passes
         required: false
@@ -169,7 +172,9 @@ jobs:
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --wait-seconds "${INPUT_BRANCH_WAIT_SECONDS:-300}"
           branch_commit="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-codex-implementation-session.json','utf8')); console.log(report.commit || '')")"
+          implementation_execution="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-platform-codex-api-session.json','utf8')); console.log(report.agentExecutionId || '')")"
           echo "MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT=$branch_commit" >> "$GITHUB_ENV"
+          echo "MINELINK_PLATFORM_CODEX_IMPLEMENTATION_EXECUTION=$implementation_execution" >> "$GITHUB_ENV"
           node scripts/dev/check-platform-codex-evidence.mjs \
             --implementation \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
@@ -203,7 +208,7 @@ jobs:
             --task-requirements docs/minelink-acceptance.md \
             --require-mp4
 
-      - name: Start Ona Platform Codex video verifier canary
+      - name: Request implementation Codex verifier subagent
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
         env:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
@@ -213,15 +218,21 @@ jobs:
           INPUT_CODEX_AGENT_ID: ${{ inputs.codex_agent_id }}
           INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '900' }}
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_IMPLEMENTATION_EXECUTION: ${{ inputs.implementation_execution }}
         run: |
           codex_agent_id="${INPUT_CODEX_AGENT_ID:-${MINELINK_ONA_CODEX_AGENT_ID:-}}"
           if [ -z "$codex_agent_id" ]; then
             echo "video verifier canary mode requires inputs.codex_agent_id or secret MINELINK_ONA_CODEX_AGENT_ID."
             exit 1
           fi
+          implementation_execution="${MINELINK_PLATFORM_CODEX_IMPLEMENTATION_EXECUTION:-${INPUT_IMPLEMENTATION_EXECUTION:-}}"
+          if [ -z "$implementation_execution" ]; then
+            echo "Missing implementation Codex execution id; cannot request same-session verifier subagent."
+            exit 1
+          fi
           node scripts/dev/start-ona-platform-codex.mjs \
             --discover-policies \
-            --start \
+            --readback-execution "$implementation_execution" \
             --video-verifier-canary \
             --codex-agent-id "$codex_agent_id" \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \

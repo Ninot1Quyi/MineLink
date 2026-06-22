@@ -944,7 +944,7 @@ Current status:
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
   request artifact is a handoff package only and does not release the task.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
-  separate Ona Platform Codex verifier writes
+  same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
   match markers and current summary/MP4 hashes. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
@@ -961,7 +961,8 @@ Current status:
   packaging, native Linear webhook enablement, Ona Platform Codex
   implementation/verifier launch and readback for the current PR, Ona native
   `pullRequest` success, acceptance MP4 availability in every environment,
-  dedicated video verifier completion, or real NeoForge install acceptance.
+  same-session video verifier subagent completion, verifier access to the actual
+  MP4 for real video-required tasks, or real NeoForge install acceptance.
 - Earlier generic Ona Agent executions are process smoke only. They do not
   count as MineLink agent execution evidence because Ona work must select the
   Platform Codex agent mode.

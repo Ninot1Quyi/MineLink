@@ -136,10 +136,10 @@ MineLink uses automation to reduce agent memory load:
 - `scripts/dev/render-acceptance-video.mjs` turns existing reports into a
   trace-driven acceptance summary and optional MP4 artifact.
 - `scripts/dev/prepare-video-review-request.mjs` turns the current summary and
-  MP4 hashes into a verifier handoff file for the separate Ona Platform Codex
-  review step.
-- `scripts/dev/check-video-review.mjs` blocks release unless a separate Ona
-  Platform Codex verifier report confirms `Release decision: pass`,
+  MP4 hashes into a verifier handoff file for the same-session Ona Platform
+  Codex verifier subagent.
+- `scripts/dev/check-video-review.mjs` blocks release unless the same-session
+  Ona Platform Codex verifier report confirms `Release decision: pass`,
   `Task matched: yes`, `Video matched: yes`, and current summary/MP4 SHA-256
   hashes against the rendered MP4.
 - `scripts/dev/sync-linear-status.mjs` uses `LINEAR_API_KEY` from the Ona

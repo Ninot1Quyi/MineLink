@@ -42,8 +42,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/fetch-platform-codex-video-verifier.mjs --repository owner/repo --branch <branch> --task-id <id> --commit <sha>
 
-Fetches the docs-only video-verifier canary committed by a separate Ona Platform
-Codex session, combines it with AgentService API readback, writes the canonical
+Fetches the docs-only video-verifier canary committed after a same-session
+verifier subagent request, combines it with AgentService API readback, writes the canonical
 .minelink-dev/reports/ona-codex-video-verifier-session.md evidence file, and
 materializes .minelink-dev/reports/artifacts/video-review.md for the release
 gate.
@@ -383,7 +383,7 @@ const reviewLines = [
   `Branch: ${args.branch || "missing"}`,
   `Commit: ${args.commit || "missing"}`,
   `Session id: ${api.agentExecutionId || "missing"}`,
-  `Platform evidence: Ona AgentService Codex API readback for execution ${api.agentExecutionId || "missing"} had spec.agentId matching the configured Codex agent id and codexSettings present; GitHub branch ${args.branch || "missing"} contains the session-bound Codex video verifier canary file ${args.verifierPath}.`,
+  `Platform evidence: Ona AgentService Codex API readback for implementation execution ${api.agentExecutionId || "missing"} had spec.agentId matching the configured Codex agent id and codexSettings present; GitHub branch ${args.branch || "missing"} contains the same-session verifier subagent canary file ${args.verifierPath}.`,
   "Boundary: video-verifier canary converted into local release-gate input; not MineLink product acceptance",
   "",
   "## Failures",
@@ -397,7 +397,7 @@ await fs.mkdir(path.dirname(args.output), { recursive: true });
 const readbackLines = [
   "Agent mode: Ona Platform Codex",
   "Identity: I am Codex running in Ona Platform Codex",
-  `Platform evidence: Ona AgentService Codex API readback for execution ${api.agentExecutionId || "missing"} had spec.agentId matching the configured Codex agent id and codexSettings present; GitHub branch ${args.branch || "missing"} contains the session-bound Codex video verifier canary file ${args.verifierPath}.`,
+  `Platform evidence: Ona AgentService Codex API readback for implementation execution ${api.agentExecutionId || "missing"} had spec.agentId matching the configured Codex agent id and codexSettings present; GitHub branch ${args.branch || "missing"} contains the same-session verifier subagent canary file ${args.verifierPath}.`,
   `Session id: ${api.agentExecutionId || "missing"}`,
   `Result: ${failures.length === 0 ? "passed" : "blocked"}`,
   `Task id: ${args.taskId}`,
