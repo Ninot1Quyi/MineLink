@@ -241,6 +241,11 @@ the Ona project id and dirty workspace count, writes
 non-MineLink environments unless explicitly overridden. This is resource hygiene
 only; it does not release or accept a task.
 
+Full-chain factory jobs pass `--allow-dirty` after task evidence has been
+fetched, because the Ona finalizer intentionally leaves report artifacts in the
+task workspace before GitHub uploads the evidence bundle. This stops the task
+environment without deleting the PR branch or changing product evidence.
+
 Ona agent-factory implementation and video review must use the Ona Platform
 Codex agent option. The default Ona Agent mode is not accepted as MineLink
 agent evidence, even if it echoes the Codex identity line. Accepted evidence

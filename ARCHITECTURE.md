@@ -747,8 +747,13 @@ after `check-video-review.mjs` passes, to upload the verifier-approved
 `acceptance.mp4` to the configured S3-compatible video store, currently
 Cloudflare R2 via `MINELINK_VIDEO_STORAGE_*` settings. The GitHub runner then
 calls `scripts/dev/comment-pr-evidence.mjs` with the returned public MP4 URL so
-reviewers can open or embed the exact Ona-produced video from the PR. The
-GitHub Actions artifact remains the raw evidence bundle. The older
+reviewers can open the exact Ona-produced video from the PR. GitHub issue and
+PR Markdown strips external `<video>` embeds, so Cloudflare R2 URLs are durable
+playback links, not guaranteed inline GitHub players. Inline playback on the
+GitHub page requires a GitHub-uploaded attachment URL such as
+`github.com/user-attachments/assets/...`; that upload path is a separate
+remaining factory capability and must not be faked with HTML. The GitHub
+Actions artifact remains the raw evidence bundle. The older
 `scripts/dev/publish-pr-video-evidence.mjs` path is a manual fallback only and
 must not be the default automated path when external video storage is
 configured, because default automation should not commit video binaries to the

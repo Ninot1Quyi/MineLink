@@ -464,9 +464,11 @@ jobs:
         run: |
           node scripts/dev/report-agent-factory-chain.mjs \
             --github-issue "${{ inputs.github_issue }}" \
+            --issue-contract-status passed \
+            --github-dispatcher-status passed \
             --github-dispatcher-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --ona-prebuild-status passed \
-            --ona-automation-status partial \
+            --ona-automation-status passed \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
             --require-video-producer ona-task-finalizer \
@@ -489,6 +491,7 @@ jobs:
           node scripts/dev/cleanup-ona-resources.mjs \
             --from-report .minelink-dev/reports/ona-platform-codex-api-session.json \
             --project-id "$MINELINK_ONA_PROJECT_ID" \
+            --allow-dirty \
             --stop
 
       - name: Upload probe evidence

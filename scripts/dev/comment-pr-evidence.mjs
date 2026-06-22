@@ -93,21 +93,37 @@ function marker() {
   return `<!-- minelink-pr-video-evidence:${args.artifactName} -->`;
 }
 
+function githubInlineAttachment(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "github.com" && parsed.pathname.startsWith("/user-attachments/assets/")) return true;
+    if (parsed.hostname === "user-images.githubusercontent.com") return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 function body() {
   const shortSha = hasValue(args.headSha) ? args.headSha.slice(0, 12) : "none";
   const inlineVideoUrl = args.rawVideoUrl || args.videoUrl;
+  const inlineExpected = inlineVideoUrl ? githubInlineAttachment(inlineVideoUrl) : false;
+  const playbackHeading = inlineExpected
+    ? "GitHub inline video attachment:"
+    : "External MP4 playback URL:";
+  const playbackNote = inlineVideoUrl && !inlineExpected
+    ? "Note: GitHub renders external MP4 URLs as links. Inline playback on the PR page requires a GitHub-uploaded attachment URL."
+    : "";
   return [
     marker(),
     "MineLink PR video evidence:",
     "",
-    inlineVideoUrl ? "Playable MP4:" : "",
+    inlineVideoUrl ? playbackHeading : "",
     inlineVideoUrl ? "" : "",
     inlineVideoUrl ? inlineVideoUrl : "",
     inlineVideoUrl ? "" : "",
-    inlineVideoUrl ? "HTML player fallback:" : "",
-    inlineVideoUrl ? "" : "",
-    inlineVideoUrl ? `<video src="${inlineVideoUrl}" controls width="720"></video>` : "",
-    inlineVideoUrl ? "" : "",
+    playbackNote,
+    playbackNote ? "" : "",
     `- Workflow: \`${args.workflowName || "unknown"}\``,
     `- Commit: \`${shortSha}\``,
     `- Run: ${args.runUrl || "none"}`,
@@ -182,6 +198,7 @@ const report = {
   artifactId: args.artifactId,
   videoUrl: args.videoUrl,
   rawVideoUrl: args.rawVideoUrl,
+  githubInlinePlaybackExpected: githubInlineAttachment(args.rawVideoUrl || args.videoUrl),
   videoPath: args.videoPath,
   producer: args.producer,
   allowArtifactOnly,
@@ -217,6 +234,7 @@ const lines = [
   `- Artifact URL: ${args.artifactUrl || "none"}`,
   `- Playable video URL: ${args.videoUrl || "none"}`,
   `- Raw video URL: ${args.rawVideoUrl || "none"}`,
+  `- GitHub inline playback expected: \`${report.githubInlinePlaybackExpected ? "yes" : "no"}\``,
   `- Acceptance video path: \`${args.videoPath}\``,
   `- Producer: \`${args.producer || "unknown"}\``,
   `- Action: \`${report.action || "none"}\``,

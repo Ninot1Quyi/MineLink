@@ -493,7 +493,11 @@ After the release gate, the Ona release finalizer uploads the verifier-approved
 MP4 with `scripts/dev/upload-acceptance-video-storage.mjs` and copies the
 upload report back. GitHub Actions writes that returned public MP4 URL into the
 PR through `scripts/dev/comment-pr-evidence.mjs`; it must not re-render or
-substitute the final task video. GitHub Actions artifacts remain the raw
+substitute the final task video. GitHub renders external MP4 URLs as links and
+strips external `<video>` tags from issue/PR Markdown, so R2 proves public
+playback but not GitHub-native inline playback. A directly playable GitHub PR
+player requires a GitHub-uploaded attachment URL, which is a separate remaining
+factory edge. GitHub Actions artifacts remain the raw
 evidence bundle; the default chain must not commit the video binary to the
 repository evidence branch when external storage is configured. When a
 canary run renders the MP4 on the GitHub runner, the artifact origin must say
@@ -507,9 +511,10 @@ hash. When a manual rehearsal needs to prove
 `scripts/dev/create-agent-factory-pr.mjs`, creates or updates a draft PR from
 the canary branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,
 refreshes `agent-factory-chain.json` with the PR URL, then runs
-`scripts/dev/cleanup-ona-resources.mjs` before artifact upload so any task
-environment created by the Platform Codex probe is stopped after the terminal
-result is recorded. This PR edge requires the `AGENT_FACTORY_GITHUB_TOKEN`
+`scripts/dev/cleanup-ona-resources.mjs --allow-dirty` before artifact upload so
+any task environment created by the Platform Codex probe is stopped after the
+terminal result is recorded, even when finalizer report files leave the task
+workspace dirty. This PR edge requires the `AGENT_FACTORY_GITHUB_TOKEN`
 repository secret; the default Actions `GITHUB_TOKEN` can be blocked by
 repository policy from creating pull requests.
 After the draft PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits
@@ -820,7 +825,9 @@ The release finalizer calls
 `scripts/dev/upload-acceptance-video-storage.mjs --require-upload` inside the
 same Ona task environment and copies the upload report back. GitHub comments
 with that returned public URL; it does not generate or replace the final task
-video.
+video. External storage URLs are not GitHub-native attachment URLs, so they are
+clickable playback links in PR Markdown. Inline playback on the GitHub page
+requires a later programmatic GitHub attachment upload path.
 
 `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID` and
 `MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY` must be configured only as GitHub or
