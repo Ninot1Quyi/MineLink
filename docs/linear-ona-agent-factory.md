@@ -371,17 +371,22 @@ MINELINK_ONA_PROJECT_ID              Ona project id, defaults to the MineLink pr
 MINELINK_ONA_ENVIRONMENT_ID          Optional explicit running environment id
 MINELINK_ONA_CREATE_ENVIRONMENT      Optional 1 to create a task environment
 MINELINK_ONA_CODEX_REASONING_EFFORT  Optional override; default is EXTRA_HIGH
+MINELINK_ONA_CODEX_AGENT_MODE        Optional override; default is AGENT_MODE_RALPH
 ```
 
 The script refuses to omit `agentId` and refuses the known default automation
 agent id `00000000-0000-0000-0000-000000007100`. It writes
 `.minelink-dev/reports/ona-platform-codex-api-session.{md,json}` and accepts a
 launch probe only when `GetAgentExecution` reads back the requested Codex
-`spec.agentId` plus `spec.codexSettings` or `status.codexSettings`. This proves
-only the programmatic Platform Codex launch/readback edge. It does not satisfy
-the implementation readback, video verifier, PR, CI, or product acceptance
-gates until the task-bound Codex session performs the work and writes the
-normal `.minelink-dev/reports/ona-codex-implementation-session.md`.
+`spec.agentId` plus `spec.codexSettings` or `status.codexSettings`. MineLink
+requests `AGENT_MODE_RALPH`, the public SDK enum that maps to the persistent
+Goal selector, and task readbacks must include
+`Agent execution mode: AGENT_MODE_RALPH`. If `GetAgentExecution` also exposes a
+mode field, it must match the requested mode. This proves only the programmatic
+Platform Codex launch/readback edge. It does not satisfy the implementation
+readback, video verifier, PR, CI, or product acceptance gates until the
+task-bound Codex session performs the work and writes the normal
+`.minelink-dev/reports/ona-codex-implementation-session.md`.
 When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
 ignore stopped historical task environments. It may pass an auto-discovered
 environment only when that environment is currently running; otherwise it passes
@@ -463,16 +468,20 @@ file markers to match task, branch, session id, and docs validation, and writes
 `.minelink-dev/reports/ona-codex-implementation-session.md` with the fetched
 branch head as `Commit:`. The canary markdown file by itself is not accepted
 implementation readback and this mode does not count as product acceptance.
-`full-chain-canary` extends that pilot to the next edge. The workflow renders
-the trace-driven acceptance summary/MP4, writes the video-review request,
-starts a second configured Ona Platform Codex session with
-`--video-verifier-canary`, waits for
+`full-chain-canary` extends that pilot to the next edge. The workflow runs
+`scripts/dev/run-ona-finalizer-artifacts.mjs` inside the implementation task's
+Ona environment to render the trace-driven acceptance summary/MP4 and write the
+video-review request. The finalizer checks out the task branch for task content
+but injects the workflow/source-commit finalizer scripts after checkout, so an
+old task branch cannot regenerate `video-review-request.md` with stale local
+defaults. The workflow then sends `--video-verifier-canary` back to the same
+implementation AgentService execution, waits for
 `docs/agent-factory-canaries/<task>-video-verifier.md`, then runs
 `scripts/dev/fetch-platform-codex-video-verifier.mjs`. The fetch script is the
 canonical bridge for canary video review: it requires the verifier AgentService
-API readback to show the configured Codex agent id plus `codexSettings`, checks
-the verifier canary against the current task, branch, reviewed commit, summary
-hash, and MP4 hash, writes
+API readback to show the configured Codex agent id, `AGENT_MODE_RALPH`, and
+`codexSettings`, checks the verifier canary against the current task, branch,
+reviewed commit, summary hash, MP4 hash, and video producer, writes
 `.minelink-dev/reports/ona-codex-video-verifier-session.md`, materializes
 `.minelink-dev/reports/artifacts/video-review.md`, and lets
 `check-video-review.mjs --require-mp4` create the release gate. This is still

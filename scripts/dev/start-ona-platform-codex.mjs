@@ -25,6 +25,7 @@ const defaults = {
   model: process.env.MINELINK_ONA_CODEX_MODEL ?? "CODEX_OPEN_AI_MODEL_GPT_5_5",
   reasoningEffort: process.env.MINELINK_ONA_CODEX_REASONING_EFFORT ?? "CODEX_REASONING_EFFORT_EXTRA_HIGH",
   serviceTier: process.env.MINELINK_ONA_CODEX_SERVICE_TIER ?? "CODEX_SERVICE_TIER_FAST",
+  agentMode: process.env.MINELINK_ONA_CODEX_AGENT_MODE ?? "AGENT_MODE_RALPH",
   name: process.env.MINELINK_ONA_CODEX_RUN_NAME ?? "",
   prompt: "",
   promptFile: "",
@@ -72,6 +73,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--model") args.model = readValue();
   else if (arg === "--reasoning-effort") args.reasoningEffort = readValue();
   else if (arg === "--service-tier") args.serviceTier = readValue();
+  else if (arg === "--agent-mode") args.agentMode = readValue();
   else if (arg === "--name") args.name = readValue();
   else if (arg === "--prompt") args.prompt = readValue();
   else if (arg === "--prompt-file") args.promptFile = readValue();
@@ -102,6 +104,8 @@ Options:
   --project-id <uuid>          Ona project id. Defaults to the MineLink project id.
   --organization-id <uuid>     Ona organization id for --discover-policies.
   --environment-id <uuid>      Explicit running Ona environment id for in-environment agents.
+  --agent-mode <enum>          AgentService mode. Defaults to AGENT_MODE_RALPH,
+                                which maps to the persistent Goal selector.
   --create-environment         Create and poll a fresh task environment before StartAgent.
   --dry-run                    Validate inputs and write the request body without API calls.
 
@@ -185,6 +189,7 @@ function implementationCanaryPrompt(context = {}) {
     `- GitHub issue: ${args.githubIssue || "none"}`,
     `- Linear issue: ${args.linearIssue || "none"}`,
     `- Ona AgentService execution id: ${sessionId}`,
+    `- Requested agent execution mode: ${args.agentMode}`,
     `- Canary file: ${canaryPath}`,
     "",
     "Scope:",
@@ -197,6 +202,7 @@ function implementationCanaryPrompt(context = {}) {
     "- Include a heading: MineLink Platform Codex Implementation Canary.",
     "- Include these exact marker lines with the current values:",
     "  Agent mode: Ona Platform Codex",
+    `  Agent execution mode: ${args.agentMode}`,
     "  Identity: I am Codex running in Ona Platform Codex",
     `  Session id: ${sessionId}`,
     "  Platform evidence: Ona AgentService StartAgent launched the configured Codex agent id with codexSettings; GitHub runner will verify the API readback separately.",
@@ -234,6 +240,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     "Agent mode: Ona Platform Codex",
     "Identity: I am Codex running in Ona Platform Codex",
     `Session id: ${sessionId}`,
+    `Agent execution mode: ${args.agentMode}`,
     "Platform evidence: Ona AgentService readback shows the configured Codex agent id with codexSettings, and the implementation execution received a same-session verifier subagent request.",
     "Verifier: Ona Platform Codex",
     "Release decision: pass",
@@ -266,6 +273,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- GitHub issue: ${args.githubIssue || "none"}`,
     `- Linear issue: ${args.linearIssue || "none"}`,
     `- Ona AgentService execution id: ${sessionId}`,
+    `- Requested agent execution mode: ${args.agentMode}`,
     `- Video-verifier canary file: ${canaryPath}`,
     `- Acceptance summary sha256: ${summaryHash}`,
     `- Acceptance MP4 sha256: ${mp4Hash}`,
@@ -526,6 +534,7 @@ function annotations() {
       ["minelink/github-issue", args.githubIssue],
       ["minelink/linear-issue", args.linearIssue],
       ["minelink/agent-mode", "ona-platform-codex"],
+      ["minelink/agent-execution-mode", args.agentMode],
     ].filter(([, value]) => hasValue(value)),
   );
 }
@@ -539,7 +548,7 @@ function startBody() {
     annotations: annotations(),
     codeContext,
     codexSettings: codexSettings(),
-    mode: "AGENT_MODE_EXECUTION",
+    mode: args.agentMode,
     name: args.name || `MineLink ${args.taskId} Platform Codex`,
   };
   if (hasValue(args.sessionId)) body.sessionId = args.sessionId;
@@ -672,6 +681,7 @@ function evaluateReadback(readback, expectedAgentId) {
   const failures = [];
   const evidence = [];
   const actualAgentId = spec.agentId ?? "";
+  const readbackMode = spec.mode ?? status.mode ?? "";
   if (!hasValue(execution.id)) failures.push("GetAgentExecution did not return an agentExecution id.");
   else evidence.push(`execution=${execution.id}`);
   if (actualAgentId !== expectedAgentId) {
@@ -686,6 +696,18 @@ function evaluateReadback(readback, expectedAgentId) {
     failures.push("GetAgentExecution did not expose spec.codexSettings or status.codexSettings.");
   } else {
     evidence.push("Codex settings are present in execution readback");
+  }
+  if (hasValue(args.agentMode)) {
+    evidence.push(`requestedMode=${args.agentMode}`);
+    if (hasValue(readbackMode)) {
+      if (readbackMode !== args.agentMode) {
+        failures.push(`Agent execution mode mismatch: expected ${args.agentMode}, got ${readbackMode}.`);
+      } else {
+        evidence.push(`readbackMode=${readbackMode}`);
+      }
+    } else {
+      evidence.push("readbackMode not exposed by GetAgentExecution");
+    }
   }
   if (hasValue(status.phase)) {
     evidence.push(`phase=${status.phase}`);
@@ -724,6 +746,7 @@ const report = {
   branch: args.branch,
   commit: args.commit,
   codexSettings: codexSettings(),
+  agentMode: args.agentMode,
   result: "pending",
   steps: [],
   blockers: [],
@@ -875,6 +898,7 @@ const lines = [
   `- Codex model: ${code(report.codexSettings.model)}`,
   `- Reasoning effort: ${code(report.codexSettings.reasoningEffort)}`,
   `- Service tier: ${code(report.codexSettings.serviceTier)}`,
+  `- Agent execution mode: ${code(report.agentMode)}`,
   "",
   "## Steps",
   "",

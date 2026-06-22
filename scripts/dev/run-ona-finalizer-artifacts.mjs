@@ -104,6 +104,14 @@ function decodeRemoteFile(filePath, base64) {
   ].join("\n");
 }
 
+function overwriteSourceScript(filePath, base64) {
+  return [
+    `mkdir -p ${shellQuote(path.posix.dirname(filePath))}`,
+    `printf %s ${shellQuote(base64)} | base64 -d > ${shellQuote(filePath)}`,
+    `chmod +x ${shellQuote(filePath)}`,
+  ].join("\n");
+}
+
 function stageCommand(stage) {
   const command = [
     "node",
@@ -182,6 +190,7 @@ const report = {
   videoProducer: args.videoProducer,
   requiredVideoProducer: args.requiredVideoProducer,
   tarOutput: args.tarOutput,
+  injectedSourceScripts: [],
   extractedFiles: [],
   failures,
   commandExitCode: null,
@@ -204,6 +213,20 @@ if (failures.length === 0) {
     failures.push(`Missing implementation readback to transfer: ${args.implementationReadback}`);
   }
 
+  const sourceScripts = [
+    "scripts/dev/run-agent-factory-stage.mjs",
+    "scripts/dev/summarize-evidence.mjs",
+    "scripts/dev/render-acceptance-video.mjs",
+    "scripts/dev/prepare-video-review-request.mjs",
+  ];
+  const sourceScriptFiles = await Promise.all(
+    sourceScripts.map(async (filePath) => [filePath, await readBase64IfPresent(filePath)]),
+  );
+  for (const [filePath, base64] of sourceScriptFiles) {
+    if (!base64) failures.push(`Missing source finalizer script to inject: ${filePath}`);
+  }
+  report.injectedSourceScripts = sourceScriptFiles.filter(([, base64]) => base64).map(([filePath]) => filePath);
+
   if (failures.length === 0) {
     const remoteScript = [
       "set -euo pipefail",
@@ -212,6 +235,7 @@ if (failures.length === 0) {
       ...transferredFiles.map(([filePath, base64]) => decodeRemoteFile(filePath, base64)).filter(Boolean),
       `git fetch origin ${shellQuote(args.branch)}`,
       `git checkout -B ${shellQuote(args.branch)} ${shellQuote(`origin/${args.branch}`)}`,
+      ...sourceScriptFiles.map(([filePath, base64]) => overwriteSourceScript(filePath, base64)),
       stageCommand("validate"),
       stageCommand("summarize"),
       stageCommand("render-video"),
@@ -306,6 +330,12 @@ const lines = [
   `- Required video producer: \`${args.requiredVideoProducer || "none"}\``,
   `- Tarball: \`${args.tarOutput}\``,
   `- Boundary: \`${report.boundary}\``,
+  "",
+  "## Injected Source Scripts",
+  "",
+  ...(report.injectedSourceScripts.length > 0
+    ? report.injectedSourceScripts.map((file) => `- \`${file}\``)
+    : ["- none"]),
   "",
   "## Extracted Artifact Files",
   "",

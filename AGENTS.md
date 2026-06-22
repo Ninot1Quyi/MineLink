@@ -215,6 +215,11 @@ Reports must distinguish:
   `MINELINK_ONA_CODEX_AGENT_ID`. Do not omit `agentId`, do not use the known
   default Ona automation agent id, and do not treat a launch probe as task
   implementation evidence.
+- Ona Platform Codex task execution must request Goal mode through
+  `AGENT_MODE_RALPH` unless the task is an explicitly documented diagnostic.
+  Accepted task and verifier readbacks must include
+  `Agent execution mode: AGENT_MODE_RALPH`; one-shot `AGENT_MODE_EXECUTION`
+  evidence is not accepted for long-running factory delivery.
 - Self-reported `Identity: I am Codex running in Ona Platform Codex` is a
   diagnostic only. The default Ona Agent can echo it. Ona work is accepted only
   with platform-side Codex selector/API evidence plus task/branch/commit-bound

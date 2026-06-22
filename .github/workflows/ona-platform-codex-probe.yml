@@ -9,7 +9,11 @@ on:
       - scripts/dev/start-ona-platform-codex.mjs
       - scripts/dev/fetch-platform-codex-canary.mjs
       - scripts/dev/fetch-platform-codex-video-verifier.mjs
+      - scripts/dev/run-ona-finalizer-artifacts.mjs
+      - scripts/dev/run-agent-factory-stage.mjs
+      - scripts/dev/prepare-video-review-request.mjs
       - scripts/dev/check-agent-factory-secrets.mjs
+      - scripts/dev/check-platform-codex-evidence.mjs
       - scripts/dev/wait-agent-factory-pr-ci.mjs
       - scripts/dev/sync-github-status.mjs
       - scripts/dev/publish-pr-video-evidence.mjs
@@ -156,6 +160,7 @@ jobs:
                 --start
                 --identity-canary
                 --codex-agent-id "$codex_agent_id"
+                --agent-mode AGENT_MODE_RALPH
                 --create-environment
                 --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
                 --wait-seconds "${INPUT_WAIT_SECONDS:-30}"
@@ -171,6 +176,7 @@ jobs:
                 --start
                 --implementation-canary
                 --codex-agent-id "$codex_agent_id"
+                --agent-mode AGENT_MODE_RALPH
                 --task-id "$task_id"
                 --branch "$target_branch"
                 --github-issue "${INPUT_GITHUB_ISSUE:-}"
@@ -269,6 +275,7 @@ jobs:
             --readback-execution "$implementation_execution" \
             --video-verifier-canary \
             --codex-agent-id "$codex_agent_id" \
+            --agent-mode AGENT_MODE_RALPH \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \

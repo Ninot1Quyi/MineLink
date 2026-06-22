@@ -791,9 +791,13 @@ Current status:
   AgentService candidate path for programmatic Codex launch: `StartAgent` with
   an explicit Codex `agentId` and `codexSettings`, `SendToAgentExecution` for
   the task prompt, and `GetAgentExecution` for `spec.agentId` plus
-  Codex-settings readback. This is not accepted product evidence yet. It
-  does not replace the task-bound implementation and verifier readback files
-  required by the finalizer. The launcher now ignores stopped historical Ona
+  Codex-settings readback. The launcher now requests `AGENT_MODE_RALPH`, the
+  Ona SDK enum behind the persistent Goal selector; generated task readbacks
+  must include `Agent execution mode: AGENT_MODE_RALPH`, while one-shot
+  `AGENT_MODE_EXECUTION` evidence remains insufficient for factory delivery.
+  This is not accepted product evidence yet. It does not replace the
+  task-bound implementation and verifier readback files required by the
+  finalizer. The launcher now ignores stopped historical Ona
   environments unless `MINELINK_ONA_ENVIRONMENT_ID` explicitly names one; without
   a running environment, canary workflows create a task environment from the
   completed project/prebuild baseline and wait for it to reach running before
@@ -967,6 +971,11 @@ Current status:
   `.minelink-dev/reports/artifacts/video-review-request.md` with the current
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
   request artifact is a handoff package only and does not release the task.
+- `scripts/dev/run-ona-finalizer-artifacts.mjs` runs finalizer stages inside
+  the Ona task environment, but after checking out the task branch it injects
+  the current workflow/source-commit finalizer scripts. This keeps task content
+  task-branch-bound while preventing stale orchestration scripts from producing
+  mismatched review requests such as `Task id: local`.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

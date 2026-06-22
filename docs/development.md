@@ -189,9 +189,13 @@ node scripts/dev/run-ona-finalizer-artifacts.mjs --environment-id <ona-env> --ta
 That command uses `ona environment exec` to run the validation, summary,
 `render-video`, and `prepare-video` finalizer stages inside the Ona
 devcontainer, then copies `.minelink-dev/reports` back to the runner for video
-review, PR creation, and publication. It is an artifact/finalizer bridge only;
-Platform Codex API readback and branch evidence remain the implementation and
-verifier proof.
+review, PR creation, and publication. The finalizer checks out the task branch
+for task content, then injects the current workflow/source-commit finalizer
+scripts so stale task branches cannot regenerate review requests with old
+defaults. It is an artifact/finalizer bridge only; Platform Codex API readback
+and branch evidence remain the implementation and verifier proof. Platform
+Codex launch commands default to `AGENT_MODE_RALPH`, which maps to the Goal mode
+used for persistent delivery.
 
 For PR review visibility, CI can publish the rendered MP4 to a dedicated
 GitHub evidence branch and update the PR with a playable GitHub file-page link:

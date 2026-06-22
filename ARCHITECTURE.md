@@ -297,18 +297,23 @@ explicit `agentId`, `codeContext`, and `codexSettings`, and
 `AgentService/SendToAgentExecution` can send the task prompt to the resulting
 execution. MineLink tracks that experiment through
 `scripts/dev/start-ona-platform-codex.mjs`, which refuses to omit `agentId` or
-use the known default automation agent id. The launcher defaults to GPT-5.5
-with `CODEX_REASONING_EFFORT_EXTRA_HIGH` and the fast service tier, while
-allowing environment overrides. Ona's current `codexSettings` surface exposes
-model, reasoning effort, and service tier; the visible context-window capacity
-is provided by the selected model rather than by a separate launcher-side
-window-size knob. The repository also carries `.codex/config.toml` to pin
+use the known default automation agent id. The launcher defaults to GPT-5.5,
+`CODEX_REASONING_EFFORT_EXTRA_HIGH`, the fast service tier, and
+`AGENT_MODE_RALPH`. Public Ona SDKs name the persistent Goal selector as
+`AGENT_MODE_RALPH`; `AGENT_MODE_EXECUTION` remains the one-shot Agent selector
+and is not accepted for MineLink long-running factory tasks. The launcher
+allows environment overrides only for controlled diagnostics. Ona's current
+`codexSettings` surface exposes model, reasoning effort, and service tier; the
+visible context-window capacity is provided by the selected model rather than
+by a separate launcher-side window-size knob. The repository also carries
+`.codex/config.toml` to pin
 trusted Codex clients to the GPT-5.5 project default, the current 258400-token
 context window shown by the UI, and a high auto-compaction threshold; this is a
 client preference, not a server-side Ona API override. This API path is not
 accepted until a task-bound readback
 from `AgentService/GetAgentExecution` proves `spec.agentId` is the configured
-Codex agent id and `spec.codexSettings` or `status.codexSettings` is present.
+Codex agent id, `spec.codexSettings` or `status.codexSettings` is present, and
+the generated task readback records `Agent execution mode: AGENT_MODE_RALPH`.
 `.github/workflows/ona-platform-codex-probe.yml` runs the same probe inside
 GitHub Actions with repository `ONA_TOKEN` access. Its default `discover` mode
 only proves token/API policy readback and resolves organization context from
@@ -346,10 +351,15 @@ readback with the remote branch head commit and canary markers into the normal
 file alone is not accepted readback, because the final `Commit:` marker comes
 from the GitHub branch head fetched by the workflow.
 The same workflow now has a `full-chain-canary` mode for the next edge. After
-the implementation canary branch exists, the runner renders the trace-driven
-acceptance summary/MP4, prepares `video-review-request.md`, sends
+the implementation canary branch exists, the runner runs
+`scripts/dev/run-ona-finalizer-artifacts.mjs` inside the same Ona task
+environment to render the trace-driven acceptance summary/MP4 and prepare
+`video-review-request.md`. That finalizer checks out the task branch for task
+content, then injects the current workflow/source-commit finalizer scripts so
+stale task-branch orchestration cannot rewrite the review request with old
+defaults such as `Task id: local`. The runner then sends
 `--video-verifier-canary` back to the same implementation AgentService
-execution, and waits for that session's bounded verifier subagent to write
+execution and waits for that session's bounded verifier subagent to write
 `docs/agent-factory-canaries/<task>-video-verifier.md` on the same task branch.
 `scripts/dev/fetch-platform-codex-video-verifier.mjs` combines the
 implementation AgentService readback, review request hashes, and the remote

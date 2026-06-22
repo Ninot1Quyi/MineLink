@@ -204,6 +204,8 @@ function apiSessionEvidence(report) {
   const spec = execution.spec ?? {};
   const status = execution.status ?? {};
   const requestedAgentId = report?.codexAgentId ?? "";
+  const requestedAgentMode = report?.agentMode ?? "";
+  const readbackMode = spec.mode ?? status.mode ?? "";
   const actualAgentId = spec.agentId ?? "";
   const agentExecutionId = report?.agentExecutionId || execution.id || "";
 
@@ -239,9 +241,21 @@ function apiSessionEvidence(report) {
   } else {
     evidence.push("codexSettings present");
   }
+  if (requestedAgentMode !== "AGENT_MODE_RALPH") {
+    failures.push(`Ona Platform Codex API session did not request Goal/Ralph mode: ${requestedAgentMode || "missing"}.`);
+  } else {
+    evidence.push("requested Goal/Ralph mode");
+  }
+  if (hasValue(readbackMode)) {
+    if (readbackMode !== requestedAgentMode) {
+      failures.push(`Ona Platform Codex API mode mismatch: expected ${requestedAgentMode}, got ${readbackMode}.`);
+    } else {
+      evidence.push(`readback mode ${readbackMode}`);
+    }
+  }
   if (hasValue(status.supportedModel)) evidence.push(`supportedModel ${status.supportedModel}`);
 
-  return { failures, evidence, agentExecutionId };
+  return { failures, evidence, agentExecutionId, agentMode: requestedAgentMode };
 }
 
 function reviewRequestEvidence(text) {
@@ -249,6 +263,7 @@ function reviewRequestEvidence(text) {
   const branch = markerValue(text, "Branch");
   const summaryHash = markerValue(text, "Summary sha256");
   const mp4Hash = markerValue(text, "MP4 sha256");
+  const videoProducer = markerValue(text, "Video producer");
   const status = markerValue(text, "Request status");
   const failures = [];
   const evidence = [];
@@ -268,9 +283,11 @@ function reviewRequestEvidence(text) {
   else evidence.push("Review request summary hash present");
   if (!hasValue(mp4Hash) || mp4Hash === "missing") failures.push("Video review request is missing MP4 sha256.");
   else evidence.push("Review request MP4 hash present");
+  if (!hasValue(videoProducer) || videoProducer === "unknown") failures.push("Video review request is missing Video producer.");
+  else evidence.push(`Review request producer ${videoProducer}`);
   if (status && status !== "ready") failures.push(`Video review request status is not ready: ${status}.`);
 
-  return { failures, evidence, summaryHash, mp4Hash };
+  return { failures, evidence, summaryHash, mp4Hash, videoProducer };
 }
 
 function validateVerifierCanary(text, agentExecutionId, expected) {
@@ -280,6 +297,7 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const branch = markerValue(text, "Branch");
   const commit = markerValue(text, "Commit");
   const sessionId = markerValue(text, ["Session id", "Session"]);
+  const agentMode = markerValue(text, "Agent execution mode");
   const platformEvidence = markerValue(text, ["Platform evidence", "Provider evidence", "Agent selector"]);
   const verifier = markerValue(text, ["Verifier", "Agent mode"]);
   const releaseDecision = markerValue(text, ["Release decision", "Result"]);
@@ -308,6 +326,11 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
     failures.push(`Verifier canary Session id mismatch: expected ${agentExecutionId || "missing"}, got ${sessionId || "missing"}.`);
   } else {
     evidence.push("verifier canary session id matches AgentService execution");
+  }
+  if (agentMode !== expected.agentMode) {
+    failures.push(`Verifier canary Agent execution mode mismatch: expected ${expected.agentMode || "missing"}, got ${agentMode || "missing"}.`);
+  } else {
+    evidence.push(`verifier canary agent execution mode ${agentMode}`);
   }
   if (!/(AgentService|Codex)/i.test(platformEvidence)) {
     failures.push("Verifier canary Platform evidence must mention AgentService or Codex.");
@@ -359,7 +382,10 @@ try {
 }
 
 if (verifier?.text) {
-  const verifierCheck = validateVerifierCanary(verifier.text, api.agentExecutionId, request);
+  const verifierCheck = validateVerifierCanary(verifier.text, api.agentExecutionId, {
+    ...request,
+    agentMode: api.agentMode,
+  });
   failures.push(...verifierCheck.failures);
   evidence.push(...verifierCheck.evidence);
 }
@@ -374,9 +400,11 @@ if (!hasValue(branchCommit)) {
 await fs.mkdir(path.dirname(args.reviewOutput), { recursive: true });
 const reviewLines = [
   "Verifier: Ona Platform Codex",
+  `Agent execution mode: ${api.agentMode || "missing"}`,
   `Release decision: ${failures.length === 0 ? "pass" : "fail"}`,
   `Task matched: ${failures.length === 0 ? "yes" : "no"}`,
   `Video matched: ${failures.length === 0 ? "yes" : "no"}`,
+  `Video producer: ${request.videoProducer || "missing"}`,
   `Summary sha256: ${request.summaryHash || "missing"}`,
   `MP4 sha256: ${request.mp4Hash || "missing"}`,
   `Task id: ${args.taskId}`,
@@ -396,6 +424,7 @@ await fs.writeFile(args.reviewOutput, reviewLines.join("\n"), "utf8");
 await fs.mkdir(path.dirname(args.output), { recursive: true });
 const readbackLines = [
   "Agent mode: Ona Platform Codex",
+  `Agent execution mode: ${api.agentMode || "missing"}`,
   "Identity: I am Codex running in Ona Platform Codex",
   `Platform evidence: Ona AgentService Codex API readback for implementation execution ${api.agentExecutionId || "missing"} had spec.agentId matching the configured Codex agent id and codexSettings present; GitHub branch ${args.branch || "missing"} contains the same-session verifier subagent canary file ${args.verifierPath}.`,
   `Session id: ${api.agentExecutionId || "missing"}`,
@@ -432,10 +461,12 @@ await fs.writeFile(
       verifierUrl: verifier?.htmlUrl ?? "",
       apiSession: args.apiSession,
       agentExecutionId: api.agentExecutionId,
+      agentMode: api.agentMode,
       reviewRequest: args.reviewRequest,
       reviewOutput: args.reviewOutput,
       summaryHash: request.summaryHash,
       mp4Hash: request.mp4Hash,
+      videoProducer: request.videoProducer,
       evidence,
       failures,
       boundary:

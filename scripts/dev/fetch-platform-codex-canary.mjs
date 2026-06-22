@@ -180,6 +180,8 @@ function apiSessionEvidence(report) {
   const spec = execution.spec ?? {};
   const status = execution.status ?? {};
   const requestedAgentId = report?.codexAgentId ?? "";
+  const requestedAgentMode = report?.agentMode ?? "";
+  const readbackMode = spec.mode ?? status.mode ?? "";
   const actualAgentId = spec.agentId ?? "";
   const agentExecutionId = report?.agentExecutionId || execution.id || "";
 
@@ -210,17 +212,30 @@ function apiSessionEvidence(report) {
   } else {
     evidence.push("codexSettings present");
   }
+  if (requestedAgentMode !== "AGENT_MODE_RALPH") {
+    failures.push(`Ona Platform Codex API session did not request Goal/Ralph mode: ${requestedAgentMode || "missing"}.`);
+  } else {
+    evidence.push("requested Goal/Ralph mode");
+  }
+  if (hasValue(readbackMode)) {
+    if (readbackMode !== requestedAgentMode) {
+      failures.push(`Ona Platform Codex API mode mismatch: expected ${requestedAgentMode}, got ${readbackMode}.`);
+    } else {
+      evidence.push(`readback mode ${readbackMode}`);
+    }
+  }
   if (hasValue(status.supportedModel)) evidence.push(`supportedModel ${status.supportedModel}`);
 
-  return { failures, evidence, agentExecutionId };
+  return { failures, evidence, agentExecutionId, agentMode: requestedAgentMode };
 }
 
-function validateCanary(text, agentExecutionId) {
+function validateCanary(text, agentExecutionId, expectedAgentMode) {
   const failures = [];
   const evidence = [];
   const taskId = markerValue(text, ["Task id", "Task"]);
   const branch = markerValue(text, "Branch");
   const sessionId = markerValue(text, ["Session id", "Session"]);
+  const agentMode = markerValue(text, "Agent execution mode");
   const platformEvidence = markerValue(text, ["Platform evidence", "Provider evidence", "Agent selector"]);
   const result = markerValue(text, ["Result", "Status"]);
   const validationResult = markerValue(text, "Validation result");
@@ -239,6 +254,11 @@ function validateCanary(text, agentExecutionId) {
     failures.push(`Canary Session id mismatch: expected ${agentExecutionId || "missing"}, got ${sessionId || "missing"}.`);
   } else {
     evidence.push("canary session id matches AgentService execution");
+  }
+  if (agentMode !== expectedAgentMode) {
+    failures.push(`Canary Agent execution mode mismatch: expected ${expectedAgentMode || "missing"}, got ${agentMode || "missing"}.`);
+  } else {
+    evidence.push(`canary agent execution mode ${agentMode}`);
   }
   if (!/(AgentService|Codex)/i.test(platformEvidence)) {
     failures.push("Canary Platform evidence must mention AgentService or Codex.");
@@ -278,7 +298,7 @@ try {
 }
 
 if (canary?.text) {
-  const canaryCheck = validateCanary(canary.text, api.agentExecutionId);
+  const canaryCheck = validateCanary(canary.text, api.agentExecutionId, api.agentMode);
   failures.push(...canaryCheck.failures);
   evidence.push(...canaryCheck.evidence);
 }
@@ -293,6 +313,7 @@ if (!hasValue(commit)) {
 await fs.mkdir(path.dirname(args.output), { recursive: true });
 const readbackLines = [
   "Agent mode: Ona Platform Codex",
+  `Agent execution mode: ${api.agentMode || "missing"}`,
   "Identity: I am Codex running in Ona Platform Codex",
   `Platform evidence: Ona AgentService Codex API readback for execution ${api.agentExecutionId || "missing"} had spec.agentId matching the configured Codex agent id and codexSettings present; GitHub branch ${args.branch || "missing"} contains the session-bound Codex canary file ${args.canaryPath}.`,
   `Session id: ${api.agentExecutionId || "missing"}`,
@@ -328,6 +349,7 @@ await fs.writeFile(
       canaryUrl: canary?.htmlUrl ?? "",
       apiSession: args.apiSession,
       agentExecutionId: api.agentExecutionId,
+      agentMode: api.agentMode,
       evidence,
       failures,
       boundary:
