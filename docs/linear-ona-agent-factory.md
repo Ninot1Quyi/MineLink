@@ -357,8 +357,13 @@ GitHub Actions can run the same probe through
 `.github/workflows/ona-platform-codex-probe.yml`. Use `mode=discover` to prove
 the repository `ONA_TOKEN` can read Ona policy/API state. Use
 `mode=identity-canary` only after supplying the real Codex app agent id through
-workflow input or the `MINELINK_ONA_CODEX_AGENT_ID` repository secret; without
-that id, the launch edge remains blocked even when `ONA_TOKEN` is present.
+workflow input or the `MINELINK_ONA_CODEX_AGENT_ID` repository secret. Remote
+run `27927522899` proved the identity-canary launch/readback edge from GitHub
+Actions: policy readback allowed the Codex app agent id, `StartAgent` and
+`SendToAgentExecution` succeeded with environment context, and
+`GetAgentExecution` returned the requested `spec.agentId`, `codexSettings`, and
+conversation/transcript URLs. This still does not satisfy implementation,
+validation, video review, PR, or product acceptance.
 After the fail-closed spec was uploaded, remote canary execution
 `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
 `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and a spec containing

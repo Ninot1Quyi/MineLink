@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has a manual/path-filtered Ona prebuild refresh fallback for `codex/minelink-mvp-engineering`, but public Ona automation `agent` steps currently launch the default Agent rather than Codex. Ona's documented `StartAgent(agentId, codexSettings)` API is now tracked as the candidate programmatic Codex launch path, but it still needs an Ona PAT, the Codex app agent id, and `GetAgentExecution` readback before automatic Ona Platform Codex implementation/verifier launch can count as real chain evidence; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has a manual/path-filtered Ona prebuild refresh fallback for `codex/minelink-mvp-engineering`, but public Ona automation `agent` steps currently launch the default Agent rather than Codex. Ona's documented `StartAgent(agentId, codexSettings)` API now has GitHub Actions identity-canary evidence for programmatic Ona Platform Codex launch/readback, but automatic task implementation, video verifier launch, PR finalization, server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -792,13 +792,15 @@ Current status:
   an explicit Codex `agentId` and `codexSettings`, `SendToAgentExecution` for
   the task prompt, and `GetAgentExecution` for `spec.agentId` plus
   Codex-settings readback. This is not accepted product evidence yet. It
-  remains blocked until `GITPOD_API_KEY` or `ONA_TOKEN` is available as an Ona
-  PAT and `MINELINK_ONA_CODEX_AGENT_ID` is known for the Codex app agent; it
-  also does not replace the task-bound implementation and verifier readback
-  files required by the finalizer. `.github/workflows/ona-platform-codex-probe.yml`
-  can now prove the repository-secret token/API edge in `discover` mode, then
-  run the launch canary in `identity-canary` mode once the Codex app agent id is
-  supplied.
+  does not replace the task-bound implementation and verifier readback files
+  required by the finalizer. GitHub Actions run `27927522899` proved the
+  repository-secret `ONA_TOKEN` path, policy readback, `StartAgent`,
+  `SendToAgentExecution`, and `GetAgentExecution` for the allowed Codex app
+  agent id. The readback reported a matching `spec.agentId`, present
+  `codexSettings`, and conversation/transcript URLs. This upgrades only the
+  `platform_codex_launch` chain edge; the downstream implementation session,
+  validation, acceptance MP4 review, PR finalization, and status writeback
+  remain unaccepted.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only

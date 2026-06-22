@@ -870,6 +870,8 @@ if (firstBlockedEdge?.to === "issue_contract") {
 } else if (firstBlockedEdge?.to === "implementation_codex") {
   if (automationExecutionReport?.result === "completed_with_failed_actions") {
     nextActions.push("The dispatcher reached Ona and the guarded finalizer failed closed. Start or repair the Ona Platform Codex implementation session and write the accepted implementation readback.");
+  } else if (nodeStatus.platform_codex_launch === "passed") {
+    nextActions.push("Start the task-bound Ona Platform Codex implementation session from the accepted launch path, then write the implementation readback with task id, branch, commit, session id, and platform evidence.");
   } else {
     nextActions.push("Repair or expose programmatic Ona Platform Codex launch/authentication, start a fresh Codex implementation session, and capture the session id plus logs.");
   }

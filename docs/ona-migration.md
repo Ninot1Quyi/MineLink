@@ -156,7 +156,10 @@ MineLink uses automation to reduce agent memory load:
   Actions with repository secrets. `discover` mode proves only the repository
   token/API policy edge. `identity-canary` mode is the launch proof and requires
   the real Codex app agent id through workflow input or
-  `MINELINK_ONA_CODEX_AGENT_ID`.
+  `MINELINK_ONA_CODEX_AGENT_ID`. Remote run `27927522899` is the current
+  accepted launch-edge evidence: it completed policy readback, `StartAgent`,
+  `SendToAgentExecution`, and `GetAgentExecution` with matching Codex agent id
+  and Codex settings. It is not implementation or video-verifier evidence.
 - `.ona/automations.yaml` defines Ona-native environment tasks.
 - `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
   finalizer that should be started by manual pilot, GitHub dispatch, or Linear
