@@ -149,6 +149,55 @@ function readOnaConfig() {
   }
 }
 
+function environmentProjectId(environment) {
+  return (
+    environment?.projectId ??
+    environment?.metadata?.projectId ??
+    environment?.spec?.projectId ??
+    environment?.project?.id ??
+    environment?.context?.projectId ??
+    ""
+  );
+}
+
+function environmentPhase(environment) {
+  return environment?.status?.phase ?? environment?.phase ?? "";
+}
+
+function environmentCreatedAt(environment) {
+  return environment?.metadata?.createdAt ?? environment?.createdAt ?? "";
+}
+
+function environmentRank(environment) {
+  const phase = environmentPhase(environment);
+  if (/RUNNING/i.test(phase)) return 0;
+  if (/STARTING|CREATING|UPDATING/i.test(phase)) return 1;
+  if (/STOPPED/i.test(phase)) return 2;
+  return 3;
+}
+
+function discoverEnvironmentId(projectId) {
+  if (!hasValue(projectId)) return "";
+  const result = run("ona", ["environment", "list", "-o", "json", "--limit", "1000"]);
+  if (result.status !== 0) return "";
+  try {
+    const parsed = JSON.parse(result.stdout);
+    const environments = Array.isArray(parsed) ? parsed : [parsed];
+    const candidates = environments
+      .filter((environment) => environmentProjectId(environment) === projectId)
+      .filter((environment) => hasValue(environment?.id))
+      .filter((environment) => !/DELETING|DELETED/i.test(environmentPhase(environment)))
+      .sort((left, right) => {
+        const rankDelta = environmentRank(left) - environmentRank(right);
+        if (rankDelta !== 0) return rankDelta;
+        return String(environmentCreatedAt(right)).localeCompare(String(environmentCreatedAt(left)));
+      });
+    return candidates[0]?.id ?? "";
+  } catch {
+    return "";
+  }
+}
+
 function git(argsList) {
   const result = run("git", argsList);
   return result.status === 0 ? result.stdout.trim() : "";
@@ -159,6 +208,7 @@ if (!args.organizationId) args.organizationId = onaConfig.organizationId ?? "";
 if (!args.environmentId) args.environmentId = onaConfig.environmentId ?? "";
 if (!args.branch) args.branch = git(["rev-parse", "--abbrev-ref", "HEAD"]) || "unknown";
 if (!args.commit) args.commit = git(["rev-parse", "--short", "HEAD"]) || "unknown";
+if (!args.environmentId) args.environmentId = discoverEnvironmentId(args.projectId);
 
 async function readPrompt() {
   if (hasValue(args.promptFile)) return fs.readFile(args.promptFile, "utf8");
