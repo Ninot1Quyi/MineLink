@@ -482,7 +482,12 @@ Ona environment to render the trace-driven acceptance summary/MP4 and write the
 video-review request. The finalizer checks out the task branch for task content
 but injects the workflow/source-commit finalizer scripts after checkout, so an
 old task branch cannot regenerate `video-review-request.md` with stale local
-defaults. The workflow then sends `--video-verifier-canary` back to the same
+defaults. For NeoForge client-video tasks, that injection also includes the
+current `e2e.sh`, client-video renderer, recorder dependency bootstrap, and
+matching `ARCHITECTURE.md`; otherwise the finalizer could validate a hybrid
+worktree with new orchestration scripts but an old architecture map, or fail
+client recording only because the already-created Ona environment predates
+`Xvfb`. The workflow then sends `--video-verifier-canary` back to the same
 implementation AgentService execution, waits for
 `docs/agent-factory-canaries/<task>-video-verifier.md`, then runs
 `scripts/dev/fetch-platform-codex-video-verifier.mjs`. The fetch script is the
@@ -863,7 +868,9 @@ surface.
   failure logs from a real Ona Platform Codex implementation branch. Until
   then, the GitHub connector fallback can open the review PR, but it is a
   fallback and must be reported as such.
-- Acceptance video is a trace visualization plus a dedicated Codex review gate.
-  Real Minecraft GUI capture remains future observer-client work.
+- Real Minecraft GUI capture now has an observer-client path, but the full
+  GitHub/Linear issue -> Ona Goal-mode implementation -> finalizer MP4 ->
+  same-session verifier -> PR/CI/status chain still needs a successful
+  end-to-end run before it can be treated as a stable delivery edge.
 - Agent output still needs human review before a gate can become
   `product-accepted`.

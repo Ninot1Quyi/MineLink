@@ -763,6 +763,21 @@ the Minecraft window through Xvfb/ffmpeg, and then runs
 with terminal evidence. That renderer is the only path allowed to set
 `clientGuiCapture=true`; `scripts/dev/check-video-review.mjs
 --require-client-gui-capture` rejects trace-driven videos for these tasks. The
+recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` when
+headless capture dependencies are missing, so an older Ona prebuild can either
+self-install `ffmpeg`, `Xvfb`, and the required X11/OpenGL libraries with
+passwordless apt/sudo or fail early with
+`.minelink-dev/reports/client-recorder-deps.{md,json}` identifying the missing
+dependency edge. New prebuild images should still include those packages; the
+self-bootstrap path is a compatibility guard for already-created task
+environments, not a replacement for the prebuild baseline.
+The Ona finalizer checks out the task branch for task content, then injects the
+current workflow-source finalizer scripts, `e2e.sh`, client-video renderer,
+recorder dependency bootstrap, and matching `ARCHITECTURE.md` from the source
+ref before running validation. Injecting the architecture map with the scripts
+keeps `check-architecture-guard.sh` meaningful: the finalizer no longer tests a
+hybrid worktree where architecture-sensitive scripts changed without their
+source-commit architecture update. The
 recorder client is an observer only: the server creates a visible
 `server_agent` marker and an invisible camera anchor that continuously follows
 the agent for recording, but it does not add MCP tools, world-query authority,

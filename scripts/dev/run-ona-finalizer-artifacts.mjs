@@ -336,6 +336,7 @@ const report = {
   requiredVideoProducer: args.requiredVideoProducer,
   requireClientGuiCapture: args.requireClientGuiCapture,
   tarOutput: args.tarOutput,
+  injectedSourceFiles: [],
   injectedSourceScripts: [],
   extractedFiles: [],
   failures,
@@ -375,14 +376,20 @@ if (failures.length === 0) {
     failures.push(`Missing verifier video review to transfer: ${args.videoReview}`);
   }
 
-  const sourceScripts = [
-    "scripts/dev/run-agent-factory-stage.mjs",
-    "scripts/dev/summarize-evidence.mjs",
-    "scripts/dev/render-acceptance-video.mjs",
-    "scripts/dev/prepare-video-review-request.mjs",
-    "scripts/dev/check-video-review.mjs",
-    "scripts/dev/upload-acceptance-video-storage.mjs",
+  const sourceFiles = [
+    { filePath: "ARCHITECTURE.md", executable: false },
+    { filePath: "scripts/dev/run-agent-factory-stage.mjs", executable: true },
+    { filePath: "scripts/dev/summarize-evidence.mjs", executable: true },
+    { filePath: "scripts/dev/render-acceptance-video.mjs", executable: true },
+    { filePath: "scripts/dev/render-client-capture-video.mjs", executable: true },
+    { filePath: "scripts/dev/prepare-video-review-request.mjs", executable: true },
+    { filePath: "scripts/dev/check-video-review.mjs", executable: true },
+    { filePath: "scripts/dev/upload-acceptance-video-storage.mjs", executable: true },
+    { filePath: "scripts/dev/e2e.sh", executable: true },
+    { filePath: "scripts/dev/ensure-client-recorder-deps.sh", executable: true },
   ];
+  const sourceScripts = sourceFiles.filter((file) => file.executable).map((file) => file.filePath);
+  report.injectedSourceFiles = sourceFiles.map((file) => file.filePath);
   report.injectedSourceScripts = sourceScripts;
 
   if (failures.length === 0) {
@@ -411,11 +418,11 @@ if (failures.length === 0) {
       args.stageGroup === "implementation-finalize"
         ? "rm -f .minelink-dev/reports/artifacts/video-review.md .minelink-dev/reports/artifacts/video-release-gate.md .minelink-dev/reports/video-storage-upload.md .minelink-dev/reports/video-storage-upload.json"
         : "",
-      ...sourceScripts.map((filePath) =>
+      ...sourceFiles.map(({ filePath, executable }) =>
         [
           `mkdir -p ${shellQuote(path.posix.dirname(filePath))}`,
           `git show "$finalizer_source_ref:${filePath}" > ${shellQuote(filePath)}`,
-          `chmod +x ${shellQuote(filePath)}`,
+          executable ? `chmod +x ${shellQuote(filePath)}` : "",
         ].join("\n"),
       ),
       ...stageList().map((stage) => stageCommand(stage)),
@@ -589,6 +596,12 @@ const lines = [
   "",
   ...(report.injectedSourceScripts.length > 0
     ? report.injectedSourceScripts.map((file) => `- \`${file}\``)
+    : ["- none"]),
+  "",
+  "## Injected Source Files",
+  "",
+  ...(report.injectedSourceFiles?.length > 0
+    ? report.injectedSourceFiles.map((file) => `- \`${file}\``)
     : ["- none"]),
   "",
   "## Extracted Artifact Files",

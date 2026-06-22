@@ -258,15 +258,30 @@ start_recorder_client() {
     echo "MINELINK_RECORD_CLIENT=1 requires MINELINK_RUNTIME=neoforge." >&2
     exit 2
   fi
+  recorder_display="${MINELINK_RECORDER_DISPLAY:-${DISPLAY:-:99}}"
+  recorder_video_size="${MINELINK_RECORDER_VIDEO_SIZE:-960x720}"
+  recorder_fps="${MINELINK_RECORDER_FPS:-15}"
+  recorder_needs_xvfb=0
+  if [ -z "${DISPLAY:-}" ] || [ "${MINELINK_RECORDER_FORCE_XVFB:-0}" = "1" ]; then
+    recorder_needs_xvfb=1
+  fi
+
+  if truthy_value "${MINELINK_RECORDER_AUTO_INSTALL_DEPS:-1}"; then
+    if ! command -v ffmpeg >/dev/null 2>&1 || { [ "$recorder_needs_xvfb" = "1" ] && ! command -v Xvfb >/dev/null 2>&1; }; then
+      ensure_args=(--require-ffmpeg)
+      if [ "$recorder_needs_xvfb" = "1" ]; then
+        ensure_args+=(--require-xvfb)
+      fi
+      bash scripts/dev/ensure-client-recorder-deps.sh "${ensure_args[@]}"
+    fi
+  fi
+
   if ! command -v ffmpeg >/dev/null 2>&1; then
     echo "ffmpeg is required for MineLink client acceptance recording." >&2
     exit 2
   fi
 
-  recorder_display="${MINELINK_RECORDER_DISPLAY:-${DISPLAY:-:99}}"
-  recorder_video_size="${MINELINK_RECORDER_VIDEO_SIZE:-960x720}"
-  recorder_fps="${MINELINK_RECORDER_FPS:-15}"
-  if [ -z "${DISPLAY:-}" ] || [ "${MINELINK_RECORDER_FORCE_XVFB:-0}" = "1" ]; then
+  if [ "$recorder_needs_xvfb" = "1" ]; then
     if ! command -v Xvfb >/dev/null 2>&1; then
       echo "Xvfb is required for headless Minecraft client recording when DISPLAY is not set." >&2
       exit 2

@@ -979,6 +979,11 @@ Current status:
   `clientGuiCapture=true` in `acceptance-video-origin.json`. The release gate
   must include `--require-client-gui-capture`; otherwise a static card, reports
   digest, or server-observation-only video cannot be final acceptance evidence.
+  Headless recorder runs call `scripts/dev/ensure-client-recorder-deps.sh` when
+  `ffmpeg` or `Xvfb` is missing; this lets an older Ona task environment
+  self-install recorder packages when apt/sudo is available, or fail with an
+  explicit recorder-dependency report instead of silently downgrading to a
+  placeholder MP4.
 - `scripts/dev/prepare-video-review-request.mjs` generates
   `.minelink-dev/reports/artifacts/video-review-request.md` with the current
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
@@ -987,7 +992,10 @@ Current status:
   the Ona task environment, but after checking out the task branch it injects
   the current workflow/source-commit finalizer scripts. This keeps task content
   task-branch-bound while preventing stale orchestration scripts from producing
-  mismatched review requests such as `Task id: local`.
+  mismatched review requests such as `Task id: local`. The injection also
+  carries the matching `ARCHITECTURE.md` and client recorder helpers so
+  architecture guard failures represent real task drift rather than a
+  source-script/task-doc hybrid.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

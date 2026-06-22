@@ -390,6 +390,7 @@ switch (args.stage) {
           "MINELINK_ACCEPT_EULA=1",
           "MINELINK_RECORD_CLIENT=1",
           "MINELINK_RECORDER_FORCE_XVFB=1",
+          "MINELINK_RECORDER_AUTO_INSTALL_DEPS=1",
           `MINELINK_TASK_ID=${shellQuote(args.taskId)}`,
           `MINELINK_ACCEPTANCE_VIDEO_PRODUCER=${shellQuote(args.videoProducer || "ona-task-finalizer")}`,
           `MINELINK_WORK_DIR=${shellQuote(workDir)}`,
