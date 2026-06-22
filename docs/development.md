@@ -153,14 +153,16 @@ artifacts.
 Trace-driven acceptance artifacts can be rendered with:
 
 ```bash
-node scripts/dev/render-acceptance-video.mjs --require-mp4
+node scripts/dev/render-acceptance-video.mjs --producer ona-task-finalizer --require-mp4
 node scripts/dev/prepare-video-review-request.mjs --require-mp4
 ```
 
 The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and
 `.minelink-dev/reports/artifacts/acceptance.mp4`; `--require-mp4` makes missing
-`ffmpeg` support fail the command. Use `--task-requirements` to embed the
-bounded task contract. The review-request script writes
+`ffmpeg` support fail the command. For final video-required tasks, render from
+the Ona task/finalizer environment with producer `ona-task-finalizer`; a
+`github-actions-canary` producer is only chain-test evidence. Use
+`--task-requirements` to embed the bounded task contract. The review-request script writes
 `.minelink-dev/reports/artifacts/video-review-request.md` with the current
 summary and MP4 hashes plus the exact markers that the release gate will
 enforce. For tasks labeled `video-required`, the current Ona Platform Codex
@@ -174,8 +176,22 @@ compare that request with the rendered summary/MP4 and write:
 The release gate is:
 
 ```bash
-node scripts/dev/check-video-review.mjs --require-mp4
+node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer
 ```
+
+Agent-factory runs should also stop task environments after terminal success or
+failure:
+
+```bash
+node scripts/dev/cleanup-ona-resources.mjs --stop
+```
+
+The cleanup script reads environment ids from
+`.minelink-dev/reports/ona-platform-codex-api-session.json` by default, checks
+the Ona project id and dirty workspace count, writes
+`.minelink-dev/reports/ona-resource-cleanup.{md,json}`, and skips dirty or
+non-MineLink environments unless explicitly overridden. This is resource hygiene
+only; it does not release or accept a task.
 
 Ona agent-factory implementation and video review must use the Ona Platform
 Codex agent option. The default Ona Agent mode is not accepted as MineLink

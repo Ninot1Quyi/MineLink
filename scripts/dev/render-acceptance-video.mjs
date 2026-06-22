@@ -361,7 +361,7 @@ const origin = {
     gitpodWorkspaceId: process.env.GITPOD_WORKSPACE_ID ?? "",
   },
   boundary:
-    producer === "github-actions"
+    producer.startsWith("github-actions")
       ? "GitHub Actions generated this trace-driven canary video; it is not an Ona-produced final acceptance recording."
       : "Acceptance video origin metadata; product acceptance still depends on the requested gate evidence.",
 };

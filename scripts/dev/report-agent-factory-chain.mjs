@@ -42,6 +42,7 @@ const defaults = {
   validationReport: ".minelink-dev/reports/agent-task-summary.md",
   acceptanceSummary: ".minelink-dev/reports/artifacts/acceptance-summary.md",
   acceptanceMp4: ".minelink-dev/reports/artifacts/acceptance.mp4",
+  acceptanceVideoOrigin: ".minelink-dev/reports/artifacts/acceptance-video-origin.json",
   videoReview: ".minelink-dev/reports/artifacts/video-review.md",
   videoReleaseGate: ".minelink-dev/reports/artifacts/video-release-gate.md",
   linearSyncReport: ".minelink-dev/reports/linear-sync.md",
@@ -52,6 +53,7 @@ const args = { ...defaults };
 let codexAuthFailed = false;
 let requirePlatformCodexImplementation = false;
 let requirePlatformCodexVerifier = false;
+let requiredVideoProducer = process.env.MINELINK_ACCEPTANCE_VIDEO_REQUIRED_PRODUCER ?? "";
 const activePrebuildPhases = new Set([
   "PREBUILD_PHASE_CREATING",
   "PREBUILD_PHASE_PENDING",
@@ -102,6 +104,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--validation-report") args.validationReport = readValue();
   else if (arg === "--acceptance-summary") args.acceptanceSummary = readValue();
   else if (arg === "--acceptance-mp4") args.acceptanceMp4 = readValue();
+  else if (arg === "--acceptance-video-origin") args.acceptanceVideoOrigin = readValue();
   else if (arg === "--video-review") args.videoReview = readValue();
   else if (arg === "--video-release-gate") args.videoReleaseGate = readValue();
   else if (arg === "--linear-sync-report") args.linearSyncReport = readValue();
@@ -109,6 +112,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--codex-auth-failed") codexAuthFailed = true;
   else if (arg === "--require-platform-codex-implementation") requirePlatformCodexImplementation = true;
   else if (arg === "--require-platform-codex-verifier") requirePlatformCodexVerifier = true;
+  else if (arg === "--require-video-producer") requiredVideoProducer = readValue();
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/report-agent-factory-chain.mjs [options]
 
@@ -485,6 +489,7 @@ function queryOnaPrebuild(projectId) {
 const validationInfo = await fileInfo(args.validationReport);
 const summaryInfo = await fileInfo(args.acceptanceSummary);
 const mp4Info = await fileInfo(args.acceptanceMp4);
+const originInfo = await fileInfo(args.acceptanceVideoOrigin);
 const reviewInfo = await fileInfo(args.videoReview);
 const releaseInfo = await fileInfo(args.videoReleaseGate);
 const prReportInfo = await fileInfo(args.prReport);
@@ -501,6 +506,7 @@ const prReportText = await readText(args.prReport);
 const linearSyncText = await readText(args.linearSyncReport);
 const implementationReadbackText = await readText(args.onaImplementationReadback);
 const verifierReadbackText = await readText(args.onaVerifierReadback);
+const acceptanceVideoOrigin = await readJson(args.acceptanceVideoOrigin);
 const secretPreflight = await readJson(args.secretPreflight);
 const automationExecutionReport = await readJson(args.onaAutomationExecutionReport);
 const platformCodexApiSession = await readJson(args.onaPlatformCodexApiSession);
@@ -605,11 +611,20 @@ const implementationStatus = codexAuthFailed
       : "missing";
 const branchStatus = implementationStatus === "passed" && args.branch && args.commit ? "passed" : "missing";
 const validationStatus = branchStatus === "passed" && validationInfo && validationInfo.size > 0 ? "passed" : "missing";
-const mp4Status = validationStatus === "passed" && summaryInfo && mp4Info && mp4Info.size > 0
-  ? "passed"
-  : validationStatus === "passed" && summaryInfo
-    ? "partial"
-    : "missing";
+const videoProducer = String(acceptanceVideoOrigin?.producer ?? "unknown");
+const videoProducerAccepted = !requiredVideoProducer || videoProducer === requiredVideoProducer;
+const videoProducerBlocker =
+  requiredVideoProducer && !videoProducerAccepted
+    ? `Acceptance video producer is ${videoProducer}; expected ${requiredVideoProducer}. GitHub-produced videos are canary evidence only, not final Ona task acceptance evidence.`
+    : "";
+const mp4Status =
+  validationStatus === "passed" && summaryInfo && mp4Info && mp4Info.size > 0
+    ? videoProducerAccepted
+      ? "passed"
+      : "blocked"
+    : validationStatus === "passed" && summaryInfo
+      ? "partial"
+      : "missing";
 const verifierSessionId = readbackSessionId(args.onaVerifierSession, verifierReadbackText);
 const verifierAgentAccepted =
   readbackAgentAccepted(args.onaVerifierAgent, verifierReadbackText) ||
@@ -715,7 +730,9 @@ const nodes = [
   mkNode("acceptance_video", "Acceptance summary and MP4", mp4Status, [
     summaryInfo && args.acceptanceSummary,
     mp4Info && `${args.acceptanceMp4}${mp4Info ? ` (${mp4Info.size} bytes)` : ""}`,
-  ]),
+    originInfo && `${args.acceptanceVideoOrigin} (producer: ${videoProducer})`,
+    requiredVideoProducer && `Required producer: ${requiredVideoProducer}`,
+  ], mp4Status === "blocked" ? videoProducerBlocker : ""),
   mkNode("video_verifier", "Same-session verifier subagent", verifierStatus, [
     verifierSessionId && `Implementation/verifier execution: ${verifierSessionId}`,
     verifierAgentAccepted && "Agent mode: Ona Platform Codex",
@@ -808,7 +825,9 @@ const rawEdges = [
   mkEdge("validation", "acceptance_video", edgeStatus(nodeStatus.acceptance_video), [
     summaryInfo && args.acceptanceSummary,
     mp4Info && args.acceptanceMp4,
-  ]),
+    originInfo && `${args.acceptanceVideoOrigin} (producer: ${videoProducer})`,
+    requiredVideoProducer && `Required producer: ${requiredVideoProducer}`,
+  ], mp4Status === "blocked" ? videoProducerBlocker : ""),
   mkEdge("acceptance_video", "video_verifier", edgeStatus(nodeStatus.video_verifier), [
     reviewInfo && args.videoReview,
   ], verifierStatus === "blocked" ? `Video verifier evidence must include same-session Platform Codex readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
@@ -883,7 +902,12 @@ if (firstBlockedEdge?.to === "issue_contract") {
 } else if (firstBlockedEdge?.to === "validation") {
   nextActions.push("Run the required validation command and preserve `.minelink-dev/reports/agent-task-summary.md`.");
 } else if (firstBlockedEdge?.to === "acceptance_video") {
-  nextActions.push("Render acceptance artifacts with `node scripts/dev/render-acceptance-video.mjs --require-mp4`.");
+  if (videoProducerBlocker) {
+    nextActions.push("Re-render the acceptance MP4 inside the Ona task/finalizer environment and preserve `acceptance-video-origin.json` with the required producer.");
+    nextActions.push(videoProducerBlocker);
+  } else {
+    nextActions.push("Render acceptance artifacts with `node scripts/dev/render-acceptance-video.mjs --require-mp4`.");
+  }
 } else if (firstBlockedEdge?.to === "video_verifier") {
   nextActions.push("Send the verifier request to the existing Ona Platform Codex implementation execution, have its native verifier subagent write `.minelink-dev/reports/artifacts/video-review.md`, then rerun the release gate.");
 } else if (firstBlockedEdge?.to === "release_gate") {
@@ -922,6 +946,12 @@ const report = {
   nodes,
   edges,
   warnings: [...autoPrebuildWarnings, automationExecutionWarning].filter(Boolean),
+  acceptanceVideoOrigin: {
+    path: args.acceptanceVideoOrigin,
+    producer: videoProducer,
+    requiredProducer: requiredVideoProducer || null,
+    accepted: videoProducerAccepted,
+  },
   automationExecution: automationExecutionReportInfo
     ? {
         path: args.onaAutomationExecutionReport,
@@ -965,6 +995,8 @@ const lines = [
   `- Generated: \`${report.generatedAt}\``,
   `- Chain progress: \`${progress}%\``,
   `- Remaining chain gap: \`${100 - progress}%\``,
+  `- Acceptance video producer: \`${escapeMd(videoProducer)}\``,
+  `- Required video producer: \`${escapeMd(requiredVideoProducer || "none")}\``,
   "- Acceptance boundary: `automation-chain evidence only; not product acceptance`",
   "",
   "## First Blocking Edge",

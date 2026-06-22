@@ -961,7 +961,8 @@ Current status:
   The renderer also writes `acceptance-video-origin.{json,md}`. A
   `github-actions-canary` producer is chain evidence only; final task
   acceptance requires the MP4 to be produced in the Ona task/finalizer
-  environment and the verifier to review that exact hash.
+  environment with producer `ona-task-finalizer`; the release gate must require
+  that producer and the verifier must review that exact hash.
 - `scripts/dev/prepare-video-review-request.mjs` generates
   `.minelink-dev/reports/artifacts/video-review-request.md` with the current
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
@@ -969,8 +970,14 @@ Current status:
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
-  match markers and current summary/MP4 hashes. The gate writes
+  match markers, the required Ona video producer, and current summary/MP4
+  hashes. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
+- `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at
+  terminal factory cleanup when they belong to the MineLink project and have no
+  uncommitted workspace changes. The cleanup report is resource evidence only;
+  it does not prove implementation correctness, video correctness, or product
+  acceptance.
 - Ona CLI bootstrap has been exercised against the MineLink cloud environment:
   `ona environment start`, `ona environment exec`, and
   `ona environment devcontainer rebuild` reached `/workspaces/MineLink` on

@@ -404,6 +404,17 @@ jobs:
             --require-platform-codex-implementation \
             --require-platform-codex-verifier
 
+      - name: Cleanup Ona task environments
+        if: always()
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+        run: |
+          node scripts/dev/cleanup-ona-resources.mjs \
+            --from-report .minelink-dev/reports/ona-platform-codex-api-session.json \
+            --project-id "$MINELINK_ONA_PROJECT_ID" \
+            --stop
+
       - name: Upload probe evidence
         if: always()
         uses: actions/upload-artifact@v4

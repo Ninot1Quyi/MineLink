@@ -30,6 +30,7 @@
     "agent-factory:secrets": "node scripts/dev/check-agent-factory-secrets.mjs",
     "agent-factory:chain": "node scripts/dev/report-agent-factory-chain.mjs",
     "agent-factory:dispatch": "node scripts/dev/dispatch-agent-factory.mjs",
+    "agent-factory:cleanup-ona": "node scripts/dev/cleanup-ona-resources.mjs",
     "agent-factory:sync-github": "node scripts/dev/sync-github-status.mjs",
     "agent-factory:trigger-full-chain": "node scripts/dev/trigger-agent-factory-full-chain.mjs",
     "agent-factory:start-codex": "node scripts/dev/start-ona-platform-codex.mjs",

@@ -371,7 +371,9 @@ SSH. GitHub Actions may store or publish the MP4 artifact, but final
 acceptance-video evidence must identify the video producer. A
 `github-actions-canary` video proves only the automation chain; a final
 task-acceptance video must be produced in the Ona task/finalizer environment
-and verified by hash against that exact artifact. Manual `ona environment ssh`
+with producer `ona-task-finalizer`, then verified by hash against that exact
+artifact with `check-video-review.mjs --require-producer ona-task-finalizer`.
+Manual `ona environment ssh`
 remains useful for debugging or verification,
 but it is not the product delivery path. Self-reported identity is not accepted:
 the default Ona Agent can echo `Identity: I am Codex running in Ona Platform
@@ -385,7 +387,11 @@ but it is not enough to prove the automated chain unless the task run records
 the specific Codex session and platform-mode evidence. The implementation
 finalizer renders the trace-driven MP4 before the verifier runs; the release
 finalizer must not re-render the MP4 after video review. It checks the existing
-artifact hashes. The GitHub Actions `full-chain-canary` can also run the
+artifact hashes. Terminal factory paths run
+`scripts/dev/cleanup-ona-resources.mjs` after success or failure so task
+environments are stopped automatically when they are in the MineLink project
+and have no uncommitted workspace changes. Cleanup is resource hygiene only; it
+does not change task acceptance. The GitHub Actions `full-chain-canary` can also run the
 release-gate-to-PR edge when `create_pr=true`; it calls
 `scripts/dev/create-agent-factory-pr.mjs`, records
 `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain

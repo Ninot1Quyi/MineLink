@@ -464,15 +464,19 @@ automation-chain evidence only; it does not prove product acceptance. When a
 canary run renders the MP4 on the GitHub runner, the artifact origin must say
 `github-actions-canary`; that video is acceptable for chain testing only. Final
 task acceptance requires an Ona-produced video artifact, with
-`acceptance-video-origin.json` showing the Ona producer and the verifier
-reviewing that exact MP4 hash. When a manual rehearsal needs to prove
+`acceptance-video-origin.json` showing producer `ona-task-finalizer`, the
+release gate requiring that producer, and the verifier reviewing that exact MP4
+hash. When a manual rehearsal needs to prove
 `release_gate -> pr`, run the same workflow with
 `mode=full-chain-canary` and `create_pr=true`. That optional step calls
 `scripts/dev/create-agent-factory-pr.mjs`, creates or updates a draft PR from
 the canary branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,
-and refreshes `agent-factory-chain.json` with the PR URL. This PR edge requires
-the `AGENT_FACTORY_GITHUB_TOKEN` repository secret; the default Actions
-`GITHUB_TOKEN` can be blocked by repository policy from creating pull requests.
+refreshes `agent-factory-chain.json` with the PR URL, then runs
+`scripts/dev/cleanup-ona-resources.mjs` before artifact upload so any task
+environment created by the Platform Codex probe is stopped after the terminal
+result is recorded. This PR edge requires the `AGENT_FACTORY_GITHUB_TOKEN`
+repository secret; the default Actions `GITHUB_TOKEN` can be blocked by
+repository policy from creating pull requests.
 After the draft PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits
 for the PR check rollup, writes
 `.minelink-dev/reports/agent-factory-pr-ci.{md,json}`, and the final chain
