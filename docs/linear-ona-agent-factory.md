@@ -56,6 +56,13 @@ Linear polling fallback
   -> ona ai automation start
 ```
 
+Both dispatchers start the checked-in Ona automation and record its execution
+id, but they do not wait for that generic automation to finish before
+triggering the Platform Codex full-chain workflow. The automation execution is
+node/edge evidence for the bridge only; implementation, video generation,
+verification, PR publication, and status writeback are owned by the downstream
+Platform Codex workflow and finalizer gates.
+
 Both paths generate `.minelink-dev/reports/agent-factory-chain.md`, which lists
 the end-to-end nodes, edges, evidence, first blocking edge, and remaining chain
 percentage. That report is automation-chain evidence only; it does not upgrade

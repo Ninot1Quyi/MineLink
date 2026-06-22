@@ -28,6 +28,18 @@ require_text() {
   fi
 }
 
+forbid_text() {
+  local file="$1"
+  local text="$2"
+  if [[ ! -f "$file" ]]; then
+    failures+=("Missing file for text check: $file")
+    return
+  fi
+  if grep -Fq -- "$text" "$file"; then
+    failures+=("$file must not contain: $text")
+  fi
+}
+
 require_file "AGENTS.md"
 require_file "ARCHITECTURE.md"
 require_file "docs/agent-workbench.md"
@@ -166,7 +178,8 @@ require_text ".github/workflows/agent-factory-dispatch.yml" "dispatch-agent-fact
 require_text ".github/workflows/agent-factory-dispatch.yml" "trigger-agent-factory-full-chain.mjs"
 require_text ".github/workflows/agent-factory-dispatch.yml" "Trigger Platform Codex full-chain workflow"
 require_text ".github/workflows/agent-factory-dispatch.yml" "check-agent-factory-secrets.mjs"
-require_text ".github/workflows/agent-factory-dispatch.yml" "--cancel-ona-execution-on-timeout"
+forbid_text ".github/workflows/agent-factory-dispatch.yml" "--wait-ona-execution"
+forbid_text ".github/workflows/agent-factory-dispatch.yml" "--cancel-ona-execution-on-timeout"
 require_text ".github/workflows/agent-factory-dispatch.yml" "secrets.ONA_TOKEN"
 require_text ".github/workflows/agent-factory-dispatch.yml" "secrets.LINEAR_API_KEY"
 require_text ".github/workflows/agent-factory-dispatch.yml" "actions: write"

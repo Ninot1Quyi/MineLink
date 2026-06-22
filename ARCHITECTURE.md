@@ -405,7 +405,13 @@ environments are stopped automatically when they are in the MineLink project
 and have no uncommitted workspace changes. Cleanup is resource hygiene only; it
 does not change task acceptance, and Ona CLI stop-watch messages are reported
 as cleanup output or warnings rather than validation errors when the final
-environment readback is stopped. The GitHub Actions `full-chain-canary` can also run the
+environment readback is stopped. The source dispatcher starts the checked-in
+Ona automation as an observable bridge node, records its execution id, and then
+continues to the Platform Codex workflow without waiting for generic Ona
+automation actions to finish. This keeps the public Ona automation node visible
+while avoiding the default automation action lifecycle as a bottleneck before
+the Codex-specific implementation and verifier sessions. The GitHub Actions
+`full-chain-canary` can also run the
 release-gate-to-PR edge when `create_pr=true`; it calls
 `scripts/dev/create-agent-factory-pr.mjs`, records
 `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
