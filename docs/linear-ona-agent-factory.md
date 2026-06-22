@@ -399,7 +399,12 @@ project-only context for in-environment agents, GitHub canary modes pass
 project/prebuild baseline, polls until the environment and machine are running,
 and then calls `StartAgent` with that environment id. This avoids binding new
 Codex executions to stale stopped environments whose old branch can leave the
-agent execution pending.
+agent execution pending. Because stopped Ona environments still count against
+the organization total-environment quota, `full-chain-canary` runs
+`scripts/dev/cleanup-ona-resources.mjs --prune-stale-stopped --delete` before
+launching Goal-mode Codex. That preflight prune is project-scoped quota hygiene,
+not task evidence; it skips running/starting environments and records every
+deleted or skipped environment in `.minelink-dev/reports/`.
 The launcher uses the model's available context window and defaults the
 configurable reasoning effort to `CODEX_REASONING_EFFORT_EXTRA_HIGH`; no
 separate launcher-side context-window-size field is currently part of the
@@ -517,7 +522,10 @@ refreshes `agent-factory-chain.json` with the PR URL, then runs
 `scripts/dev/cleanup-ona-resources.mjs --allow-dirty` before artifact upload so
 any task environment created by the Platform Codex probe is stopped after the
 terminal result is recorded, even when finalizer report files leave the task
-workspace dirty. This PR edge requires the `AGENT_FACTORY_GITHUB_TOKEN`
+workspace dirty. A separate preflight cleanup may delete stopped historical
+MineLink task environments to keep the Ona project below the total environment
+quota before new Goal-mode environments are created. This PR edge requires the
+`AGENT_FACTORY_GITHUB_TOKEN`
 repository secret; the default Actions `GITHUB_TOKEN` can be blocked by
 repository policy from creating pull requests.
 After the draft PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits

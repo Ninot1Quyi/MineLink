@@ -443,7 +443,13 @@ environments are stopped automatically when they are in the MineLink project
 and have no uncommitted workspace changes. Cleanup is resource hygiene only; it
 does not change task acceptance, and Ona CLI stop-watch messages are reported
 as cleanup output or warnings rather than validation errors when the final
-environment readback is stopped. The source dispatcher starts the checked-in
+environment readback is stopped. Stopped Ona environments still count against
+the organization's total environment quota, so `full-chain-canary` also runs a
+preflight prune that deletes stopped MineLink task environments before creating
+a fresh Goal-mode task environment. This prune is quota hygiene only: it is
+project-scoped, skips running or starting environments, records dirty-workspace
+deletions in the cleanup report, and does not prove implementation,
+verification, or product acceptance. The source dispatcher starts the checked-in
 Ona automation as an observable bridge node, records its execution id, and then
 continues to the Platform Codex workflow without waiting for generic Ona
 automation actions to finish. This keeps the public Ona automation node visible

@@ -7,6 +7,7 @@ const defaults = {
   output: ".minelink-dev/reports/ona-resource-cleanup.md",
   jsonOutput: ".minelink-dev/reports/ona-resource-cleanup.json",
   projectId: process.env.MINELINK_ONA_PROJECT_ID ?? "",
+  onaTimeout: process.env.MINELINK_ONA_CLEANUP_TIMEOUT ?? "30s",
 };
 const defaultReportPath = ".minelink-dev/reports/ona-platform-codex-api-session.json";
 
@@ -15,8 +16,11 @@ const args = {
   environmentIds: [],
   reportPaths: [],
   stop: false,
+  delete: false,
   allowDirty: false,
   dontWait: false,
+  pruneStaleStopped: false,
+  maxPrune: Number(process.env.MINELINK_ONA_MAX_PRUNE ?? 5),
 };
 
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -28,8 +32,12 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--stop") args.stop = true;
+  else if (arg === "--delete") args.delete = true;
   else if (arg === "--allow-dirty") args.allowDirty = true;
   else if (arg === "--dont-wait") args.dontWait = true;
+  else if (arg === "--prune-stale-stopped") args.pruneStaleStopped = true;
+  else if (arg === "--max-prune") args.maxPrune = Number(readValue());
+  else if (arg === "--ona-timeout") args.onaTimeout = readValue();
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/cleanup-ona-resources.mjs [--stop]
 
@@ -42,8 +50,14 @@ Options:
   --environment-id <id>      Add an explicit environment id.
   --project-id <id>          Only clean environments from this Ona project.
   --stop                     Actually run 'ona environment stop'.
+  --delete                   Delete selected environments. Only safe for clean,
+                             stopped environments unless --allow-dirty is set.
   --allow-dirty              Stop even when Ona reports changed workspace files.
   --dont-wait                Request stop without waiting for completion.
+  --prune-stale-stopped      Add old stopped, clean project environments from
+                             'ona environment list' to the cleanup set.
+  --max-prune <n>            Maximum stale stopped environments to add.
+  --ona-timeout <duration>   Per Ona CLI operation timeout. Defaults to 30s.
   --output <path>            Markdown report path.
   --json-output <path>       JSON report path.`);
     process.exit(0);
@@ -68,7 +82,8 @@ function sanitize(value) {
 }
 
 function run(commandArgs) {
-  return spawnSync("ona", commandArgs, {
+  const finalArgs = ["--timeout", args.onaTimeout, ...commandArgs];
+  return spawnSync("ona", finalArgs, {
     encoding: "utf8",
     stdio: "pipe",
     env: process.env,
@@ -130,6 +145,14 @@ function envMachinePhase(environment) {
   return environment?.status?.machine?.phase ?? "";
 }
 
+function envDesiredPhase(environment) {
+  return environment?.spec?.desiredPhase ?? "";
+}
+
+function envCreatedAt(environment) {
+  return environment?.metadata?.createdAt ?? environment?.createdAt ?? "";
+}
+
 function envChangedFiles(environment) {
   const total = Number(environment?.status?.content?.git?.totalChangedFiles ?? 0);
   if (Number.isFinite(total) && total > 0) return total;
@@ -153,7 +176,8 @@ function envSummary(environment) {
     branch: envBranch(environment),
     phase: envPhase(environment),
     machinePhase: envMachinePhase(environment),
-    desiredPhase: environment?.spec?.desiredPhase ?? "",
+    desiredPhase: envDesiredPhase(environment),
+    createdAt: envCreatedAt(environment),
     changedFiles: envChangedFiles(environment),
   };
 }
@@ -174,7 +198,64 @@ function shouldStop(summary) {
 
 function isStopped(summary) {
   return /STOPPED|STOPPING|DELETED|DELETING/i.test(summary?.phase ?? "") ||
-    /STOPPED|STOPPING|DELETED|DELETING/i.test(summary?.machinePhase ?? "");
+    /STOPPED|STOPPING|DELETED|DELETING/i.test(summary?.machinePhase ?? "") ||
+    /STOPPED|STOPPING|DELETED|DELETING/i.test(summary?.desiredPhase ?? "");
+}
+
+function isDeleted(summary) {
+  return /DELETED|DELETING/i.test(summary?.phase ?? "") ||
+    /DELETED|DELETING/i.test(summary?.machinePhase ?? "") ||
+    /DELETED|DELETING/i.test(summary?.desiredPhase ?? "");
+}
+
+function isRunningOrStarting(summary) {
+  return /RUNNING|STARTING|PENDING|CREATING/i.test(summary?.phase ?? "") ||
+    /RUNNING|STARTING|PENDING|CREATING/i.test(summary?.machinePhase ?? "");
+}
+
+function shouldDelete(summary) {
+  if (!args.delete) return { ok: false, reason: "delete_not_requested" };
+  if (args.projectId && summary.projectId !== args.projectId) {
+    return { ok: false, reason: `project_mismatch:${summary.projectId || "missing"}` };
+  }
+  if (!isStopped(summary)) return { ok: false, reason: "not_stopped" };
+  if (isRunningOrStarting(summary)) return { ok: false, reason: "running_or_starting" };
+  if (!args.allowDirty && summary.changedFiles > 0) {
+    return { ok: false, reason: `dirty_workspace:${summary.changedFiles}` };
+  }
+  return { ok: true, reason: "" };
+}
+
+function parseList(stdout) {
+  try {
+    const parsed = JSON.parse(stdout);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [];
+  }
+}
+
+function collectPruneCandidates(existingIds) {
+  if (!args.pruneStaleStopped || !args.projectId) return { candidates: [], warning: "" };
+  if (!Number.isFinite(args.maxPrune) || args.maxPrune < 0) {
+    return { candidates: [], warning: "--max-prune must be a non-negative number." };
+  }
+  const result = run(["environment", "list", "-o", "json", "--limit", "1000"]);
+  if (result.status !== 0) {
+    return { candidates: [], warning: sanitize(result.stderr || result.stdout) };
+  }
+  const candidates = parseList(result.stdout)
+    .map((environment) => envSummary(environment))
+    .filter((summary) => summary.id)
+    .filter((summary) => !existingIds.has(summary.id))
+    .filter((summary) => summary.projectId === args.projectId)
+    .filter((summary) => isStopped(summary))
+    .filter((summary) => !isDeleted(summary))
+    .filter((summary) => !isRunningOrStarting(summary))
+    .filter((summary) => args.allowDirty || summary.changedFiles === 0)
+    .sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)))
+    .slice(0, args.maxPrune);
+  return { candidates, warning: "" };
 }
 
 async function cleanupEnvironment(environmentId) {
@@ -183,7 +264,7 @@ async function cleanupEnvironment(environmentId) {
     environmentId,
     before: null,
     after: null,
-    action: args.stop ? "stop" : "dry-run",
+    action: args.delete ? "delete" : args.stop ? "stop" : "dry-run",
     result: "pending",
     reason: "",
     output: "",
@@ -192,8 +273,21 @@ async function cleanupEnvironment(environmentId) {
   };
 
   if (getResult.status !== 0) {
+    const error = sanitize(getResult.stderr || getResult.stdout);
+    if (args.delete && /not_found|environment not found/i.test(error)) {
+      record.result = "deleted";
+      record.reason = "already_deleted";
+      record.after = {
+        id: environmentId,
+        phase: "deleted_or_unreadable",
+        machinePhase: "",
+        desiredPhase: "",
+        changedFiles: 0,
+      };
+      return record;
+    }
     record.result = "readback_failed";
-    record.error = sanitize(getResult.stderr || getResult.stdout);
+    record.error = error;
     return record;
   }
 
@@ -202,6 +296,47 @@ async function cleanupEnvironment(environmentId) {
   if (!record.before) {
     record.result = "readback_parse_failed";
     record.error = "ona environment get did not return JSON.";
+    return record;
+  }
+
+  if (args.delete) {
+    const decision = shouldDelete(record.before);
+    if (!decision.ok) {
+      record.result = "skipped";
+      record.reason = decision.reason;
+      return record;
+    }
+
+    const deleteArgs = ["environment", "delete", environmentId];
+    if (args.dontWait) deleteArgs.push("--dont-wait");
+    const deleteResult = run(deleteArgs);
+    record.output = sanitize([deleteResult.stdout, deleteResult.status === 0 ? deleteResult.stderr : ""].filter(Boolean).join("\n"));
+    record.error = deleteResult.status === 0 ? "" : sanitize(deleteResult.stderr);
+
+    const afterResult = run(["environment", "get", environmentId, "-o", "json"]);
+    if (afterResult.status === 0) {
+      const after = parseEnvironment(afterResult.stdout);
+      record.after = after ? envSummary(after) : null;
+    } else if (deleteResult.status === 0) {
+      record.after = {
+        id: environmentId,
+        phase: "deleted_or_unreadable",
+        machinePhase: "",
+        desiredPhase: "",
+        changedFiles: 0,
+      };
+    }
+
+    if (deleteResult.status !== 0 && !isDeleted(record.after)) {
+      record.result = "delete_failed";
+      return record;
+    }
+    if (deleteResult.status !== 0 && isDeleted(record.after)) {
+      record.reason = "delete_reported_error_but_environment_deleted";
+      record.warning = record.error;
+      record.error = "";
+    }
+    record.result = "deleted";
     return record;
   }
 
@@ -237,29 +372,41 @@ async function cleanupEnvironment(environmentId) {
 }
 
 const environmentIds = await collectEnvironmentIds();
+const prune = collectPruneCandidates(new Set(environmentIds));
+for (const candidate of prune.candidates) {
+  environmentIds.push(candidate.id);
+}
 const records = [];
 for (const environmentId of environmentIds) {
   records.push(await cleanupEnvironment(environmentId));
 }
 
 const stopped = records.filter((record) => record.result === "stopped").length;
+const deleted = records.filter((record) => record.result === "deleted").length;
 const failed = records.filter((record) => record.result.endsWith("_failed")).length;
 const dirtySkipped = records.filter((record) => record.reason.startsWith("dirty_workspace")).length;
 const report = {
   generatedAt: new Date().toISOString(),
   stopRequested: args.stop,
+  deleteRequested: args.delete,
   allowDirty: args.allowDirty,
   dontWait: args.dontWait,
+  pruneStaleStopped: args.pruneStaleStopped,
+  maxPrune: args.maxPrune,
+  onaTimeout: args.onaTimeout,
   projectId: args.projectId || "",
   reportPaths: args.reportPaths,
   environmentIds,
+  pruneWarning: prune.warning,
+  pruneCandidates: prune.candidates,
   result: failed > 0 ? "partial" : "completed",
   stopped,
+  deleted,
   skipped: records.filter((record) => record.result === "skipped").length,
   dirtySkipped,
   records,
   boundary:
-    "Cleanup evidence only. Stopping an Ona task environment does not prove MineLink product acceptance.",
+    "Cleanup evidence only. Stopping or deleting an Ona task environment does not prove MineLink product acceptance.",
 };
 
 function md(value) {
@@ -275,8 +422,13 @@ const lines = [
   `- Generated: \`${report.generatedAt}\``,
   `- Result: \`${report.result}\``,
   `- Stop requested: \`${report.stopRequested ? "yes" : "no"}\``,
+  `- Delete requested: \`${report.deleteRequested ? "yes" : "no"}\``,
+  `- Prune stale stopped: \`${report.pruneStaleStopped ? "yes" : "no"}\``,
+  `- Max prune: \`${report.maxPrune}\``,
+  `- Ona operation timeout: \`${report.onaTimeout}\``,
   `- Project guard: \`${report.projectId || "none"}\``,
   `- Stopped: \`${report.stopped}\``,
+  `- Deleted: \`${report.deleted}\``,
   `- Skipped: \`${report.skipped}\``,
   `- Dirty skipped: \`${report.dirtySkipped}\``,
   `- Boundary: \`${report.boundary}\``,
@@ -291,9 +443,10 @@ const lines = [
         ...records.map((record) => {
           const before = record.before ?? {};
           const after = record.after ?? {};
-          return `| ${md(record.result)} | ${md(record.reason || "none")} | \`${md(record.environmentId)}\` | ${md(before.name || "none")} | ${md(before.branch || "none")} | ${md(before.phase || "unknown")}/${md(before.machinePhase || "unknown")} | ${md(after.phase || "not-read")}/${md(after.machinePhase || "not-read")} | ${Number(before.changedFiles ?? 0)} |`;
+          return `| ${md(record.result)} | ${md(record.reason || "none")} | \`${md(record.environmentId)}\` | ${md(before.name || "none")} | ${md(before.branch || "none")} | ${md(before.phase || "unknown")}/${md(before.machinePhase || "unknown")}/${md(before.desiredPhase || "unknown")} | ${md(after.phase || "not-read")}/${md(after.machinePhase || "not-read")}/${md(after.desiredPhase || "not-read")} | ${Number(before.changedFiles ?? 0)} |`;
         }),
       ].join("\n"),
+  report.pruneWarning ? `\nPrune warning: ${md(report.pruneWarning)}\n` : "",
   "",
   "## Errors",
   "",
