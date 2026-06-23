@@ -20,6 +20,8 @@ const defaults = {
   onaAutomationExecutionReport: ".minelink-dev/reports/ona-automation-execution.json",
   onaPrebuild: process.env.MINELINK_ONA_PREBUILD ?? "",
   onaPrebuildStatus: process.env.MINELINK_ONA_PREBUILD_STATUS ?? "",
+  onaPlatformCodexApiSession: ".minelink-dev/reports/ona-platform-codex-api-session.json",
+  onaPlatformCodexApiReport: ".minelink-dev/reports/ona-platform-codex-api-session.md",
   onaImplementationAgent: process.env.MINELINK_ONA_IMPLEMENTATION_AGENT ?? "",
   onaImplementationSession: process.env.MINELINK_ONA_IMPLEMENTATION_SESSION ?? "",
   onaImplementationStatus: process.env.MINELINK_ONA_IMPLEMENTATION_STATUS ?? "",
@@ -33,6 +35,7 @@ const defaults = {
   prUrl: process.env.MINELINK_PR_URL ?? "",
   prReport: ".minelink-dev/reports/agent-factory-pr.md",
   ciUrl: process.env.MINELINK_CI_URL ?? "",
+  prVideoEvidenceReport: ".minelink-dev/reports/pr-video-evidence-comment.md",
   githubStatusUrl: process.env.MINELINK_GITHUB_STATUS_URL ?? "",
   linearStatusUrl: process.env.MINELINK_LINEAR_STATUS_URL ?? "",
   blocker: process.env.MINELINK_CHAIN_BLOCKER ?? "",
@@ -40,6 +43,7 @@ const defaults = {
   validationReport: ".minelink-dev/reports/agent-task-summary.md",
   acceptanceSummary: ".minelink-dev/reports/artifacts/acceptance-summary.md",
   acceptanceMp4: ".minelink-dev/reports/artifacts/acceptance.mp4",
+  acceptanceVideoOrigin: ".minelink-dev/reports/artifacts/acceptance-video-origin.json",
   videoReview: ".minelink-dev/reports/artifacts/video-review.md",
   videoReleaseGate: ".minelink-dev/reports/artifacts/video-release-gate.md",
   linearSyncReport: ".minelink-dev/reports/linear-sync.md",
@@ -50,6 +54,7 @@ const args = { ...defaults };
 let codexAuthFailed = false;
 let requirePlatformCodexImplementation = false;
 let requirePlatformCodexVerifier = false;
+let requiredVideoProducer = process.env.MINELINK_ACCEPTANCE_VIDEO_REQUIRED_PRODUCER ?? "";
 const activePrebuildPhases = new Set([
   "PREBUILD_PHASE_CREATING",
   "PREBUILD_PHASE_PENDING",
@@ -78,6 +83,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-automation-execution-report") args.onaAutomationExecutionReport = readValue();
   else if (arg === "--ona-prebuild") args.onaPrebuild = readValue();
   else if (arg === "--ona-prebuild-status") args.onaPrebuildStatus = readValue();
+  else if (arg === "--ona-platform-codex-api-session") args.onaPlatformCodexApiSession = readValue();
+  else if (arg === "--ona-platform-codex-api-report") args.onaPlatformCodexApiReport = readValue();
   else if (arg === "--ona-implementation-agent") args.onaImplementationAgent = readValue();
   else if (arg === "--ona-implementation-session") args.onaImplementationSession = readValue();
   else if (arg === "--ona-implementation-status") args.onaImplementationStatus = readValue();
@@ -91,6 +98,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--pr-url") args.prUrl = readValue();
   else if (arg === "--pr-report") args.prReport = readValue();
   else if (arg === "--ci-url") args.ciUrl = readValue();
+  else if (arg === "--pr-video-evidence-report") args.prVideoEvidenceReport = readValue();
   else if (arg === "--github-status-url") args.githubStatusUrl = readValue();
   else if (arg === "--linear-status-url") args.linearStatusUrl = readValue();
   else if (arg === "--blocker") args.blocker = readValue();
@@ -98,6 +106,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--validation-report") args.validationReport = readValue();
   else if (arg === "--acceptance-summary") args.acceptanceSummary = readValue();
   else if (arg === "--acceptance-mp4") args.acceptanceMp4 = readValue();
+  else if (arg === "--acceptance-video-origin") args.acceptanceVideoOrigin = readValue();
   else if (arg === "--video-review") args.videoReview = readValue();
   else if (arg === "--video-release-gate") args.videoReleaseGate = readValue();
   else if (arg === "--linear-sync-report") args.linearSyncReport = readValue();
@@ -105,11 +114,12 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--codex-auth-failed") codexAuthFailed = true;
   else if (arg === "--require-platform-codex-implementation") requirePlatformCodexImplementation = true;
   else if (arg === "--require-platform-codex-verifier") requirePlatformCodexVerifier = true;
+  else if (arg === "--require-video-producer") requiredVideoProducer = readValue();
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/report-agent-factory-chain.mjs [options]
 
 Writes a stage report for the MineLink AI-native delivery chain:
-GitHub issue -> dispatcher -> Ona Platform Codex -> validation -> acceptance MP4 -> verifier -> PR -> CI -> status.
+GitHub issue -> dispatcher -> Ona Platform Codex -> validation -> acceptance MP4 -> same-session verifier subagent -> PR -> CI -> status.
 
 This report is progress evidence only. It does not upgrade acceptance gates or
 claim MineLink product completion.`);
@@ -279,6 +289,62 @@ function readbackMatchesExpected(text, expected) {
   return { passed: failures.length === 0, failures, evidence };
 }
 
+function codexApiSessionEvidence(report) {
+  const failures = [];
+  const evidence = [];
+  if (!report) {
+    return {
+      status: "missing",
+      failures: ["No Ona Platform Codex API session report is available."],
+      evidence,
+      agentExecutionId: "",
+    };
+  }
+  const result = normalizeStatus(report.result);
+  const requestedAgentId = report.codexAgentId ?? "";
+  const execution = report.readback?.agentExecution ?? {};
+  const spec = execution.spec ?? {};
+  const status = execution.status ?? {};
+  const actualAgentId = spec.agentId ?? "";
+  const agentExecutionId = report.agentExecutionId || execution.id || "";
+
+  if (result === "blocked") {
+    failures.push(...(report.blockers ?? ["Ona Platform Codex API probe is blocked."]));
+  }
+  if (!hasValue(agentExecutionId)) {
+    failures.push("Ona Platform Codex API probe did not expose an agent execution id.");
+  } else {
+    evidence.push(`API execution: ${agentExecutionId}`);
+  }
+  if (!hasValue(requestedAgentId)) {
+    failures.push("Ona Platform Codex API probe did not record a requested Codex agent id.");
+  }
+  if (hasValue(requestedAgentId) && actualAgentId !== requestedAgentId) {
+    failures.push(`Ona Platform Codex API probe spec.agentId mismatch: expected ${requestedAgentId}, got ${actualAgentId || "missing"}.`);
+  }
+  if (actualAgentId === "00000000-0000-0000-0000-000000007100") {
+    failures.push("Ona Platform Codex API probe read back the default Ona automation agent id.");
+  }
+  if (actualAgentId === requestedAgentId && hasValue(actualAgentId)) {
+    evidence.push("API spec.agentId matches requested Codex agent id");
+  }
+  if (!spec.codexSettings && !status.codexSettings) {
+    failures.push("Ona Platform Codex API probe did not expose spec.codexSettings or status.codexSettings.");
+  } else {
+    evidence.push("API readback includes codexSettings");
+  }
+  if (hasValue(status.supportedModel)) evidence.push(`API supportedModel: ${status.supportedModel}`);
+  if (hasValue(status.conversationUrl)) evidence.push("API conversationUrl present");
+
+  const passed = failures.length === 0 && result === "passed";
+  return {
+    status: passed ? "passed" : failures.length > 0 ? "blocked" : result === "dry-run" ? "partial" : result,
+    failures,
+    evidence,
+    agentExecutionId,
+  };
+}
+
 function escapeMd(value) {
   return String(value ?? "")
     .replaceAll("|", "\\|")
@@ -425,22 +491,29 @@ function queryOnaPrebuild(projectId) {
 const validationInfo = await fileInfo(args.validationReport);
 const summaryInfo = await fileInfo(args.acceptanceSummary);
 const mp4Info = await fileInfo(args.acceptanceMp4);
+const originInfo = await fileInfo(args.acceptanceVideoOrigin);
 const reviewInfo = await fileInfo(args.videoReview);
 const releaseInfo = await fileInfo(args.videoReleaseGate);
 const prReportInfo = await fileInfo(args.prReport);
+const prVideoEvidenceInfo = await fileInfo(args.prVideoEvidenceReport);
 const linearSyncInfo = await fileInfo(args.linearSyncReport);
 const secretPreflightInfo = await fileInfo(args.secretPreflight);
 const automationExecutionReportInfo = await fileInfo(args.onaAutomationExecutionReport);
+const platformCodexApiReportInfo = await fileInfo(args.onaPlatformCodexApiReport);
+const platformCodexApiSessionInfo = await fileInfo(args.onaPlatformCodexApiSession);
 const implementationReadbackInfo = await fileInfo(args.onaImplementationReadback);
 const verifierReadbackInfo = await fileInfo(args.onaVerifierReadback);
 const releaseText = await readText(args.videoReleaseGate);
 const reviewText = await readText(args.videoReview);
 const prReportText = await readText(args.prReport);
+const prVideoEvidenceText = await readText(args.prVideoEvidenceReport);
 const linearSyncText = await readText(args.linearSyncReport);
 const implementationReadbackText = await readText(args.onaImplementationReadback);
 const verifierReadbackText = await readText(args.onaVerifierReadback);
+const acceptanceVideoOrigin = await readJson(args.acceptanceVideoOrigin);
 const secretPreflight = await readJson(args.secretPreflight);
 const automationExecutionReport = await readJson(args.onaAutomationExecutionReport);
+const platformCodexApiSession = await readJson(args.onaPlatformCodexApiSession);
 const secretPreflightActions = Array.isArray(secretPreflight?.nextActions)
   ? secretPreflight.nextActions.filter(Boolean)
   : [];
@@ -520,6 +593,8 @@ const prebuildStatus = normalizeStatus(args.onaPrebuildStatus) !== "missing"
   : hasValue(args.onaPrebuild)
     ? "partial"
     : "missing";
+const platformCodexApi = codexApiSessionEvidence(platformCodexApiSession);
+const platformCodexLaunchStatus = codexAuthFailed ? "blocked" : platformCodexApi.status;
 const implementationSessionId = readbackSessionId(args.onaImplementationSession, implementationReadbackText);
 const implementationAgentAccepted = readbackAgentAccepted(args.onaImplementationAgent, implementationReadbackText);
 const implementationReadbackBound = readbackMatchesExpected(implementationReadbackText, {
@@ -540,11 +615,20 @@ const implementationStatus = codexAuthFailed
       : "missing";
 const branchStatus = implementationStatus === "passed" && args.branch && args.commit ? "passed" : "missing";
 const validationStatus = branchStatus === "passed" && validationInfo && validationInfo.size > 0 ? "passed" : "missing";
-const mp4Status = validationStatus === "passed" && summaryInfo && mp4Info && mp4Info.size > 0
-  ? "passed"
-  : validationStatus === "passed" && summaryInfo
-    ? "partial"
-    : "missing";
+const videoProducer = String(acceptanceVideoOrigin?.producer ?? "unknown");
+const videoProducerAccepted = !requiredVideoProducer || videoProducer === requiredVideoProducer;
+const videoProducerBlocker =
+  requiredVideoProducer && !videoProducerAccepted
+    ? `Acceptance video producer is ${videoProducer}; expected ${requiredVideoProducer}. GitHub-produced videos are canary evidence only, not final Ona task acceptance evidence.`
+    : "";
+const mp4Status =
+  validationStatus === "passed" && summaryInfo && mp4Info && mp4Info.size > 0
+    ? videoProducerAccepted
+      ? "passed"
+      : "blocked"
+    : validationStatus === "passed" && summaryInfo
+      ? "partial"
+      : "missing";
 const verifierSessionId = readbackSessionId(args.onaVerifierSession, verifierReadbackText);
 const verifierAgentAccepted =
   readbackAgentAccepted(args.onaVerifierAgent, verifierReadbackText) ||
@@ -574,12 +658,21 @@ const releaseStatus = verifierStatus === "passed" && releaseInfo && /Result:\s*`
     : "missing";
 const prStatus = releaseStatus === "passed" && hasValue(args.prUrl) ? "passed" : "missing";
 const ciStatus = prStatus === "passed" && hasValue(args.ciUrl) ? "passed" : "missing";
-const statusSyncStatus = ciStatus === "passed" && hasValue(args.githubStatusUrl) && hasValue(args.linearStatusUrl)
+const prVideoEvidenceStatus =
+  ciStatus === "passed" && prVideoEvidenceInfo && /Result:\s*`?passed`?/im.test(prVideoEvidenceText)
+    ? "passed"
+    : ciStatus === "passed" && prVideoEvidenceInfo
+      ? "blocked"
+      : "missing";
+const githubStatusRequired = hasValue(args.githubIssue) || hasValue(args.prUrl);
+const linearStatusRequired = hasValue(args.linearIssue);
+const linearSyncPassed = linearSyncInfo && /created comment|updated .* status|attached /i.test(linearSyncText);
+const githubStatusPassed = !githubStatusRequired || hasValue(args.githubStatusUrl);
+const linearStatusPassed = !linearStatusRequired || hasValue(args.linearStatusUrl) || linearSyncPassed;
+const statusSyncStatus = prVideoEvidenceStatus === "passed" && githubStatusPassed && linearStatusPassed
   ? "passed"
   : ciStatus === "passed" && (hasValue(args.githubStatusUrl) || hasValue(args.linearStatusUrl) || linearSyncInfo)
-    ? /created comment|updated .* status|attached /i.test(linearSyncText)
-      ? "partial"
-      : "partial"
+    ? "partial"
     : "missing";
 
 const codexBlocker = codexAuthFailed
@@ -588,6 +681,13 @@ const codexBlocker = codexAuthFailed
     ? `Implementation evidence must identify Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Platform evidence from the Ona UI/API selector, Session id, Result: passed, Task id, Branch, and Commit in ${args.onaImplementationReadback}; generic Ona automation, task, stale readback, wrong branch, self-reported identity, or default-agent evidence is not accepted.${implementationReadbackBound.failures.length ? ` ${implementationReadbackBound.failures.join(" ")}` : ""}`
     : implementationStatus === "missing"
       ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Platform evidence from the Ona UI/API selector, Session id, Result: passed, Task id, Branch, and Commit.`
+      : "";
+const platformCodexLaunchBlocker = codexAuthFailed
+  ? "Ona Platform Codex rejected the LLM request as unauthenticated before repository commands could run."
+  : platformCodexLaunchStatus === "blocked"
+    ? `Programmatic Ona Platform Codex launch/readback is blocked. Run npm run agent-factory:start-codex -- --start --identity-canary with GITPOD_API_KEY or ONA_TOKEN and MINELINK_ONA_CODEX_AGENT_ID. ${platformCodexApi.failures.join(" ")}`
+    : platformCodexLaunchStatus === "missing"
+      ? `No programmatic Ona Platform Codex API launch/readback evidence was supplied. Expected ${args.onaPlatformCodexApiSession} from npm run agent-factory:start-codex -- --start --identity-canary.`
       : "";
 const globalBlocker = args.blocker || codexBlocker;
 const prebuildBlocker =
@@ -617,6 +717,11 @@ const nodes = [
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
     ...autoPrebuildEvidence,
   ], prebuildBlocker),
+  mkNode("platform_codex_launch", "Ona Platform Codex API launch", platformCodexLaunchStatus, [
+    platformCodexApiSessionInfo && args.onaPlatformCodexApiSession,
+    platformCodexApiReportInfo && args.onaPlatformCodexApiReport,
+    ...platformCodexApi.evidence,
+  ], platformCodexLaunchBlocker),
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
@@ -635,16 +740,18 @@ const nodes = [
   mkNode("acceptance_video", "Acceptance summary and MP4", mp4Status, [
     summaryInfo && args.acceptanceSummary,
     mp4Info && `${args.acceptanceMp4}${mp4Info ? ` (${mp4Info.size} bytes)` : ""}`,
-  ]),
-  mkNode("video_verifier", "Dedicated video verifier", verifierStatus, [
-    verifierSessionId && `Verifier session: ${verifierSessionId}`,
+    originInfo && `${args.acceptanceVideoOrigin} (producer: ${videoProducer})`,
+    requiredVideoProducer && `Required producer: ${requiredVideoProducer}`,
+  ], mp4Status === "blocked" ? videoProducerBlocker : ""),
+  mkNode("video_verifier", "Same-session verifier subagent", verifierStatus, [
+    verifierSessionId && `Implementation/verifier execution: ${verifierSessionId}`,
     verifierAgentAccepted && "Agent mode: Ona Platform Codex",
     verifierReadbackInfo && readbackIdentityAccepted(verifierReadbackText) && "Identity: Codex on Ona Platform Codex diagnostic",
     verifierReadbackInfo && readbackPlatformEvidenceAccepted(verifierReadbackText) && "Platform evidence: Codex selector/API",
     ...verifierReadbackBound.evidence,
     verifierReadbackInfo && args.onaVerifierReadback,
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include same-session Platform Codex readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
   mkNode("release_gate", "Video release gate", releaseStatus, [
     releaseInfo && args.videoReleaseGate,
   ], releaseStatus === "blocked" ? "Video release gate failed or hashes do not match." : ""),
@@ -655,6 +762,9 @@ const nodes = [
   mkNode("ci", "GitHub CI", ciStatus, [
     args.ciUrl && `CI: ${args.ciUrl}`,
   ]),
+  mkNode("pr_video_evidence", "Playable PR video evidence", prVideoEvidenceStatus, [
+    prVideoEvidenceInfo && args.prVideoEvidenceReport,
+  ], prVideoEvidenceStatus === "blocked" ? "Final PR video evidence comment did not publish a GitHub user-attachments MP4 player." : ""),
   mkNode("status_writeback", "Linear/GitHub status writeback", statusSyncStatus, [
     args.githubStatusUrl && `GitHub status: ${args.githubStatusUrl}`,
     args.linearStatusUrl && `Linear status: ${args.linearStatusUrl}`,
@@ -678,6 +788,10 @@ const prebuildHandoffBlocker =
       : prebuildBlocker || "No completed Ona prebuild baseline is available; Codex handoff must wait for a prepared environment.";
 const automationHandoffStatus =
   nodeStatus.ona_automation === "passed" || nodeStatus.ona_automation === "partial"
+    ? nodeStatus.platform_codex_launch
+    : "blocked";
+const codexImplementationHandoffStatus =
+  nodeStatus.platform_codex_launch === "passed"
     ? nodeStatus.implementation_codex
     : "blocked";
 const rawEdges = [
@@ -694,21 +808,28 @@ const rawEdges = [
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
     ...automationExecutionEvidence,
   ]),
-  mkEdge("ona_prebuild", "implementation_codex", prebuildHandoffStatus, [
+  mkEdge("ona_prebuild", "platform_codex_launch", prebuildHandoffStatus, [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
     ...autoPrebuildEvidence,
   ], prebuildHandoffBlocker),
-  mkEdge("ona_automation", "implementation_codex", automationHandoffStatus, [
+  mkEdge("ona_automation", "platform_codex_launch", automationHandoffStatus, [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
     ...automationExecutionEvidence,
+    platformCodexApiSessionInfo && args.onaPlatformCodexApiSession,
+    ...platformCodexApi.evidence,
+  ], nodeStatus.ona_automation === "blocked" ? globalBlocker : platformCodexLaunchBlocker),
+  mkEdge("platform_codex_launch", "implementation_codex", codexImplementationHandoffStatus, [
+    platformCodexApiSessionInfo && args.onaPlatformCodexApiSession,
+    platformCodexApiReportInfo && args.onaPlatformCodexApiReport,
+    ...platformCodexApi.evidence,
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
     implementationReadbackInfo && readbackPlatformEvidenceAccepted(implementationReadbackText) && "Platform evidence: Codex selector/API",
     ...implementationReadbackBound.evidence,
     implementationReadbackInfo && args.onaImplementationReadback,
-  ], nodeStatus.ona_automation === "blocked" ? globalBlocker : codexBlocker),
+  ], nodeStatus.platform_codex_launch === "passed" ? codexBlocker : platformCodexLaunchBlocker),
   mkEdge("implementation_codex", "branch_commit", implementationStatus === "passed" ? nodeStatus.branch_commit : "blocked", [
     `Branch: ${args.branch}`,
     `Commit: ${args.commit}`,
@@ -717,16 +838,21 @@ const rawEdges = [
   mkEdge("validation", "acceptance_video", edgeStatus(nodeStatus.acceptance_video), [
     summaryInfo && args.acceptanceSummary,
     mp4Info && args.acceptanceMp4,
-  ]),
+    originInfo && `${args.acceptanceVideoOrigin} (producer: ${videoProducer})`,
+    requiredVideoProducer && `Required producer: ${requiredVideoProducer}`,
+  ], mp4Status === "blocked" ? videoProducerBlocker : ""),
   mkEdge("acceptance_video", "video_verifier", edgeStatus(nodeStatus.video_verifier), [
     reviewInfo && args.videoReview,
-  ], verifierStatus === "blocked" ? `Video verifier evidence must include a separate Ona Platform Codex session id/readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
+  ], verifierStatus === "blocked" ? `Video verifier evidence must include same-session Platform Codex readback in ${args.onaVerifierReadback}, platform selector/API evidence, match Task id/Branch/Commit, and approve the current acceptance artifacts.${verifierReadbackBound.failures.length ? ` ${verifierReadbackBound.failures.join(" ")}` : ""}` : ""),
   mkEdge("video_verifier", "release_gate", edgeStatus(nodeStatus.release_gate), [
     releaseInfo && args.videoReleaseGate,
   ]),
   mkEdge("release_gate", "pr", edgeStatus(nodeStatus.pr), [args.prUrl && args.prUrl]),
   mkEdge("pr", "ci", edgeStatus(nodeStatus.ci), [args.ciUrl && args.ciUrl]),
-  mkEdge("ci", "status_writeback", edgeStatus(nodeStatus.status_writeback), [
+  mkEdge("ci", "pr_video_evidence", edgeStatus(nodeStatus.pr_video_evidence), [
+    prVideoEvidenceInfo && args.prVideoEvidenceReport,
+  ], nodeStatus.pr_video_evidence === "blocked" ? "Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback." : ""),
+  mkEdge("pr_video_evidence", "status_writeback", edgeStatus(nodeStatus.status_writeback), [
     args.githubStatusUrl && args.githubStatusUrl,
     args.linearStatusUrl && args.linearStatusUrl,
     linearSyncInfo && args.linearSyncReport,
@@ -771,14 +897,19 @@ if (firstBlockedEdge?.to === "issue_contract") {
   nextActions.push("Provide ONA_TOKEN/Ona CLI authentication, start the Ona automation, and capture the automation execution id.");
 } else if (
   firstBlockedEdge?.from === "ona_prebuild" &&
-  firstBlockedEdge?.to === "implementation_codex" &&
+  firstBlockedEdge?.to === "platform_codex_launch" &&
   nodeStatus.ona_prebuild !== "passed"
 ) {
   nextActions.push("Trigger the Ona prebuild refresh only when the environment baseline is missing or environment-sensitive files changed, then wait for a completed baseline before Codex handoff.");
   if (prebuildBlocker) nextActions.push(prebuildBlocker);
+} else if (firstBlockedEdge?.to === "platform_codex_launch") {
+  nextActions.push("Run `npm run agent-factory:start-codex -- --start --identity-canary` with GITPOD_API_KEY or ONA_TOKEN and MINELINK_ONA_CODEX_AGENT_ID, then attach `.minelink-dev/reports/ona-platform-codex-api-session.json`.");
+  if (platformCodexLaunchBlocker) nextActions.push(platformCodexLaunchBlocker);
 } else if (firstBlockedEdge?.to === "implementation_codex") {
   if (automationExecutionReport?.result === "completed_with_failed_actions") {
     nextActions.push("The dispatcher reached Ona and the guarded finalizer failed closed. Start or repair the Ona Platform Codex implementation session and write the accepted implementation readback.");
+  } else if (nodeStatus.platform_codex_launch === "passed") {
+    nextActions.push("Start the task-bound Ona Platform Codex implementation session from the accepted launch path, then write the implementation readback with task id, branch, commit, session id, and platform evidence.");
   } else {
     nextActions.push("Repair or expose programmatic Ona Platform Codex launch/authentication, start a fresh Codex implementation session, and capture the session id plus logs.");
   }
@@ -787,15 +918,22 @@ if (firstBlockedEdge?.to === "issue_contract") {
 } else if (firstBlockedEdge?.to === "validation") {
   nextActions.push("Run the required validation command and preserve `.minelink-dev/reports/agent-task-summary.md`.");
 } else if (firstBlockedEdge?.to === "acceptance_video") {
-  nextActions.push("Render acceptance artifacts with `node scripts/dev/render-acceptance-video.mjs --require-mp4`.");
+  if (videoProducerBlocker) {
+    nextActions.push("Re-render the acceptance MP4 inside the Ona task/finalizer environment and preserve `acceptance-video-origin.json` with the required producer.");
+    nextActions.push(videoProducerBlocker);
+  } else {
+    nextActions.push("Render acceptance artifacts with `node scripts/dev/render-acceptance-video.mjs --require-mp4`.");
+  }
 } else if (firstBlockedEdge?.to === "video_verifier") {
-  nextActions.push("Start a separate Ona Platform Codex verifier session and have it write `.minelink-dev/reports/artifacts/video-review.md`.");
+  nextActions.push("Send the verifier request to the existing Ona Platform Codex implementation execution, have its native verifier subagent write `.minelink-dev/reports/artifacts/video-review.md`, then rerun the release gate.");
 } else if (firstBlockedEdge?.to === "release_gate") {
   nextActions.push("Run `node scripts/dev/check-video-review.mjs --require-mp4` and fix any hash or verifier mismatch.");
 } else if (firstBlockedEdge?.to === "pr") {
   nextActions.push("Open or update the draft PR with links to the validation, MP4, verifier report, release gate, and remaining gaps.");
 } else if (firstBlockedEdge?.to === "ci") {
   nextActions.push("Wait for required GitHub Actions and attach run URLs or logs.");
+} else if (firstBlockedEdge?.to === "pr_video_evidence") {
+  nextActions.push("Publish verifier-approved `acceptance.mp4` through a GitHub user-attachments MP4 URL so the PR page renders an inline video player.");
 } else if (firstBlockedEdge?.to === "status_writeback") {
   nextActions.push("Write the final evidence summary back to GitHub and Linear without printing secrets.");
 }
@@ -826,6 +964,12 @@ const report = {
   nodes,
   edges,
   warnings: [...autoPrebuildWarnings, automationExecutionWarning].filter(Boolean),
+  acceptanceVideoOrigin: {
+    path: args.acceptanceVideoOrigin,
+    producer: videoProducer,
+    requiredProducer: requiredVideoProducer || null,
+    accepted: videoProducerAccepted,
+  },
   automationExecution: automationExecutionReportInfo
     ? {
         path: args.onaAutomationExecutionReport,
@@ -835,6 +979,15 @@ const report = {
         sessionId: automationExecutionReport?.sessionId ?? "",
         cancelOnTimeout: automationExecutionReport?.cancelOnTimeout ?? false,
         cancellation: automationExecutionReport?.cancellation ?? null,
+      }
+    : null,
+  platformCodexApiSession: platformCodexApiSessionInfo
+    ? {
+        path: args.onaPlatformCodexApiSession,
+        reportPath: platformCodexApiReportInfo ? args.onaPlatformCodexApiReport : "",
+        result: platformCodexApiSession?.result ?? "unknown",
+        agentExecutionId: platformCodexApi.agentExecutionId,
+        status: platformCodexLaunchStatus,
       }
     : null,
   nextActions,
@@ -860,6 +1013,8 @@ const lines = [
   `- Generated: \`${report.generatedAt}\``,
   `- Chain progress: \`${progress}%\``,
   `- Remaining chain gap: \`${100 - progress}%\``,
+  `- Acceptance video producer: \`${escapeMd(videoProducer)}\``,
+  `- Required video producer: \`${escapeMd(requiredVideoProducer || "none")}\``,
   "- Acceptance boundary: `automation-chain evidence only; not product acceptance`",
   "",
   "## First Blocking Edge",
