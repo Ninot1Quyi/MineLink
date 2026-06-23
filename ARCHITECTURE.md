@@ -779,10 +779,14 @@ commit SHA before the finalizer fetches the PR base or task branch, because
 later fetches overwrite Git's transient `FETCH_HEAD`. Injecting the architecture map with the scripts
 keeps `check-architecture-guard.sh` meaningful: the finalizer no longer tests a
 hybrid worktree where architecture-sensitive scripts changed without their
-source-commit architecture update. The finalizer also receives the PR base
-branch and fetches it before running `verify-agent-task.sh --base`, so canary
-branches are validated against the branch they will actually target instead of
-falling back to `origin/main`. When a client-video run fails, the artifact
+source-commit architecture update. The finalizer also receives the full
+reviewed commit from the Platform Codex implementation readback and checks out
+the task branch at that exact commit before validation or video rendering.
+This prevents reused or force-pushed canary branches from moving the finalizer
+to a newer branch head that was not the commit reviewed by Goal-mode Codex. The
+finalizer also receives the PR base branch and fetches it before running
+`verify-agent-task.sh --base`, so canary branches are validated against the
+branch they will actually target instead of falling back to `origin/main`. When a client-video run fails, the artifact
 tarball includes `.minelink-dev/client-capture-*` logs in addition to
 `.minelink-dev/reports`, and stage reports preserve both the head and tail of
 long command output so recorder, Minecraft client, and MCP server failures can

@@ -271,6 +271,7 @@ jobs:
             --environment-id "$environment_id" \
             --task-id "$task_id" \
             --branch "$target_branch" \
+            --commit "$reviewed_commit" \
             --base "${INPUT_PR_BASE_BRANCH:-codex/minelink-mvp-engineering}" \
             --source-ref "$GITHUB_REF_NAME" \
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
@@ -387,6 +388,11 @@ jobs:
             echo "Missing Ona finalizer environment id for verifier-approved video release."
             exit 1
           fi
+          reviewed_commit="${MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT:-}"
+          if [ -z "$reviewed_commit" ]; then
+            echo "Missing reviewed commit for verifier-approved video release."
+            exit 1
+          fi
           client_gui_args=()
           if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ]; then
             client_gui_args+=(--require-client-gui-capture)
@@ -396,6 +402,7 @@ jobs:
             --stage-group release-upload \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$reviewed_commit" \
             --base "${INPUT_PR_BASE_BRANCH:-codex/minelink-mvp-engineering}" \
             --source-ref "$GITHUB_REF_NAME" \
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \

@@ -489,8 +489,13 @@ fetches can overwrite `FETCH_HEAD` and make the finalizer inject stale task
 branch scripts. Without that pinning, the finalizer could validate a hybrid
 worktree with new orchestration scripts but an old architecture map, or fail
 client recording only because the already-created Ona environment predates
-`Xvfb`. The finalizer receives the workflow PR base and passes it to
-`verify-agent-task.sh --base`, and its artifact tarball includes
+`Xvfb`. The finalizer also receives the full reviewed commit reported by the
+Platform Codex implementation readback and resets the task branch to that
+commit before validation, summary rendering, or video release. A reused canary
+branch may move after implementation finishes; the finalizer must follow the
+reviewed commit, not the latest remote branch head. The finalizer receives the
+workflow PR base and passes it to `verify-agent-task.sh --base`, and its
+artifact tarball includes
 `.minelink-dev/client-capture-*` logs so failed recorder runs expose the real
 Minecraft/client/MCP log tail. The workflow then sends
 `--video-verifier-canary` back to the same

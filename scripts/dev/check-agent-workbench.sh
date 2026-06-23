@@ -162,6 +162,7 @@ require_text ".github/workflows/ona-platform-codex-probe.yml" "MINELINK_PLATFORM
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Request implementation Codex verifier subagent"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Run Ona finalizer acceptance video request"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "run-ona-finalizer-artifacts.mjs"
+require_text ".github/workflows/ona-platform-codex-probe.yml" '--commit "$reviewed_commit"'
 require_text ".github/workflows/ona-platform-codex-probe.yml" "--readback-execution"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "shouldSendPromptToExistingExecution"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "native Codex subagent/verifier"
@@ -326,7 +327,10 @@ require_text "scripts/dev/render-acceptance-video.mjs" "acceptance-video-origin.
 require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "injectedSourceScripts"
 require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "injectedSourceFiles"
 require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "client-capture-*"
+require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "finalizer_reviewed_commit"
 require_text "scripts/dev/run-agent-factory-stage.mjs" "verifyBaseRef"
+require_text "scripts/dev/run-agent-factory-stage.mjs" "MINELINK_COMMIT"
+require_text "scripts/dev/fetch-platform-codex-canary.mjs" "commitShort"
 require_text "scripts/dev/run-ona-finalizer-artifacts.mjs" "overwriteSourceScript"
 require_text "scripts/dev/publish-pr-video-evidence.mjs" "minelink-evidence"
 require_text "scripts/dev/publish-pr-video-evidence.mjs" "Playable video file"

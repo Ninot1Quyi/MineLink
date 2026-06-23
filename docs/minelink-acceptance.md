@@ -996,9 +996,13 @@ Current status:
   carries the matching `ARCHITECTURE.md` and client recorder helpers so
   architecture guard failures represent real task drift rather than a
   source-script/task-doc hybrid. The finalizer must pin the source ref to a
-  commit before fetching the PR base or task branch, validate against the PR
-  base branch rather than a hard-coded default, and return client-capture logs
-  in its artifact bundle when video rendering fails.
+  commit before fetching the PR base or task branch, checkout the task branch
+  at the full reviewed commit reported by the Platform Codex implementation
+  readback, validate against the PR base branch rather than a hard-coded
+  default, and return client-capture logs in its artifact bundle when video
+  rendering fails. Following the reviewed commit is required for reused canary
+  branches because the remote branch head can move after Goal-mode Codex
+  finishes.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

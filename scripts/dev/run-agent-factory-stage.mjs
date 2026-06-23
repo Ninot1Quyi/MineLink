@@ -11,6 +11,7 @@ const defaults = {
   onaProject: process.env.MINELINK_ONA_PROJECT ?? "",
   onaAutomation: process.env.MINELINK_ONA_AUTOMATION ?? "",
   branch: process.env.MINELINK_BRANCH ?? "",
+  commit: process.env.MINELINK_COMMIT ?? "",
   base: process.env.MINELINK_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
   prTitle: process.env.MINELINK_PR_TITLE ?? "",
   acceptanceGate: process.env.MINELINK_ACCEPTANCE_GATE ?? "unspecified",
@@ -65,6 +66,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-project") args.onaProject = readValue();
   else if (arg === "--ona-automation") args.onaAutomation = readValue();
   else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--commit") args.commit = readValue();
   else if (arg === "--base") args.base = readValue();
   else if (arg === "--pr-title") args.prTitle = readValue();
   else if (arg === "--acceptance-gate") args.acceptanceGate = readValue();
@@ -155,6 +157,8 @@ function selfInvocationArgs(stage) {
     args.onaAutomation || "",
     "--branch",
     args.branch || "",
+    "--commit",
+    args.commit || "",
     "--base",
     args.base || "codex/minelink-mvp-engineering",
     "--pr-title",
@@ -193,7 +197,7 @@ function git(argsList) {
 }
 
 function currentCommit() {
-  return git(["rev-parse", "--short", "HEAD"]) || process.env.MINELINK_COMMIT || "";
+  return args.commit || process.env.MINELINK_COMMIT || git(["rev-parse", "HEAD"]) || git(["rev-parse", "--short", "HEAD"]) || "";
 }
 
 function stageReportPath(stage) {
@@ -250,6 +254,8 @@ function chainArgs(status, requireVerifier = false) {
     "partial",
     "--branch",
     args.branch || "unknown",
+    "--commit",
+    currentCommit(),
     "--acceptance-gate",
     args.acceptanceGate || "unspecified",
     "--require-video-producer",
@@ -412,6 +418,7 @@ switch (args.stage) {
           "MINELINK_RECORDER_FORCE_XVFB=1",
           "MINELINK_RECORDER_AUTO_INSTALL_DEPS=1",
           `MINELINK_TASK_ID=${shellQuote(args.taskId)}`,
+          `MINELINK_COMMIT=${shellQuote(currentCommit())}`,
           `MINELINK_ACCEPTANCE_VIDEO_PRODUCER=${shellQuote(args.videoProducer || "ona-task-finalizer")}`,
           `MINELINK_WORK_DIR=${shellQuote(workDir)}`,
           `bash scripts/dev/e2e.sh ${shellQuote(scenario)}`,

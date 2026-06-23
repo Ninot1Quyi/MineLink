@@ -13,6 +13,7 @@ const defaults = {
   githubIssue: process.env.MINELINK_GITHUB_ISSUE ?? "none",
   linearIssue: process.env.MINELINK_LINEAR_ISSUE ?? "none",
   branch: process.env.MINELINK_BRANCH ?? "",
+  commit: process.env.MINELINK_COMMIT ?? "",
   base: process.env.MINELINK_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
   sourceRef:
     process.env.MINELINK_FINALIZER_SOURCE_REF ??
@@ -67,6 +68,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--github-issue") args.githubIssue = readValue();
   else if (arg === "--linear-issue") args.linearIssue = readValue();
   else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--commit") args.commit = readValue();
   else if (arg === "--base") args.base = readValue();
   else if (arg === "--source-ref") args.sourceRef = readValue();
   else if (arg === "--pr-title") args.prTitle = readValue();
@@ -198,6 +200,8 @@ function stageCommand(stage) {
     args.linearIssue || "none",
     "--branch",
     args.branch,
+    "--commit",
+    args.commit || "",
     "--base",
     args.base || "codex/minelink-mvp-engineering",
     "--pr-title",
@@ -336,6 +340,7 @@ const report = {
   workingDir: args.workingDir,
   taskId: args.taskId,
   branch: args.branch,
+  commit: args.commit,
   sourceRef: args.sourceRef,
   stageGroup: args.stageGroup,
   base: args.base,
@@ -420,6 +425,7 @@ if (failures.length === 0) {
       exportIfValue("MINELINK_VIDEO_STORAGE_BUCKET", args.videoStorageBucket),
       exportIfValue("MINELINK_VIDEO_PUBLIC_BASE_URL", args.videoStoragePublicBaseUrl),
       exportIfValue("MINELINK_VIDEO_STORAGE_PREFIX", args.videoStoragePrefix),
+      exportIfValue("MINELINK_COMMIT", args.commit),
       "mkdir -p .minelink-dev/reports",
       ...transferredFiles.map(([filePath, base64]) => decodeRemoteFile(filePath, base64)).filter(Boolean),
       hasValue(args.sourceRef) ? `git fetch origin ${shellQuote(args.sourceRef)}` : "",
@@ -427,8 +433,11 @@ if (failures.length === 0) {
       hasValue(remoteBranchName(args.base))
         ? `git fetch origin ${shellQuote(remoteBranchName(args.base))}:${shellQuote(`refs/remotes/origin/${remoteBranchName(args.base)}`)} || git fetch origin ${shellQuote(remoteBranchName(args.base))}`
         : "",
+      hasValue(args.commit) ? `finalizer_reviewed_commit=${shellQuote(args.commit)}` : "finalizer_reviewed_commit=",
       `git fetch origin ${shellQuote(args.branch)}`,
-      `git checkout -B ${shellQuote(args.branch)} ${shellQuote(`origin/${args.branch}`)}`,
+      `if [ -n "$finalizer_reviewed_commit" ]; then git fetch origin "$finalizer_reviewed_commit" || true; fi`,
+      `if [ -n "$finalizer_reviewed_commit" ]; then git checkout -B ${shellQuote(args.branch)} "$finalizer_reviewed_commit"; else git checkout -B ${shellQuote(args.branch)} ${shellQuote(`origin/${args.branch}`)}; fi`,
+      `if [ -n "$finalizer_reviewed_commit" ]; then case "$(git rev-parse HEAD)" in "$finalizer_reviewed_commit"*) ;; *) echo "Finalizer checkout mismatch: expected $finalizer_reviewed_commit got $(git rev-parse HEAD)" >&2; exit 65 ;; esac; fi`,
       args.stageGroup === "implementation-finalize"
         ? "rm -f .minelink-dev/reports/artifacts/video-review.md .minelink-dev/reports/artifacts/video-release-gate.md .minelink-dev/reports/video-storage-upload.md .minelink-dev/reports/video-storage-upload.json"
         : "",
@@ -605,6 +614,7 @@ const lines = [
   `- Working directory: \`${args.workingDir}\``,
   `- Task id: \`${args.taskId}\``,
   `- Branch: \`${args.branch || "none"}\``,
+  `- Reviewed commit: \`${args.commit || "none"}\``,
   `- Video producer: \`${args.videoProducer || "none"}\``,
   `- Required video producer: \`${args.requiredVideoProducer || "none"}\``,
   `- Tarball: \`${args.tarOutput}\``,

@@ -331,11 +331,12 @@ if (canary?.text) {
   evidence.push(...canaryCheck.evidence);
 }
 
-const commit = (canary?.commit || args.branchCommit || "").slice(0, 12);
+const commit = canary?.commit || args.branchCommit || "";
+const commitShort = commit ? commit.slice(0, 12) : "";
 if (!hasValue(commit)) {
   failures.push("No branch commit was available for implementation readback.");
 } else {
-  evidence.push(`branch commit ${commit}`);
+  evidence.push(`branch commit ${commitShort || commit}`);
 }
 
 await fs.mkdir(path.dirname(args.output), { recursive: true });
@@ -373,6 +374,7 @@ await fs.writeFile(
       taskId: args.taskId,
       branch: args.branch,
       commit,
+      commitShort,
       canaryPath: args.canaryPath,
       canaryUrl: canary?.htmlUrl ?? "",
       apiSession: args.apiSession,
