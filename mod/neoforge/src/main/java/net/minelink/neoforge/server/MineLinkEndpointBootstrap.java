@@ -36,6 +36,9 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
+import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
+import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.recipebook.PlaceRecipe;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -299,8 +302,8 @@ public final class MineLinkEndpointBootstrap {
         double height,
         double side
     ) {
-        double[] distances = new double[] { distance, distance + 2.0D, distance + 4.0D, Math.max(3.0D, distance - 1.0D) };
-        double[] heights = new double[] { height + 3.0D, height + 5.0D, height + 1.5D, height + 7.0D, height };
+        double[] distances = new double[] { distance, Math.max(3.0D, distance - 1.0D), distance + 2.0D, distance + 4.0D };
+        double[] heights = new double[] { height, height + 1.0D, height + 2.0D, height + 3.0D, height + 5.0D };
         double[] sides = new double[] { side, 0.0D, -side, side * 2.0D, -side * 2.0D };
         Vec3 fallback = agentPos.subtract(forward.scale(distance)).add(right.scale(side)).add(0.0D, height, 0.0D);
         for (double candidateDistance : distances) {
@@ -371,9 +374,9 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private static int recorderMiningVisibleMs() {
-        return Math.min(
-            5_000,
-            parseIntSetting("MINELINK_RECORDER_MINING_VISIBLE_MS", "minelink.recorder.miningVisibleMs", 1_800)
+        return Math.max(
+            1_000,
+            Math.min(8_000, parseIntSetting("MINELINK_RECORDER_MINING_VISIBLE_MS", "minelink.recorder.miningVisibleMs", 5_000))
         );
     }
 
@@ -1150,6 +1153,8 @@ public final class MineLinkEndpointBootstrap {
     private int moveForPlayerLikeDuration(AgentBody agent, Vec3 requested, int durationMs) {
         if (durationMs <= PLAYER_MOVEMENT_TICK_MS) {
             agent.entity.move(MoverType.SELF, requested);
+            broadcastAgentMotion(agent, requested);
+            broadcastAgentPosition(agent);
             return requested.length() > 0.001D ? 1 : 0;
         }
         int steps = Math.max(1, Math.min(120, (int)Math.ceil(durationMs / (double)PLAYER_MOVEMENT_TICK_MS)));
@@ -1157,6 +1162,8 @@ public final class MineLinkEndpointBootstrap {
         long sleepMs = Math.max(1L, durationMs / steps);
         for (int index = 0; index < steps; index += 1) {
             agent.entity.move(MoverType.SELF, step);
+            broadcastAgentMotion(agent, step);
+            broadcastAgentPosition(agent);
             updateRecorder(agent);
             try {
                 TimeUnit.MILLISECONDS.sleep(sleepMs);
@@ -1165,7 +1172,25 @@ public final class MineLinkEndpointBootstrap {
                 return index + 1;
             }
         }
+        broadcastAgentMotion(agent, Vec3.ZERO);
+        broadcastAgentPosition(agent);
         return steps;
+    }
+
+    private void broadcastAgentPosition(AgentBody agent) {
+        server.getPlayerList().broadcastAll(new ClientboundTeleportEntityPacket(agent.entity));
+    }
+
+    private void broadcastAgentMotion(AgentBody agent, Vec3 delta) {
+        agent.entity.setDeltaMovement(delta);
+        server.getPlayerList().broadcastAll(new ClientboundSetEntityMotionPacket(agent.entity));
+    }
+
+    private void broadcastAgentSwing(AgentBody agent) {
+        server.getPlayerList().broadcastAll(new ClientboundAnimatePacket(
+            agent.entity,
+            ClientboundAnimatePacket.SWING_MAIN_HAND
+        ));
     }
 
     private int holdVisibleMiningForRecorder(AgentBody agent, BlockPos pos) {
@@ -1184,6 +1209,7 @@ public final class MineLinkEndpointBootstrap {
         try {
             for (int index = 0; index < steps; index += 1) {
                 agent.entity.swing(InteractionHand.MAIN_HAND);
+                broadcastAgentSwing(agent);
                 server.overworld().destroyBlockProgress(agent.entity.getId(), pos, Math.min(9, index));
                 updateRecorder(agent);
                 try {

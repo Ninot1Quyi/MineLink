@@ -451,6 +451,7 @@ const report = {
     manifestPath: ".minelink-dev/ona-finalizer-artifacts-manifest.json",
     chunkDir: ".minelink-dev/ona-finalizer-artifact-chunks",
     chunkSize: 48_000,
+    maxByteCount: Number(process.env.MINELINK_ONA_FINALIZER_MAX_CHUNKED_BYTES ?? 8_000_000),
     chunkCount: 0,
     fetchedChunks: 0,
     byteCount: 0,
@@ -584,13 +585,30 @@ if (failures.length === 0) {
       `printf '%s\\n' "$status" > ${shellQuote(remoteExitCode)}`,
       "tar_paths=(reports)",
       "while IFS= read -r -d '' candidate; do",
-      "  tar_paths+=(\"${candidate#.minelink-dev/}\")",
+      "  rel=\"${candidate#.minelink-dev/}\"",
+      "  if test -d \"$candidate/logs\"; then tar_paths+=(\"$rel/logs\"); fi",
+      "  if test -d \"$candidate/reports\"; then tar_paths+=(\"$rel/reports\"); fi",
       "done < <(find .minelink-dev -maxdepth 1 -type d -name 'client-capture-*' -print0 2>/dev/null || true)",
-      "tar_args=()",
+      "tar_args=(",
+      "  --exclude='client-capture-*/reports/*.mp4'",
+      "  --exclude='*.mkv'",
+      "  --exclude='*/recorder-game-dir/*'",
+      "  --exclude='*/node_modules/*'",
+      "  --exclude='*/.git/*'",
+      "  --exclude='*/build/*'",
+      "  --exclude='*/run/*'",
+      ")",
       "if test -s .minelink-dev/reports/artifacts/video-storage-manifest.json; then",
       "  tar_args+=(--exclude=reports/artifacts/acceptance.mp4)",
       "fi",
       `tar -C .minelink-dev -czf ${shellQuote(remoteTarball)} "\${tar_args[@]}" "\${tar_paths[@]}" >> ${shellQuote(remoteLog)} 2>&1 || true`,
+      `tar -tzf ${shellQuote(remoteTarball)} > .minelink-dev/reports/ona-finalizer-artifacts-files.txt 2>> ${shellQuote(remoteLog)} || true`,
+      "if grep -E '(^|/)(node_modules|\\.git|recorder-game-dir|build|run)/|(^|/)(AGENTS\\.md|ARCHITECTURE\\.md|package\\.json)$' .minelink-dev/reports/ona-finalizer-artifacts-files.txt >/dev/null 2>&1; then",
+      "  echo 'Refusing unsafe finalizer artifact tarball: repo/client workspace files were included.' >> " + shellQuote(remoteLog),
+      `  printf '%s\\n' 67 > ${shellQuote(remoteExitCode)}`,
+      `  touch ${shellQuote(remoteDone)}`,
+      "  exit 0",
+      "fi",
       `touch ${shellQuote(remoteDone)}`,
       "exit 0",
     ].join("\n");
@@ -725,6 +743,11 @@ if (failures.length === 0) {
           }
           if (!Number.isFinite(byteCount) || byteCount < 1) {
             failures.push(`Ona finalizer artifact manifest has invalid byteCount: ${manifest.byteCount}`);
+          }
+          if (Number.isFinite(byteCount) && byteCount > report.artifactTransfer.maxByteCount) {
+            failures.push(
+              `Ona finalizer artifact tarball is too large for the chunk bridge: ${byteCount} > ${report.artifactTransfer.maxByteCount}`,
+            );
           }
           if (!/^[a-f0-9]{64}$/i.test(expectedSha)) {
             failures.push(`Ona finalizer artifact manifest has invalid sha256: ${expectedSha || "missing"}`);
@@ -886,6 +909,7 @@ const lines = [
   `- Manifest: \`${report.artifactTransfer.manifestPath}\``,
   `- Chunk directory: \`${report.artifactTransfer.chunkDir}\``,
   `- Chunk size: \`${report.artifactTransfer.chunkSize}\``,
+  `- Max byte count: \`${report.artifactTransfer.maxByteCount}\``,
   `- Chunks fetched: \`${report.artifactTransfer.fetchedChunks}/${report.artifactTransfer.chunkCount}\``,
   `- Byte count: \`${report.artifactTransfer.byteCount}\``,
   `- SHA256: \`${report.artifactTransfer.sha256 || "none"}\``,

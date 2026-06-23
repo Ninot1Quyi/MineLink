@@ -205,7 +205,8 @@ uses an invisible observer camera anchor only; the visible target must be the
 real `MineLink-*` FakePlayer-backed ServerPlayer body, not an ArmorStand or
 other proxy marker. It must log `MineLink recorder auto-follow active` so
 release gates can verify the server-side recorder binding followed the active
-`server_agent`. The recorder client must also log
+`server_agent`. The recorder client defaults to binding the recorded Minecraft
+view to that same `MineLink-*` player body in third person. It must also log
 `MineLink recorder client following server_agent` so release gates can verify the
 captured client view actually saw and followed the visible player body. It must
 also log
@@ -217,11 +218,13 @@ must also log
 framed in the recorder client's own camera view; release gates record this as
 `recorderClientTargetCentered=true` so a video where the agent is off-screen is
 not accepted. It must also log
-`MineLink recorder client target visible server_agent` after a raycast confirms
-clear line of sight from the recorder camera to the visible `server_agent`
-player body; release gates record this as `recorderClientTargetVisible=true` so a
-video where the agent is hidden behind terrain or foliage is not accepted. The
-runner must wait for these recorder markers before task work starts and record
+`MineLink recorder client target visible server_agent` after the selected camera
+mode is showing the visible `server_agent` player body; free-camera fallback may
+use raycast line-of-sight confirmation, but the accepted default is target-bound
+third-person footage of the real player body. Release gates record this as
+`recorderClientTargetVisible=true` so a video where the agent is hidden behind
+terrain, foliage, or a proxy marker is not accepted. The runner must wait for
+these recorder markers before task work starts and record
 `recorderReadyBeforeScenario=true`; the post-scenario hold must then record
 `recorderWorkCoverageAdequate=true` for the configured visible work window. The
 renderer must then set `recorderWorkVisible=true`, which requires a passing
@@ -254,9 +257,16 @@ node scripts/dev/run-ona-finalizer-artifacts.mjs --environment-id <ona-env> --ta
 
 That command uses `ona environment exec` to run the validation, summary,
 `render-video`, `render-storyboard`, `upload-video` when R2 is configured, and
-`prepare-video` finalizer stages inside the Ona devcontainer, then copies
-`.minelink-dev/reports` back to the runner for the
-same implementation Codex execution to launch its verifier subagent. After
+`prepare-video` finalizer stages inside the Ona devcontainer, then copies only
+small reports, manifests, and lightweight `client-capture-*/{logs,reports}`
+evidence back to the runner for the same implementation Codex execution to
+launch its verifier subagent. When external storage is configured, the final
+MP4 travels through the storage manifest instead of the chunk bridge. The chunk
+bridge excludes recorder game directories, `node_modules`, `.git`, build/run
+outputs, raw client MP4s, and repository-root files; a tarball crossing that
+boundary fails closed before long downloads. Without external storage, the
+final `acceptance.mp4` may use the chunk bridge only as a size-capped fallback.
+After
 `video-review.md` is written, run the bridge again with
 `--stage-group release-upload`; the Ona release finalizer checks the existing
 MP4/review hashes, uploads the verified MP4 to external storage, and copies the

@@ -183,14 +183,19 @@ Current status:
   guard replay asserts movement collision feedback; the latest real guard run
   reported `collision=true` with `moved_distance` lower than
   `requested_distance`. Movement is stepped at an approximate vanilla walking
-  cadence for video-required scenarios, but full client-equivalent locomotion
-  and animation parity remain open product gaps.
+  cadence for video-required scenarios and now broadcasts position/motion
+  updates for the visible `MineLink-*` player body, but full client-equivalent
+  locomotion, pathfinding, jump/fall handling, and animation parity remain open
+  product gaps.
 - `action.mine_visible_block` in the real NeoForge runtime now keeps the
   existing observed-ref, TTL, reach, and block-id guards, then mines through the
   FakePlayer `ServerPlayerGameMode.destroyBlock` path. Drops are collected only
   from newly spawned nearby item entities through vanilla/NeoForge pickup hooks,
   and unbreakable or unharvestable targets return structured `blocked` or
-  `wrong_tool` failures instead of synthetic inventory credit.
+  `wrong_tool` failures instead of synthetic inventory credit. Video-required
+  mining also broadcasts main-hand swing and block-destroy progress from the
+  same visible `server_agent` player entity so the MP4 can show task work, not
+  just a final inventory result.
 - The real NeoForge runtime now treats the FakePlayer inventory as the
   authoritative item store for `observe.inventory`, container inventory slots,
   `container.take_output`, `craft.quick_craft` ingredient consumption,
@@ -1009,16 +1014,18 @@ Current status:
   to the agent-following camera anchor; the renderer records this as
   `recorderAutoFollow=true`. The recorder client must also log
   `MineLink recorder client following server_agent` after it sees the visible
-  `MineLink-*` player body and steers the recorded camera toward it; the renderer records
-  this as `recorderClientFollow=true`. The server-side recorder helper must
+  `MineLink-*` player body. The default accepted view binds the client camera
+  to that same player body in third person, rather than filming a proxy marker
+  or a detached first-person recorder hand; the renderer records this as
+  `recorderClientFollow=true`. The server-side recorder helper must
   log `MineLink recorder target moved server_agent` after the active
   `server_agent` visibly moves during the recorded scenario; the renderer
   records this as `recorderTargetMoved=true`. The recorder client must also log
   `MineLink recorder client target centered server_agent` after the recorder
-  player's own camera has held the visible agent in frame; the renderer records
+  view has held the visible agent in frame; the renderer records
   this as `recorderClientTargetCentered=true`. The recorder client must also
   log `MineLink recorder client target visible server_agent` only after its
-  camera has a clear line of sight to the visible `server_agent` player body; the
+  selected camera mode is showing the visible `server_agent` player body; the
   renderer records this as `recorderClientTargetVisible=true`. The renderer
   must also set `recorderReadyBeforeScenario=true` before the first scenario
   work tool runs, so fast tasks cannot finish before the recorder has visibly
@@ -1095,7 +1102,13 @@ Current status:
   runner must download the MP4 from the manifest URL and fail closed unless
   the bytes match `mp4Sha256`. The fixed-size base64 chunk bridge remains for
   reports, client-capture logs, and no-R2 fallback; it is no longer the
-  preferred large-`acceptance.mp4` transport. Implementation finalization also
+  preferred large-`acceptance.mp4` transport. When a storage manifest exists,
+  the chunk bridge must not include the final `acceptance.mp4`; a no-R2
+  fallback may carry that final MP4 only under the chunk bridge byte cap. The
+  chunk bridge must never include raw client MP4 files, recorder game
+  directories, `node_modules`, `.git`, build/run outputs, or repository root
+  files; those indicate a broken artifact boundary and must fail closed before
+  long chunk downloads. Implementation finalization also
   runs `render-storyboard` after `render-video`; missing storyboard evidence
   blocks a client-GUI video review request, but storyboard evidence never
   releases a task without the MP4.

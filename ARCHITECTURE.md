@@ -810,8 +810,8 @@ MCP/server/agent logs. `recorderWorkVisible=true` and
 and recorder evidence: the scenario must pass, at least one world-changing MCP
 tool such as `action.*`, `container.*`, `craft.*`, `furnace.*`, or `create.*`
 must succeed, at least one final assertion must pass, and the recorder must
-confirm target movement, follow, centered framing, and line-of-sight
-visibility. For scenarios that complete `action.mine_visible_block`, the
+confirm target movement, follow, centered framing, and visible target framing.
+For scenarios that complete `action.mine_visible_block`, the
 renderer additionally requires the server-side recorder marker
 `MineLink recorder visible mining server_agent` before it sets
 `recorderScenarioActionVisible=true`; this prevents a video that only shows the
@@ -866,7 +866,15 @@ closed unless its SHA-256 matches `mp4Sha256`. The artifact bridge still
 prepares a remote manifest plus fixed-size base64 chunks under
 `.minelink-dev/ona-finalizer-artifact-chunks` and verifies the tarball SHA-256
 after downloading; that bridge is for reports, logs, manifests, and no-R2
-fallbacks, not the preferred large-video transport. The
+fallbacks, not the preferred large-video transport. The chunk bridge is a
+small-report allowlist: it may include `.minelink-dev/reports` and lightweight
+`.minelink-dev/client-capture-*/{logs,reports}` files, but when a storage
+manifest exists it must exclude the final `acceptance.mp4`; it must always
+exclude raw client MP4s, recorder game directories, `node_modules`, `.git`,
+build outputs, run directories, and repository-root files such as `AGENTS.md`,
+`ARCHITECTURE.md`, or `package.json`. A no-R2 fallback may carry the final
+`acceptance.mp4` only under the chunk bridge byte cap. A tarball that crosses
+the boundary fails before GitHub Actions spends time fetching chunks. The
 recorder client is an observer only: the server publishes the real
 `MineLink-*` FakePlayer-backed `server_agent` as a visible ServerPlayer entity
 and creates only an invisible camera anchor that continuously follows that body
@@ -889,12 +897,11 @@ must log `MineLink recorder target moved server_agent` after the active
 `server_agent` body visibly moves during the recorded scenario; the renderer
 writes that as `recorderTargetMoved=true`. It must then log
 `MineLink recorder client target centered server_agent` after the recorded
-client camera is back on the recorder player and has held a target-centered
+client camera has held a target-centered
 view long enough for review; the renderer writes that as
 `recorderClientTargetCentered=true`. The recorder must also log
 `MineLink recorder client target visible server_agent` only after the chosen
-camera position has a clear raycast line of sight to the visible
-`server_agent` player body; the renderer writes that as
+camera mode is showing the visible `server_agent` player body; the renderer writes that as
 `recorderClientTargetVisible=true`. The renderer then combines those recorder
 markers with the scenario's successful work tools and final assertions to write
 `recorderWorkVisible=true`. For video-required product gates, the Codex RPC

@@ -153,6 +153,10 @@ public final class MineLinkClientRecorder {
             targetVisibleTicks = 0;
             return;
         }
+        if (useTargetThirdPersonCamera()) {
+            followTargetThirdPerson(minecraft, target);
+            return;
+        }
         Vec3 targetPos = target.position().add(0.0D, Math.max(1.35D, target.getBbHeight() * 0.75D), 0.0D);
         Vec3 forward = forwardVector(target.getYRot());
         Vec3 right = rightVector(target.getYRot());
@@ -243,6 +247,42 @@ public final class MineLinkClientRecorder {
         }
     }
 
+    private static void followTargetThirdPerson(Minecraft minecraft, Entity target) {
+        minecraft.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+        minecraft.setCameraEntity(target);
+
+        followTicks++;
+        int readyTicks = positiveInt(setting(
+            "MINELINK_RECORDER_CLIENT_FOLLOW_READY_TICKS",
+            "minelink.recorder.client.followReadyTicks",
+            "10"
+        ), 10);
+        if (!followLogged && followTicks >= readyTicks) {
+            followLogged = true;
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder client following server_agent {} from target third-person camera",
+                target.getName().getString()
+            );
+        }
+
+        targetVisibleTicks++;
+        targetCenteredTicks++;
+        if (!targetVisibleLogged && targetVisibleTicks >= readyTicks) {
+            targetVisibleLogged = true;
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder client target visible server_agent {} target-third-person",
+                target.getName().getString()
+            );
+        }
+        if (!targetCenteredLogged && targetCenteredTicks >= readyTicks) {
+            targetCenteredLogged = true;
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder client target centered server_agent {} target-third-person",
+                target.getName().getString()
+            );
+        }
+    }
+
     private static CameraChoice chooseCameraPosition(
         Minecraft minecraft,
         Vec3 targetPos,
@@ -253,8 +293,8 @@ public final class MineLinkClientRecorder {
         double height,
         double side
     ) {
-        double[] distances = new double[] { distance, distance + 2.0D, distance + 4.0D, Math.max(3.0D, distance - 1.0D) };
-        double[] heights = new double[] { height + 3.0D, height + 5.0D, height + 1.5D, height + 7.0D, height };
+        double[] distances = new double[] { distance, Math.max(3.0D, distance - 1.0D), distance + 2.0D, distance + 4.0D };
+        double[] heights = new double[] { height, height + 1.0D, height + 2.0D, height + 3.0D, height + 5.0D };
         double[] sides = new double[] { side, 0.0D, -side, side * 2.0D, -side * 2.0D };
         CameraChoice fallback = null;
         for (double candidateDistance : distances) {
@@ -300,6 +340,15 @@ public final class MineLinkClientRecorder {
         minecraft.options.tutorialStep = TutorialSteps.NONE;
         minecraft.options.hideBundleTutorial = true;
         minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+    }
+
+    private static boolean useTargetThirdPersonCamera() {
+        String mode = setting(
+            "MINELINK_RECORDER_CLIENT_CAMERA_MODE",
+            "minelink.recorder.client.cameraMode",
+            "target_third_person"
+        );
+        return mode.equalsIgnoreCase("target_third_person") || mode.equalsIgnoreCase("target-third-person");
     }
 
     private static Entity findServerAgent(Minecraft minecraft) {
