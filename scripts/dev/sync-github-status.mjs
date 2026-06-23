@@ -17,6 +17,9 @@ const defaults = {
   acceptanceMp4: ".minelink-dev/reports/artifacts/acceptance.mp4",
   videoReview: ".minelink-dev/reports/artifacts/video-review.md",
   videoReleaseGate: ".minelink-dev/reports/artifacts/video-release-gate.md",
+  statusLabel: process.env.MINELINK_STATUS_LABEL ?? "final",
+  blocker: process.env.MINELINK_STATUS_BLOCKER ?? "",
+  videoEvidenceUrl: process.env.MINELINK_VIDEO_EVIDENCE_URL ?? "",
   output: ".minelink-dev/reports/github-status.md",
   jsonOutput: ".minelink-dev/reports/github-status.json",
 };
@@ -41,6 +44,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--acceptance-mp4") args.acceptanceMp4 = readValue();
   else if (arg === "--video-review") args.videoReview = readValue();
   else if (arg === "--video-release-gate") args.videoReleaseGate = readValue();
+  else if (arg === "--status-label") args.statusLabel = readValue();
+  else if (arg === "--blocker") args.blocker = readValue();
+  else if (arg === "--video-evidence-url") args.videoEvidenceUrl = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--require-update") requireUpdate = true;
@@ -104,13 +110,16 @@ async function fileSize(file) {
 
 function buildBody() {
   return [
-    "MineLink agent-factory final status:",
+    `MineLink agent-factory ${args.statusLabel || "final"} status:`,
     "",
+    `- Status: \`${args.statusLabel || "final"}\``,
     `- Task id: \`${args.taskId || "manual"}\``,
     `- Branch: \`${args.branch || "none"}\``,
     `- Commit: \`${args.commit || "none"}\``,
     `- PR: ${args.prUrl || "none"}`,
     `- CI: ${args.ciUrl || "none"}`,
+    `- Final PR video evidence: ${args.videoEvidenceUrl || "none"}`,
+    ...(hasValue(args.blocker) ? [`- Blocker: ${args.blocker}`] : []),
     `- Chain report: \`${args.chainReport}\``,
     `- CI report: \`${args.ciReport}\``,
     `- Acceptance summary: \`${args.acceptanceSummary}\``,
@@ -144,6 +153,9 @@ const report = {
   commit: args.commit,
   prUrl: args.prUrl,
   ciUrl: args.ciUrl,
+  statusLabel: args.statusLabel,
+  blocker: args.blocker,
+  videoEvidenceUrl: args.videoEvidenceUrl,
   commentUrl: "",
   dryRun,
   operations: [],
@@ -208,6 +220,9 @@ const lines = [
   `- Commit: \`${args.commit || "none"}\``,
   `- PR: ${args.prUrl || "none"}`,
   `- CI: ${args.ciUrl || "none"}`,
+  `- Status: \`${args.statusLabel || "final"}\``,
+  `- Final PR video evidence: ${args.videoEvidenceUrl || "none"}`,
+  `- Blocker: ${args.blocker || "none"}`,
   "",
   "## Operations",
   "",
@@ -227,6 +242,13 @@ await fs.mkdir(path.dirname(args.output), { recursive: true });
 await fs.writeFile(args.output, lines.join("\n"), "utf8");
 await fs.mkdir(path.dirname(args.jsonOutput), { recursive: true });
 await fs.writeFile(args.jsonOutput, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
+if (process.env.GITHUB_OUTPUT) {
+  const outputs = [];
+  if (hasValue(report.commentUrl)) outputs.push(`comment-url=${report.commentUrl}`);
+  outputs.push(`result=${report.result}`);
+  await fs.appendFile(process.env.GITHUB_OUTPUT, `${outputs.join("\n")}\n`, "utf8");
+}
 
 if (report.failures.length > 0 || report.result === "failed") {
   console.error(`GitHub status sync failed; wrote ${args.output}`);

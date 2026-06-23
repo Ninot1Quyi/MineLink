@@ -503,7 +503,7 @@ jobs:
           fi
           echo "MINELINK_AGENT_FACTORY_CI_URL=$ci_url" >> "$GITHUB_ENV"
 
-      - name: Sync final canary status
+      - name: Sync pre-video canary status
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
@@ -519,6 +519,8 @@ jobs:
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
             --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --status-label pre-video-publication \
+            --blocker "Final PR video evidence comment has not run yet." \
             --require-update
           github_status_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '')")"
           if [ -z "$github_status_url" ]; then
@@ -530,7 +532,7 @@ jobs:
           linear_args=(
             scripts/dev/sync-linear-status.mjs
             --issue "${INPUT_LINEAR_ISSUE:-none}"
-            --comment "MineLink agent-factory final status for ${MINELINK_PLATFORM_CODEX_TASK_ID}: PR ${MINELINK_AGENT_FACTORY_PR_URL}; CI ${MINELINK_AGENT_FACTORY_CI_URL}; evidence paths include .minelink-dev/reports/agent-factory-chain.md, .minelink-dev/reports/artifacts/acceptance.mp4, .minelink-dev/reports/artifacts/video-review.md, and .minelink-dev/reports/artifacts/video-release-gate.md."
+            --comment "MineLink agent-factory pre-video publication status for ${MINELINK_PLATFORM_CODEX_TASK_ID}: PR ${MINELINK_AGENT_FACTORY_PR_URL}; CI ${MINELINK_AGENT_FACTORY_CI_URL}; final PR video evidence comment has not run yet."
             --attachment-title "MineLink agent-factory PR"
             --attachment-url "$MINELINK_AGENT_FACTORY_PR_URL"
           )
@@ -556,6 +558,7 @@ jobs:
             --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
             --pr-report .minelink-dev/reports/agent-factory-pr.md \
             --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --pr-video-evidence-report .minelink-dev/reports/pr-video-evidence-comment.md \
             --github-status-url "$MINELINK_GITHUB_STATUS_URL" \
             --linear-issue "${{ inputs.linear_issue || 'none' }}" \
             --linear-sync-report .minelink-dev/reports/linear-sync.md \
@@ -596,6 +599,7 @@ jobs:
           include-hidden-files: true
 
       - name: Comment canary PR video evidence
+        id: comment-pr-video-evidence
         if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
@@ -608,10 +612,10 @@ jobs:
             echo "Could not parse PR number from $MINELINK_AGENT_FACTORY_PR_URL"
             exit 1
           fi
+          raw_video_url="${INPUT_GITHUB_ATTACHMENT_VIDEO_URL:-${{ steps.ona-video-release.outputs.video-url }}}"
           if [ -z "${INPUT_GITHUB_ATTACHMENT_VIDEO_URL:-}" ]; then
             echo "Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback."
             echo "The Ona finalizer R2 URL remains candidate storage only: ${{ steps.ona-video-release.outputs.video-url }}"
-            exit 1
           fi
           node scripts/dev/comment-pr-evidence.mjs \
             --repository "$GITHUB_REPOSITORY" \
@@ -620,7 +624,7 @@ jobs:
             --artifact-id "${{ steps.upload-probe-evidence.outputs.artifact-id }}" \
             --artifact-url "${{ steps.upload-probe-evidence.outputs.artifact-url }}" \
             --video-url "$INPUT_GITHUB_ATTACHMENT_VIDEO_URL" \
-            --raw-video-url "$INPUT_GITHUB_ATTACHMENT_VIDEO_URL" \
+            --raw-video-url "$raw_video_url" \
             --manifest .minelink-dev/reports/artifacts/video-storage-manifest.json \
             --video-review .minelink-dev/reports/artifacts/video-review.md \
             --release-gate .minelink-dev/reports/artifacts/video-release-gate.md \
@@ -629,3 +633,100 @@ jobs:
             --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY" \
             --require-github-attachment-video \
             --require-comment
+
+      - name: Sync final canary status after video evidence
+        if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' && steps.comment-pr-video-evidence.conclusion == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+        run: |
+          video_comment_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/pr-video-evidence-comment.json','utf8')); console.log(report.commentUrl || '')")"
+          node scripts/dev/sync-github-status.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --status-label final-video-published \
+            --video-evidence-url "$video_comment_url" \
+            --require-update
+          github_status_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '')")"
+          echo "MINELINK_GITHUB_STATUS_URL=$github_status_url" >> "$GITHUB_ENV"
+          echo "MINELINK_FINAL_VIDEO_BLOCKER=" >> "$GITHUB_ENV"
+
+          linear_args=(
+            scripts/dev/sync-linear-status.mjs
+            --issue "${INPUT_LINEAR_ISSUE:-none}"
+            --comment "MineLink agent-factory final-video-published status for ${MINELINK_PLATFORM_CODEX_TASK_ID}: PR ${MINELINK_AGENT_FACTORY_PR_URL}; CI ${MINELINK_AGENT_FACTORY_CI_URL}; video evidence ${video_comment_url}."
+            --attachment-title "MineLink agent-factory PR"
+            --attachment-url "$MINELINK_AGENT_FACTORY_PR_URL"
+          )
+          if [ -n "${INPUT_LINEAR_ISSUE:-}" ] && [ "${INPUT_LINEAR_ISSUE:-none}" != "none" ]; then
+            linear_args+=(--require-key --require-update)
+          fi
+          node "${linear_args[@]}"
+
+      - name: Sync blocked canary status after video evidence
+        if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' && steps.comment-pr-video-evidence.conclusion != 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+        run: |
+          blocker="Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback; configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE or pass github_attachment_video_url."
+          node scripts/dev/sync-github-status.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --status-label blocked-final-video-publication \
+            --blocker "$blocker" \
+            --require-update
+          github_status_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '')")"
+          echo "MINELINK_GITHUB_STATUS_URL=$github_status_url" >> "$GITHUB_ENV"
+          echo "MINELINK_FINAL_VIDEO_BLOCKER=$blocker" >> "$GITHUB_ENV"
+
+          linear_args=(
+            scripts/dev/sync-linear-status.mjs
+            --issue "${INPUT_LINEAR_ISSUE:-none}"
+            --comment "MineLink agent-factory blocked-final-video-publication status for ${MINELINK_PLATFORM_CODEX_TASK_ID}: PR ${MINELINK_AGENT_FACTORY_PR_URL}; CI ${MINELINK_AGENT_FACTORY_CI_URL}; blocker: ${blocker}"
+            --attachment-title "MineLink agent-factory PR"
+            --attachment-url "$MINELINK_AGENT_FACTORY_PR_URL"
+          )
+          if [ -n "${INPUT_LINEAR_ISSUE:-}" ] && [ "${INPUT_LINEAR_ISSUE:-none}" != "none" ]; then
+            linear_args+=(--require-key --require-update)
+          fi
+          node "${linear_args[@]}"
+
+      - name: Refresh chain report after final video evidence
+        if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' }}
+        run: |
+          node scripts/dev/report-agent-factory-chain.mjs \
+            --github-issue "${{ inputs.github_issue }}" \
+            --issue-contract-status passed \
+            --github-dispatcher-status passed \
+            --github-dispatcher-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --ona-prebuild-status passed \
+            --ona-automation-status passed \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --require-video-producer ona-task-finalizer \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --pr-report .minelink-dev/reports/agent-factory-pr.md \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --pr-video-evidence-report .minelink-dev/reports/pr-video-evidence-comment.md \
+            --github-status-url "$MINELINK_GITHUB_STATUS_URL" \
+            --linear-issue "${{ inputs.linear_issue || 'none' }}" \
+            --linear-sync-report .minelink-dev/reports/linear-sync.md \
+            --blocker "${MINELINK_FINAL_VIDEO_BLOCKER:-}" \
+            --require-platform-codex-implementation \
+            --require-platform-codex-verifier

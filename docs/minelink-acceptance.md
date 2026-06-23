@@ -947,14 +947,17 @@ Current status:
   starting the disabled default Agent. This is still not product-accepted until
   a real dispatch proves implementation, validation, MP4, separate verifier,
   release gate, PR, CI, and status writeback edges end to end. The current
-  follow-up adds `scripts/dev/sync-github-status.mjs` and the workflow
-  `Sync final canary status` step so a GitHub-only canary is no longer blocked
-  by an absent Linear issue; linked GitHub+Linear tasks still require both
-  writeback reports.
+  follow-up adds `scripts/dev/sync-github-status.mjs` and the workflow status
+  sync steps so a GitHub-only canary is no longer blocked by an absent Linear
+  issue; linked GitHub+Linear tasks still require both writeback reports. The
+  final status is not written before PR video publication: the chain has a
+  separate `pr_video_evidence` node, and missing GitHub user-attachments MP4
+  playback writes `blocked-final-video-publication` instead of an optimistic
+  final status.
 - `scripts/dev/sync-github-status.mjs` writes
   `.minelink-dev/reports/github-status.{md,json}` and comments the linked
-  GitHub issue or PR with the final chain evidence paths without exposing token
-  values.
+  GitHub issue or PR with the final or blocked chain evidence paths without
+  exposing token values.
 - `scripts/dev/trigger-agent-factory-full-chain.mjs` reads
   `.minelink-dev/reports/agent-factory-dispatch.json` and starts
   `.github/workflows/ona-platform-codex-probe.yml` in `full-chain-canary` mode

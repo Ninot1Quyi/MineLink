@@ -35,6 +35,7 @@ const defaults = {
   prUrl: process.env.MINELINK_PR_URL ?? "",
   prReport: ".minelink-dev/reports/agent-factory-pr.md",
   ciUrl: process.env.MINELINK_CI_URL ?? "",
+  prVideoEvidenceReport: ".minelink-dev/reports/pr-video-evidence-comment.md",
   githubStatusUrl: process.env.MINELINK_GITHUB_STATUS_URL ?? "",
   linearStatusUrl: process.env.MINELINK_LINEAR_STATUS_URL ?? "",
   blocker: process.env.MINELINK_CHAIN_BLOCKER ?? "",
@@ -97,6 +98,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--pr-url") args.prUrl = readValue();
   else if (arg === "--pr-report") args.prReport = readValue();
   else if (arg === "--ci-url") args.ciUrl = readValue();
+  else if (arg === "--pr-video-evidence-report") args.prVideoEvidenceReport = readValue();
   else if (arg === "--github-status-url") args.githubStatusUrl = readValue();
   else if (arg === "--linear-status-url") args.linearStatusUrl = readValue();
   else if (arg === "--blocker") args.blocker = readValue();
@@ -493,6 +495,7 @@ const originInfo = await fileInfo(args.acceptanceVideoOrigin);
 const reviewInfo = await fileInfo(args.videoReview);
 const releaseInfo = await fileInfo(args.videoReleaseGate);
 const prReportInfo = await fileInfo(args.prReport);
+const prVideoEvidenceInfo = await fileInfo(args.prVideoEvidenceReport);
 const linearSyncInfo = await fileInfo(args.linearSyncReport);
 const secretPreflightInfo = await fileInfo(args.secretPreflight);
 const automationExecutionReportInfo = await fileInfo(args.onaAutomationExecutionReport);
@@ -503,6 +506,7 @@ const verifierReadbackInfo = await fileInfo(args.onaVerifierReadback);
 const releaseText = await readText(args.videoReleaseGate);
 const reviewText = await readText(args.videoReview);
 const prReportText = await readText(args.prReport);
+const prVideoEvidenceText = await readText(args.prVideoEvidenceReport);
 const linearSyncText = await readText(args.linearSyncReport);
 const implementationReadbackText = await readText(args.onaImplementationReadback);
 const verifierReadbackText = await readText(args.onaVerifierReadback);
@@ -654,12 +658,18 @@ const releaseStatus = verifierStatus === "passed" && releaseInfo && /Result:\s*`
     : "missing";
 const prStatus = releaseStatus === "passed" && hasValue(args.prUrl) ? "passed" : "missing";
 const ciStatus = prStatus === "passed" && hasValue(args.ciUrl) ? "passed" : "missing";
+const prVideoEvidenceStatus =
+  ciStatus === "passed" && prVideoEvidenceInfo && /Result:\s*`?passed`?/im.test(prVideoEvidenceText)
+    ? "passed"
+    : ciStatus === "passed" && prVideoEvidenceInfo
+      ? "blocked"
+      : "missing";
 const githubStatusRequired = hasValue(args.githubIssue) || hasValue(args.prUrl);
 const linearStatusRequired = hasValue(args.linearIssue);
 const linearSyncPassed = linearSyncInfo && /created comment|updated .* status|attached /i.test(linearSyncText);
 const githubStatusPassed = !githubStatusRequired || hasValue(args.githubStatusUrl);
 const linearStatusPassed = !linearStatusRequired || hasValue(args.linearStatusUrl) || linearSyncPassed;
-const statusSyncStatus = ciStatus === "passed" && githubStatusPassed && linearStatusPassed
+const statusSyncStatus = prVideoEvidenceStatus === "passed" && githubStatusPassed && linearStatusPassed
   ? "passed"
   : ciStatus === "passed" && (hasValue(args.githubStatusUrl) || hasValue(args.linearStatusUrl) || linearSyncInfo)
     ? "partial"
@@ -752,6 +762,9 @@ const nodes = [
   mkNode("ci", "GitHub CI", ciStatus, [
     args.ciUrl && `CI: ${args.ciUrl}`,
   ]),
+  mkNode("pr_video_evidence", "Playable PR video evidence", prVideoEvidenceStatus, [
+    prVideoEvidenceInfo && args.prVideoEvidenceReport,
+  ], prVideoEvidenceStatus === "blocked" ? "Final PR video evidence comment did not publish a GitHub user-attachments MP4 player." : ""),
   mkNode("status_writeback", "Linear/GitHub status writeback", statusSyncStatus, [
     args.githubStatusUrl && `GitHub status: ${args.githubStatusUrl}`,
     args.linearStatusUrl && `Linear status: ${args.linearStatusUrl}`,
@@ -836,7 +849,10 @@ const rawEdges = [
   ]),
   mkEdge("release_gate", "pr", edgeStatus(nodeStatus.pr), [args.prUrl && args.prUrl]),
   mkEdge("pr", "ci", edgeStatus(nodeStatus.ci), [args.ciUrl && args.ciUrl]),
-  mkEdge("ci", "status_writeback", edgeStatus(nodeStatus.status_writeback), [
+  mkEdge("ci", "pr_video_evidence", edgeStatus(nodeStatus.pr_video_evidence), [
+    prVideoEvidenceInfo && args.prVideoEvidenceReport,
+  ], nodeStatus.pr_video_evidence === "blocked" ? "Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback." : ""),
+  mkEdge("pr_video_evidence", "status_writeback", edgeStatus(nodeStatus.status_writeback), [
     args.githubStatusUrl && args.githubStatusUrl,
     args.linearStatusUrl && args.linearStatusUrl,
     linearSyncInfo && args.linearSyncReport,
@@ -916,6 +932,8 @@ if (firstBlockedEdge?.to === "issue_contract") {
   nextActions.push("Open or update the draft PR with links to the validation, MP4, verifier report, release gate, and remaining gaps.");
 } else if (firstBlockedEdge?.to === "ci") {
   nextActions.push("Wait for required GitHub Actions and attach run URLs or logs.");
+} else if (firstBlockedEdge?.to === "pr_video_evidence") {
+  nextActions.push("Publish verifier-approved `acceptance.mp4` through a GitHub user-attachments MP4 URL so the PR page renders an inline video player.");
 } else if (firstBlockedEdge?.to === "status_writeback") {
   nextActions.push("Write the final evidence summary back to GitHub and Linear without printing secrets.");
 }

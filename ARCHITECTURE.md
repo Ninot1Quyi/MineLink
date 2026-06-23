@@ -482,13 +482,17 @@ report with the created draft PR URL. That edge requires the
 `AGENT_FACTORY_GITHUB_TOKEN` repository secret because repository policy can
 block the default Actions `GITHUB_TOKEN` from creating pull requests. When the
 PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits for the GitHub PR
-check rollup, then `scripts/dev/sync-github-status.mjs` comments the linked
-GitHub issue or PR with the final evidence summary and
-`scripts/dev/sync-linear-status.mjs` comments/attaches the linked Linear issue
-when one was supplied. The refreshed chain report marks
-`ci -> status_writeback` as passed only for the task sources that exist: a
-GitHub-only task requires GitHub writeback, a Linear-only task requires Linear
-sync evidence, and a linked GitHub+Linear task requires both. Linear sync uses
+check rollup. The final PR evidence edge is separate from generic status
+writeback: `scripts/dev/comment-pr-evidence.mjs` must publish a GitHub
+user-attachments MP4 URL before the chain can mark `pr_video_evidence` passed.
+Only after that edge runs does `scripts/dev/sync-github-status.mjs` comment the
+linked GitHub issue or PR with either `final-video-published` or
+`blocked-final-video-publication`, and `scripts/dev/sync-linear-status.mjs`
+comments/attaches the linked Linear issue when one was supplied. The refreshed
+chain report marks `pr_video_evidence -> status_writeback` as passed only for
+the task sources that exist: a GitHub-only task requires GitHub writeback, a
+Linear-only task requires Linear sync evidence, and a linked GitHub+Linear task
+requires both. Linear sync uses
 `LINEAR_API_KEY` from the environment; the key must never be committed, passed
 as a parameter, or printed.
 If Ona repository webhooks are unavailable for the account, the GitHub Actions
