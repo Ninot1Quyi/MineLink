@@ -50,7 +50,7 @@ const groupedStages = {
     "render-video",
     "prepare-video",
   ],
-  "release-finalize": ["check-video-release", "upload-video", "sync-in-review", "create-pr", "final-report"],
+  "release-finalize": ["check-video-release", "sync-in-review", "create-pr", "final-report"],
   all: allStages,
 };
 
@@ -103,6 +103,15 @@ scheduling overhead in manual diagnostics.`);
 
 function requiresClientGuiCapture() {
   return args.requireClientGuiCapture || String(args.validationScope || "").toLowerCase() === "neoforge";
+}
+
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function sanitize(text) {
@@ -458,6 +467,9 @@ switch (args.stage) {
         "--require-mp4",
       ];
       if (requiresClientGuiCapture()) commandArgs.push("--require-client-gui-capture");
+      if (await fileExists(".minelink-dev/reports/artifacts/video-storage-manifest.json")) {
+        commandArgs.push("--require-storage-manifest");
+      }
       await runCommandStage(args.stage, process.execPath, commandArgs, { requireImplementation: true });
     }
     break;
@@ -486,11 +498,15 @@ switch (args.stage) {
         args.taskId,
         "--branch",
         args.branch || "unknown",
+        "--commit",
+        currentCommit(),
+        "--producer",
+        args.videoProducer || "ona-task-finalizer",
         "--run-id",
         process.env.MINELINK_RUN_ID || process.env.GITHUB_RUN_ID || "ona-finalizer",
         "--require-upload",
       ],
-      { requireImplementation: true, requireVerifier: true },
+      { requireImplementation: true },
     );
     break;
   case "sync-in-review":

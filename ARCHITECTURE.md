@@ -397,9 +397,11 @@ PR-visible video evidence must include a public playable MP4 URL, preferably
 from the configured external video store. Actions artifact zip links are useful
 for logs and reports, but they are not accepted as the visible video surface by
 themselves, and automated PR video comments skip or fail when the playable URL
-is missing. The external video upload belongs to the verifier-approved Ona
-release finalizer; the GitHub runner may comment with the returned URL, but it
-must not re-render or substitute the final task video.
+is missing. The external video upload belongs to the Ona implementation
+finalizer as candidate evidence transport; the GitHub runner may comment with
+the returned URL only after downloading it from R2, verifying `mp4Sha256`, and
+passing the same-session verifier release gate. It must not re-render or
+substitute the final task video.
 Manual `ona environment ssh`
 remains useful for debugging or verification,
 but it is not the product delivery path. Self-reported identity is not accepted:
@@ -421,19 +423,28 @@ Ona task environment. The bridge starts a background runner through a short
 `ona environment exec` call, polls it with short follow-up exec calls, and then
 copies `.minelink-dev/reports` back for verifier prompting. This avoids the Ona
 gateway timeout that can cut off long NeoForge/client video captures before
-artifacts can be returned. After the same Platform Codex implementation
-execution writes `video-review.md`, the runner calls the same bridge again with
-`release-upload`; that release finalizer checks the existing MP4/review hashes,
-uploads the verified MP4 to external storage, and copies the upload report back
-for PR commenting. The bridge fetches finalizer scripts from the
+artifacts can be returned. When external video storage is configured, the
+implementation finalizer uploads the freshly rendered `acceptance.mp4` directly
+from the Ona environment to R2 as candidate evidence, then writes
+`.minelink-dev/reports/artifacts/video-storage-manifest.json` and
+`.minelink-dev/reports/video-storage-upload.json`. The GitHub runner copies
+only small reports/manifests back through the chunk bridge, downloads the MP4
+from the manifest URL, and verifies `mp4Sha256` before verifier prompting or PR
+publication. After the same Platform Codex implementation execution writes
+`video-review.md`, the runner calls the same bridge again with `release-upload`;
+that release finalizer checks the existing MP4/review/manifest hashes and
+copies the release report back for PR commenting. R2 upload is candidate
+transport only: it does not bypass the same-session verifier or
+`check-video-review.mjs`. The bridge fetches finalizer scripts from the
 workflow/source ref inside the Ona environment instead of injecting large script
 bodies through `ona environment exec`, because the Ona exec path is
 shell-mediated and has practical argument-size limits. This bridge also deletes
 stale verifier/release/upload artifacts before the implementation finalizer
 stages so old `video-review.md` files cannot be mistaken for the current
-same-session verifier result, runs the upload step directly after the release
-gate so old task-branch stage runners cannot block the uploader, and reports
-extracted files only after the current tarball is decoded successfully.
+same-session verifier result, runs candidate upload before verifier handoff so
+old task-branch stage runners cannot block video transport, and reports
+extracted files only after the current tarball is decoded successfully and any
+manifest MP4 has been downloaded and hash-verified.
 This bridge is accepted only as
 finalizer/artifact transport; Platform Codex API readback and task-bound branch
 commits remain the implementation and verifier evidence.
@@ -801,21 +812,26 @@ recorder logs at the end so GitHub truncation still preserves the most useful
 failure evidence. Stage
 reports preserve both the head and tail of long command output so recorder,
 Minecraft client, and MCP server failures can be diagnosed from GitHub
-artifacts. The artifact bridge prepares a remote manifest plus fixed-size
-base64 chunks under `.minelink-dev/ona-finalizer-artifact-chunks` and verifies
-the tarball SHA-256 after downloading, so large client-video bundles do not
-depend on a single oversized Ona CLI stdout payload or JSON marker parse. The
+artifacts. For large MP4s, the default path is R2-first: the Ona finalizer
+uploads candidate `acceptance.mp4` to the configured S3-compatible store,
+writes `video-storage-manifest.json`, and excludes the MP4 from the chunked
+report tarball. The GitHub runner downloads the MP4 from `videoUrl` and fails
+closed unless its SHA-256 matches `mp4Sha256`. The artifact bridge still
+prepares a remote manifest plus fixed-size base64 chunks under
+`.minelink-dev/ona-finalizer-artifact-chunks` and verifies the tarball SHA-256
+after downloading; that bridge is for reports, logs, manifests, and no-R2
+fallbacks, not the preferred large-video transport. The
 recorder client is an observer only: the server creates a visible
 `server_agent` marker and an invisible camera anchor that continuously follows
 the agent for recording, but it does not add MCP tools, world-query authority,
-materials, or any bypass around server-side checks. Pull request workflows call
-the Ona release finalizer, which runs
-`scripts/dev/upload-acceptance-video-storage.mjs` inside the task environment
-after `check-video-review.mjs` passes, to upload the verifier-approved
-`acceptance.mp4` to the configured S3-compatible video store, currently
-Cloudflare R2 via `MINELINK_VIDEO_STORAGE_*` settings. The GitHub runner then
-calls `scripts/dev/comment-pr-evidence.mjs` with the returned public MP4 URL so
-reviewers can open the exact Ona-produced video from the PR. GitHub issue and
+materials, or any bypass around server-side checks. Pull request workflows use
+`scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
+finalizer to upload candidate `acceptance.mp4` to the configured
+S3-compatible video store, currently Cloudflare R2 via
+`MINELINK_VIDEO_STORAGE_*` settings. The release finalizer does not re-upload
+or re-render; it runs `check-video-review.mjs`, preserves the manifest, and lets
+the GitHub runner re-download and verify the MP4 hash before
+`scripts/dev/comment-pr-evidence.mjs` publishes PR evidence. GitHub issue and
 PR Markdown strips external `<video>` embeds, so Cloudflare R2 URLs are durable
 playback links, not guaranteed inline GitHub players. Inline playback on the
 GitHub page requires a GitHub-uploaded attachment URL such as

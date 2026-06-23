@@ -50,6 +50,9 @@ const defaults = {
   verifierApiReadback: ".minelink-dev/reports/ona-platform-codex-video-verifier-api-session.md",
   verifierApiReadbackJson: ".minelink-dev/reports/ona-platform-codex-video-verifier-api-session.json",
   videoReview: ".minelink-dev/reports/artifacts/video-review.md",
+  videoStorageManifest: ".minelink-dev/reports/artifacts/video-storage-manifest.json",
+  videoStorageUpload: ".minelink-dev/reports/video-storage-upload.json",
+  acceptanceMp4: ".minelink-dev/reports/artifacts/acceptance.mp4",
   output: ".minelink-dev/reports/ona-finalizer-artifacts.md",
   jsonOutput: ".minelink-dev/reports/ona-finalizer-artifacts.json",
   tarOutput: ".minelink-dev/reports/ona-finalizer-artifacts.tar.gz",
@@ -96,6 +99,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--verifier-api-readback") args.verifierApiReadback = readValue();
   else if (arg === "--verifier-api-readback-json") args.verifierApiReadbackJson = readValue();
   else if (arg === "--video-review") args.videoReview = readValue();
+  else if (arg === "--video-storage-manifest") args.videoStorageManifest = readValue();
+  else if (arg === "--video-storage-upload") args.videoStorageUpload = readValue();
+  else if (arg === "--acceptance-mp4") args.acceptanceMp4 = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--tar-output") args.tarOutput = readValue();
@@ -104,10 +110,12 @@ for (let index = 2; index < process.argv.length; index += 1) {
 
 Runs MineLink finalizer artifact stages inside an existing Ona task
 environment, then copies .minelink-dev/reports back to the local runner. Use
---stage-group implementation-finalize to render acceptance.mp4 and
-video-review-request.md, then --stage-group release-upload after the same
-Platform Codex execution writes video-review.md. This is an artifact/finalizer
-bridge only; Platform Codex implementation/verifier evidence remains the
+--stage-group implementation-finalize to render acceptance.mp4, upload the
+candidate MP4 directly from the Ona environment to R2 when configured, and
+write video-review-request.md. Then use --stage-group release-upload after the
+same Platform Codex execution writes video-review.md. The bridge only returns
+small reports/manifests by chunk and downloads the MP4 from storage for hash
+verification; Platform Codex implementation/verifier evidence remains the
 accepted agent execution proof. Internally this uses ona environment exec, not
 the default Ona Agent.`);
     process.exit(0);
@@ -181,8 +189,24 @@ function stageCommand(stage) {
       args.taskId,
       "--branch",
       args.branch,
+      "--commit",
+      args.commit || "",
       "--run-id",
       args.runId,
+      "--producer",
+      args.videoProducer || "ona-task-finalizer",
+      "--provider",
+      args.videoStorageProvider || "",
+      "--endpoint",
+      args.videoStorageEndpoint || "",
+      "--region",
+      args.videoStorageRegion || "auto",
+      "--bucket",
+      args.videoStorageBucket || "",
+      "--public-base-url",
+      args.videoStoragePublicBaseUrl || "",
+      "--key-prefix",
+      args.videoStoragePrefix || "minelink/acceptance-videos",
       "--require-upload",
     ];
     return command.map(shellQuote).join(" ");
@@ -291,6 +315,18 @@ function sha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
+async function sha256File(filePath) {
+  return sha256(await fs.readFile(filePath));
+}
+
+async function readJsonIfPresent(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function exitCode(payload, fallbackStatus) {
   const value =
     payload?.exitCode ??
@@ -304,12 +340,23 @@ function exitCode(payload, fallbackStatus) {
   return fallbackStatus ?? 0;
 }
 
+function videoStorageConfigured() {
+  return (
+    hasValue(args.videoStorageProvider) &&
+    hasValue(args.videoStorageEndpoint) &&
+    hasValue(args.videoStorageBucket) &&
+    hasValue(args.videoStoragePublicBaseUrl)
+  );
+}
+
 function stageList() {
   if (args.stageGroup === "implementation-finalize") {
-    return ["validate", "summarize", "render-video", "prepare-video"];
+    return videoStorageConfigured()
+      ? ["validate", "summarize", "render-video", "upload-video", "prepare-video"]
+      : ["validate", "summarize", "render-video", "prepare-video"];
   }
   if (args.stageGroup === "release-upload") {
-    return ["check-video-release", "upload-video", "final-report"];
+    return ["check-video-release", "final-report"];
   }
   return args.stageGroup
     .split(",")
@@ -399,7 +446,7 @@ const report = {
   remotePid: "",
   execOutput: "",
   artifactTransfer: {
-    mode: "chunked-base64",
+    mode: videoStorageConfigured() ? "r2-manifest-plus-chunked-reports" : "chunked-base64-fallback",
     manifestPath: ".minelink-dev/ona-finalizer-artifacts-manifest.json",
     chunkDir: ".minelink-dev/ona-finalizer-artifact-chunks",
     chunkSize: 48_000,
@@ -407,6 +454,17 @@ const report = {
     fetchedChunks: 0,
     byteCount: 0,
     sha256: "",
+  },
+  videoDownload: {
+    attempted: false,
+    result: "skipped",
+    manifestPath: args.videoStorageManifest,
+    videoPath: args.acceptanceMp4,
+    videoUrl: "",
+    expectedSha256: "",
+    actualSha256: "",
+    bytes: 0,
+    failure: "",
   },
   boundary:
     "Ona finalizer artifact bridge only. Platform Codex API readback remains the implementation/verifier evidence.",
@@ -431,6 +489,8 @@ if (failures.length === 0) {
       await readBase64IfPresent(args.verifierApiReadbackJson),
     ],
     [".minelink-dev/reports/artifacts/video-review.md", await readBase64IfPresent(args.videoReview)],
+    [args.videoStorageManifest, await readBase64IfPresent(args.videoStorageManifest)],
+    [args.videoStorageUpload, await readBase64IfPresent(args.videoStorageUpload)],
   ];
   if (!transferredFiles[0][1]) {
     failures.push(`Missing implementation readback to transfer: ${args.implementationReadback}`);
@@ -486,7 +546,7 @@ if (failures.length === 0) {
       `if [ -n "$finalizer_reviewed_commit" ]; then git checkout -B ${shellQuote(args.branch)} "$finalizer_reviewed_commit"; else git checkout -B ${shellQuote(args.branch)} ${shellQuote(`origin/${args.branch}`)}; fi`,
       `if [ -n "$finalizer_reviewed_commit" ]; then case "$(git rev-parse HEAD)" in "$finalizer_reviewed_commit"*) ;; *) echo "Finalizer checkout mismatch: expected $finalizer_reviewed_commit got $(git rev-parse HEAD)" >&2; exit 65 ;; esac; fi`,
       args.stageGroup === "implementation-finalize"
-        ? "rm -f .minelink-dev/reports/artifacts/video-review.md .minelink-dev/reports/artifacts/video-release-gate.md .minelink-dev/reports/video-storage-upload.md .minelink-dev/reports/video-storage-upload.json"
+        ? "rm -f .minelink-dev/reports/artifacts/video-review.md .minelink-dev/reports/artifacts/video-release-gate.md .minelink-dev/reports/artifacts/video-storage-manifest.json .minelink-dev/reports/video-storage-upload.md .minelink-dev/reports/video-storage-upload.json"
         : "",
       ...sourceFiles.map(({ filePath, executable }) =>
         [
@@ -500,7 +560,10 @@ if (failures.length === 0) {
       args.stageGroup === "implementation-finalize"
         ? "test -s .minelink-dev/reports/artifacts/video-review-request.md"
         : "",
-      args.stageGroup === "release-upload" ? "test -s .minelink-dev/reports/video-storage-upload.json" : "",
+      videoStorageConfigured() ? "test -s .minelink-dev/reports/artifacts/video-storage-manifest.json" : "",
+      args.stageGroup === "release-upload" && videoStorageConfigured()
+        ? "test -s .minelink-dev/reports/video-storage-upload.json"
+        : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -519,7 +582,11 @@ if (failures.length === 0) {
       "while IFS= read -r -d '' candidate; do",
       "  tar_paths+=(\"${candidate#.minelink-dev/}\")",
       "done < <(find .minelink-dev -maxdepth 1 -type d -name 'client-capture-*' -print0 2>/dev/null || true)",
-      `tar -C .minelink-dev -czf ${shellQuote(remoteTarball)} "\${tar_paths[@]}" >> ${shellQuote(remoteLog)} 2>&1 || true`,
+      "tar_args=()",
+      "if test -s .minelink-dev/reports/artifacts/video-storage-manifest.json; then",
+      "  tar_args+=(--exclude=reports/artifacts/acceptance.mp4)",
+      "fi",
+      `tar -C .minelink-dev -czf ${shellQuote(remoteTarball)} "\${tar_args[@]}" "\${tar_paths[@]}" >> ${shellQuote(remoteLog)} 2>&1 || true`,
       `touch ${shellQuote(remoteDone)}`,
       "exit 0",
     ].join("\n");
@@ -734,6 +801,50 @@ async function walk(dir) {
   }
 }
 
+async function downloadVideoFromManifest() {
+  const manifest = await readJsonIfPresent(args.videoStorageManifest);
+  if (!manifest) return;
+  report.videoDownload.attempted = true;
+  report.videoDownload.videoUrl = manifest.videoUrl || "";
+  report.videoDownload.expectedSha256 = manifest.mp4Sha256 || "";
+  if (!hasValue(manifest.videoUrl)) {
+    report.videoDownload.result = "failed";
+    report.videoDownload.failure = "video storage manifest is missing videoUrl";
+    failures.push(report.videoDownload.failure);
+    return;
+  }
+  if (!/^[a-f0-9]{64}$/i.test(String(manifest.mp4Sha256 || ""))) {
+    report.videoDownload.result = "failed";
+    report.videoDownload.failure = "video storage manifest is missing a valid mp4Sha256";
+    failures.push(report.videoDownload.failure);
+    return;
+  }
+  try {
+    const response = await fetch(manifest.videoUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const actual = sha256(buffer);
+    report.videoDownload.actualSha256 = actual;
+    report.videoDownload.bytes = buffer.length;
+    if (actual !== manifest.mp4Sha256) {
+      throw new Error(`sha256 mismatch: expected ${manifest.mp4Sha256}, got ${actual}`);
+    }
+    await fs.mkdir(path.dirname(args.acceptanceMp4), { recursive: true });
+    await fs.writeFile(args.acceptanceMp4, buffer);
+    report.videoDownload.result = "passed";
+  } catch (error) {
+    report.videoDownload.result = "failed";
+    report.videoDownload.failure = error instanceof Error ? error.message : String(error);
+    failures.push(`Acceptance MP4 storage download/verification failed: ${report.videoDownload.failure}`);
+  }
+}
+
+if (extractedCurrentTarball) {
+  await downloadVideoFromManifest();
+}
+
 report.extractedFiles = extractedCurrentTarball ? await walk(".minelink-dev/reports/artifacts") : [];
 report.failures = failures;
 report.result = failures.length === 0 ? "passed" : "failed";
@@ -774,6 +885,18 @@ const lines = [
   `- Chunks fetched: \`${report.artifactTransfer.fetchedChunks}/${report.artifactTransfer.chunkCount}\``,
   `- Byte count: \`${report.artifactTransfer.byteCount}\``,
   `- SHA256: \`${report.artifactTransfer.sha256 || "none"}\``,
+  "",
+  "## Video Storage Download",
+  "",
+  `- Attempted: \`${report.videoDownload.attempted ? "yes" : "no"}\``,
+  `- Result: \`${report.videoDownload.result}\``,
+  `- Manifest: \`${report.videoDownload.manifestPath}\``,
+  `- Video path: \`${report.videoDownload.videoPath}\``,
+  `- Video URL: ${report.videoDownload.videoUrl || "none"}`,
+  `- Expected SHA256: \`${report.videoDownload.expectedSha256 || "none"}\``,
+  `- Actual SHA256: \`${report.videoDownload.actualSha256 || "none"}\``,
+  `- Bytes: \`${report.videoDownload.bytes}\``,
+  `- Failure: ${report.videoDownload.failure || "none"}`,
   "",
   "## Extracted Artifact Files",
   "",

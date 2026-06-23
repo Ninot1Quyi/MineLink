@@ -5,9 +5,13 @@ import path from "node:path";
 
 const defaults = {
   videoPath: process.env.MINELINK_ACCEPTANCE_VIDEO_PATH ?? ".minelink-dev/reports/artifacts/acceptance.mp4",
+  summaryPath: process.env.MINELINK_ACCEPTANCE_SUMMARY_PATH ?? ".minelink-dev/reports/artifacts/acceptance-summary.md",
+  originPath: process.env.MINELINK_ACCEPTANCE_VIDEO_ORIGIN_PATH ?? ".minelink-dev/reports/artifacts/acceptance-video-origin.json",
   taskId: process.env.MINELINK_TASK_ID ?? "",
   branch: process.env.MINELINK_BRANCH ?? process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "",
+  commit: process.env.MINELINK_COMMIT ?? process.env.GITHUB_SHA ?? "",
   runId: process.env.GITHUB_RUN_ID ?? "local",
+  producer: process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ?? "ona-task-finalizer",
   provider: process.env.MINELINK_VIDEO_STORAGE_PROVIDER ?? "",
   endpoint: process.env.MINELINK_VIDEO_STORAGE_ENDPOINT ?? "",
   region: process.env.MINELINK_VIDEO_STORAGE_REGION ?? "auto",
@@ -19,6 +23,7 @@ const defaults = {
   key: process.env.MINELINK_VIDEO_STORAGE_KEY ?? "",
   output: ".minelink-dev/reports/video-storage-upload.md",
   jsonOutput: ".minelink-dev/reports/video-storage-upload.json",
+  manifestOutput: ".minelink-dev/reports/artifacts/video-storage-manifest.json",
 };
 
 const args = { ...defaults };
@@ -29,9 +34,13 @@ for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
   const readValue = () => process.argv[++index] ?? "";
   if (arg === "--video-path") args.videoPath = readValue();
+  else if (arg === "--summary-path") args.summaryPath = readValue();
+  else if (arg === "--origin-path") args.originPath = readValue();
   else if (arg === "--task-id") args.taskId = readValue();
   else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--commit") args.commit = readValue();
   else if (arg === "--run-id") args.runId = readValue();
+  else if (arg === "--producer") args.producer = readValue();
   else if (arg === "--provider") args.provider = readValue();
   else if (arg === "--endpoint") args.endpoint = readValue();
   else if (arg === "--region") args.region = readValue();
@@ -43,6 +52,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--key") args.key = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
+  else if (arg === "--manifest-output") args.manifestOutput = readValue();
   else if (arg === "--require-upload") requireUpload = true;
   else if (arg === "--dry-run") dryRun = true;
   else if (arg === "-h" || arg === "--help") {
@@ -90,6 +100,18 @@ function sha256(value, encoding = "hex") {
   return createHash("sha256").update(value).digest(encoding);
 }
 
+async function sha256File(filePath) {
+  return sha256(await fs.readFile(filePath));
+}
+
+async function readJsonIfPresent(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function hmac(key, value, encoding) {
   return createHmac("sha256", key).update(value).digest(encoding);
 }
@@ -119,6 +141,7 @@ function objectKey() {
     args.keyPrefix.replace(/^\/+|\/+$/g, ""),
     pathSegment(args.taskId || "manual"),
     pathSegment(args.branch || "unknown-branch"),
+    pathSegment(args.commit || "unknown-commit"),
     pathSegment(args.runId || "local"),
     "acceptance.mp4",
   ]
@@ -190,24 +213,41 @@ async function putS3Object(key, body) {
 }
 
 const report = {
+  createdAt: new Date().toISOString(),
   result: "pending",
+  taskId: args.taskId || "none",
+  branch: args.branch || "none",
+  commit: args.commit || "none",
+  runId: args.runId || "none",
+  producer: args.producer || "unknown",
   provider: args.provider || "none",
+  storageProvider: args.provider || "none",
   endpointConfigured: hasValue(args.endpoint),
   bucketConfigured: hasValue(args.bucket),
   publicBaseUrlConfigured: hasValue(args.publicBaseUrl),
   accessKeyConfigured: hasValue(args.accessKeyId),
   secretKeyConfigured: hasValue(args.secretAccessKey),
   videoPath: args.videoPath,
+  summaryPath: args.summaryPath,
+  originPath: args.originPath,
   videoSize: 0,
+  mp4Sha256: "",
+  summarySha256: "",
+  clientGuiCapture: false,
+  videoKind: "unknown",
   key: "",
+  objectKey: "",
   videoUrl: "",
   endpointUrl: "",
   etag: "",
+  manifestOutput: args.manifestOutput,
+  boundary: "candidate video upload only; release requires same-session Codex verifier approval",
   dryRun,
   failures: [],
 };
 
 if (!(await exists(args.videoPath))) report.failures.push(`Acceptance video is missing: ${args.videoPath}`);
+if (!(await exists(args.summaryPath))) report.failures.push(`Acceptance summary is missing: ${args.summaryPath}`);
 if (!hasValue(args.provider)) report.failures.push("MINELINK_VIDEO_STORAGE_PROVIDER or --provider is required.");
 if (hasValue(args.provider) && !/^s3|r2$/i.test(args.provider)) {
   report.failures.push(`Unsupported video storage provider: ${args.provider}. Use s3 or r2.`);
@@ -227,9 +267,15 @@ if (!hasValue(args.publicBaseUrl)) {
 if (report.failures.length === 0) {
   const key = objectKey();
   const body = await fs.readFile(args.videoPath);
+  const origin = await readJsonIfPresent(args.originPath);
   report.videoSize = body.length;
   report.key = key;
+  report.objectKey = key;
   report.videoUrl = publicUrl(key);
+  report.mp4Sha256 = sha256(body);
+  report.summarySha256 = await sha256File(args.summaryPath);
+  report.videoKind = origin?.videoKind ?? "unknown";
+  report.clientGuiCapture = origin?.clientGuiCapture === true;
   if (dryRun) {
     report.result = "passed";
     report.endpointUrl = "dry-run";
@@ -252,20 +298,58 @@ const githubOutput = process.env.GITHUB_OUTPUT;
 if (githubOutput && report.result === "passed") {
   await fs.appendFile(
     githubOutput,
-    [`video-url=${report.videoUrl}`, `raw-video-url=${report.videoUrl}`, `storage-key=${report.key}`].join("\n") + "\n",
+    [
+      `video-url=${report.videoUrl}`,
+      `raw-video-url=${report.videoUrl}`,
+      `storage-key=${report.key}`,
+      `video-sha256=${report.mp4Sha256}`,
+      `video-manifest=${args.manifestOutput}`,
+    ].join("\n") + "\n",
     "utf8",
   );
+}
+
+const manifest = {
+  taskId: report.taskId,
+  branch: report.branch,
+  commit: report.commit,
+  runId: report.runId,
+  producer: report.producer,
+  videoUrl: report.videoUrl,
+  storageProvider: report.storageProvider.toLowerCase(),
+  bucket: args.bucket || "",
+  objectKey: report.objectKey,
+  mp4Sha256: report.mp4Sha256,
+  summarySha256: report.summarySha256,
+  clientGuiCapture: report.clientGuiCapture,
+  videoKind: report.videoKind,
+  createdAt: report.createdAt,
+  boundary: report.boundary,
+};
+
+if (report.result === "passed") {
+  await fs.mkdir(path.dirname(args.manifestOutput), { recursive: true });
+  await fs.writeFile(args.manifestOutput, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
 
 const lines = [
   "# MineLink Acceptance Video Storage Upload",
   "",
   `- Result: \`${report.result}\``,
+  `- Task id: \`${report.taskId}\``,
+  `- Branch: \`${report.branch}\``,
+  `- Commit: \`${report.commit}\``,
+  `- Run id: \`${report.runId}\``,
+  `- Producer: \`${report.producer}\``,
   `- Provider: \`${report.provider}\``,
   `- Video path: \`${report.videoPath}\``,
   `- Video size: \`${report.videoSize}\``,
+  `- MP4 SHA256: \`${report.mp4Sha256 || "none"}\``,
+  `- Summary SHA256: \`${report.summarySha256 || "none"}\``,
+  `- Client GUI capture: \`${report.clientGuiCapture ? "yes" : "no"}\``,
   `- Storage key: \`${report.key || "none"}\``,
   `- Public video URL: ${report.videoUrl || "none"}`,
+  `- Manifest: \`${args.manifestOutput}\``,
   `- Endpoint configured: \`${report.endpointConfigured ? "yes" : "no"}\``,
   `- Bucket configured: \`${report.bucketConfigured ? "yes" : "no"}\``,
   `- Public base URL configured: \`${report.publicBaseUrlConfigured ? "yes" : "no"}\``,
@@ -279,7 +363,7 @@ const lines = [
   "",
   "## Boundary",
   "",
-  "- This report proves external video upload only. It does not change MineLink product acceptance status.",
+  `- ${report.boundary}. It does not change MineLink product acceptance status.`,
   "",
 ];
 

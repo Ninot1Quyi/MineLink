@@ -7,6 +7,7 @@ let reviewPath = ".minelink-dev/reports/artifacts/video-review.md";
 let summaryPath = ".minelink-dev/reports/artifacts/acceptance-summary.md";
 let mp4Path = ".minelink-dev/reports/artifacts/acceptance.mp4";
 let originPath = ".minelink-dev/reports/artifacts/acceptance-video-origin.json";
+let manifestPath = ".minelink-dev/reports/artifacts/video-storage-manifest.json";
 let outputPath = ".minelink-dev/reports/artifacts/video-release-gate.md";
 let requireMp4 = false;
 let requireProducer = "";
@@ -22,6 +23,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
     mp4Path = process.argv[++index] ?? "";
   } else if (arg === "--origin") {
     originPath = process.argv[++index] ?? "";
+  } else if (arg === "--manifest") {
+    manifestPath = process.argv[++index] ?? "";
   } else if (arg === "--output") {
     outputPath = process.argv[++index] ?? "";
   } else if (arg === "--require-producer") {
@@ -105,6 +108,7 @@ const reviewStat = await stat(reviewPath);
 const summaryStat = await stat(summaryPath);
 const mp4Stat = await stat(mp4Path);
 const origin = await readJson(originPath);
+const storageManifest = await readJson(manifestPath);
 const producer = origin?.producer ?? "unknown";
 const videoKind = origin?.videoKind ?? "unknown";
 const clientGuiCapture = origin?.clientGuiCapture === true;
@@ -138,6 +142,27 @@ if (requireClientGuiCapture) {
     failures.push(
       `Acceptance video is ${videoKind} with clientGuiCapture=false; Minecraft product gates require normal Minecraft client footage`,
     );
+  }
+}
+
+if (storageManifest) {
+  if (mp4Stat?.isFile()) {
+    const currentMp4Hash = await sha256(mp4Path);
+    if (storageManifest.mp4Sha256 !== currentMp4Hash) {
+      failures.push(`Video storage manifest MP4 hash mismatch: ${storageManifest.mp4Sha256 || "missing"}`);
+    }
+  }
+  if (summaryStat?.isFile()) {
+    const currentSummaryHash = await sha256(summaryPath);
+    if (storageManifest.summarySha256 !== currentSummaryHash) {
+      failures.push(`Video storage manifest summary hash mismatch: ${storageManifest.summarySha256 || "missing"}`);
+    }
+  }
+  if (requireProducer && storageManifest.producer !== requireProducer) {
+    failures.push(`Video storage manifest producer is ${storageManifest.producer || "missing"}, expected ${requireProducer}`);
+  }
+  if (requireClientGuiCapture && storageManifest.clientGuiCapture !== true) {
+    failures.push("Video storage manifest does not confirm clientGuiCapture=true");
   }
 }
 
@@ -207,12 +232,16 @@ const lines = [
   `- Acceptance summary: \`${summaryPath}\``,
   `- Acceptance MP4: \`${mp4Path}\``,
   `- Acceptance video origin: \`${originPath}\``,
+  `- Video storage manifest: \`${manifestPath}\``,
   `- Video producer: \`${producer}\``,
   `- Video kind: \`${videoKind}\``,
   `- Required producer: \`${requireProducer || "none"}\``,
   `- MP4 required: \`${requireMp4 ? "yes" : "no"}\``,
   `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
+  `- Storage provider: \`${storageManifest?.storageProvider || "none"}\``,
+  `- Storage object: \`${storageManifest?.objectKey || "none"}\``,
+  `- Storage video URL: ${storageManifest?.videoUrl || "none"}`,
   `- Scenario reports: \`${scenarioReportCount ?? "unknown"}\``,
   `- Result: \`${failures.length === 0 ? "passed" : "failed"}\``,
   "",

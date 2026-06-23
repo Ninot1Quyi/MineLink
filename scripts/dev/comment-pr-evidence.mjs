@@ -14,6 +14,10 @@ const args = {
   headSha: process.env.GITHUB_SHA ?? "",
   workflowName: process.env.GITHUB_WORKFLOW ?? "",
   videoPath: process.env.MINELINK_ACCEPTANCE_VIDEO_PATH ?? ".minelink-dev/reports/artifacts/acceptance.mp4",
+  manifestPath:
+    process.env.MINELINK_VIDEO_STORAGE_MANIFEST ?? ".minelink-dev/reports/artifacts/video-storage-manifest.json",
+  videoReviewPath: process.env.MINELINK_VIDEO_REVIEW_PATH ?? ".minelink-dev/reports/artifacts/video-review.md",
+  releaseGatePath: process.env.MINELINK_VIDEO_RELEASE_GATE_PATH ?? ".minelink-dev/reports/artifacts/video-release-gate.md",
   producer: process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ?? "github-actions",
   boundary:
     process.env.MINELINK_ACCEPTANCE_VIDEO_BOUNDARY ??
@@ -39,6 +43,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--head-sha") args.headSha = readValue();
   else if (arg === "--workflow-name") args.workflowName = readValue();
   else if (arg === "--video-path") args.videoPath = readValue();
+  else if (arg === "--manifest") args.manifestPath = readValue();
+  else if (arg === "--video-review") args.videoReviewPath = readValue();
+  else if (arg === "--release-gate") args.releaseGatePath = readValue();
   else if (arg === "--producer") args.producer = readValue();
   else if (arg === "--boundary") args.boundary = readValue();
   else if (arg === "--output") args.output = readValue();
@@ -57,6 +64,14 @@ alter acceptance gate status.`);
   } else {
     console.error(`Unknown argument: ${arg}`);
     process.exit(2);
+  }
+}
+
+async function readJsonIfPresent(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
   }
 }
 
@@ -104,7 +119,7 @@ function githubInlineAttachment(url) {
   return false;
 }
 
-function body() {
+function body(manifest) {
   const shortSha = hasValue(args.headSha) ? args.headSha.slice(0, 12) : "none";
   const inlineVideoUrl = args.rawVideoUrl || args.videoUrl;
   const inlineExpected = inlineVideoUrl ? githubInlineAttachment(inlineVideoUrl) : false;
@@ -112,8 +127,13 @@ function body() {
     ? "GitHub inline video attachment:"
     : "External MP4 playback URL:";
   const playbackNote = inlineVideoUrl && !inlineExpected
-    ? "Note: GitHub renders external MP4 URLs as links. Inline playback on the PR page requires a GitHub-uploaded attachment URL."
+    ? "Note: GitHub renders external MP4 URLs as links. Inline playback on the PR page requires a GitHub-uploaded attachment URL; use the R2 URL or artifact when no attachment URL is available."
     : "";
+  const provider = manifest?.storageProvider || "unknown";
+  const objectKey = manifest?.objectKey || "unknown";
+  const manifestHash = manifest?.mp4Sha256 || "unknown";
+  const manifestSummaryHash = manifest?.summarySha256 || "unknown";
+  const clientGuiCapture = manifest?.clientGuiCapture === true ? "yes" : "no";
   return [
     marker(),
     "MineLink PR video evidence:",
@@ -129,6 +149,14 @@ function body() {
     `- Run: ${args.runUrl || "none"}`,
     `- Playable video URL: ${args.videoUrl || "not published"}`,
     `- Raw video URL: ${args.rawVideoUrl || "not published"}`,
+    `- R2/storage provider: \`${provider}\``,
+    `- R2/object key: \`${objectKey}\``,
+    `- Video storage manifest: \`${args.manifestPath}\``,
+    `- Manifest MP4 SHA256: \`${manifestHash}\``,
+    `- Manifest summary SHA256: \`${manifestSummaryHash}\``,
+    `- Client GUI capture: \`${clientGuiCapture}\``,
+    `- Verifier report: \`${args.videoReviewPath}\``,
+    `- Release gate report: \`${args.releaseGatePath}\``,
     hasValue(args.artifactUrl)
       ? `- Artifact: [${args.artifactName}](${args.artifactUrl})`
       : `- Artifact: \`${args.artifactName}\` (not linked yet)`,
@@ -170,11 +198,15 @@ async function githubJson(url, options = {}) {
 }
 
 async function upsertComment() {
+  const manifest = await readJsonIfPresent(args.manifestPath);
+  if (!manifest) {
+    throw new Error(`Video storage manifest is required before publishing PR evidence: ${args.manifestPath}`);
+  }
   const comments = await githubJson(`/repos/${args.repository}/issues/${args.pr}/comments?per_page=100`);
   const existing = Array.isArray(comments)
     ? comments.find((comment) => String(comment.body ?? "").includes(marker()))
     : null;
-  const payload = { body: body() };
+  const payload = { body: body(manifest) };
   if (existing?.id) {
     const updated = await githubJson(`/repos/${args.repository}/issues/comments/${existing.id}`, {
       method: "PATCH",
@@ -200,6 +232,9 @@ const report = {
   rawVideoUrl: args.rawVideoUrl,
   githubInlinePlaybackExpected: githubInlineAttachment(args.rawVideoUrl || args.videoUrl),
   videoPath: args.videoPath,
+  manifestPath: args.manifestPath,
+  videoReviewPath: args.videoReviewPath,
+  releaseGatePath: args.releaseGatePath,
   producer: args.producer,
   allowArtifactOnly,
   commentUrl: "",
@@ -236,6 +271,9 @@ const lines = [
   `- Raw video URL: ${args.rawVideoUrl || "none"}`,
   `- GitHub inline playback expected: \`${report.githubInlinePlaybackExpected ? "yes" : "no"}\``,
   `- Acceptance video path: \`${args.videoPath}\``,
+  `- Video storage manifest: \`${args.manifestPath}\``,
+  `- Verifier report: \`${args.videoReviewPath}\``,
+  `- Release gate report: \`${args.releaseGatePath}\``,
   `- Producer: \`${args.producer || "unknown"}\``,
   `- Action: \`${report.action || "none"}\``,
   `- Comment URL: ${report.commentUrl || "none"}`,

@@ -10,12 +10,14 @@ const execFileAsync = promisify(execFile);
 let summaryPath = ".minelink-dev/reports/artifacts/acceptance-summary.md";
 let mp4Path = ".minelink-dev/reports/artifacts/acceptance.mp4";
 let originPath = ".minelink-dev/reports/artifacts/acceptance-video-origin.json";
+let manifestPath = ".minelink-dev/reports/artifacts/video-storage-manifest.json";
 let outputPath = ".minelink-dev/reports/artifacts/video-review-request.md";
 let taskId = process.env.MINELINK_TASK_ID ?? "local";
 let branch = process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "";
 let taskRequirements = process.env.MINELINK_TASK_REQUIREMENTS ?? "";
 let requireMp4 = false;
 let requireClientGuiCapture = false;
+let requireStorageManifest = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -25,6 +27,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
     mp4Path = process.argv[++index] ?? "";
   } else if (arg === "--origin") {
     originPath = process.argv[++index] ?? "";
+  } else if (arg === "--manifest") {
+    manifestPath = process.argv[++index] ?? "";
   } else if (arg === "--output") {
     outputPath = process.argv[++index] ?? "";
   } else if (arg === "--task-id") {
@@ -37,6 +41,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
     requireMp4 = true;
   } else if (arg === "--require-client-gui-capture") {
     requireClientGuiCapture = true;
+  } else if (arg === "--require-storage-manifest") {
+    requireStorageManifest = true;
   } else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/prepare-video-review-request.mjs [--require-mp4] [--require-client-gui-capture]
 
@@ -128,6 +134,7 @@ const summaryHash = summaryStat?.isFile() ? await sha256(summaryPath) : "missing
 const mp4Hash = mp4Stat?.isFile() ? await sha256(mp4Path) : "missing";
 const mp4Metadata = mp4Stat?.isFile() ? await ffprobe(mp4Path) : "missing";
 const origin = await readJson(originPath);
+const storageManifest = await readJson(manifestPath);
 const producer = origin?.producer ?? "unknown";
 const videoKind = origin?.videoKind ?? "unknown";
 const clientGuiCapture = origin?.clientGuiCapture === true;
@@ -143,6 +150,25 @@ if (requireClientGuiCapture) {
   }
 }
 
+if (requireStorageManifest) {
+  if (!storageManifest) {
+    failures.push(`Missing required video storage manifest: ${manifestPath}`);
+  } else {
+    if (storageManifest.mp4Sha256 !== mp4Hash) {
+      failures.push(`Video storage manifest MP4 hash mismatch: ${storageManifest.mp4Sha256 || "missing"}`);
+    }
+    if (storageManifest.summarySha256 !== summaryHash) {
+      failures.push(`Video storage manifest summary hash mismatch: ${storageManifest.summarySha256 || "missing"}`);
+    }
+    if (storageManifest.producer && storageManifest.producer !== producer) {
+      failures.push(`Video storage manifest producer mismatch: ${storageManifest.producer}`);
+    }
+    if (requireClientGuiCapture && storageManifest.clientGuiCapture !== true) {
+      failures.push("Video storage manifest does not confirm clientGuiCapture=true");
+    }
+  }
+}
+
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
 const lines = [
@@ -155,10 +181,15 @@ const lines = [
   `- Acceptance summary: \`${summaryPath}\``,
   `- Acceptance MP4: \`${mp4Path}\``,
   `- Acceptance video origin: \`${originPath}\``,
+  `- Video storage manifest: \`${manifestPath}\``,
   `- Video producer: \`${md(producer)}\``,
   `- Video kind: \`${md(videoKind)}\``,
   `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
+  `- Storage manifest required: \`${requireStorageManifest ? "yes" : "no"}\``,
+  `- Storage provider: \`${md(storageManifest?.storageProvider || "none")}\``,
+  `- Storage object: \`${md(storageManifest?.objectKey || "none")}\``,
+  `- Storage video URL: ${storageManifest?.videoUrl || "none"}`,
   `- Summary sha256: \`${summaryHash}\``,
   `- MP4 sha256: \`${mp4Hash}\``,
   `- MP4 metadata: \`${md(mp4Metadata).replaceAll("\n", "; ")}\``,
@@ -167,6 +198,8 @@ const lines = [
   "## Verifier Assignment",
   "",
   "Use the current Ona Platform Codex implementation session, not the default Ona Agent, to launch a bounded native Codex verifier subagent that reviews the acceptance summary and MP4 against the task requirements. The verifier must not edit product code and must not re-render the video. It must inspect the artifacts above and write `.minelink-dev/reports/artifacts/video-review.md`.",
+  "",
+  "For R2-backed candidate videos, the manifest URL is candidate evidence transport only. The verifier must compare the task requirements, acceptance summary, manifest hashes, and MP4 hash; it must not treat storage upload as release approval.",
   "",
   "The review file must include these exact markers with the current hashes:",
   "",

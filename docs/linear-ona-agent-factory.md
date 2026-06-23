@@ -527,15 +527,19 @@ path already exists from an earlier run, the fetch script polls until the file
 contains the current Goal-mode execution id, reviewed commit, and artifact
 hashes; stale branch content is a timeout failure, not release evidence. This
 is still automation-chain evidence only; it does not prove product acceptance.
-After the release gate, the Ona release finalizer uploads the verifier-approved
-MP4 with `scripts/dev/upload-acceptance-video-storage.mjs` and copies the
-upload report back. GitHub Actions writes that returned public MP4 URL into the
-PR through `scripts/dev/comment-pr-evidence.mjs`; it must not re-render or
-substitute the final task video. GitHub renders external MP4 URLs as links and
-strips external `<video>` tags from issue/PR Markdown, so R2 proves public
-playback but not GitHub-native inline playback. A directly playable GitHub PR
-player requires a GitHub-uploaded attachment URL, which is a separate remaining
-factory edge. GitHub Actions artifacts remain the raw
+After the candidate MP4 is rendered, the Ona implementation finalizer uploads
+it with `scripts/dev/upload-acceptance-video-storage.mjs` and writes
+`video-storage-manifest.json`; that upload is candidate evidence transport, not
+release approval. After the release gate, the Ona release finalizer copies the
+manifest, upload report, verifier report, and release-gate report back. GitHub
+Actions downloads the R2 MP4 from the manifest URL, verifies `mp4Sha256`, and
+only then writes the public MP4 URL into the PR through
+`scripts/dev/comment-pr-evidence.mjs`; it must not re-render or substitute the
+final task video. GitHub renders external MP4 URLs as links and strips external
+`<video>` tags from issue/PR Markdown, so R2 proves public playback but not
+GitHub-native inline playback. A directly playable GitHub PR player requires a
+GitHub-uploaded attachment URL, which is a separate remaining factory edge.
+GitHub Actions artifacts remain the raw
 evidence bundle; the default chain must not commit the video binary to the
 repository evidence branch when external storage is configured. When a
 canary run renders the MP4 on the GitHub runner, the artifact origin must say
@@ -814,17 +818,38 @@ MP4 rendering was skipped. For `video-required` tasks, rerun on a host or CI
 image with `ffmpeg`; `--require-mp4` must fail the task if MP4 cannot be
 created.
 
-After rendering, run:
+After rendering, upload candidate video evidence directly from the Ona
+environment when R2 storage is configured:
 
 ```bash
-node scripts/dev/prepare-video-review-request.mjs --require-mp4
+node scripts/dev/upload-acceptance-video-storage.mjs --require-upload
+```
+
+This writes:
+
+```text
+.minelink-dev/reports/video-storage-upload.md
+.minelink-dev/reports/video-storage-upload.json
+.minelink-dev/reports/artifacts/video-storage-manifest.json
+```
+
+The upload is transport only. It is not release approval, and it must not
+bypass the same-session Codex verifier. The object key must include the task,
+branch, commit, and run id so repeated factory runs do not overwrite each
+other.
+
+After rendering and candidate upload, run:
+
+```bash
+node scripts/dev/prepare-video-review-request.mjs --require-mp4 --require-storage-manifest
 ```
 
 This writes `.minelink-dev/reports/artifacts/video-review-request.md` with the
-current artifact hashes and verifier assignment. Before publishing or merging
-video evidence, the current Ona Platform Codex implementation session must
-launch a bounded native Codex verifier subagent to inspect that request, the
-task requirements, `acceptance-summary.md`, and `acceptance.mp4`. It writes
+current artifact hashes, storage manifest, and verifier assignment. Before
+publishing or merging video evidence, the current Ona Platform Codex
+implementation session must launch a bounded native Codex verifier subagent to
+inspect that request, the task requirements, `acceptance-summary.md`, the
+storage manifest, and the `acceptance.mp4` hash. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 
 ```text
@@ -839,10 +864,9 @@ MP4 sha256: <current acceptance.mp4 sha256>
 The full-chain canary may embed the review-request hashes directly so it can
 prove the same-session subagent handoff without moving large media through the
 repository. Real video-required tasks still need the verifier subagent to have
-access to the actual MP4, either because the implementation session rendered it
-in the same workspace or because the workflow published a downloadable artifact
-URL before the verifier runs. Hash-only canary evidence must not be called real
-video inspection.
+access to the actual MP4 hash and storage manifest, and the GitHub runner must
+later download the MP4 from R2 and verify `mp4Sha256`. Hash-only canary
+evidence must not be called real video inspection.
 
 Then run:
 
@@ -854,21 +878,25 @@ If the implementation and video do not match the task, the verifier must write
 `Release decision: fail` or omit the pass markers, stop publication, and return
 the task for another implementation iteration.
 
-After the release gate passes, publish the MP4 for PR review from the Ona task
-environment:
+After the release gate passes, publish PR evidence from the manifest. The
+release path does not re-upload or re-render the MP4:
 
 ```bash
 node scripts/dev/run-ona-finalizer-artifacts.mjs --stage-group release-upload --environment-id <ona-env> --task-id gh-123 --branch codex/gh-123-task
 node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --video-url URL --artifact-url URL
 ```
 
-The release finalizer calls
+The implementation finalizer has already called
 `scripts/dev/upload-acceptance-video-storage.mjs --require-upload` inside the
-same Ona task environment and copies the upload report back. GitHub comments
-with that returned public URL; it does not generate or replace the final task
-video. External storage URLs are not GitHub-native attachment URLs, so they are
-clickable playback links in PR Markdown. Inline playback on the GitHub page
-requires a later programmatic GitHub attachment upload path.
+same Ona task environment. The release finalizer copies back the manifest,
+upload report, verifier report, and release gate report; the GitHub runner then
+downloads the R2 MP4 from `videoUrl` and verifies `mp4Sha256` before publishing
+PR evidence. GitHub comments with the returned public URL and artifact links;
+it does not generate or replace the final task video. External storage URLs are
+not GitHub-native attachment URLs, so they are clickable playback links in PR
+Markdown. Inline playback on the GitHub page requires a GitHub attachment URL;
+when no attachment exists, the comment must explicitly provide the R2 playable
+URL, artifact zip, manifest path, and verifier report.
 
 `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID` and
 `MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY` must be configured only as GitHub or

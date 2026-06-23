@@ -1013,17 +1013,24 @@ Current status:
   `reports/e2e-failure-log-tail.txt` with the recorder client config, client
   logs, and recorder logs last, so reviewers can diagnose Minecraft client
   startup failures from GitHub artifacts even when the stage output is
-  truncated. The finalizer artifact bridge must return reports and
-  client-capture logs through a manifest plus fixed-size base64 chunks with a
-  SHA-256 check, not a single large stdout marker payload, so a large
-  `acceptance.mp4` cannot be lost by Ona CLI JSON truncation or escaping.
+  truncated. The finalizer artifact bridge must use R2-first video transport
+  when storage is configured: after `acceptance.mp4` is rendered inside Ona,
+  the finalizer uploads it as candidate evidence, writes
+  `.minelink-dev/reports/artifacts/video-storage-manifest.json`, and returns
+  only small reports, logs, and manifests through the chunk bridge. The GitHub
+  runner must download the MP4 from the manifest URL and fail closed unless
+  the bytes match `mp4Sha256`. The fixed-size base64 chunk bridge remains for
+  reports, client-capture logs, and no-R2 fallback; it is no longer the
+  preferred large-`acceptance.mp4` transport.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
   match markers, the required Ona video producer, and current summary/MP4
-  hashes. The gate also fails final publication when the summary has
-  `Scenario reports: 0` or `No scenario reports found`; a pure text/card MP4 is
-  never sufficient final evidence for video-required tasks. The gate writes
+  hashes. When a storage manifest is present, the gate also verifies the
+  manifest hashes, producer, and `clientGuiCapture` marker. The gate fails
+  final publication when the summary has `Scenario reports: 0` or
+  `No scenario reports found`; a pure text/card MP4 is never sufficient final
+  evidence for video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
 - `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at
   terminal factory cleanup when they belong to the MineLink project and have no
