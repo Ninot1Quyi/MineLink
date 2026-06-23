@@ -175,10 +175,16 @@ Current status:
   only public MCP dynamic tools to assert `unknown_or_unobserved_target`,
   `target_too_far`, `missing_material`, `blocked` for vanilla daytime sleep,
   and `expired_ref`.
+- `agent.birth` now publishes the real `MineLink-*` FakePlayer-backed
+  `server_agent` as a visible ServerPlayer entity, instead of relying on a
+  recorder-only ArmorStand proxy. The client recorder is required to follow a
+  player entity, so proxy marker footage cannot satisfy product-video gates.
 - `action.move` now uses native entity movement in the NeoForge runtime and the
   guard replay asserts movement collision feedback; the latest real guard run
   reported `collision=true` with `moved_distance` lower than
-  `requested_distance`.
+  `requested_distance`. Movement is stepped at an approximate vanilla walking
+  cadence for video-required scenarios, but full client-equivalent locomotion
+  and animation parity remain open product gaps.
 - `action.mine_visible_block` in the real NeoForge runtime now keeps the
   existing observed-ref, TTL, reach, and block-id guards, then mines through the
   FakePlayer `ServerPlayerGameMode.destroyBlock` path. Drops are collected only
@@ -1003,7 +1009,7 @@ Current status:
   to the agent-following camera anchor; the renderer records this as
   `recorderAutoFollow=true`. The recorder client must also log
   `MineLink recorder client following server_agent` after it sees the visible
-  agent marker and steers the recorded camera toward it; the renderer records
+  `MineLink-*` player body and steers the recorded camera toward it; the renderer records
   this as `recorderClientFollow=true`. The server-side recorder helper must
   log `MineLink recorder target moved server_agent` after the active
   `server_agent` visibly moves during the recorded scenario; the renderer
@@ -1012,7 +1018,7 @@ Current status:
   player's own camera has held the visible agent in frame; the renderer records
   this as `recorderClientTargetCentered=true`. The recorder client must also
   log `MineLink recorder client target visible server_agent` only after its
-  camera has a clear line of sight to the visible `server_agent` marker; the
+  camera has a clear line of sight to the visible `server_agent` player body; the
   renderer records this as `recorderClientTargetVisible=true`. The renderer
   must also set `recorderReadyBeforeScenario=true` before the first scenario
   work tool runs, so fast tasks cannot finish before the recorder has visibly
@@ -1030,7 +1036,11 @@ Current status:
   lifecycle confirmation for submitted actions. The renderer also writes
   `serverAgentTaskActionVisible=true` from the same condition, so merely seeing
   an idle `server_agent`, seeing the target only near the end, or submitting
-  work without waiting for execution completion is not enough. The release gate
+  work without waiting for execution completion is not enough. For scenarios
+  that complete `action.mine_visible_block`, the renderer also requires the
+  server-side `MineLink recorder visible mining server_agent` marker before it
+  can set `recorderScenarioActionVisible=true`, so a clip that only shows the
+  agent beside the final result cannot pass as mining evidence. The release gate
   must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,

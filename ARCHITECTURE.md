@@ -811,7 +811,12 @@ and recorder evidence: the scenario must pass, at least one world-changing MCP
 tool such as `action.*`, `container.*`, `craft.*`, `furnace.*`, or `create.*`
 must succeed, at least one final assertion must pass, and the recorder must
 confirm target movement, follow, centered framing, and line-of-sight
-visibility. The finalizer also runs
+visibility. For scenarios that complete `action.mine_visible_block`, the
+renderer additionally requires the server-side recorder marker
+`MineLink recorder visible mining server_agent` before it sets
+`recorderScenarioActionVisible=true`; this prevents a video that only shows the
+agent standing near a finished result from passing as mining evidence. The
+finalizer also runs
 `scripts/dev/render-video-storyboard.mjs` after MP4 rendering to create a
 numbered frame grid for model-readable QA; that storyboard is never the final
 deliverable and cannot replace the playable `acceptance.mp4`. The
@@ -862,10 +867,13 @@ prepares a remote manifest plus fixed-size base64 chunks under
 `.minelink-dev/ona-finalizer-artifact-chunks` and verifies the tarball SHA-256
 after downloading; that bridge is for reports, logs, manifests, and no-R2
 fallbacks, not the preferred large-video transport. The
-recorder client is an observer only: the server creates a visible
-`server_agent` marker and an invisible camera anchor that continuously follows
-the agent for recording, but it does not add MCP tools, world-query authority,
-materials, or any bypass around server-side checks. The client recorder must
+recorder client is an observer only: the server publishes the real
+`MineLink-*` FakePlayer-backed `server_agent` as a visible ServerPlayer entity
+and creates only an invisible camera anchor that continuously follows that body
+for recording. The recorder must target a client-visible player entity, not an
+ArmorStand or other proxy marker, and this recorder path does not add MCP
+tools, world-query authority, materials, or any bypass around server-side
+checks. The client recorder must
 emit `MineLink recorder client in world` after the Minecraft client has a
 world, player, and no blocking screen; `e2e.sh` starts ffmpeg only after that
 marker and writes `clientWorldReady=true` plus
@@ -875,7 +883,7 @@ recorder player is switched to spectator camera mode and bound to the
 agent-following camera anchor; the renderer writes that as
 `recorderAutoFollow=true`. The recorder client must also log
 `MineLink recorder client following server_agent` after it sees the visible
-agent marker and continuously steers the recorded view toward it; the renderer
+`MineLink-*` player body and continuously steers the recorded view toward it; the renderer
 writes that as `recorderClientFollow=true`. The server-side recorder helper
 must log `MineLink recorder target moved server_agent` after the active
 `server_agent` body visibly moves during the recorded scenario; the renderer
@@ -886,7 +894,7 @@ view long enough for review; the renderer writes that as
 `recorderClientTargetCentered=true`. The recorder must also log
 `MineLink recorder client target visible server_agent` only after the chosen
 camera position has a clear raycast line of sight to the visible
-`server_agent` marker; the renderer writes that as
+`server_agent` player body; the renderer writes that as
 `recorderClientTargetVisible=true`. The renderer then combines those recorder
 markers with the scenario's successful work tools and final assertions to write
 `recorderWorkVisible=true`. For video-required product gates, the Codex RPC

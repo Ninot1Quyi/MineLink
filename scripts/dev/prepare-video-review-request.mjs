@@ -169,6 +169,9 @@ const recorderCaptureDurationSeconds = Number.isFinite(origin?.recorderCaptureDu
   ? origin.recorderCaptureDurationSeconds
   : 0;
 const recorderWorkCoverageAdequate = origin?.recorderWorkCoverageAdequate === true;
+const recorderVisibleMining = origin?.recorderVisibleMining === true;
+const requiresVisibleMining = origin?.requiresVisibleMining === true;
+const recorderScenarioActionVisible = origin?.recorderScenarioActionVisible === true;
 const submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
 const submittedActionPendingCount = Number.isFinite(origin?.submittedActionPendingCount)
   ? origin.submittedActionPendingCount
@@ -225,6 +228,12 @@ if (requireClientGuiCapture) {
     }
     if (!recorderWorkCoverageAdequate) {
       failures.push("Acceptance video origin does not confirm adequate visible work coverage");
+    }
+    if (requiresVisibleMining && !recorderVisibleMining) {
+      failures.push("Acceptance video origin requires visible mining evidence but recorderVisibleMining is false");
+    }
+    if (!recorderScenarioActionVisible) {
+      failures.push("Acceptance video origin does not confirm scenario-specific visible task action");
     }
     if (!submittedActionsTerminalConfirmed) {
       failures.push(
@@ -334,6 +343,9 @@ const lines = [
   `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
   `- Recorder capture duration seconds: \`${recorderCaptureDurationSeconds}\``,
   `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+  `- Recorder visible mining: \`${recorderVisibleMining ? "yes" : "no"}\``,
+  `- Requires visible mining: \`${requiresVisibleMining ? "yes" : "no"}\``,
+  `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
   `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,

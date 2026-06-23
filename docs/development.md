@@ -201,12 +201,14 @@ Xvfb/ffmpeg, and composes that client view with terminal evidence through
 `minecraftClientPanel=true` for the left-side normal Minecraft client capture
 and `mcpTerminalLogPanel=true` for the right-side MCP/server/agent terminal log
 digest; both markers are required for release. The server-side recorder helper
-only moves an observer camera anchor and visible marker for video review; it
-must log `MineLink recorder auto-follow active` so release gates can verify the
-server-side recorder binding followed the active `server_agent`. The recorder
-client must also log `MineLink recorder client following server_agent` so release
-gates can verify the captured client view actually saw and followed the visible
-agent marker. It must also log
+uses an invisible observer camera anchor only; the visible target must be the
+real `MineLink-*` FakePlayer-backed ServerPlayer body, not an ArmorStand or
+other proxy marker. It must log `MineLink recorder auto-follow active` so
+release gates can verify the server-side recorder binding followed the active
+`server_agent`. The recorder client must also log
+`MineLink recorder client following server_agent` so release gates can verify the
+captured client view actually saw and followed the visible player body. It must
+also log
 `MineLink recorder target moved server_agent` after the active `server_agent`
 visibly moves during the recorded scenario; release gates record this as
 `recorderTargetMoved=true` so a static/idle target video is not accepted. It
@@ -217,7 +219,7 @@ framed in the recorder client's own camera view; release gates record this as
 not accepted. It must also log
 `MineLink recorder client target visible server_agent` after a raycast confirms
 clear line of sight from the recorder camera to the visible `server_agent`
-marker; release gates record this as `recorderClientTargetVisible=true` so a
+player body; release gates record this as `recorderClientTargetVisible=true` so a
 video where the agent is hidden behind terrain or foliage is not accepted. The
 runner must wait for these recorder markers before task work starts and record
 `recorderReadyBeforeScenario=true`; the post-scenario hold must then record
@@ -227,7 +229,11 @@ scenario, at least one successful work tool such as `action.*`, `container.*`,
 `craft.*`, `furnace.*`, or `create.*`, at least one passing final assertion,
 terminal lifecycle confirmation for submit-mode actions, the recorder
 movement/follow/centered/visible markers, pre-scenario readiness, and adequate
-work coverage. The renderer also writes `serverAgentTaskActionVisible=true`
+work coverage. For scenarios that complete `action.mine_visible_block`, the
+renderer also requires the server-side `MineLink recorder visible mining
+server_agent` marker and records it as `recorderScenarioActionVisible=true`; a
+video that only shows the agent beside the finished tree result is not accepted
+as mining evidence. The renderer also writes `serverAgentTaskActionVisible=true`
 from that same condition. This blocks videos where the agent is merely standing
 in view, appears only at the end, or has only submitted work without execution
 completion. It does not grant the agent new MCP tools or bypass any server

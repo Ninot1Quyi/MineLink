@@ -301,6 +301,9 @@ function reviewRequestEvidence(text) {
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
   const recorderReadyBeforeScenario = markerValue(text, "Recorder ready before scenario");
   const recorderWorkCoverageAdequate = markerValue(text, "Recorder work coverage adequate");
+  const recorderVisibleMining = markerValue(text, "Recorder visible mining");
+  const requiresVisibleMining = markerValue(text, "Requires visible mining");
+  const recorderScenarioActionVisible = markerValue(text, "Recorder scenario action visible");
   const submittedActionsTerminalConfirmed = markerValue(text, "Submitted actions terminal confirmed");
   const recorderWorkVisible = markerValue(text, "Recorder work visible");
   const serverAgentTaskActionVisible = markerValue(text, "Server agent task action visible");
@@ -385,6 +388,18 @@ function reviewRequestEvidence(text) {
     } else {
       evidence.push("Review request adequate visible work coverage marker present");
     }
+    if (/^yes$/i.test(requiresVisibleMining) && !/^yes$/i.test(recorderVisibleMining)) {
+      failures.push(`Video review request requires visible mining but got ${recorderVisibleMining || "missing"}.`);
+    } else if (/^yes$/i.test(recorderVisibleMining)) {
+      evidence.push("Review request visible mining marker present");
+    }
+    if (!/^yes$/i.test(recorderScenarioActionVisible)) {
+      failures.push(
+        `Video review request requires scenario-specific visible task action but got ${recorderScenarioActionVisible || "missing"}.`,
+      );
+    } else {
+      evidence.push("Review request scenario-specific visible task action marker present");
+    }
     if (!/^yes$/i.test(submittedActionsTerminalConfirmed)) {
       failures.push(
         `Video review request requires submitted action terminal lifecycle completion but got ${submittedActionsTerminalConfirmed || "missing"}.`,
@@ -425,6 +440,9 @@ function reviewRequestEvidence(text) {
     recorderClientTargetVisible,
     recorderReadyBeforeScenario,
     recorderWorkCoverageAdequate,
+    recorderVisibleMining,
+    requiresVisibleMining,
+    recorderScenarioActionVisible,
     submittedActionsTerminalConfirmed,
     recorderWorkVisible,
     serverAgentTaskActionVisible,
@@ -459,6 +477,9 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
   const recorderReadyBeforeScenario = markerValue(text, "Recorder ready before scenario");
   const recorderWorkCoverageAdequate = markerValue(text, "Recorder work coverage adequate");
+  const recorderVisibleMining = markerValue(text, "Recorder visible mining");
+  const requiresVisibleMining = markerValue(text, "Requires visible mining");
+  const recorderScenarioActionVisible = markerValue(text, "Recorder scenario action visible");
   const submittedActionsTerminalConfirmed = markerValue(text, "Submitted actions terminal confirmed");
   const recorderWorkVisible = markerValue(text, "Recorder work visible");
   const serverAgentTaskActionVisible = markerValue(text, "Server agent task action visible");
@@ -568,6 +589,16 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   } else if (/^yes$/i.test(recorderWorkCoverageAdequate)) {
     evidence.push("verifier canary adequate visible work coverage marker accepted");
   }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && /^yes$/i.test(expected.requiresVisibleMining) && !/^yes$/i.test(recorderVisibleMining)) {
+    failures.push(`Verifier canary Recorder visible mining is not yes: ${recorderVisibleMining || "missing"}.`);
+  } else if (/^yes$/i.test(recorderVisibleMining)) {
+    evidence.push("verifier canary visible mining marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderScenarioActionVisible)) {
+    failures.push(`Verifier canary Recorder scenario action visible is not yes: ${recorderScenarioActionVisible || "missing"}.`);
+  } else if (/^yes$/i.test(recorderScenarioActionVisible)) {
+    evidence.push("verifier canary scenario-specific visible task action marker accepted");
+  }
   if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(submittedActionsTerminalConfirmed)) {
     failures.push(
       `Verifier canary Submitted actions terminal confirmed is not yes: ${submittedActionsTerminalConfirmed || "missing"}.`,
@@ -666,6 +697,9 @@ const reviewLines = [
   `Recorder client target visible: ${request.recorderClientTargetVisible || "missing"}`,
   `Recorder ready before scenario: ${request.recorderReadyBeforeScenario || "missing"}`,
   `Recorder work coverage adequate: ${request.recorderWorkCoverageAdequate || "missing"}`,
+  `Recorder visible mining: ${request.recorderVisibleMining || "missing"}`,
+  `Requires visible mining: ${request.requiresVisibleMining || "missing"}`,
+  `Recorder scenario action visible: ${request.recorderScenarioActionVisible || "missing"}`,
   `Submitted actions terminal confirmed: ${request.submittedActionsTerminalConfirmed || "missing"}`,
   `Recorder work visible: ${request.recorderWorkVisible || "missing"}`,
   `Server agent task action visible: ${request.serverAgentTaskActionVisible || "missing"}`,

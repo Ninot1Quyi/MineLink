@@ -128,8 +128,8 @@ function displayValue(value) {
 
 function metadataValue(text, key) {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = String(text ?? "").match(new RegExp(`^${escaped}=(.*)$`, "m"));
-  return match?.[1]?.trim() ?? "";
+  const matches = [...String(text ?? "").matchAll(new RegExp(`^${escaped}=(.*)$`, "gm"))];
+  return matches.at(-1)?.[1]?.trim() ?? "";
 }
 
 function metadataBool(text, key) {
@@ -175,6 +175,7 @@ const successfulWorkTools = toolResults.filter((item) => {
 });
 const successfulAssertions = finalAssertions.filter((assertion) => assertion?.passed === true);
 const reportHash = report ? await sha256(args.report) : "missing";
+const successfulWorkToolNames = successfulWorkTools.map((item) => item?.name ?? "tool");
 
 const agentLog = await readText(path.join(args.logDir, "agent.log"));
 const serverStdout = await readText(path.join(args.logDir, "server.stdout.log"));
@@ -223,10 +224,14 @@ const recorderWorkCoverageAdequate =
   recorderWorkHoldCompleted &&
   recorderWorkHoldSeconds >= recorderMinWorkVisibleSeconds &&
   captureDurationSeconds >= recorderMinWorkVisibleSeconds;
+const recorderVisibleMining = serverLogText.includes("MineLink recorder visible mining server_agent");
+const requiresVisibleMining = successfulWorkToolNames.includes("action.mine_visible_block");
+const recorderScenarioActionVisible = !requiresVisibleMining || recorderVisibleMining;
 const recorderWorkVisible =
   passed &&
   successfulWorkTools.length > 0 &&
   successfulAssertions.length > 0 &&
+  recorderScenarioActionVisible &&
   recorderTargetMoved &&
   recorderClientFollow &&
   recorderClientTargetCentered &&
@@ -271,6 +276,9 @@ if (!submittedActionsTerminalConfirmed) {
     `Scenario finished with ${submittedActionPendingCount} submitted action(s) still lacking terminal lifecycle confirmation`,
   );
 }
+if (requiresVisibleMining && !recorderVisibleMining) {
+  failures.push("Recorder did not capture a visible mining marker for action.mine_visible_block");
+}
 if (!recorderWorkVisible) {
   failures.push(
     "Recorder did not confirm active visible server_agent work for this task; final evidence requires successful work tools, passing assertions, and visible centered follow footage",
@@ -295,6 +303,7 @@ const terminalLines = [
   `target visible: ${recorderClientTargetVisible ? "YES" : "NO"}`,
   `ready before work: ${recorderReadyBeforeScenario ? "YES" : "NO"}`,
   `work hold sec: ${recorderWorkHoldSeconds}`,
+  `visible mining: ${recorderVisibleMining ? "YES" : "NO"}`,
   `actions terminal: ${submittedActionsTerminalConfirmed ? "YES" : "NO"}`,
   `work visible: ${recorderWorkVisible ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
@@ -467,6 +476,8 @@ const summaryLines = [
   `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
   `- Recorder capture duration seconds: \`${captureDurationSeconds.toFixed(3)}\``,
   `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+  `- Recorder visible mining: \`${recorderVisibleMining ? "yes" : "no"}\``,
+  `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
   `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
@@ -517,11 +528,14 @@ const origin = {
   recorderMinWorkVisibleSeconds,
   recorderCaptureDurationSeconds: Number(captureDurationSeconds.toFixed(3)),
   recorderWorkCoverageAdequate,
+  recorderVisibleMining,
+  requiresVisibleMining,
+  recorderScenarioActionVisible,
   submittedActionsTerminalConfirmed,
   submittedActionPendingCount,
   recorderWorkVisible,
   serverAgentTaskActionVisible,
-  successfulWorkTools: successfulWorkTools.map((item) => item?.name ?? "tool"),
+  successfulWorkTools: successfulWorkToolNames,
   successfulWorkToolCount: successfulWorkTools.length,
   successfulFinalAssertionCount: successfulAssertions.length,
   scenarioReports: report ? 1 : 0,
@@ -559,6 +573,8 @@ await fs.writeFile(
     `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
     `- Recorder capture duration seconds: \`${captureDurationSeconds.toFixed(3)}\``,
     `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+    `- Recorder visible mining: \`${recorderVisibleMining ? "yes" : "no"}\``,
+    `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
     `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
     `- Submitted action pending count: \`${submittedActionPendingCount}\``,
     `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,

@@ -249,6 +249,9 @@ const report = {
   recorderMinWorkVisibleSeconds: 0,
   recorderCaptureDurationSeconds: 0,
   recorderWorkCoverageAdequate: false,
+  recorderVisibleMining: false,
+  requiresVisibleMining: false,
+  recorderScenarioActionVisible: false,
   submittedActionsTerminalConfirmed: false,
   submittedActionPendingCount: 0,
   recorderWorkVisible: false,
@@ -314,6 +317,9 @@ if (report.failures.length === 0) {
     ? origin.recorderCaptureDurationSeconds
     : 0;
   report.recorderWorkCoverageAdequate = origin?.recorderWorkCoverageAdequate === true;
+  report.recorderVisibleMining = origin?.recorderVisibleMining === true;
+  report.requiresVisibleMining = origin?.requiresVisibleMining === true;
+  report.recorderScenarioActionVisible = origin?.recorderScenarioActionVisible === true;
   report.submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
   report.submittedActionPendingCount = Number.isFinite(origin?.submittedActionPendingCount)
     ? origin.submittedActionPendingCount
@@ -381,6 +387,9 @@ const manifest = {
   recorderMinWorkVisibleSeconds: report.recorderMinWorkVisibleSeconds,
   recorderCaptureDurationSeconds: report.recorderCaptureDurationSeconds,
   recorderWorkCoverageAdequate: report.recorderWorkCoverageAdequate,
+  recorderVisibleMining: report.recorderVisibleMining,
+  requiresVisibleMining: report.requiresVisibleMining,
+  recorderScenarioActionVisible: report.recorderScenarioActionVisible,
   submittedActionsTerminalConfirmed: report.submittedActionsTerminalConfirmed,
   submittedActionPendingCount: report.submittedActionPendingCount,
   recorderWorkVisible: report.recorderWorkVisible,
@@ -425,6 +434,9 @@ const lines = [
   `- Recorder min work visible seconds: \`${report.recorderMinWorkVisibleSeconds}\``,
   `- Recorder capture duration seconds: \`${report.recorderCaptureDurationSeconds}\``,
   `- Recorder work coverage adequate: \`${report.recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+  `- Recorder visible mining: \`${report.recorderVisibleMining ? "yes" : "no"}\``,
+  `- Requires visible mining: \`${report.requiresVisibleMining ? "yes" : "no"}\``,
+  `- Recorder scenario action visible: \`${report.recorderScenarioActionVisible ? "yes" : "no"}\``,
   `- Submitted actions terminal confirmed: \`${report.submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
   `- Submitted action pending count: \`${report.submittedActionPendingCount}\``,
   `- Recorder work visible: \`${report.recorderWorkVisible ? "yes" : "no"}\``,

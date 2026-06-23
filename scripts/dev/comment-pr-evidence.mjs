@@ -161,6 +161,9 @@ function body(manifest) {
   const recorderWorkHoldSeconds = Number.isFinite(manifest?.recorderWorkHoldSeconds)
     ? manifest.recorderWorkHoldSeconds
     : "unknown";
+  const recorderVisibleMining = manifest?.recorderVisibleMining === true ? "yes" : "no";
+  const requiresVisibleMining = manifest?.requiresVisibleMining === true ? "yes" : "no";
+  const recorderScenarioActionVisible = manifest?.recorderScenarioActionVisible === true ? "yes" : "no";
   const submittedActionsTerminalConfirmed = manifest?.submittedActionsTerminalConfirmed === true ? "yes" : "no";
   const recorderWorkVisible = manifest?.recorderWorkVisible === true ? "yes" : "no";
   const serverAgentTaskActionVisible = manifest?.serverAgentTaskActionVisible === true ? "yes" : "no";
@@ -197,6 +200,9 @@ function body(manifest) {
     `- Recorder ready before scenario: \`${recorderReadyBeforeScenario}\``,
     `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate}\``,
     `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
+    `- Recorder visible mining: \`${recorderVisibleMining}\``,
+    `- Requires visible mining: \`${requiresVisibleMining}\``,
+    `- Recorder scenario action visible: \`${recorderScenarioActionVisible}\``,
     `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed}\``,
     `- Recorder work visible: \`${recorderWorkVisible}\``,
     `- Server agent task action visible: \`${serverAgentTaskActionVisible}\``,

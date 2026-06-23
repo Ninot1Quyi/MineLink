@@ -34,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.recipebook.PlaceRecipe;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -48,7 +50,6 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.RelativeMovement;
 import net.minecraft.world.entity.decoration.ArmorStand;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -102,6 +103,8 @@ public final class MineLinkEndpointBootstrap {
     private static final long SUBMITTED_ACTION_START_DELAY_MS = 250L;
     private static final long SUBMITTED_ACTION_TTL_MS = 5_000L;
     private static final int MAX_SYNC_MINING_TICKS = 600;
+    private static final int PLAYER_MOVEMENT_TICK_MS = 50;
+    private static final double PLAYER_WALK_BLOCKS_PER_SECOND = 4.317D;
     private static final int PLAYER_INVENTORY_SLOT_LIMIT = 36;
     private static final int CONTAINER_INVENTORY_SLOT_LIMIT = PLAYER_INVENTORY_SLOT_LIMIT;
     private static final int CRAFTING_GRID_SLOT_START = 1;
@@ -149,12 +152,18 @@ public final class MineLinkEndpointBootstrap {
     }
 
     public void onPlayerLoggedIn(Player player) {
-        if (!(player instanceof ServerPlayer serverPlayer) || !recorderEnabled()) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
+            return;
+        }
+        for (AgentBody agent : runtimeState.agents()) {
+            publishAgentPlayerInfo(serverPlayer, agent);
+        }
+        if (!recorderEnabled()) {
             return;
         }
         AgentBody latestAgent = runtimeState.latestAgent();
         if (latestAgent != null) {
-            updateRecorderAvatar(latestAgent);
+            updateRecorderTarget(latestAgent);
             positionRecorderPlayer(serverPlayer, latestAgent);
         }
     }
@@ -178,7 +187,7 @@ public final class MineLinkEndpointBootstrap {
         if (!recorderEnabled()) {
             return;
         }
-        updateRecorderAvatar(agent);
+        updateRecorderTarget(agent);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (isRecorderPlayer(player)) {
                 positionRecorderPlayer(player, agent);
@@ -186,32 +195,10 @@ public final class MineLinkEndpointBootstrap {
         }
     }
 
-    private void updateRecorderAvatar(AgentBody agent) {
+    private void updateRecorderTarget(AgentBody agent) {
         ServerLevel level = server.overworld();
-        ArmorStand avatar = agent.recorderAvatar;
-        if (avatar == null || avatar.isRemoved()) {
-            avatar = new ArmorStand(level, agent.position().x, agent.position().y, agent.position().z);
-            avatar.setNoGravity(true);
-            avatar.setInvulnerable(true);
-            avatar.setNoBasePlate(true);
-            avatar.setShowArms(true);
-            avatar.setGlowingTag(true);
-            avatar.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.GOLDEN_HELMET));
-            avatar.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.GOLDEN_CHESTPLATE));
-            avatar.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.GOLDEN_LEGGINGS));
-            avatar.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.GOLDEN_BOOTS));
-            avatar.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_LOG));
-            avatar.setCustomName(Component.literal(agent.displayName + " server_agent"));
-            avatar.setCustomNameVisible(true);
-            level.addFreshEntity(avatar);
-            agent.recorderAvatar = avatar;
-        }
+        ensureVisibleAgentPlayer(agent);
         Vec3 pos = agent.position();
-        avatar.setInvisible(false);
-        avatar.setCustomNameVisible(true);
-        avatar.moveTo(pos.x, pos.y + 0.05D, pos.z, agent.entity.getYRot(), agent.entity.getXRot());
-        avatar.setYHeadRot(agent.entity.getYRot());
-        avatar.setGlowingTag(true);
 
         ArmorStand cameraAnchor = agent.recorderCameraAnchor;
         if (cameraAnchor == null || cameraAnchor.isRemoved()) {
@@ -227,12 +214,38 @@ public final class MineLinkEndpointBootstrap {
         positionCameraAnchor(cameraAnchor, agent);
     }
 
+    private void ensureVisibleAgentPlayer(AgentBody agent) {
+        agent.entity.setInvisible(false);
+        agent.entity.setNoGravity(false);
+        agent.entity.setCustomName(null);
+        agent.entity.setCustomNameVisible(false);
+        if (!agent.entity.isAddedToLevel()) {
+            publishAgentPlayerInfo(agent);
+            server.overworld().addNewPlayer(agent.entity);
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder visible player body active server_agent {} entity_id={} profile={}",
+                agent.displayName,
+                agent.entity.getId(),
+                agent.entity.getGameProfile().getName()
+            );
+            return;
+        }
+    }
+
+    private void publishAgentPlayerInfo(AgentBody agent) {
+        server.getPlayerList().broadcastAll(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(agent.entity)));
+    }
+
+    private void publishAgentPlayerInfo(ServerPlayer player, AgentBody agent) {
+        player.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(agent.entity)));
+    }
+
     private void positionRecorderPlayer(ServerPlayer player, AgentBody agent) {
         if (!isRecorderPlayer(player)) {
             return;
         }
         if (agent.recorderCameraAnchor == null || agent.recorderCameraAnchor.isRemoved()) {
-            updateRecorderAvatar(agent);
+            updateRecorderTarget(agent);
         }
         if (agent.recorderCameraAnchor == null) {
             return;
@@ -317,15 +330,12 @@ public final class MineLinkEndpointBootstrap {
         return hit.getType() == HitResult.Type.MISS || hit.getLocation().distanceToSqr(focusPos) <= 0.75D;
     }
 
-    private void removeRecorderAvatar(AgentBody agent) {
-        if (agent.recorderAvatar != null) {
-            agent.recorderAvatar.discard();
-            agent.recorderAvatar = null;
-        }
+    private void removeRecorderArtifacts(AgentBody agent) {
         if (agent.recorderCameraAnchor != null) {
             agent.recorderCameraAnchor.discard();
             agent.recorderCameraAnchor = null;
         }
+        server.getPlayerList().broadcastAll(new ClientboundPlayerInfoRemovePacket(List.of(agent.entity.getUUID())));
     }
 
     private static boolean recorderEnabled() {
@@ -358,6 +368,13 @@ public final class MineLinkEndpointBootstrap {
 
     private static int recorderFollowIntervalTicks() {
         return parseIntSetting("MINELINK_RECORDER_FOLLOW_INTERVAL_TICKS", "minelink.recorder.followIntervalTicks", 2);
+    }
+
+    private static int recorderMiningVisibleMs() {
+        return Math.min(
+            5_000,
+            parseIntSetting("MINELINK_RECORDER_MINING_VISIBLE_MS", "minelink.recorder.miningVisibleMs", 1_800)
+        );
     }
 
     private static double parseDoubleSetting(String envName, String propertyName, double fallback) {
@@ -681,7 +698,7 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private JsonObject removeBody(JsonObject request, AgentBody agent, JsonObject arguments) {
-        removeRecorderAvatar(agent);
+        removeRecorderArtifacts(agent);
         int cancelledActions = agent.prepareRemove(stringValue(arguments, "reason", "server_agent body was removed."));
         String ownerId = agent.ownerId;
         String agentId = agent.agentId;
@@ -1083,10 +1100,10 @@ public final class MineLinkEndpointBootstrap {
         double dx = clamp(vector.get(0).getAsDouble(), -4.0, 4.0);
         double dy = clamp(vector.get(1).getAsDouble(), -2.0, 2.0);
         double dz = clamp(vector.get(2).getAsDouble(), -4.0, 4.0);
-        int durationMs = Math.max(0, intValue(arguments, "durationMs", 0));
         Vec3 current = agent.position();
         Vec3 requested = new Vec3(dx, dy, dz);
-        moveForVisibleDuration(agent, requested, durationMs);
+        int durationMs = Math.max(0, intValue(arguments, "durationMs", defaultMoveDurationMs(requested)));
+        int movementSteps = moveForPlayerLikeDuration(agent, requested, durationMs);
         Vec3 actual = agent.position().subtract(current);
         double requestedDistance = requested.length();
         double movedDistance = actual.length();
@@ -1097,11 +1114,15 @@ public final class MineLinkEndpointBootstrap {
         response.addProperty("moved", movedDistance > 0.001D);
         response.addProperty("moved_distance", movedDistance);
         response.addProperty("requested_distance", requestedDistance);
+        response.addProperty("movement_duration_ms", durationMs);
+        response.addProperty("movement_steps", movementSteps);
         response.addProperty("collision", collision);
         response.add("position", vector(agent.position()));
         JsonObject result = new JsonObject();
         result.addProperty("moved_distance", movedDistance);
         result.addProperty("requested_distance", requestedDistance);
+        result.addProperty("movement_duration_ms", durationMs);
+        result.addProperty("movement_steps", movementSteps);
         result.addProperty("collision", collision);
         result.add("position", vector(agent.position()));
         response.add("result", result);
@@ -1118,14 +1139,22 @@ public final class MineLinkEndpointBootstrap {
         return response;
     }
 
-    private void moveForVisibleDuration(AgentBody agent, Vec3 requested, int durationMs) {
-        if (!recorderEnabled() || durationMs <= 100) {
-            agent.entity.move(MoverType.SELF, requested);
-            return;
+    private int defaultMoveDurationMs(Vec3 requested) {
+        double distance = requested.length();
+        if (distance <= 0.001D) {
+            return 0;
         }
-        int steps = Math.max(2, Math.min(20, durationMs / 75));
+        return Math.max(PLAYER_MOVEMENT_TICK_MS, (int)Math.ceil((distance / PLAYER_WALK_BLOCKS_PER_SECOND) * 1_000.0D));
+    }
+
+    private int moveForPlayerLikeDuration(AgentBody agent, Vec3 requested, int durationMs) {
+        if (durationMs <= PLAYER_MOVEMENT_TICK_MS) {
+            agent.entity.move(MoverType.SELF, requested);
+            return requested.length() > 0.001D ? 1 : 0;
+        }
+        int steps = Math.max(1, Math.min(120, (int)Math.ceil(durationMs / (double)PLAYER_MOVEMENT_TICK_MS)));
         Vec3 step = requested.scale(1.0D / steps);
-        long sleepMs = Math.max(35L, Math.min(125L, durationMs / steps));
+        long sleepMs = Math.max(1L, durationMs / steps);
         for (int index = 0; index < steps; index += 1) {
             agent.entity.move(MoverType.SELF, step);
             updateRecorder(agent);
@@ -1133,9 +1162,41 @@ public final class MineLinkEndpointBootstrap {
                 TimeUnit.MILLISECONDS.sleep(sleepMs);
             } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
-                return;
+                return index + 1;
             }
         }
+        return steps;
+    }
+
+    private int holdVisibleMiningForRecorder(AgentBody agent, BlockPos pos) {
+        if (!recorderEnabled()) {
+            return 0;
+        }
+        int visibleMs = recorderMiningVisibleMs();
+        int steps = Math.max(3, Math.min(10, visibleMs / 200));
+        long sleepMs = Math.max(75L, Math.min(250L, visibleMs / steps));
+        MineLinkMod.LOGGER.info(
+            "MineLink recorder visible mining server_agent {} block={} visible_ms={}",
+            agent.displayName,
+            pos,
+            visibleMs
+        );
+        try {
+            for (int index = 0; index < steps; index += 1) {
+                agent.entity.swing(InteractionHand.MAIN_HAND);
+                server.overworld().destroyBlockProgress(agent.entity.getId(), pos, Math.min(9, index));
+                updateRecorder(agent);
+                try {
+                    TimeUnit.MILLISECONDS.sleep(sleepMs);
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    return visibleMs;
+                }
+            }
+        } finally {
+            server.overworld().destroyBlockProgress(agent.entity.getId(), pos, -1);
+        }
+        return visibleMs;
     }
 
     private JsonObject lookAt(JsonObject request, AgentBody agent, JsonObject arguments) {
@@ -1211,6 +1272,7 @@ public final class MineLinkEndpointBootstrap {
         Map<String, Integer> beforeInventory = inventoryCounts(agent);
         AABB pickupArea = new AABB(blockRef.pos).inflate(1.5D);
         Set<Integer> existingDropIds = itemEntityIds(level, pickupArea);
+        int visibleMiningMs = holdVisibleMiningForRecorder(agent, blockRef.pos);
         boolean destroyed = agent.entity.gameMode.destroyBlock(blockRef.pos);
         collectNewNearbyDrops(level, agent, pickupArea, existingDropIds);
         syncInventoryMirrorFromPlayer(agent);
@@ -1226,12 +1288,14 @@ public final class MineLinkEndpointBootstrap {
         response.addProperty("mined", blockRef.blockId);
         response.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
         response.addProperty("estimated_mining_ticks", estimatedTicks);
+        response.addProperty("visible_mining_ms", visibleMiningMs);
         response.add("drops", pickedUp);
         response.add("drop", pickedUp.size() == 0 ? JsonNull.INSTANCE : pickedUp.get(0).getAsJsonObject());
         JsonObject result = new JsonObject();
         result.addProperty("mined", blockRef.blockId);
         result.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
         result.addProperty("estimated_mining_ticks", estimatedTicks);
+        result.addProperty("visible_mining_ms", visibleMiningMs);
         result.add("drops", pickedUp.deepCopy());
         response.add("result", result);
         updateRecorder(agent);
@@ -3743,9 +3807,20 @@ public final class MineLinkEndpointBootstrap {
             FakePlayer entity = FakePlayerFactory.get(level, profile);
             entity.getInventory().clearContent();
             entity.moveTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
-            entity.setNoGravity(true);
+            entity.setInvisible(false);
+            entity.setNoGravity(false);
             entity.setInvulnerable(true);
             entity.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
+            level.getServer().getPlayerList().broadcastAll(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(entity)));
+            if (!entity.isAddedToLevel()) {
+                level.addNewPlayer(entity);
+            }
+            MineLinkMod.LOGGER.info(
+                "MineLink server_agent visible player body born agent={} entity_id={} profile={}",
+                displayName,
+                entity.getId(),
+                entity.getGameProfile().getName()
+            );
 
             AgentBody body = new AgentBody(agentId, displayName, ownerId, seedPrompt, entity, base.immutable(), fixtureName);
             agents.put(agentId, body);
@@ -3762,6 +3837,10 @@ public final class MineLinkEndpointBootstrap {
                 latest = agent;
             }
             return latest;
+        }
+
+        private List<AgentBody> agents() {
+            return new ArrayList<>(agents.values());
         }
 
         private AgentBody removeAgent(String agentId) {
@@ -4128,7 +4207,6 @@ public final class MineLinkEndpointBootstrap {
         private int actionSeq = 0;
         private int queueDepth = 0;
         private boolean frozen = false;
-        private ArmorStand recorderAvatar;
         private ArmorStand recorderCameraAnchor;
         private boolean recorderAutoFollowLogged = false;
 

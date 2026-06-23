@@ -431,6 +431,7 @@ switch (args.stage) {
           "MINELINK_RECORDER_PRE_SCENARIO_READY_TIMEOUT=60",
           "MINELINK_RECORDER_POST_SCENARIO_SECONDS=12",
           "MINELINK_RECORDER_MIN_WORK_VISIBLE_SECONDS=10",
+          "MINELINK_RECORDER_MINING_VISIBLE_MS=1800",
           `MINELINK_TASK_ID=${shellQuote(args.taskId)}`,
           `MINELINK_COMMIT=${shellQuote(currentCommit())}`,
           `MINELINK_ACCEPTANCE_VIDEO_PRODUCER=${shellQuote(args.videoProducer || "ona-task-finalizer")}`,

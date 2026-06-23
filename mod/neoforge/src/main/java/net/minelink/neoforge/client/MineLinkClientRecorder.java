@@ -9,6 +9,7 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.tutorial.TutorialSteps;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -309,8 +310,11 @@ public final class MineLinkClientRecorder {
             if (entity == minecraft.player || entity.isRemoved()) {
                 continue;
             }
+            if (!(entity instanceof Player)) {
+                continue;
+            }
             String name = entity.getName().getString();
-            if (!name.endsWith(" server_agent")) {
+            if (!name.startsWith("MineLink-") && !name.endsWith(" server_agent")) {
                 continue;
             }
             double distance = entity.position().distanceToSqr(origin);
