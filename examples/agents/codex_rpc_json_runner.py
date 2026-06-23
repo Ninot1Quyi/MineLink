@@ -143,8 +143,13 @@ def main() -> None:
         else:
             final_assertions = [{"name": "max_turns_not_exceeded", "passed": False, "max_turns": args.max_turns}]
 
-    passed = bool(final_assertions) and all(assertion.get("passed") is True for assertion in final_assertions)
     submitted_actions = submitted_action_summary(state)
+    failures = unexpected_tool_failures(state, final_assertions)
+    passed = (
+        bool(final_assertions)
+        and all(assertion.get("passed") is True for assertion in final_assertions)
+        and not failures["unexpected"]
+    )
     report: JsonDict = {
         "scenario": scenario,
         "passed": passed,
@@ -163,6 +168,8 @@ def main() -> None:
         "placements": state["placements"],
         "final_assertions": final_assertions,
         "submitted_actions": submitted_actions,
+        "tool_failures": failures["all"],
+        "unexpected_tool_failures": failures["unexpected"],
         "tool_results": state["tool_results"],
         "rpc_messages": rpc_messages,
         "final_inventory": state.get("last_inventory"),
@@ -433,8 +440,13 @@ def run_portal_coop(
         else:
             final_assertions = [{"name": "max_turns_not_exceeded", "passed": False, "max_turns": args.max_turns}]
 
-    passed = bool(final_assertions) and all(assertion.get("passed") is True for assertion in final_assertions)
     submitted_actions = submitted_action_summary(state)
+    failures = unexpected_tool_failures(state, final_assertions)
+    passed = (
+        bool(final_assertions)
+        and all(assertion.get("passed") is True for assertion in final_assertions)
+        and not failures["unexpected"]
+    )
     report: JsonDict = {
         "scenario": scenario,
         "passed": passed,
@@ -462,6 +474,8 @@ def run_portal_coop(
         "placements": state["placements"],
         "final_assertions": final_assertions,
         "submitted_actions": submitted_actions,
+        "tool_failures": failures["all"],
+        "unexpected_tool_failures": failures["unexpected"],
         "tool_results": state["tool_results"],
         "rpc_messages": rpc_messages,
         "final_inventory": {
@@ -796,6 +810,52 @@ def submitted_action_summary(state: JsonDict, global_state: Optional[JsonDict] =
         "terminal_statuses": sorted(terminal_statuses),
         "pending_action_ids": pending,
         "observed_statuses": observed_statuses,
+    }
+
+
+def unexpected_tool_failures(
+    state: JsonDict,
+    final_assertions: List[JsonDict],
+    global_state: Optional[JsonDict] = None,
+) -> JsonDict:
+    expected = [
+        assertion
+        for assertion in final_assertions
+        if assertion.get("kind") == "tool_call_failed" and assertion.get("passed") is True
+    ]
+    all_failures = []
+    unexpected = []
+    for record in tool_records(state, global_state):
+        if not is_tool_failure(record.get("result", {})):
+            continue
+        failure = summarize_tool_failure(record)
+        all_failures.append(failure)
+        if not any(expected_failure_matches(assertion, failure) for assertion in expected):
+            unexpected.append(failure)
+    return {"all": all_failures, "unexpected": unexpected}
+
+
+def expected_failure_matches(assertion: JsonDict, failure: JsonDict) -> bool:
+    expected_name = assertion.get("tool_name")
+    expected_reason = assertion.get("expected_reason")
+    if expected_name and failure.get("name") != expected_name:
+        return False
+    if expected_reason is not None and failure.get("reason") != expected_reason:
+        return False
+    return True
+
+
+def summarize_tool_failure(record: JsonDict) -> JsonDict:
+    result = record.get("result", {})
+    payload = tool_result_payload(result)
+    return {
+        "turn": record.get("turn"),
+        "agent": record.get("agent"),
+        "name": record.get("name"),
+        "reason": payload.get("reason"),
+        "status": payload.get("status"),
+        "message": payload.get("message"),
+        "error": payload.get("error"),
     }
 
 

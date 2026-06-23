@@ -822,7 +822,16 @@ For scenarios that complete `action.mine_visible_block`, the
 renderer additionally requires the server-side recorder marker
 `MineLink recorder visible mining server_agent` before it sets
 `recorderScenarioActionVisible=true`; this prevents a video that only shows the
-agent standing near a finished result from passing as mining evidence. The
+agent standing near a finished result from passing as mining evidence. The real
+NeoForge mining path must produce that marker while driving
+`ServerPlayerGameMode.handleBlockBreakAction` and `gameMode.tick()` for the
+visible `MineLink-*` FakePlayer body, so video-required mining evidence comes
+from vanilla block-break progress rather than a recorder-only hold followed by
+an instant `destroyBlock` call. The sync mining budget is intentionally below
+the protocol request timeout, and `mine_tree` retrieves a wooden axe from the
+shared fixture chest through public container tools before mining. Agent
+scenario reports also fail closed on unexpected `ok:false` tool results; a final
+inventory assertion cannot mask a failed MCP action. The
 finalizer also runs
 `scripts/dev/render-video-storyboard.mjs` after MP4 rendering to create a
 numbered frame grid for model-readable QA; that storyboard is never the final

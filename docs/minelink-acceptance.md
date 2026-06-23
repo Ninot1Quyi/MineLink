@@ -189,13 +189,17 @@ Current status:
   product gaps.
 - `action.mine_visible_block` in the real NeoForge runtime now keeps the
   existing observed-ref, TTL, reach, and block-id guards, then mines through the
-  FakePlayer `ServerPlayerGameMode.destroyBlock` path. Drops are collected only
-  from newly spawned nearby item entities through vanilla/NeoForge pickup hooks,
-  and unbreakable or unharvestable targets return structured `blocked` or
-  `wrong_tool` failures instead of synthetic inventory credit. Video-required
-  mining also broadcasts main-hand swing and block-destroy progress from the
-  same visible `server_agent` player entity so the MP4 can show task work, not
-  just a final inventory result.
+  FakePlayer `ServerPlayerGameMode.handleBlockBreakAction` start/stop path while
+  ticking `ServerPlayerGameMode` until vanilla block-destroy progress removes
+  the target. Drops are collected only from newly spawned nearby item entities
+  through vanilla/NeoForge pickup hooks, and unbreakable or unharvestable targets
+  return structured `blocked` or `wrong_tool` failures instead of synthetic
+  inventory credit. Synchronous mining is capped below the protocol request
+  timeout; the `mine_tree` fixture requires the agent to take a wooden axe from
+  the shared chest through public container tools before mining the log. Video-
+  required mining also broadcasts main-hand swing and block-destroy progress
+  from the same visible `server_agent` player entity so the MP4 can show task
+  work, not just a final inventory result.
 - The real NeoForge runtime now treats the FakePlayer inventory as the
   authoritative item store for `observe.inventory`, container inventory slots,
   `container.take_output`, `craft.quick_craft` ingredient consumption,

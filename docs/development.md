@@ -243,7 +243,16 @@ work coverage. For scenarios that complete `action.mine_visible_block`, the
 renderer also requires the server-side `MineLink recorder visible mining
 server_agent` marker and records it as `recorderScenarioActionVisible=true`; a
 video that only shows the agent beside the finished tree result is not accepted
-as mining evidence. The renderer also writes `serverAgentTaskActionVisible=true`
+as mining evidence. The NeoForge runtime emits that marker while driving
+`ServerPlayerGameMode.handleBlockBreakAction` and `gameMode.tick()` for the
+visible `MineLink-*` FakePlayer body, so the capture should show vanilla
+block-break progress instead of a recorder-only hold plus an instant destroy.
+The `mine_tree` fixture gets its wooden axe through public chest/container tools,
+and synchronous mining is capped below the protocol request timeout so a failed
+tool action cannot continue in the background and later satisfy an inventory
+assertion. The runner records `unexpected_tool_failures` and fails closed when a
+failure was not explicitly asserted as a negative case. The renderer also writes
+`serverAgentTaskActionVisible=true`
 from that same condition. This blocks videos where the agent is merely standing
 in view, appears only at the end, or has only submitted work without execution
 completion. It does not grant the agent new MCP tools or bypass any server

@@ -39,6 +39,7 @@ import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.recipebook.PlaceRecipe;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -105,7 +106,7 @@ public final class MineLinkEndpointBootstrap {
     private static final long SUBMITTED_ACTION_HOLD_MS = 1_000L;
     private static final long SUBMITTED_ACTION_START_DELAY_MS = 250L;
     private static final long SUBMITTED_ACTION_TTL_MS = 5_000L;
-    private static final int MAX_SYNC_MINING_TICKS = 600;
+    private static final int MAX_SYNC_MINING_TICKS = 170;
     private static final int PLAYER_MOVEMENT_TICK_MS = 50;
     private static final double PLAYER_WALK_BLOCKS_PER_SECOND = 4.317D;
     private static final int PLAYER_INVENTORY_SLOT_LIMIT = 36;
@@ -1193,36 +1194,81 @@ public final class MineLinkEndpointBootstrap {
         ));
     }
 
-    private int holdVisibleMiningForRecorder(AgentBody agent, BlockPos pos) {
-        if (!recorderEnabled()) {
-            return 0;
-        }
-        int visibleMs = recorderMiningVisibleMs();
-        int steps = Math.max(3, Math.min(10, visibleMs / 200));
-        long sleepMs = Math.max(75L, Math.min(250L, visibleMs / steps));
+    private MiningProgress mineBlockThroughGameModeTicks(AgentBody agent, BlockPos pos, int estimatedTicks) {
+        Direction face = miningFace(agent, pos);
+        int maxBuildHeight = server.overworld().getMaxBuildHeight();
+        int sequence = agent.nextProtocolSequence();
+        int maxTicks = Math.max(1, Math.min(MAX_SYNC_MINING_TICKS, estimatedTicks + 8));
+        int completedTicks = 0;
+        boolean recorderLogged = false;
         MineLinkMod.LOGGER.info(
             "MineLink recorder visible mining server_agent {} block={} visible_ms={}",
             agent.displayName,
             pos,
-            visibleMs
+            maxTicks * PLAYER_MOVEMENT_TICK_MS
         );
+
+        agent.entity.gameMode.handleBlockBreakAction(
+            pos,
+            ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK,
+            face,
+            maxBuildHeight,
+            sequence
+        );
+
         try {
-            for (int index = 0; index < steps; index += 1) {
-                agent.entity.swing(InteractionHand.MAIN_HAND);
+            for (int index = 0; index < maxTicks; index += 1) {
+                if (server.overworld().getBlockState(pos).isAir()) {
+                    break;
+                }
+                agent.entity.swing(InteractionHand.MAIN_HAND, true);
                 broadcastAgentSwing(agent);
-                server.overworld().destroyBlockProgress(agent.entity.getId(), pos, Math.min(9, index));
+                agent.entity.gameMode.tick();
                 updateRecorder(agent);
+                recorderLogged = true;
+                completedTicks++;
                 try {
-                    TimeUnit.MILLISECONDS.sleep(sleepMs);
+                    TimeUnit.MILLISECONDS.sleep(PLAYER_MOVEMENT_TICK_MS);
                 } catch (InterruptedException error) {
                     Thread.currentThread().interrupt();
-                    return visibleMs;
+                    break;
                 }
             }
         } finally {
-            server.overworld().destroyBlockProgress(agent.entity.getId(), pos, -1);
+            if (!server.overworld().getBlockState(pos).isAir()) {
+                agent.entity.gameMode.handleBlockBreakAction(
+                    pos,
+                    ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK,
+                    face,
+                    maxBuildHeight,
+                    sequence + 1
+                );
+                agent.entity.gameMode.tick();
+            }
+            if (!server.overworld().getBlockState(pos).isAir()) {
+                agent.entity.gameMode.handleBlockBreakAction(
+                    pos,
+                    ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK,
+                    face,
+                    maxBuildHeight,
+                    sequence + 2
+                );
+            }
+            updateRecorder(agent);
         }
-        return visibleMs;
+        return new MiningProgress(completedTicks, completedTicks * PLAYER_MOVEMENT_TICK_MS, recorderLogged);
+    }
+
+    private Direction miningFace(AgentBody agent, BlockPos pos) {
+        Vec3 center = Vec3.atCenterOf(pos);
+        Vec3 eye = agent.entity.getEyePosition();
+        return Direction.getNearest(eye.x - center.x, eye.y - center.y, eye.z - center.z);
+    }
+
+    private record MiningProgress(int ticks, int durationMs, boolean recorderVisible) {
+        private boolean completed() {
+            return ticks > 0;
+        }
     }
 
     private JsonObject lookAt(JsonObject request, AgentBody agent, JsonObject arguments) {
@@ -1292,19 +1338,29 @@ public final class MineLinkEndpointBootstrap {
         }
         int estimatedTicks = Math.max(1, (int)Math.ceil(1.0F / progressPerTick));
         if (estimatedTicks > MAX_SYNC_MINING_TICKS) {
-            return failure(request, "wrong_tool", "No available tool can mine this block within the synchronous action budget.");
+            JsonObject response = failure(
+                request,
+                "wrong_tool",
+                "No available tool can mine this block within the synchronous action budget."
+            );
+            response.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
+            response.addProperty("estimated_mining_ticks", estimatedTicks);
+            response.addProperty("max_sync_mining_ticks", MAX_SYNC_MINING_TICKS);
+            response.addProperty("progress_per_tick", progressPerTick);
+            response.addProperty("tool_destroy_speed", miningStack.getDestroySpeed(state));
+            response.addProperty("tool_correct_for_drops", miningStack.isCorrectToolForDrops(state));
+            return response;
         }
 
         Map<String, Integer> beforeInventory = inventoryCounts(agent);
         AABB pickupArea = new AABB(blockRef.pos).inflate(1.5D);
         Set<Integer> existingDropIds = itemEntityIds(level, pickupArea);
-        int visibleMiningMs = holdVisibleMiningForRecorder(agent, blockRef.pos);
-        boolean destroyed = agent.entity.gameMode.destroyBlock(blockRef.pos);
+        MiningProgress miningProgress = mineBlockThroughGameModeTicks(agent, blockRef.pos, estimatedTicks);
         collectNewNearbyDrops(level, agent, pickupArea, existingDropIds);
         syncInventoryMirrorFromPlayer(agent);
 
         BlockState afterState = level.getBlockState(blockRef.pos);
-        if (!destroyed || !afterState.isAir()) {
+        if (!afterState.isAir()) {
             return failure(request, "blocked", "Vanilla mining did not remove the observed block.");
         }
         JsonArray pickedUp = positiveInventoryDelta(beforeInventory, inventoryCounts(agent));
@@ -1314,14 +1370,20 @@ public final class MineLinkEndpointBootstrap {
         response.addProperty("mined", blockRef.blockId);
         response.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
         response.addProperty("estimated_mining_ticks", estimatedTicks);
-        response.addProperty("visible_mining_ms", visibleMiningMs);
+        response.addProperty("mining_ticks", miningProgress.ticks());
+        response.addProperty("visible_mining_ms", miningProgress.durationMs());
+        response.addProperty("vanilla_break_action", miningProgress.completed());
+        response.addProperty("recorder_visible_mining", miningProgress.recorderVisible());
         response.add("drops", pickedUp);
         response.add("drop", pickedUp.size() == 0 ? JsonNull.INSTANCE : pickedUp.get(0).getAsJsonObject());
         JsonObject result = new JsonObject();
         result.addProperty("mined", blockRef.blockId);
         result.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
         result.addProperty("estimated_mining_ticks", estimatedTicks);
-        result.addProperty("visible_mining_ms", visibleMiningMs);
+        result.addProperty("mining_ticks", miningProgress.ticks());
+        result.addProperty("visible_mining_ms", miningProgress.durationMs());
+        result.addProperty("vanilla_break_action", miningProgress.completed());
+        result.addProperty("recorder_visible_mining", miningProgress.recorderVisible());
         result.add("drops", pickedUp.deepCopy());
         response.add("result", result);
         updateRecorder(agent);
@@ -4014,6 +4076,7 @@ public final class MineLinkEndpointBootstrap {
                 container.setItem(5, new ItemStack(Items.GRAVEL, 1));
                 container.setItem(6, new ItemStack(Items.WHEAT, 1));
                 container.setItem(7, new ItemStack(Items.STICK, 1));
+                container.setItem(8, new ItemStack(Items.WOODEN_AXE, 1));
                 container.setChanged();
             }
             level.setBlockAndUpdate(base.south(4), Blocks.CRAFTING_TABLE.defaultBlockState());
@@ -4231,6 +4294,7 @@ public final class MineLinkEndpointBootstrap {
         private int slotSeq = 0;
         private int containerSeq = 0;
         private int actionSeq = 0;
+        private int protocolSeq = 0;
         private int queueDepth = 0;
         private boolean frozen = false;
         private ArmorStand recorderCameraAnchor;
@@ -4426,6 +4490,11 @@ public final class MineLinkEndpointBootstrap {
 
         private String nextActionId() {
             return "act_" + agentId + "_" + (++actionSeq);
+        }
+
+        private int nextProtocolSequence() {
+            protocolSeq = (protocolSeq + 1) & 0x3fffffff;
+            return protocolSeq;
         }
 
         private BlockPos[] smokeFixturePositions() {

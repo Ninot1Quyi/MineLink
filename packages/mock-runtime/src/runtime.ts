@@ -2362,6 +2362,16 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
 
   return [
     {
+      id: "minecraft:chest",
+      pos: [0, 64, 3],
+      tags: ["minecraft:chest", "minelink:container"],
+      visibleFaces: ["north", "up"],
+      container: {
+        kind: "chest",
+        slots: [{ item: "minecraft:wooden_axe", count: 1 }]
+      }
+    },
+    {
       id: "minecraft:oak_log",
       pos: [6, 64, 0],
       tags: ["minecraft:logs", "minecraft:mineable/axe"],
