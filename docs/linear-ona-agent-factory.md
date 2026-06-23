@@ -927,6 +927,16 @@ missing attachment as the blocker instead of posting an R2-only comment. GitHub
 Actions artifacts remain the raw evidence bundle; the workflow must not commit
 video binaries to a repository evidence branch.
 
+The optional attachment bridge is
+`scripts/dev/upload-github-user-attachment.mjs`. It runs after the Ona
+finalizer and same-session verifier pass, uses the downloaded and hash-checked
+`acceptance.mp4`, and attempts to create the GitHub inline playback URL. This
+uses GitHub's web attachment flow, so it requires
+`MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` as a secret. PATs and the Actions
+`GITHUB_TOKEN` are not sufficient for attachment upload; if the cookie is
+missing the bridge writes a skipped report and the final PR evidence comment
+still fails closed.
+
 `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID` and
 `MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY` must be configured only as GitHub or
 Ona secrets. Non-secret settings such as provider, endpoint, bucket, public base

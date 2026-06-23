@@ -888,7 +888,13 @@ PR Markdown strips external `<video>` embeds, so Cloudflare R2 URLs are
 candidate transport links only. Final PR video evidence must use a GitHub
 user-attachment MP4 URL such as `github.com/user-attachments/assets/...`; when
 that URL is missing the release-to-PR edge must fail closed instead of
-publishing an R2 link as playable evidence. The GitHub Actions artifact remains
+publishing an R2 link as playable evidence. MineLink can optionally create that
+attachment with `scripts/dev/upload-github-user-attachment.mjs`, but that bridge
+requires an explicit GitHub web attachment cookie secret
+`MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; PATs and `GITHUB_TOKEN` can identify
+the repository but do not create comment attachments by themselves. When the
+cookie is absent the script writes a skipped report and the PR publication gate
+remains blocked. The GitHub Actions artifact remains
 the raw evidence bundle. The older `scripts/dev/publish-pr-video-evidence.mjs`
 path is a manual fallback only and must not be used for final PR playback,
 because video binaries must not be committed to the repository evidence branch.

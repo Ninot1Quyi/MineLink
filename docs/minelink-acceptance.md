@@ -1063,6 +1063,13 @@ Current status:
   runs `render-storyboard` after `render-video`; missing storyboard evidence
   blocks a client-GUI video review request, but storyboard evidence never
   releases a task without the MP4.
+- GitHub PR publication treats R2 as candidate video transport only. The
+  final PR comment must use a `github.com/user-attachments/assets/...` MP4 URL
+  so the GitHub page renders an inline video player. The optional
+  `scripts/dev/upload-github-user-attachment.mjs` bridge requires
+  `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; if it is not configured, the
+  workflow must record the skipped attachment upload and block the final PR
+  video comment instead of publishing an R2-only link as final evidence.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
