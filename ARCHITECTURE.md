@@ -774,14 +774,18 @@ the Minecraft window through Xvfb/ffmpeg, and then runs
 with terminal evidence. That renderer is the only path allowed to set
 `clientGuiCapture=true`, and it must also set `clientWorldReady=true` plus
 `captureStartedAfterWorldReady=true` plus `recorderAutoFollow=true` plus
-`recorderClientFollow=true`;
+`recorderTargetMoved=true` plus `recorderClientFollow=true` plus
+`recorderClientTargetCentered=true` plus `recorderClientTargetVisible=true`;
 `scripts/dev/check-video-review.mjs --require-client-gui-capture` rejects
-trace-driven, loading-screen, pre-world, and non-following videos for these
-tasks. The
+trace-driven, loading-screen, pre-world, static, non-moving, occluded, and
+non-following videos for these tasks. The finalizer also runs
+`scripts/dev/render-video-storyboard.mjs` after MP4 rendering to create a
+numbered frame grid for model-readable QA; that storyboard is never the final
+deliverable and cannot replace the playable `acceptance.mp4`. The
 recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` when
 headless capture dependencies are missing, so an older Ona prebuild can either
-self-install `ffmpeg`, `Xvfb`, and the required X11/OpenGL libraries with
-passwordless apt/sudo or fail early with
+self-install `ffmpeg`, `Xvfb`, the required X11/OpenGL libraries, and
+`python3-pil` with passwordless apt/sudo or fail early with
 `.minelink-dev/reports/client-recorder-deps.{md,json}` identifying the missing
 dependency edge. New prebuild images should still include those packages; the
 self-bootstrap path is a compatibility guard for already-created task
@@ -839,15 +843,22 @@ agent-following camera anchor; the renderer writes that as
 `recorderAutoFollow=true`. The recorder client must also log
 `MineLink recorder client following server_agent` after it sees the visible
 agent marker and continuously steers the recorded view toward it; the renderer
-writes that as `recorderClientFollow=true`. It must then log
+writes that as `recorderClientFollow=true`. The server-side recorder helper
+must log `MineLink recorder target moved server_agent` after the active
+`server_agent` body visibly moves during the recorded scenario; the renderer
+writes that as `recorderTargetMoved=true`. It must then log
 `MineLink recorder client target centered server_agent` after the recorded
 client camera is back on the recorder player and has held a target-centered
 view long enough for review; the renderer writes that as
-`recorderClientTargetCentered=true`. Release gates require all three recorder
-markers so loading screens, Mojang bootstrap footage, server-only camera
-intent, off-screen target following, or normal clients that are not visibly
-following and framing the active `server_agent` cannot be published as final
-Minecraft product evidence.
+`recorderClientTargetCentered=true`. The recorder must also log
+`MineLink recorder client target visible server_agent` only after the chosen
+camera position has a clear raycast line of sight to the visible
+`server_agent` marker; the renderer writes that as
+`recorderClientTargetVisible=true`. Release gates require all recorder markers
+so loading screens, Mojang bootstrap footage, server-only camera intent,
+static/idle targets, occluded targets, off-screen target following, or normal
+clients that are not visibly following and framing the active `server_agent`
+cannot be published as final Minecraft product evidence.
 Pull request workflows use
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
 finalizer to upload candidate `acceptance.mp4` to the configured

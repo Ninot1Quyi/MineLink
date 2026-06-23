@@ -9,6 +9,9 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.tutorial.TutorialSteps;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minelink.neoforge.MineLinkMod;
 import net.neoforged.api.distmarker.Dist;
@@ -29,6 +32,8 @@ public final class MineLinkClientRecorder {
     private static int followTicks;
     private static boolean targetCenteredLogged;
     private static int targetCenteredTicks;
+    private static boolean targetVisibleLogged;
+    private static int targetVisibleTicks;
 
     private MineLinkClientRecorder() {
     }
@@ -92,6 +97,8 @@ public final class MineLinkClientRecorder {
         followTicks = 0;
         targetCenteredLogged = false;
         targetCenteredTicks = 0;
+        targetVisibleLogged = false;
+        targetVisibleTicks = 0;
         MineLinkMod.LOGGER.info("MineLink recorder client joined {}", address());
     }
 
@@ -104,6 +111,8 @@ public final class MineLinkClientRecorder {
         followTicks = 0;
         targetCenteredLogged = false;
         targetCenteredTicks = 0;
+        targetVisibleLogged = false;
+        targetVisibleTicks = 0;
         ticks = 0;
     }
 
@@ -113,6 +122,7 @@ public final class MineLinkClientRecorder {
             worldReadyTicks = 0;
             followTicks = 0;
             targetCenteredTicks = 0;
+            targetVisibleTicks = 0;
             return false;
         }
         worldReadyTicks++;
@@ -131,6 +141,7 @@ public final class MineLinkClientRecorder {
     private static void followServerAgent(Minecraft minecraft) {
         if (minecraft.level == null || minecraft.player == null || minecraft.screen != null) {
             followTicks = 0;
+            targetVisibleTicks = 0;
             return;
         }
         configureRecorderView(minecraft);
@@ -138,6 +149,7 @@ public final class MineLinkClientRecorder {
         if (target == null) {
             followTicks = 0;
             targetCenteredTicks = 0;
+            targetVisibleTicks = 0;
             return;
         }
         Vec3 targetPos = target.position().add(0.0D, Math.max(1.35D, target.getBbHeight() * 0.75D), 0.0D);
@@ -164,7 +176,8 @@ public final class MineLinkClientRecorder {
             "0.75"
         ), 0.75D);
         Vec3 focusPos = targetPos.add(forward.scale(lead));
-        Vec3 cameraPos = targetPos.subtract(forward.scale(distance)).add(right.scale(side)).add(0.0D, height, 0.0D);
+        CameraChoice cameraChoice = chooseCameraPosition(minecraft, targetPos, focusPos, forward, right, distance, height, side);
+        Vec3 cameraPos = cameraChoice.position();
         float yaw = yawToward(cameraPos, focusPos);
         float pitch = pitchToward(cameraPos, focusPos);
 
@@ -193,7 +206,26 @@ public final class MineLinkClientRecorder {
                 String.format("%.2f", cameraPos.z)
             );
         }
-        if (minecraft.getCameraEntity() == minecraft.player) {
+        boolean targetVisible = cameraChoice.visible() && clearLineOfSight(minecraft, cameraPos, focusPos);
+        if (targetVisible) {
+            targetVisibleTicks++;
+        } else {
+            targetVisibleTicks = 0;
+        }
+        if (!targetVisibleLogged && targetVisibleTicks >= readyTicks) {
+            targetVisibleLogged = true;
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder client target visible server_agent {} camera {},{},{} focus {},{},{}",
+                target.getName().getString(),
+                String.format("%.2f", cameraPos.x),
+                String.format("%.2f", cameraPos.y),
+                String.format("%.2f", cameraPos.z),
+                String.format("%.2f", focusPos.x),
+                String.format("%.2f", focusPos.y),
+                String.format("%.2f", focusPos.z)
+            );
+        }
+        if (minecraft.getCameraEntity() == minecraft.player && targetVisible) {
             targetCenteredTicks++;
         } else {
             targetCenteredTicks = 0;
@@ -208,6 +240,57 @@ public final class MineLinkClientRecorder {
                 String.format("%.2f", focusPos.z)
             );
         }
+    }
+
+    private static CameraChoice chooseCameraPosition(
+        Minecraft minecraft,
+        Vec3 targetPos,
+        Vec3 focusPos,
+        Vec3 forward,
+        Vec3 right,
+        double distance,
+        double height,
+        double side
+    ) {
+        double[] distances = new double[] { distance, distance + 2.0D, distance + 4.0D, Math.max(3.0D, distance - 1.0D) };
+        double[] heights = new double[] { height + 3.0D, height + 5.0D, height + 1.5D, height + 7.0D, height };
+        double[] sides = new double[] { side, 0.0D, -side, side * 2.0D, -side * 2.0D };
+        CameraChoice fallback = null;
+        for (double candidateDistance : distances) {
+            for (double candidateHeight : heights) {
+                for (double candidateSide : sides) {
+                    Vec3 cameraPos = targetPos
+                        .subtract(forward.scale(candidateDistance))
+                        .add(right.scale(candidateSide))
+                        .add(0.0D, candidateHeight, 0.0D);
+                    boolean visible = clearLineOfSight(minecraft, cameraPos, focusPos);
+                    CameraChoice choice = new CameraChoice(cameraPos, visible);
+                    if (fallback == null) {
+                        fallback = choice;
+                    }
+                    if (visible) {
+                        return choice;
+                    }
+                }
+            }
+        }
+        return fallback == null
+            ? new CameraChoice(targetPos.subtract(forward.scale(distance)).add(right.scale(side)).add(0.0D, height, 0.0D), false)
+            : fallback;
+    }
+
+    private static boolean clearLineOfSight(Minecraft minecraft, Vec3 cameraPos, Vec3 focusPos) {
+        if (minecraft.level == null || minecraft.player == null) {
+            return false;
+        }
+        BlockHitResult hit = minecraft.level.clip(new ClipContext(
+            cameraPos,
+            focusPos,
+            ClipContext.Block.COLLIDER,
+            ClipContext.Fluid.NONE,
+            minecraft.player
+        ));
+        return hit.getType() == HitResult.Type.MISS || hit.getLocation().distanceToSqr(focusPos) <= 0.75D;
     }
 
     private static void configureRecorderView(Minecraft minecraft) {
@@ -311,5 +394,8 @@ public final class MineLinkClientRecorder {
         } catch (RuntimeException error) {
             return fallback;
         }
+    }
+
+    private record CameraChoice(Vec3 position, boolean visible) {
     }
 }

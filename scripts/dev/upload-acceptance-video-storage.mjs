@@ -237,8 +237,10 @@ const report = {
   clientWorldReady: false,
   captureStartedAfterWorldReady: false,
   recorderAutoFollow: false,
+  recorderTargetMoved: false,
   recorderClientFollow: false,
   recorderClientTargetCentered: false,
+  recorderClientTargetVisible: false,
   videoKind: "unknown",
   key: "",
   objectKey: "",
@@ -284,8 +286,10 @@ if (report.failures.length === 0) {
   report.clientWorldReady = origin?.clientWorldReady === true;
   report.captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
   report.recorderAutoFollow = origin?.recorderAutoFollow === true;
+  report.recorderTargetMoved = origin?.recorderTargetMoved === true;
   report.recorderClientFollow = origin?.recorderClientFollow === true;
   report.recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
+  report.recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
   if (dryRun) {
     report.result = "passed";
     report.endpointUrl = "dry-run";
@@ -335,8 +339,10 @@ const manifest = {
   clientWorldReady: report.clientWorldReady,
   captureStartedAfterWorldReady: report.captureStartedAfterWorldReady,
   recorderAutoFollow: report.recorderAutoFollow,
+  recorderTargetMoved: report.recorderTargetMoved,
   recorderClientFollow: report.recorderClientFollow,
   recorderClientTargetCentered: report.recorderClientTargetCentered,
+  recorderClientTargetVisible: report.recorderClientTargetVisible,
   videoKind: report.videoKind,
   createdAt: report.createdAt,
   boundary: report.boundary,
@@ -365,8 +371,10 @@ const lines = [
   `- Client world ready: \`${report.clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${report.captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${report.recorderAutoFollow ? "yes" : "no"}\``,
+  `- Recorder target moved: \`${report.recorderTargetMoved ? "yes" : "no"}\``,
   `- Recorder client follow: \`${report.recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${report.recorderClientTargetCentered ? "yes" : "no"}\``,
+  `- Recorder client target visible: \`${report.recorderClientTargetVisible ? "yes" : "no"}\``,
   `- Storage key: \`${report.key || "none"}\``,
   `- Public video URL: ${report.videoUrl || "none"}`,
   `- Manifest: \`${args.manifestOutput}\``,

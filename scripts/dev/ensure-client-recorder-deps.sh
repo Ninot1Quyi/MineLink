@@ -45,6 +45,11 @@ fi
 if [[ "$require_xvfb" == "1" ]] && ! command -v Xvfb >/dev/null 2>&1; then
   missing+=("Xvfb")
 fi
+if ! command -v python3 >/dev/null 2>&1; then
+  missing+=("python3")
+elif ! python3 -c 'import PIL' >/dev/null 2>&1; then
+  missing+=("python3-pil")
+fi
 
 write_report() {
   local result="$1"
@@ -58,14 +63,16 @@ write_report() {
     echo "- Require Xvfb: \`$require_xvfb\`"
     echo "- ffmpeg: \`$(command -v ffmpeg 2>/dev/null || printf 'missing')\`"
     echo "- Xvfb: \`$(command -v Xvfb 2>/dev/null || printf 'missing')\`"
+    echo "- Pillow: \`$(python3 -c 'import PIL; print("available")' 2>/dev/null || printf 'missing')\`"
   } > "$report_md"
-  printf '{\n  "result": "%s",\n  "detail": "%s",\n  "requireFfmpeg": %s,\n  "requireXvfb": %s,\n  "ffmpeg": "%s",\n  "xvfb": "%s"\n}\n' \
+  printf '{\n  "result": "%s",\n  "detail": "%s",\n  "requireFfmpeg": %s,\n  "requireXvfb": %s,\n  "ffmpeg": "%s",\n  "xvfb": "%s",\n  "pillow": "%s"\n}\n' \
     "$result" \
     "${detail//\"/\\\"}" \
     "$([[ "$require_ffmpeg" == "1" ]] && printf true || printf false)" \
     "$([[ "$require_xvfb" == "1" ]] && printf true || printf false)" \
     "$(command -v ffmpeg 2>/dev/null || printf missing)" \
     "$(command -v Xvfb 2>/dev/null || printf missing)" \
+    "$(python3 -c 'import PIL; print("available")' 2>/dev/null || printf missing)" \
     > "$report_json"
 }
 
@@ -107,6 +114,8 @@ export DEBIAN_FRONTEND=noninteractive
   libxss1 \
   libxtst6 \
   libxxf86vm1 \
+  python3 \
+  python3-pil \
   xvfb
 
 post_missing=()
@@ -115,6 +124,11 @@ if [[ "$require_ffmpeg" == "1" ]] && ! command -v ffmpeg >/dev/null 2>&1; then
 fi
 if [[ "$require_xvfb" == "1" ]] && ! command -v Xvfb >/dev/null 2>&1; then
   post_missing+=("Xvfb")
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  post_missing+=("python3")
+elif ! python3 -c 'import PIL' >/dev/null 2>&1; then
+  post_missing+=("python3-pil")
 fi
 
 if [[ ${#post_missing[@]} -gt 0 ]]; then

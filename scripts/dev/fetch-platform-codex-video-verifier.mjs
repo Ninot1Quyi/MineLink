@@ -293,8 +293,10 @@ function reviewRequestEvidence(text) {
   const clientWorldReady = markerValue(text, "Client world ready");
   const captureStartedAfterWorldReady = markerValue(text, "Capture started after world ready");
   const recorderAutoFollow = markerValue(text, "Recorder auto-follow");
+  const recorderTargetMoved = markerValue(text, "Recorder target moved");
   const recorderClientFollow = markerValue(text, "Recorder client follow");
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
+  const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
   const clientGuiCaptureRequired = markerValue(text, "Client GUI capture required");
   const status = markerValue(text, "Request status");
   const failures = [];
@@ -332,6 +334,11 @@ function reviewRequestEvidence(text) {
     } else {
       evidence.push("Review request recorder auto-follow marker present");
     }
+    if (!/^yes$/i.test(recorderTargetMoved)) {
+      failures.push(`Video review request requires visible server_agent movement but got ${recorderTargetMoved || "missing"}.`);
+    } else {
+      evidence.push("Review request visible server_agent movement marker present");
+    }
     if (!/^yes$/i.test(recorderClientFollow)) {
       failures.push(`Video review request requires recorder client-visible follow but got ${recorderClientFollow || "missing"}.`);
     } else {
@@ -341,6 +348,11 @@ function reviewRequestEvidence(text) {
       failures.push(`Video review request requires recorder target-centered framing but got ${recorderClientTargetCentered || "missing"}.`);
     } else {
       evidence.push("Review request recorder target-centered marker present");
+    }
+    if (!/^yes$/i.test(recorderClientTargetVisible)) {
+      failures.push(`Video review request requires recorder target visibility but got ${recorderClientTargetVisible || "missing"}.`);
+    } else {
+      evidence.push("Review request recorder target-visible marker present");
     }
   }
   if (status && status !== "ready") failures.push(`Video review request status is not ready: ${status}.`);
@@ -355,8 +367,10 @@ function reviewRequestEvidence(text) {
     clientWorldReady,
     captureStartedAfterWorldReady,
     recorderAutoFollow,
+    recorderTargetMoved,
     recorderClientFollow,
     recorderClientTargetCentered,
+    recorderClientTargetVisible,
     clientGuiCaptureRequired,
   };
 }
@@ -380,8 +394,10 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const clientWorldReady = markerValue(text, "Client world ready");
   const captureStartedAfterWorldReady = markerValue(text, "Capture started after world ready");
   const recorderAutoFollow = markerValue(text, "Recorder auto-follow");
+  const recorderTargetMoved = markerValue(text, "Recorder target moved");
   const recorderClientFollow = markerValue(text, "Recorder client follow");
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
+  const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
   const result = markerValue(text, ["Result", "Status"]);
   const boundary = markerValue(text, "Boundary");
 
@@ -448,6 +464,11 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   } else if (/^yes$/i.test(recorderAutoFollow)) {
     evidence.push("verifier canary recorder auto-follow marker accepted");
   }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderTargetMoved)) {
+    failures.push(`Verifier canary Recorder target moved is not yes: ${recorderTargetMoved || "missing"}.`);
+  } else if (/^yes$/i.test(recorderTargetMoved)) {
+    evidence.push("verifier canary visible server_agent movement marker accepted");
+  }
   if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderClientFollow)) {
     failures.push(`Verifier canary Recorder client follow is not yes: ${recorderClientFollow || "missing"}.`);
   } else if (/^yes$/i.test(recorderClientFollow)) {
@@ -457,6 +478,11 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
     failures.push(`Verifier canary Recorder client target centered is not yes: ${recorderClientTargetCentered || "missing"}.`);
   } else if (/^yes$/i.test(recorderClientTargetCentered)) {
     evidence.push("verifier canary recorder target-centered marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderClientTargetVisible)) {
+    failures.push(`Verifier canary Recorder client target visible is not yes: ${recorderClientTargetVisible || "missing"}.`);
+  } else if (/^yes$/i.test(recorderClientTargetVisible)) {
+    evidence.push("verifier canary recorder target-visible marker accepted");
   }
   if (!/^(passed|pass|success|succeeded)$/i.test(result)) failures.push(`Verifier canary Result is not passed: ${result || "missing"}.`);
   else evidence.push("verifier canary result passed");
@@ -529,8 +555,10 @@ const reviewLines = [
   `Client world ready: ${request.clientWorldReady || "missing"}`,
   `Capture started after world ready: ${request.captureStartedAfterWorldReady || "missing"}`,
   `Recorder auto-follow: ${request.recorderAutoFollow || "missing"}`,
+  `Recorder target moved: ${request.recorderTargetMoved || "missing"}`,
   `Recorder client follow: ${request.recorderClientFollow || "missing"}`,
   `Recorder client target centered: ${request.recorderClientTargetCentered || "missing"}`,
+  `Recorder client target visible: ${request.recorderClientTargetVisible || "missing"}`,
   `Summary sha256: ${request.summaryHash || "missing"}`,
   `MP4 sha256: ${request.mp4Hash || "missing"}`,
   `Task id: ${args.taskId}`,
@@ -597,8 +625,10 @@ await fs.writeFile(
       clientWorldReady: request.clientWorldReady,
       captureStartedAfterWorldReady: request.captureStartedAfterWorldReady,
       recorderAutoFollow: request.recorderAutoFollow,
+      recorderTargetMoved: request.recorderTargetMoved,
       recorderClientFollow: request.recorderClientFollow,
       recorderClientTargetCentered: request.recorderClientTargetCentered,
+      recorderClientTargetVisible: request.recorderClientTargetVisible,
       clientGuiCaptureRequired: request.clientGuiCaptureRequired,
       evidence,
       failures,

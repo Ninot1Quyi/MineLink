@@ -10,6 +10,8 @@ const execFileAsync = promisify(execFile);
 let summaryPath = ".minelink-dev/reports/artifacts/acceptance-summary.md";
 let mp4Path = ".minelink-dev/reports/artifacts/acceptance.mp4";
 let originPath = ".minelink-dev/reports/artifacts/acceptance-video-origin.json";
+let storyboardPath = ".minelink-dev/reports/artifacts/acceptance-storyboard.png";
+let storyboardJsonPath = ".minelink-dev/reports/artifacts/acceptance-storyboard.json";
 let manifestPath = ".minelink-dev/reports/artifacts/video-storage-manifest.json";
 let outputPath = ".minelink-dev/reports/artifacts/video-review-request.md";
 let taskId = process.env.MINELINK_TASK_ID ?? "local";
@@ -27,6 +29,10 @@ for (let index = 2; index < process.argv.length; index += 1) {
     mp4Path = process.argv[++index] ?? "";
   } else if (arg === "--origin") {
     originPath = process.argv[++index] ?? "";
+  } else if (arg === "--storyboard") {
+    storyboardPath = process.argv[++index] ?? "";
+  } else if (arg === "--storyboard-json") {
+    storyboardJsonPath = process.argv[++index] ?? "";
   } else if (arg === "--manifest") {
     manifestPath = process.argv[++index] ?? "";
   } else if (arg === "--output") {
@@ -120,6 +126,7 @@ function md(value) {
 
 const summaryStat = await stat(summaryPath);
 const mp4Stat = await stat(mp4Path);
+const storyboardStat = await stat(storyboardPath);
 const failures = [];
 
 if (!summaryStat?.isFile() || summaryStat.size === 0) {
@@ -130,8 +137,13 @@ if (requireMp4 && (!mp4Stat?.isFile() || mp4Stat.size === 0)) {
   failures.push(`Missing required acceptance MP4: ${mp4Path}`);
 }
 
+if (requireClientGuiCapture && (!storyboardStat?.isFile() || storyboardStat.size === 0)) {
+  failures.push(`Missing required acceptance storyboard for visual review: ${storyboardPath}`);
+}
+
 const summaryHash = summaryStat?.isFile() ? await sha256(summaryPath) : "missing";
 const mp4Hash = mp4Stat?.isFile() ? await sha256(mp4Path) : "missing";
+const storyboardHash = storyboardStat?.isFile() ? await sha256(storyboardPath) : "missing";
 const mp4Metadata = mp4Stat?.isFile() ? await ffprobe(mp4Path) : "missing";
 const origin = await readJson(originPath);
 const storageManifest = await readJson(manifestPath);
@@ -141,8 +153,10 @@ const clientGuiCapture = origin?.clientGuiCapture === true;
 const clientWorldReady = origin?.clientWorldReady === true;
 const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
 const recorderAutoFollow = origin?.recorderAutoFollow === true;
+const recorderTargetMoved = origin?.recorderTargetMoved === true;
 const recorderClientFollow = origin?.recorderClientFollow === true;
 const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
+const recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
 const resolvedBranch = await gitBranch();
 
 if (requireClientGuiCapture) {
@@ -162,11 +176,17 @@ if (requireClientGuiCapture) {
     if (!recorderAutoFollow) {
       failures.push("Acceptance video origin does not confirm recorder auto-follow of the active server_agent");
     }
+    if (!recorderTargetMoved) {
+      failures.push("Acceptance video origin does not confirm visible movement from the active server_agent");
+    }
     if (!recorderClientFollow) {
       failures.push("Acceptance video origin does not confirm the recorder client visibly followed the active server_agent");
     }
     if (!recorderClientTargetCentered) {
       failures.push("Acceptance video origin does not confirm the active server_agent target is centered in the client view");
+    }
+    if (!recorderClientTargetVisible) {
+      failures.push("Acceptance video origin does not confirm clear line-of-sight visibility for the active server_agent target");
     }
   }
 }
@@ -196,11 +216,17 @@ if (requireStorageManifest) {
     if (requireClientGuiCapture && storageManifest.recorderAutoFollow !== true) {
       failures.push("Video storage manifest does not confirm recorderAutoFollow=true");
     }
+    if (requireClientGuiCapture && storageManifest.recorderTargetMoved !== true) {
+      failures.push("Video storage manifest does not confirm recorderTargetMoved=true");
+    }
     if (requireClientGuiCapture && storageManifest.recorderClientFollow !== true) {
       failures.push("Video storage manifest does not confirm recorderClientFollow=true");
     }
     if (requireClientGuiCapture && storageManifest.recorderClientTargetCentered !== true) {
       failures.push("Video storage manifest does not confirm recorderClientTargetCentered=true");
+    }
+    if (requireClientGuiCapture && storageManifest.recorderClientTargetVisible !== true) {
+      failures.push("Video storage manifest does not confirm recorderClientTargetVisible=true");
     }
   }
 }
@@ -216,6 +242,8 @@ const lines = [
   `- Task requirements: \`${md(taskRequirements || "unspecified")}\``,
   `- Acceptance summary: \`${summaryPath}\``,
   `- Acceptance MP4: \`${mp4Path}\``,
+  `- Acceptance storyboard: \`${storyboardPath}\``,
+  `- Acceptance storyboard JSON: \`${storyboardJsonPath}\``,
   `- Acceptance video origin: \`${originPath}\``,
   `- Video storage manifest: \`${manifestPath}\``,
   `- Video producer: \`${md(producer)}\``,
@@ -224,8 +252,10 @@ const lines = [
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
+  `- Recorder target moved: \`${recorderTargetMoved ? "yes" : "no"}\``,
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
+  `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage manifest required: \`${requireStorageManifest ? "yes" : "no"}\``,
   `- Storage provider: \`${md(storageManifest?.storageProvider || "none")}\``,
@@ -233,12 +263,13 @@ const lines = [
   `- Storage video URL: ${storageManifest?.videoUrl || "none"}`,
   `- Summary sha256: \`${summaryHash}\``,
   `- MP4 sha256: \`${mp4Hash}\``,
+  `- Storyboard sha256: \`${storyboardHash}\``,
   `- MP4 metadata: \`${md(mp4Metadata).replaceAll("\n", "; ")}\``,
   `- Request status: \`${failures.length === 0 ? "ready" : "blocked"}\``,
   "",
   "## Verifier Assignment",
   "",
-  "Use the current Ona Platform Codex implementation session, not the default Ona Agent, to launch a bounded native Codex verifier subagent that reviews the acceptance summary and MP4 against the task requirements. The verifier must not edit product code and must not re-render the video. It must inspect the artifacts above and write `.minelink-dev/reports/artifacts/video-review.md`.",
+  "Use the current Ona Platform Codex implementation session, not the default Ona Agent, to launch a bounded native Codex verifier subagent that reviews the acceptance summary and MP4 against the task requirements. The verifier must not edit product code and must not re-render the video. It must inspect the artifacts above, using the numbered storyboard only as model-readable QA evidence, and write `.minelink-dev/reports/artifacts/video-review.md`.",
   "",
   "For R2-backed candidate videos, the manifest URL is candidate evidence transport only. The verifier must compare the task requirements, acceptance summary, manifest hashes, and MP4 hash; it must not treat storage upload as release approval.",
   "",
@@ -254,8 +285,10 @@ const lines = [
   `Client world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Capture started after world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder auto-follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder target moved: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder client follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder client target centered: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder client target visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Summary sha256: ${summaryHash}`,
   `MP4 sha256: ${mp4Hash}`,
   "```",

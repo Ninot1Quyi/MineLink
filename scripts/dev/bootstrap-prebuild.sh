@@ -47,11 +47,14 @@ install_os_packages() {
   fi
 
   local missing=()
-  for command_name in curl ffmpeg git Xvfb; do
+  for command_name in curl ffmpeg git Xvfb python3; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       missing+=("$command_name")
     fi
   done
+  if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import PIL' >/dev/null 2>&1; then
+    missing+=("python3-pil")
+  fi
 
   if [[ ${#missing[@]} -eq 0 ]]; then
     log "required OS tools already present; skipping apt-get install"
@@ -71,6 +74,8 @@ install_os_packages() {
     curl \
     ffmpeg \
     git \
+    python3 \
+    python3-pil \
     xvfb
 }
 
@@ -81,6 +86,7 @@ check_runtime_versions() {
   run node --version
   run npm --version
   run python3 --version
+  run python3 -c 'import PIL; print("Pillow available")'
   run java -version
   run ffmpeg -version
   run bash -lc 'command -v Xvfb'

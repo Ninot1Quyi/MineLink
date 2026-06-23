@@ -70,6 +70,7 @@ import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BedBlock;
@@ -80,6 +81,7 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minelink.neoforge.MineLinkMod;
 import net.neoforged.neoforge.common.util.FakePlayer;
@@ -195,7 +197,9 @@ public final class MineLinkEndpointBootstrap {
             avatar.setShowArms(true);
             avatar.setGlowingTag(true);
             avatar.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.GOLDEN_HELMET));
-            avatar.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+            avatar.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.GOLDEN_CHESTPLATE));
+            avatar.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.GOLDEN_LEGGINGS));
+            avatar.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.GOLDEN_BOOTS));
             avatar.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_LOG));
             avatar.setCustomName(Component.literal(agent.displayName + " server_agent"));
             avatar.setCustomNameVisible(true);
@@ -203,7 +207,9 @@ public final class MineLinkEndpointBootstrap {
             agent.recorderAvatar = avatar;
         }
         Vec3 pos = agent.position();
-        avatar.moveTo(pos.x, pos.y, pos.z, agent.entity.getYRot(), agent.entity.getXRot());
+        avatar.setInvisible(false);
+        avatar.setCustomNameVisible(true);
+        avatar.moveTo(pos.x, pos.y + 0.05D, pos.z, agent.entity.getYRot(), agent.entity.getXRot());
         avatar.setYHeadRot(agent.entity.getYRot());
         avatar.setGlowingTag(true);
 
@@ -262,12 +268,53 @@ public final class MineLinkEndpointBootstrap {
         double side = recorderCameraSide();
         double lead = recorderCameraLead();
         Vec3 focusPos = agentPos.add(forward.scale(lead));
-        Vec3 cameraPos = agentPos.subtract(forward.scale(distance)).add(right.scale(side)).add(0.0D, height, 0.0D);
+        Vec3 cameraPos = chooseRecorderCameraPosition(agent, agentPos, focusPos, forward, right, distance, height, side);
         float yaw = yawToward(cameraPos, focusPos);
         float pitch = pitchToward(cameraPos, focusPos);
         cameraAnchor.moveTo(cameraPos.x, cameraPos.y, cameraPos.z, yaw, pitch);
         cameraAnchor.setYHeadRot(yaw);
         cameraAnchor.setXRot(pitch);
+    }
+
+    private Vec3 chooseRecorderCameraPosition(
+        AgentBody agent,
+        Vec3 agentPos,
+        Vec3 focusPos,
+        Vec3 forward,
+        Vec3 right,
+        double distance,
+        double height,
+        double side
+    ) {
+        double[] distances = new double[] { distance, distance + 2.0D, distance + 4.0D, Math.max(3.0D, distance - 1.0D) };
+        double[] heights = new double[] { height + 3.0D, height + 5.0D, height + 1.5D, height + 7.0D, height };
+        double[] sides = new double[] { side, 0.0D, -side, side * 2.0D, -side * 2.0D };
+        Vec3 fallback = agentPos.subtract(forward.scale(distance)).add(right.scale(side)).add(0.0D, height, 0.0D);
+        for (double candidateDistance : distances) {
+            for (double candidateHeight : heights) {
+                for (double candidateSide : sides) {
+                    Vec3 cameraPos = agentPos
+                        .subtract(forward.scale(candidateDistance))
+                        .add(right.scale(candidateSide))
+                        .add(0.0D, candidateHeight, 0.0D);
+                    if (clearRecorderLineOfSight(agent, cameraPos, focusPos)) {
+                        return cameraPos;
+                    }
+                }
+            }
+        }
+        return fallback;
+    }
+
+    private boolean clearRecorderLineOfSight(AgentBody agent, Vec3 cameraPos, Vec3 focusPos) {
+        BlockHitResult hit = server.overworld().clip(new ClipContext(
+            cameraPos,
+            focusPos,
+            ClipContext.Block.COLLIDER,
+            ClipContext.Fluid.NONE,
+            agent.entity
+        ));
+        return hit.getType() == HitResult.Type.MISS || hit.getLocation().distanceToSqr(focusPos) <= 0.75D;
     }
 
     private void removeRecorderAvatar(AgentBody agent) {
@@ -1036,9 +1083,10 @@ public final class MineLinkEndpointBootstrap {
         double dx = clamp(vector.get(0).getAsDouble(), -4.0, 4.0);
         double dy = clamp(vector.get(1).getAsDouble(), -2.0, 2.0);
         double dz = clamp(vector.get(2).getAsDouble(), -4.0, 4.0);
+        int durationMs = Math.max(0, intValue(arguments, "durationMs", 0));
         Vec3 current = agent.position();
         Vec3 requested = new Vec3(dx, dy, dz);
-        agent.entity.move(MoverType.SELF, requested);
+        moveForVisibleDuration(agent, requested, durationMs);
         Vec3 actual = agent.position().subtract(current);
         double requestedDistance = requested.length();
         double movedDistance = actual.length();
@@ -1058,7 +1106,36 @@ public final class MineLinkEndpointBootstrap {
         result.add("position", vector(agent.position()));
         response.add("result", result);
         updateRecorder(agent);
+        if (recorderEnabled() && movedDistance > 0.05D) {
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder target moved server_agent {} moved_distance={} requested_distance={} duration_ms={}",
+                agent.displayName,
+                String.format("%.2f", movedDistance),
+                String.format("%.2f", requestedDistance),
+                durationMs
+            );
+        }
         return response;
+    }
+
+    private void moveForVisibleDuration(AgentBody agent, Vec3 requested, int durationMs) {
+        if (!recorderEnabled() || durationMs <= 100) {
+            agent.entity.move(MoverType.SELF, requested);
+            return;
+        }
+        int steps = Math.max(2, Math.min(20, durationMs / 75));
+        Vec3 step = requested.scale(1.0D / steps);
+        long sleepMs = Math.max(35L, Math.min(125L, durationMs / steps));
+        for (int index = 0; index < steps; index += 1) {
+            agent.entity.move(MoverType.SELF, step);
+            updateRecorder(agent);
+            try {
+                TimeUnit.MILLISECONDS.sleep(sleepMs);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     private JsonObject lookAt(JsonObject request, AgentBody agent, JsonObject arguments) {

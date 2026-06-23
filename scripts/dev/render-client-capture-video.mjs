@@ -167,12 +167,18 @@ const captureStartedAfterWorldReady =
 const recorderAutoFollow =
   /(?:^|\n)recorderAutoFollow=true(?:\n|$)/.test(clientReadyLog) ||
   serverLogText.includes("MineLink recorder auto-follow active");
+const recorderTargetMoved =
+  /(?:^|\n)recorderTargetMoved=true(?:\n|$)/.test(clientReadyLog) ||
+  serverLogText.includes("MineLink recorder target moved server_agent");
 const recorderClientFollow =
   /(?:^|\n)recorderClientFollow=true(?:\n|$)/.test(clientReadyLog) ||
   clientLogText.includes("MineLink recorder client following server_agent");
 const recorderClientTargetCentered =
   /(?:^|\n)recorderClientTargetCentered=true(?:\n|$)/.test(clientReadyLog) ||
   clientLogText.includes("MineLink recorder client target centered server_agent");
+const recorderClientTargetVisible =
+  /(?:^|\n)recorderClientTargetVisible=true(?:\n|$)/.test(clientReadyLog) ||
+  clientLogText.includes("MineLink recorder client target visible server_agent");
 
 if (!clientWorldReady) {
   failures.push("Recorder client did not confirm an in-world Minecraft view before acceptance rendering");
@@ -183,11 +189,17 @@ if (!captureStartedAfterWorldReady) {
 if (!recorderAutoFollow) {
   failures.push("Recorder client did not confirm auto-follow camera binding to the active server_agent");
 }
+if (!recorderTargetMoved) {
+  failures.push("Recorder did not confirm visible movement from the active server_agent during the captured task");
+}
 if (!recorderClientFollow) {
   failures.push("Recorder client did not confirm a visible client-side follow target for the active server_agent");
 }
 if (!recorderClientTargetCentered) {
   failures.push("Recorder client did not confirm the active server_agent target is centered in the client view");
+}
+if (!recorderClientTargetVisible) {
+  failures.push("Recorder client did not confirm clear line-of-sight visibility for the active server_agent target");
 }
 
 const terminalLines = [
@@ -199,8 +211,10 @@ const terminalLines = [
   `world ready: ${clientWorldReady ? "YES" : "NO"}`,
   `capture after ready: ${captureStartedAfterWorldReady ? "YES" : "NO"}`,
   `auto follow: ${recorderAutoFollow ? "YES" : "NO"}`,
+  `target moved: ${recorderTargetMoved ? "YES" : "NO"}`,
   `client follow: ${recorderClientFollow ? "YES" : "NO"}`,
   `target centered: ${recorderClientTargetCentered ? "YES" : "NO"}`,
+  `target visible: ${recorderClientTargetVisible ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
   "",
   "assertions:",
@@ -358,8 +372,10 @@ const summaryLines = [
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
+  `- Recorder target moved: \`${recorderTargetMoved ? "yes" : "no"}\``,
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
+  `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
   "- Video kind: `minecraft-client-terminal-composite`",
   `- Client capture source: \`${args.clientVideo}\``,
   `- Report: \`${args.report}\``,
@@ -392,8 +408,10 @@ const origin = {
   clientWorldReady,
   captureStartedAfterWorldReady,
   recorderAutoFollow,
+  recorderTargetMoved,
   recorderClientFollow,
   recorderClientTargetCentered,
+  recorderClientTargetVisible,
   scenarioReports: report ? 1 : 0,
   clientVideo: args.clientVideo,
   report: args.report,
@@ -417,8 +435,10 @@ await fs.writeFile(
     `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
     `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
     `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
+    `- Recorder target moved: \`${recorderTargetMoved ? "yes" : "no"}\``,
     `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
     `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
+    `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
     `- Scenario reports: \`${report ? 1 : 0}\``,
     `- Client video: \`${args.clientVideo}\``,
     `- Report: \`${args.report}\``,

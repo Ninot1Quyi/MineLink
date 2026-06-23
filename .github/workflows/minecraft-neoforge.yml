@@ -47,7 +47,7 @@ jobs:
       - name: Install acceptance video renderer
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg xvfb libgl1 libgl1-mesa-dri libxcursor1 libxi6 libxinerama1 libxrandr2 libxxf86vm1
+          sudo apt-get install -y ffmpeg python3-pil xvfb libgl1 libgl1-mesa-dri libxcursor1 libxi6 libxinerama1 libxrandr2 libxxf86vm1
       - run: npm ci
       - run: npm run build
       - run: npm run typecheck

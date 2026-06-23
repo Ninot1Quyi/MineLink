@@ -986,17 +986,27 @@ Current status:
   `recorderAutoFollow=true`. The recorder client must also log
   `MineLink recorder client following server_agent` after it sees the visible
   agent marker and steers the recorded camera toward it; the renderer records
-  this as `recorderClientFollow=true`. The recorder client must also log
+  this as `recorderClientFollow=true`. The server-side recorder helper must
+  log `MineLink recorder target moved server_agent` after the active
+  `server_agent` visibly moves during the recorded scenario; the renderer
+  records this as `recorderTargetMoved=true`. The recorder client must also log
   `MineLink recorder client target centered server_agent` after the recorder
   player's own camera has held the visible agent in frame; the renderer records
-  this as `recorderClientTargetCentered=true`. The release gate must include
+  this as `recorderClientTargetCentered=true`. The recorder client must also
+  log `MineLink recorder client target visible server_agent` only after its
+  camera has a clear line of sight to the visible `server_agent` marker; the
+  renderer records this as `recorderClientTargetVisible=true`. The release gate must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,
-  off-screen target following, or non-following client capture cannot be final
-  acceptance evidence.
+  static/idle target, occluded target, off-screen target following, or
+  non-following client capture cannot be final acceptance evidence. The
+  finalizer also produces `acceptance-storyboard.png` and
+  `acceptance-storyboard.json` for model-readable visual QA, but those files
+  are inspection aids only; the deliverable remains the playable
+  `acceptance.mp4`.
   Headless recorder runs call `scripts/dev/ensure-client-recorder-deps.sh` when
-  `ffmpeg` or `Xvfb` is missing; this lets an older Ona task environment
-  self-install recorder packages when apt/sudo is available, or fail with an
+  `ffmpeg`, `Xvfb`, or `python3-pil` is missing; this lets an older Ona task environment
+  self-install recorder/storyboard packages when apt/sudo is available, or fail with an
   explicit recorder-dependency report instead of silently downgrading to a
   placeholder MP4. The recorder client resolves
   `MINELINK_RECORDER_CLIENT_GAME_DIR` to a task-local absolute path under the
@@ -1039,7 +1049,10 @@ Current status:
   runner must download the MP4 from the manifest URL and fail closed unless
   the bytes match `mp4Sha256`. The fixed-size base64 chunk bridge remains for
   reports, client-capture logs, and no-R2 fallback; it is no longer the
-  preferred large-`acceptance.mp4` transport.
+  preferred large-`acceptance.mp4` transport. Implementation finalization also
+  runs `render-storyboard` after `render-video`; missing storyboard evidence
+  blocks a client-GUI video review request, but storyboard evidence never
+  releases a task without the MP4.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
@@ -1047,11 +1060,14 @@ Current status:
   hashes. When a storage manifest is present, the gate also verifies the
   manifest hashes, producer, `clientGuiCapture`, `clientWorldReady`,
   `captureStartedAfterWorldReady`, `recorderAutoFollow`, and
-  `recorderClientFollow`, and `recorderClientTargetCentered` markers. The gate
+  `recorderTargetMoved`, `recorderClientFollow`,
+  `recorderClientTargetCentered`, and
+  `recorderClientTargetVisible` markers. The gate
   fails final publication when the summary has `Scenario reports: 0`,
-  `No scenario reports found`, no client-visible follow proof, or no
-  target-centered framing proof; a pure text/card MP4 is never sufficient final
-  evidence for video-required tasks. The gate writes
+  `No scenario reports found`, no visible active-agent movement, no
+  client-visible follow proof, or no target-centered and target-visible framing
+  proof; a pure text/card MP4 is never sufficient final evidence for
+  video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
 - `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at
   terminal factory cleanup when they belong to the MineLink project and have no

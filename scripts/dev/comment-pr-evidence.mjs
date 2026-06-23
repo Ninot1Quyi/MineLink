@@ -14,6 +14,8 @@ const args = {
   headSha: process.env.GITHUB_SHA ?? "",
   workflowName: process.env.GITHUB_WORKFLOW ?? "",
   videoPath: process.env.MINELINK_ACCEPTANCE_VIDEO_PATH ?? ".minelink-dev/reports/artifacts/acceptance.mp4",
+  storyboardPath:
+    process.env.MINELINK_ACCEPTANCE_STORYBOARD_PATH ?? ".minelink-dev/reports/artifacts/acceptance-storyboard.png",
   manifestPath:
     process.env.MINELINK_VIDEO_STORAGE_MANIFEST ?? ".minelink-dev/reports/artifacts/video-storage-manifest.json",
   videoReviewPath: process.env.MINELINK_VIDEO_REVIEW_PATH ?? ".minelink-dev/reports/artifacts/video-review.md",
@@ -43,6 +45,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--head-sha") args.headSha = readValue();
   else if (arg === "--workflow-name") args.workflowName = readValue();
   else if (arg === "--video-path") args.videoPath = readValue();
+  else if (arg === "--storyboard-path") args.storyboardPath = readValue();
   else if (arg === "--manifest") args.manifestPath = readValue();
   else if (arg === "--video-review") args.videoReviewPath = readValue();
   else if (arg === "--release-gate") args.releaseGatePath = readValue();
@@ -137,8 +140,10 @@ function body(manifest) {
   const clientWorldReady = manifest?.clientWorldReady === true ? "yes" : "no";
   const captureStartedAfterWorldReady = manifest?.captureStartedAfterWorldReady === true ? "yes" : "no";
   const recorderAutoFollow = manifest?.recorderAutoFollow === true ? "yes" : "no";
+  const recorderTargetMoved = manifest?.recorderTargetMoved === true ? "yes" : "no";
   const recorderClientFollow = manifest?.recorderClientFollow === true ? "yes" : "no";
   const recorderClientTargetCentered = manifest?.recorderClientTargetCentered === true ? "yes" : "no";
+  const recorderClientTargetVisible = manifest?.recorderClientTargetVisible === true ? "yes" : "no";
   return [
     marker(),
     "MineLink PR video evidence:",
@@ -163,8 +168,10 @@ function body(manifest) {
     `- Client world ready: \`${clientWorldReady}\``,
     `- Capture started after world ready: \`${captureStartedAfterWorldReady}\``,
     `- Recorder auto-follow: \`${recorderAutoFollow}\``,
+    `- Recorder target moved: \`${recorderTargetMoved}\``,
     `- Recorder client follow: \`${recorderClientFollow}\``,
     `- Recorder client target centered: \`${recorderClientTargetCentered}\``,
+    `- Recorder client target visible: \`${recorderClientTargetVisible}\``,
     `- Verifier report: \`${args.videoReviewPath}\``,
     `- Release gate report: \`${args.releaseGatePath}\``,
     hasValue(args.artifactUrl)
@@ -172,6 +179,7 @@ function body(manifest) {
       : `- Artifact: \`${args.artifactName}\` (not linked yet)`,
     `- Artifact id: \`${args.artifactId || "none"}\``,
     `- Acceptance video path inside artifact zip: \`${args.videoPath}\``,
+    `- Acceptance storyboard path inside artifact zip: \`${args.storyboardPath}\``,
     `- Video producer: \`${args.producer || "unknown"}\``,
     "",
     `Boundary: ${args.boundary}`,

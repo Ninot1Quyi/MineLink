@@ -35,6 +35,7 @@ RUN mkdir -p -m 0755 /etc/apt/keyrings \
     libxinerama1 \
     libxrandr2 \
     libxxf86vm1 \
+    python3-pil \
     xvfb \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
@@ -42,6 +43,7 @@ RUN mkdir -p -m 0755 /etc/apt/keyrings \
 RUN node --version \
   && npm --version \
   && python3 --version \
+  && python3 -c 'import PIL' \
   && java -version \
   && gh --version \
   && ffmpeg -version \

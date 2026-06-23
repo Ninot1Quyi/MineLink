@@ -110,9 +110,10 @@ for (let index = 2; index < process.argv.length; index += 1) {
 
 Runs MineLink finalizer artifact stages inside an existing Ona task
 environment, then copies .minelink-dev/reports back to the local runner. Use
---stage-group implementation-finalize to render acceptance.mp4, upload the
-candidate MP4 directly from the Ona environment to R2 when configured, and
-write video-review-request.md. Then use --stage-group release-upload after the
+--stage-group implementation-finalize to render acceptance.mp4, generate the
+model-readable storyboard QA image, upload the candidate MP4 directly from the
+Ona environment to R2 when configured, and write video-review-request.md. Then
+use --stage-group release-upload after the
 same Platform Codex execution writes video-review.md. The bridge only returns
 small reports/manifests by chunk and downloads the MP4 from storage for hash
 verification; Platform Codex implementation/verifier evidence remains the
@@ -352,8 +353,8 @@ function videoStorageConfigured() {
 function stageList() {
   if (args.stageGroup === "implementation-finalize") {
     return videoStorageConfigured()
-      ? ["validate", "summarize", "render-video", "upload-video", "prepare-video"]
-      : ["validate", "summarize", "render-video", "prepare-video"];
+      ? ["validate", "summarize", "render-video", "render-storyboard", "upload-video", "prepare-video"]
+      : ["validate", "summarize", "render-video", "render-storyboard", "prepare-video"];
   }
   if (args.stageGroup === "release-upload") {
     return ["check-video-release", "final-report"];
@@ -505,6 +506,7 @@ if (failures.length === 0) {
     { filePath: "scripts/dev/summarize-evidence.mjs", executable: true },
     { filePath: "scripts/dev/render-acceptance-video.mjs", executable: true },
     { filePath: "scripts/dev/render-client-capture-video.mjs", executable: true },
+    { filePath: "scripts/dev/render-video-storyboard.mjs", executable: true },
     { filePath: "scripts/dev/prepare-video-review-request.mjs", executable: true },
     { filePath: "scripts/dev/check-video-review.mjs", executable: true },
     { filePath: "scripts/dev/upload-acceptance-video-storage.mjs", executable: true },

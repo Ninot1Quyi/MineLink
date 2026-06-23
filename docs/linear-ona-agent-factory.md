@@ -850,13 +850,17 @@ publishing or merging video evidence, the current Ona Platform Codex
 implementation session must launch a bounded native Codex verifier subagent to
 inspect that request, the task requirements, `acceptance-summary.md`, the
 storage manifest, the `acceptance.mp4` hash, and the client-capture readiness
-markers. For Minecraft product-video tasks the request and manifest must show
+markers. `acceptance-storyboard.png` is included only as model-readable visual
+QA; the final deliverable remains the playable `acceptance.mp4`. For Minecraft
+product-video tasks the request and manifest must show
 `clientGuiCapture=yes`, `clientWorldReady=yes`,
-`captureStartedAfterWorldReady=yes`, `recorderAutoFollow=yes`, and
-`recorderClientFollow=yes`, and `recorderClientTargetCentered=yes`; loading
-screens, bootstrap footage, server-only camera intent, off-screen target
-following, or clients that are not visibly following and framing the active
-`server_agent` are not releaseable evidence. It writes
+`captureStartedAfterWorldReady=yes`, `recorderAutoFollow=yes`,
+`recorderTargetMoved=yes`, `recorderClientFollow=yes`,
+`recorderClientTargetCentered=yes`, and `recorderClientTargetVisible=yes`;
+loading screens, bootstrap footage, server-only camera intent, static/idle
+targets, occluded targets, off-screen target following, or clients that are not
+visibly following and framing the active `server_agent` are not releaseable
+evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 
 ```text
@@ -868,8 +872,10 @@ Client GUI capture: yes
 Client world ready: yes
 Capture started after world ready: yes
 Recorder auto-follow: yes
+Recorder target moved: yes
 Recorder client follow: yes
 Recorder client target centered: yes
+Recorder client target visible: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 ```

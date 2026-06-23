@@ -479,6 +479,12 @@ if truthy_value "$record_client"; then
     else
       echo "recorderAutoFollow=false"
     fi
+    if grep -Fq "MineLink recorder target moved server_agent" "$work_dir/logs/server.stdout.log" "$work_dir/logs/server.stderr.log" 2>/dev/null; then
+      echo "recorderTargetMoved=true"
+      echo "targetMovedLog=MineLink recorder target moved server_agent"
+    else
+      echo "recorderTargetMoved=false"
+    fi
     if grep -Fq "MineLink recorder client following server_agent" "$work_dir/logs/client.stdout.log" "$work_dir/logs/client.stderr.log" 2>/dev/null; then
       echo "recorderClientFollow=true"
       echo "clientFollowLog=MineLink recorder client following server_agent"
@@ -490,6 +496,12 @@ if truthy_value "$record_client"; then
       echo "clientTargetCenteredLog=MineLink recorder client target centered server_agent"
     else
       echo "recorderClientTargetCentered=false"
+    fi
+    if grep -Fq "MineLink recorder client target visible server_agent" "$work_dir/logs/client.stdout.log" "$work_dir/logs/client.stderr.log" 2>/dev/null; then
+      echo "recorderClientTargetVisible=true"
+      echo "clientTargetVisibleLog=MineLink recorder client target visible server_agent"
+    else
+      echo "recorderClientTargetVisible=false"
     fi
   } >> "$client_capture_ready"
   branch_name="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf '%s' unknown)"

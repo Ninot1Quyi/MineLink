@@ -34,6 +34,7 @@ const allStages = [
   "validate",
   "summarize",
   "render-video",
+  "render-storyboard",
   "prepare-video",
   "check-video-release",
   "upload-video",
@@ -48,6 +49,7 @@ const groupedStages = {
     "validate",
     "summarize",
     "render-video",
+    "render-storyboard",
     "prepare-video",
   ],
   "release-finalize": ["check-video-release", "sync-in-review", "create-pr", "final-report"],
@@ -453,6 +455,29 @@ switch (args.stage) {
         { requireImplementation: true },
       );
     }
+    break;
+  case "render-storyboard":
+    await runCommandStage(
+      args.stage,
+      "bash",
+      [
+        "-lc",
+        [
+          "bash scripts/dev/ensure-client-recorder-deps.sh --require-ffmpeg",
+          [
+            shellQuote(process.execPath),
+            "scripts/dev/render-video-storyboard.mjs",
+            "--mp4",
+            ".minelink-dev/reports/artifacts/acceptance.mp4",
+            "--output",
+            ".minelink-dev/reports/artifacts/acceptance-storyboard.png",
+            "--json-output",
+            ".minelink-dev/reports/artifacts/acceptance-storyboard.json",
+          ].join(" "),
+        ].join(" && "),
+      ],
+      { requireImplementation: true },
+    );
     break;
   case "prepare-video":
     {

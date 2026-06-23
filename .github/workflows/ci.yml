@@ -48,7 +48,7 @@ jobs:
         if: always()
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg python3-pil
       - name: Render MineLink acceptance artifacts
         if: always()
         run: node scripts/dev/render-acceptance-video.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --pr-url "$MINELINK_PR_URL" --require-mp4

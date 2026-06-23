@@ -204,11 +204,25 @@ server-side recorder binding followed the active `server_agent`. The recorder
 client must also log `MineLink recorder client following server_agent` so release
 gates can verify the captured client view actually saw and followed the visible
 agent marker. It must also log
+`MineLink recorder target moved server_agent` after the active `server_agent`
+visibly moves during the recorded scenario; release gates record this as
+`recorderTargetMoved=true` so a static/idle target video is not accepted. It
+must also log
 `MineLink recorder client target centered server_agent` after the target stays
 framed in the recorder client's own camera view; release gates record this as
 `recorderClientTargetCentered=true` so a video where the agent is off-screen is
-not accepted. It does not grant the agent new MCP tools or bypass any server
-validation.
+not accepted. It must also log
+`MineLink recorder client target visible server_agent` after a raycast confirms
+clear line of sight from the recorder camera to the visible `server_agent`
+marker; release gates record this as `recorderClientTargetVisible=true` so a
+video where the agent is hidden behind terrain or foliage is not accepted. It
+does not grant the agent new MCP tools or bypass any server validation.
+`scripts/dev/render-video-storyboard.mjs` creates a numbered frame grid from
+the final MP4 for model-readable visual QA; it is not a substitute for the
+playable `acceptance.mp4` in PR evidence. The devcontainer, prebuild bootstrap,
+and recorder dependency fallback install `python3-pil` because storyboard
+numbering is composed with Pillow instead of ffmpeg's optional `drawtext`
+filter.
 
 Full-chain canaries use the Platform Codex task environment as the artifact
 producer. After the implementation readback exists, GitHub Actions runs:
@@ -218,8 +232,9 @@ node scripts/dev/run-ona-finalizer-artifacts.mjs --environment-id <ona-env> --ta
 ```
 
 That command uses `ona environment exec` to run the validation, summary,
-`render-video`, and `prepare-video` finalizer stages inside the Ona
-devcontainer, then copies `.minelink-dev/reports` back to the runner for the
+`render-video`, `render-storyboard`, `upload-video` when R2 is configured, and
+`prepare-video` finalizer stages inside the Ona devcontainer, then copies
+`.minelink-dev/reports` back to the runner for the
 same implementation Codex execution to launch its verifier subagent. After
 `video-review.md` is written, run the bridge again with
 `--stage-group release-upload`; the Ona release finalizer checks the existing
