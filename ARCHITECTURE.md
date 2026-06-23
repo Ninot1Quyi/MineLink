@@ -839,10 +839,15 @@ agent-following camera anchor; the renderer writes that as
 `recorderAutoFollow=true`. The recorder client must also log
 `MineLink recorder client following server_agent` after it sees the visible
 agent marker and continuously steers the recorded view toward it; the renderer
-writes that as `recorderClientFollow=true`. Release gates require both markers
-so loading screens, Mojang bootstrap footage, server-only camera intent, or
-normal clients that are not visibly following the active `server_agent` cannot
-be published as final Minecraft product evidence.
+writes that as `recorderClientFollow=true`. It must then log
+`MineLink recorder client target centered server_agent` after the recorded
+client camera is back on the recorder player and has held a target-centered
+view long enough for review; the renderer writes that as
+`recorderClientTargetCentered=true`. Release gates require all three recorder
+markers so loading screens, Mojang bootstrap footage, server-only camera
+intent, off-screen target following, or normal clients that are not visibly
+following and framing the active `server_agent` cannot be published as final
+Minecraft product evidence.
 Pull request workflows use
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
 finalizer to upload candidate `acceptance.mp4` to the configured

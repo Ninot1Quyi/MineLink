@@ -170,6 +170,9 @@ const recorderAutoFollow =
 const recorderClientFollow =
   /(?:^|\n)recorderClientFollow=true(?:\n|$)/.test(clientReadyLog) ||
   clientLogText.includes("MineLink recorder client following server_agent");
+const recorderClientTargetCentered =
+  /(?:^|\n)recorderClientTargetCentered=true(?:\n|$)/.test(clientReadyLog) ||
+  clientLogText.includes("MineLink recorder client target centered server_agent");
 
 if (!clientWorldReady) {
   failures.push("Recorder client did not confirm an in-world Minecraft view before acceptance rendering");
@@ -183,6 +186,9 @@ if (!recorderAutoFollow) {
 if (!recorderClientFollow) {
   failures.push("Recorder client did not confirm a visible client-side follow target for the active server_agent");
 }
+if (!recorderClientTargetCentered) {
+  failures.push("Recorder client did not confirm the active server_agent target is centered in the client view");
+}
 
 const terminalLines = [
   "MINELINK CLIENT ACCEPTANCE",
@@ -194,6 +200,7 @@ const terminalLines = [
   `capture after ready: ${captureStartedAfterWorldReady ? "YES" : "NO"}`,
   `auto follow: ${recorderAutoFollow ? "YES" : "NO"}`,
   `client follow: ${recorderClientFollow ? "YES" : "NO"}`,
+  `target centered: ${recorderClientTargetCentered ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
   "",
   "assertions:",
@@ -352,6 +359,7 @@ const summaryLines = [
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
+  `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   "- Video kind: `minecraft-client-terminal-composite`",
   `- Client capture source: \`${args.clientVideo}\``,
   `- Report: \`${args.report}\``,
@@ -385,6 +393,7 @@ const origin = {
   captureStartedAfterWorldReady,
   recorderAutoFollow,
   recorderClientFollow,
+  recorderClientTargetCentered,
   scenarioReports: report ? 1 : 0,
   clientVideo: args.clientVideo,
   report: args.report,
@@ -409,6 +418,7 @@ await fs.writeFile(
     `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
     `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
     `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
+    `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
     `- Scenario reports: \`${report ? 1 : 0}\``,
     `- Client video: \`${args.clientVideo}\``,
     `- Report: \`${args.report}\``,

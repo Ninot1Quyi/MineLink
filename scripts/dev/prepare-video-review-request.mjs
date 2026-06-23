@@ -142,6 +142,7 @@ const clientWorldReady = origin?.clientWorldReady === true;
 const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
 const recorderAutoFollow = origin?.recorderAutoFollow === true;
 const recorderClientFollow = origin?.recorderClientFollow === true;
+const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const resolvedBranch = await gitBranch();
 
 if (requireClientGuiCapture) {
@@ -163,6 +164,9 @@ if (requireClientGuiCapture) {
     }
     if (!recorderClientFollow) {
       failures.push("Acceptance video origin does not confirm the recorder client visibly followed the active server_agent");
+    }
+    if (!recorderClientTargetCentered) {
+      failures.push("Acceptance video origin does not confirm the active server_agent target is centered in the client view");
     }
   }
 }
@@ -195,6 +199,9 @@ if (requireStorageManifest) {
     if (requireClientGuiCapture && storageManifest.recorderClientFollow !== true) {
       failures.push("Video storage manifest does not confirm recorderClientFollow=true");
     }
+    if (requireClientGuiCapture && storageManifest.recorderClientTargetCentered !== true) {
+      failures.push("Video storage manifest does not confirm recorderClientTargetCentered=true");
+    }
   }
 }
 
@@ -218,6 +225,7 @@ const lines = [
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
+  `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage manifest required: \`${requireStorageManifest ? "yes" : "no"}\``,
   `- Storage provider: \`${md(storageManifest?.storageProvider || "none")}\``,
@@ -247,6 +255,7 @@ const lines = [
   `Capture started after world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder auto-follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder client follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder client target centered: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Summary sha256: ${summaryHash}`,
   `MP4 sha256: ${mp4Hash}`,
   "```",

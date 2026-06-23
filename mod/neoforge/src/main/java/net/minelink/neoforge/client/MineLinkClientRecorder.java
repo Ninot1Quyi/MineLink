@@ -27,6 +27,8 @@ public final class MineLinkClientRecorder {
     private static int worldReadyTicks;
     private static boolean followLogged;
     private static int followTicks;
+    private static boolean targetCenteredLogged;
+    private static int targetCenteredTicks;
 
     private MineLinkClientRecorder() {
     }
@@ -88,6 +90,8 @@ public final class MineLinkClientRecorder {
         worldReadyTicks = 0;
         followLogged = false;
         followTicks = 0;
+        targetCenteredLogged = false;
+        targetCenteredTicks = 0;
         MineLinkMod.LOGGER.info("MineLink recorder client joined {}", address());
     }
 
@@ -98,6 +102,8 @@ public final class MineLinkClientRecorder {
         worldReadyTicks = 0;
         followLogged = false;
         followTicks = 0;
+        targetCenteredLogged = false;
+        targetCenteredTicks = 0;
         ticks = 0;
     }
 
@@ -106,6 +112,7 @@ public final class MineLinkClientRecorder {
         if (!inWorld) {
             worldReadyTicks = 0;
             followTicks = 0;
+            targetCenteredTicks = 0;
             return false;
         }
         worldReadyTicks++;
@@ -130,26 +137,42 @@ public final class MineLinkClientRecorder {
         Entity target = findServerAgent(minecraft);
         if (target == null) {
             followTicks = 0;
+            targetCenteredTicks = 0;
             return;
         }
         Vec3 targetPos = target.position().add(0.0D, Math.max(1.35D, target.getBbHeight() * 0.75D), 0.0D);
+        Vec3 forward = forwardVector(target.getYRot());
+        Vec3 right = rightVector(target.getYRot());
         double distance = positiveDouble(setting(
             "MINELINK_RECORDER_CLIENT_CAMERA_DISTANCE",
             "minelink.recorder.client.cameraDistance",
-            "6.0"
-        ), 6.0D);
+            "4.0"
+        ), 4.0D);
         double height = positiveDouble(setting(
             "MINELINK_RECORDER_CLIENT_CAMERA_HEIGHT",
             "minelink.recorder.client.cameraHeight",
-            "2.25"
-        ), 2.25D);
-        Vec3 cameraPos = targetPos.add(-distance, height, -distance);
-        float yaw = yawToward(cameraPos, targetPos);
-        float pitch = pitchToward(cameraPos, targetPos);
+            "1.8"
+        ), 1.8D);
+        double side = signedDouble(setting(
+            "MINELINK_RECORDER_CLIENT_CAMERA_SIDE",
+            "minelink.recorder.client.cameraSide",
+            "1.6"
+        ), 1.6D);
+        double lead = positiveDouble(setting(
+            "MINELINK_RECORDER_CLIENT_CAMERA_LEAD",
+            "minelink.recorder.client.cameraLead",
+            "0.75"
+        ), 0.75D);
+        Vec3 focusPos = targetPos.add(forward.scale(lead));
+        Vec3 cameraPos = targetPos.subtract(forward.scale(distance)).add(right.scale(side)).add(0.0D, height, 0.0D);
+        float yaw = yawToward(cameraPos, focusPos);
+        float pitch = pitchToward(cameraPos, focusPos);
 
         minecraft.player.noPhysics = true;
         minecraft.player.setDeltaMovement(Vec3.ZERO);
         minecraft.player.moveTo(cameraPos.x, cameraPos.y, cameraPos.z, yaw, pitch);
+        minecraft.player.setYRot(yaw);
+        minecraft.player.setXRot(pitch);
         minecraft.player.setYHeadRot(yaw);
         minecraft.player.setYBodyRot(yaw);
         minecraft.setCameraEntity(minecraft.player);
@@ -170,10 +193,25 @@ public final class MineLinkClientRecorder {
                 String.format("%.2f", cameraPos.z)
             );
         }
+        if (minecraft.getCameraEntity() == minecraft.player) {
+            targetCenteredTicks++;
+        } else {
+            targetCenteredTicks = 0;
+        }
+        if (!targetCenteredLogged && targetCenteredTicks >= readyTicks) {
+            targetCenteredLogged = true;
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder client target centered server_agent {} focus {},{},{}",
+                target.getName().getString(),
+                String.format("%.2f", focusPos.x),
+                String.format("%.2f", focusPos.y),
+                String.format("%.2f", focusPos.z)
+            );
+        }
     }
 
     private static void configureRecorderView(Minecraft minecraft) {
-        minecraft.options.hideGui = true;
+        minecraft.options.hideGui = false;
         minecraft.options.joinedFirstServer = true;
         minecraft.options.tutorialStep = TutorialSteps.NONE;
         minecraft.options.hideBundleTutorial = true;
@@ -215,6 +253,16 @@ public final class MineLinkClientRecorder {
         return Mth.wrapDegrees((float)(-(Mth.atan2(dy, horizontal) * 180.0D / Math.PI)));
     }
 
+    private static Vec3 forwardVector(float yawDegrees) {
+        double yaw = Math.toRadians(yawDegrees);
+        return new Vec3(-Math.sin(yaw), 0.0D, Math.cos(yaw));
+    }
+
+    private static Vec3 rightVector(float yawDegrees) {
+        double yaw = Math.toRadians(yawDegrees);
+        return new Vec3(Math.cos(yaw), 0.0D, Math.sin(yaw));
+    }
+
     private static boolean enabled() {
         return truthy(setting("MINELINK_RECORDER_CLIENT_ENABLED", "minelink.recorder.client.enabled", "false"));
     }
@@ -252,6 +300,14 @@ public final class MineLinkClientRecorder {
         try {
             double parsed = Double.parseDouble(value.trim());
             return parsed > 0.0D ? parsed : fallback;
+        } catch (RuntimeException error) {
+            return fallback;
+        }
+    }
+
+    private static double signedDouble(String value, double fallback) {
+        try {
+            return Double.parseDouble(value.trim());
         } catch (RuntimeException error) {
             return fallback;
         }

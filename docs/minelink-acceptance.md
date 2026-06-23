@@ -986,10 +986,14 @@ Current status:
   `recorderAutoFollow=true`. The recorder client must also log
   `MineLink recorder client following server_agent` after it sees the visible
   agent marker and steers the recorded camera toward it; the renderer records
-  this as `recorderClientFollow=true`. The release gate must include
+  this as `recorderClientFollow=true`. The recorder client must also log
+  `MineLink recorder client target centered server_agent` after the recorder
+  player's own camera has held the visible agent in frame; the renderer records
+  this as `recorderClientTargetCentered=true`. The release gate must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
-  server-observation-only video, loading screen, Mojang bootstrap capture, or
-  non-following client capture cannot be final acceptance evidence.
+  server-observation-only video, loading screen, Mojang bootstrap capture,
+  off-screen target following, or non-following client capture cannot be final
+  acceptance evidence.
   Headless recorder runs call `scripts/dev/ensure-client-recorder-deps.sh` when
   `ffmpeg` or `Xvfb` is missing; this lets an older Ona task environment
   self-install recorder packages when apt/sudo is available, or fail with an
@@ -1043,9 +1047,10 @@ Current status:
   hashes. When a storage manifest is present, the gate also verifies the
   manifest hashes, producer, `clientGuiCapture`, `clientWorldReady`,
   `captureStartedAfterWorldReady`, `recorderAutoFollow`, and
-  `recorderClientFollow` markers. The gate fails final publication when the
-  summary has `Scenario reports: 0`, `No scenario reports found`, or no
-  client-visible follow proof; a pure text/card MP4 is never sufficient final
+  `recorderClientFollow`, and `recorderClientTargetCentered` markers. The gate
+  fails final publication when the summary has `Scenario reports: 0`,
+  `No scenario reports found`, no client-visible follow proof, or no
+  target-centered framing proof; a pure text/card MP4 is never sufficient final
   evidence for video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
 - `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at

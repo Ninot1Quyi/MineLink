@@ -485,6 +485,12 @@ if truthy_value "$record_client"; then
     else
       echo "recorderClientFollow=false"
     fi
+    if grep -Fq "MineLink recorder client target centered server_agent" "$work_dir/logs/client.stdout.log" "$work_dir/logs/client.stderr.log" 2>/dev/null; then
+      echo "recorderClientTargetCentered=true"
+      echo "clientTargetCenteredLog=MineLink recorder client target centered server_agent"
+    else
+      echo "recorderClientTargetCentered=false"
+    fi
   } >> "$client_capture_ready"
   branch_name="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf '%s' unknown)"
   node scripts/dev/render-client-capture-video.mjs \

@@ -203,7 +203,11 @@ must log `MineLink recorder auto-follow active` so release gates can verify the
 server-side recorder binding followed the active `server_agent`. The recorder
 client must also log `MineLink recorder client following server_agent` so release
 gates can verify the captured client view actually saw and followed the visible
-agent marker. It does not grant the agent new MCP tools or bypass any server
+agent marker. It must also log
+`MineLink recorder client target centered server_agent` after the target stays
+framed in the recorder client's own camera view; release gates record this as
+`recorderClientTargetCentered=true` so a video where the agent is off-screen is
+not accepted. It does not grant the agent new MCP tools or bypass any server
 validation.
 
 Full-chain canaries use the Platform Codex task environment as the artifact

@@ -48,6 +48,7 @@ Client world ready: yes
 Capture started after world ready: yes
 Recorder auto-follow: yes
 Recorder client follow: yes
+Recorder client target centered: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 
@@ -122,6 +123,7 @@ const clientWorldReady = origin?.clientWorldReady === true;
 const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
 const recorderAutoFollow = origin?.recorderAutoFollow === true;
 const recorderClientFollow = origin?.recorderClientFollow === true;
+const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const review = await readText(reviewPath);
 const summary = await readText(summaryPath);
 const scenarioReportCount = summaryCount(summary, "Scenario reports");
@@ -165,6 +167,11 @@ if (requireClientGuiCapture) {
     if (!recorderClientFollow) {
       failures.push("Acceptance video origin does not confirm recorder client-visible follow of the active server_agent");
     }
+    if (!recorderClientTargetCentered) {
+      failures.push(
+        "Acceptance video origin does not confirm recorder target-centered framing of the active server_agent",
+      );
+    }
   }
 }
 
@@ -199,6 +206,9 @@ if (storageManifest) {
   if (requireClientGuiCapture && storageManifest.recorderClientFollow !== true) {
     failures.push("Video storage manifest does not confirm recorderClientFollow=true");
   }
+  if (requireClientGuiCapture && storageManifest.recorderClientTargetCentered !== true) {
+    failures.push("Video storage manifest does not confirm recorderClientTargetCentered=true");
+  }
 }
 
 if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
@@ -213,6 +223,7 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const reviewedCaptureStartedAfterWorldReady = marker(review, "Capture started after world ready");
   const reviewedRecorderAutoFollow = marker(review, "Recorder auto-follow");
   const reviewedRecorderClientFollow = marker(review, "Recorder client follow");
+  const reviewedRecorderClientTargetCentered = marker(review, "Recorder client target centered");
   const verifier = marker(review, "Verifier");
   const reviewedSummaryHash = marker(review, "Summary sha256");
   const reviewedMp4Hash = marker(review, "MP4 sha256");
@@ -259,6 +270,11 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
       `Video verifier did not confirm recorder client-visible follow: ${reviewedRecorderClientFollow || "missing"}`,
     );
   }
+  if (requireClientGuiCapture && reviewedRecorderClientTargetCentered !== "yes") {
+    failures.push(
+      `Video verifier did not confirm recorder target-centered framing: ${reviewedRecorderClientTargetCentered || "missing"}`,
+    );
+  }
   if (/^Release decision:\s*fail/im.test(review)) {
     failures.push("Video verifier reported fail");
   }
@@ -301,6 +317,7 @@ const lines = [
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
+  `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage provider: \`${storageManifest?.storageProvider || "none"}\``,
   `- Storage object: \`${storageManifest?.objectKey || "none"}\``,

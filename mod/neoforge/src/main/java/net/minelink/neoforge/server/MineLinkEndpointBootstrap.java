@@ -239,7 +239,7 @@ public final class MineLinkEndpointBootstrap {
             player.gameMode.changeGameModeForPlayer(GameType.SPECTATOR);
         }
         player.teleportTo(server.overworld(), cameraPos.x, cameraPos.y, cameraPos.z, Set.of(), yaw, pitch);
-        player.setCamera(agent.recorderCameraAnchor);
+        player.setCamera(player);
         if (!agent.recorderAutoFollowLogged) {
             agent.recorderAutoFollowLogged = true;
             MineLinkMod.LOGGER.info(
@@ -255,15 +255,17 @@ public final class MineLinkEndpointBootstrap {
 
     private void positionCameraAnchor(ArmorStand cameraAnchor, AgentBody agent) {
         Vec3 agentPos = agent.position().add(0.0D, 1.35D, 0.0D);
+        Vec3 forward = forwardVector(agent.entity.getYRot());
+        Vec3 right = rightVector(agent.entity.getYRot());
         double distance = recorderCameraDistance();
         double height = recorderCameraHeight();
-        double x = agentPos.x - distance;
-        double y = agentPos.y + height;
-        double z = agentPos.z - distance;
-        Vec3 cameraPos = new Vec3(x, y, z);
-        float yaw = yawToward(cameraPos, agentPos);
-        float pitch = pitchToward(cameraPos, agentPos);
-        cameraAnchor.moveTo(x, y, z, yaw, pitch);
+        double side = recorderCameraSide();
+        double lead = recorderCameraLead();
+        Vec3 focusPos = agentPos.add(forward.scale(lead));
+        Vec3 cameraPos = agentPos.subtract(forward.scale(distance)).add(right.scale(side)).add(0.0D, height, 0.0D);
+        float yaw = yawToward(cameraPos, focusPos);
+        float pitch = pitchToward(cameraPos, focusPos);
+        cameraAnchor.moveTo(cameraPos.x, cameraPos.y, cameraPos.z, yaw, pitch);
         cameraAnchor.setYHeadRot(yaw);
         cameraAnchor.setXRot(pitch);
     }
@@ -292,11 +294,19 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private static double recorderCameraDistance() {
-        return parseDoubleSetting("MINELINK_RECORDER_CAMERA_DISTANCE", "minelink.recorder.cameraDistance", 5.0D);
+        return parseDoubleSetting("MINELINK_RECORDER_CAMERA_DISTANCE", "minelink.recorder.cameraDistance", 4.0D);
     }
 
     private static double recorderCameraHeight() {
-        return parseDoubleSetting("MINELINK_RECORDER_CAMERA_HEIGHT", "minelink.recorder.cameraHeight", 3.0D);
+        return parseDoubleSetting("MINELINK_RECORDER_CAMERA_HEIGHT", "minelink.recorder.cameraHeight", 1.8D);
+    }
+
+    private static double recorderCameraSide() {
+        return parseDoubleSetting("MINELINK_RECORDER_CAMERA_SIDE", "minelink.recorder.cameraSide", 1.6D);
+    }
+
+    private static double recorderCameraLead() {
+        return parseDoubleSetting("MINELINK_RECORDER_CAMERA_LEAD", "minelink.recorder.cameraLead", 0.75D);
     }
 
     private static int recorderFollowIntervalTicks() {
@@ -309,6 +319,16 @@ public final class MineLinkEndpointBootstrap {
         } catch (RuntimeException error) {
             return fallback;
         }
+    }
+
+    private static Vec3 forwardVector(float yawDegrees) {
+        double yaw = Math.toRadians(yawDegrees);
+        return new Vec3(-Math.sin(yaw), 0.0D, Math.cos(yaw));
+    }
+
+    private static Vec3 rightVector(float yawDegrees) {
+        double yaw = Math.toRadians(yawDegrees);
+        return new Vec3(Math.cos(yaw), 0.0D, Math.sin(yaw));
     }
 
     private static int parseIntSetting(String envName, String propertyName, int fallback) {
