@@ -934,7 +934,10 @@ match markers and summary/MP4 hashes are not passing. The release gate also
 rejects zero-report placeholder videos: an `acceptance-summary.md` with
 `Scenario reports: 0` or `No scenario reports found` cannot be final acceptance
 evidence, even if a verifier report says `Release decision: pass`. A ready
-`video-review-request.md` never releases a task by itself.
+`video-review-request.md` never releases a task by itself. For client GUI
+captures, the same verifier canary and release gate must also carry
+`Recorder work visible: yes`, proving that the video shows successful task work
+by the followed `server_agent` rather than an idle or merely observed target.
 
 Gate 3 perception smoke uses stable vanilla fixture blocks for repeatable real
 NeoForge evidence: glass/leaves for translucent, torch for empty-collision
