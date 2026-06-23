@@ -305,7 +305,8 @@ async function loadCanary(validateRemote, options = {}) {
   let lastError = null;
   let lastCandidate = null;
   let lastCheck = null;
-  let salvageAttempt = null;
+  let lastSalvageAttempt = null;
+  let salvageSucceeded = false;
   do {
     try {
       const candidate = await fetchRemoteCanary();
@@ -324,9 +325,10 @@ async function loadCanary(validateRemote, options = {}) {
       }
     } catch (error) {
       lastError = error;
-      if (!salvageAttempt && options.salvageRemote) {
-        salvageAttempt = await options.salvageRemote(error);
-        if (salvageAttempt?.ok) {
+      if (!salvageSucceeded && options.salvageRemote) {
+        lastSalvageAttempt = await options.salvageRemote(error);
+        if (lastSalvageAttempt?.ok) {
+          salvageSucceeded = true;
           await sleep(Math.min(5000, Math.max(1000, args.pollSeconds * 1000)));
           continue;
         }
@@ -343,19 +345,19 @@ async function loadCanary(validateRemote, options = {}) {
       remoteWaitFailure:
         [
           lastError?.message ?? `Timed out waiting for current Platform Codex implementation evidence at ${args.canaryPath}.`,
-          salvageAttempt && !salvageAttempt.ok ? salvageAttempt.message : "",
-          salvageAttempt && !salvageAttempt.ok && salvageAttempt.output ? salvageAttempt.output : "",
+          lastSalvageAttempt && !lastSalvageAttempt.ok ? lastSalvageAttempt.message : "",
+          lastSalvageAttempt && !lastSalvageAttempt.ok && lastSalvageAttempt.output ? lastSalvageAttempt.output : "",
         ]
           .filter(Boolean)
           .join("\n"),
     };
   }
-  if (salvageAttempt && !salvageAttempt.ok) {
+  if (lastSalvageAttempt && !lastSalvageAttempt.ok) {
     const error = new Error(
       [
         lastError?.message ?? "Timed out waiting for Platform Codex canary branch evidence.",
-        salvageAttempt.message,
-        salvageAttempt.output,
+        lastSalvageAttempt.message,
+        lastSalvageAttempt.output,
       ]
         .filter(Boolean)
         .join("\n"),
