@@ -6,8 +6,12 @@ import path from "node:path";
 let reviewPath = ".minelink-dev/reports/artifacts/video-review.md";
 let summaryPath = ".minelink-dev/reports/artifacts/acceptance-summary.md";
 let mp4Path = ".minelink-dev/reports/artifacts/acceptance.mp4";
+let originPath = ".minelink-dev/reports/artifacts/acceptance-video-origin.json";
+let manifestPath = ".minelink-dev/reports/artifacts/video-storage-manifest.json";
 let outputPath = ".minelink-dev/reports/artifacts/video-release-gate.md";
 let requireMp4 = false;
+let requireProducer = "";
+let requireClientGuiCapture = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -17,14 +21,22 @@ for (let index = 2; index < process.argv.length; index += 1) {
     summaryPath = process.argv[++index] ?? "";
   } else if (arg === "--mp4") {
     mp4Path = process.argv[++index] ?? "";
+  } else if (arg === "--origin") {
+    originPath = process.argv[++index] ?? "";
+  } else if (arg === "--manifest") {
+    manifestPath = process.argv[++index] ?? "";
   } else if (arg === "--output") {
     outputPath = process.argv[++index] ?? "";
+  } else if (arg === "--require-producer") {
+    requireProducer = process.argv[++index] ?? "";
   } else if (arg === "--require-mp4") {
     requireMp4 = true;
+  } else if (arg === "--require-client-gui-capture") {
+    requireClientGuiCapture = true;
   } else if (arg === "-h" || arg === "--help") {
-    console.log(`Usage: node scripts/dev/check-video-review.mjs [--require-mp4]
+    console.log(`Usage: node scripts/dev/check-video-review.mjs [--require-mp4] [--require-client-gui-capture]
 
-Checks the dedicated acceptance-video verifier report before release. The
+Checks the Goal-mode acceptance-video release gate before release. The
 verifier report must explicitly contain:
 
 Verifier: Ona Platform Codex
@@ -35,7 +47,10 @@ Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 
 Any missing video, missing report, negative marker, or non-pass decision fails
-the release gate.`);
+the release gate. Use --require-producer <producer> to require a specific video
+origin such as ona-environment. Use --require-client-gui-capture for Minecraft
+product video gates that must show a real Minecraft client view rather than a
+trace-driven server-observation composite.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -69,31 +84,96 @@ async function sha256(filePath) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
+async function readJson(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function marker(text, label) {
   const match = text.match(new RegExp(`^${label}:\\s*(.+)$`, "im"));
   return match?.[1]?.trim().toLowerCase() ?? "";
+}
+
+function summaryCount(text, label) {
+  const match = text.match(new RegExp(`^-\\s*${label}:\\s*\`?(\\d+)\`?\\s*$`, "im"));
+  if (!match) return null;
+  return Number.parseInt(match[1], 10);
 }
 
 const failures = [];
 const reviewStat = await stat(reviewPath);
 const summaryStat = await stat(summaryPath);
 const mp4Stat = await stat(mp4Path);
+const origin = await readJson(originPath);
+const storageManifest = await readJson(manifestPath);
+const producer = origin?.producer ?? "unknown";
+const videoKind = origin?.videoKind ?? "unknown";
+const clientGuiCapture = origin?.clientGuiCapture === true;
 const review = await readText(reviewPath);
+const summary = await readText(summaryPath);
+const scenarioReportCount = summaryCount(summary, "Scenario reports");
 
 if (!summaryStat || !summaryStat.isFile() || summaryStat.size === 0) {
   failures.push(`Missing acceptance summary: ${summaryPath}`);
+} else {
+  if (scenarioReportCount === null) {
+    failures.push("Acceptance summary does not declare Scenario reports");
+  } else if (scenarioReportCount <= 0) {
+    failures.push(
+      "Acceptance video has zero scenario reports; placeholder videos cannot be released as final evidence",
+    );
+  }
+  if (/^\s*-\s*No scenario reports found\./im.test(summary)) {
+    failures.push("Acceptance summary contains no scenario reports");
+  }
 }
 
 if (requireMp4 && (!mp4Stat || !mp4Stat.isFile() || mp4Stat.size === 0)) {
   failures.push(`Missing required acceptance MP4: ${mp4Path}`);
 }
 
+if (requireClientGuiCapture) {
+  if (!origin) {
+    failures.push(`Missing acceptance video origin metadata: ${originPath}`);
+  } else if (!clientGuiCapture) {
+    failures.push(
+      `Acceptance video is ${videoKind} with clientGuiCapture=false; Minecraft product gates require normal Minecraft client footage`,
+    );
+  }
+}
+
+if (storageManifest) {
+  if (mp4Stat?.isFile()) {
+    const currentMp4Hash = await sha256(mp4Path);
+    if (storageManifest.mp4Sha256 !== currentMp4Hash) {
+      failures.push(`Video storage manifest MP4 hash mismatch: ${storageManifest.mp4Sha256 || "missing"}`);
+    }
+  }
+  if (summaryStat?.isFile()) {
+    const currentSummaryHash = await sha256(summaryPath);
+    if (storageManifest.summarySha256 !== currentSummaryHash) {
+      failures.push(`Video storage manifest summary hash mismatch: ${storageManifest.summarySha256 || "missing"}`);
+    }
+  }
+  if (requireProducer && storageManifest.producer !== requireProducer) {
+    failures.push(`Video storage manifest producer is ${storageManifest.producer || "missing"}, expected ${requireProducer}`);
+  }
+  if (requireClientGuiCapture && storageManifest.clientGuiCapture !== true) {
+    failures.push("Video storage manifest does not confirm clientGuiCapture=true");
+  }
+}
+
 if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
-  failures.push(`Missing dedicated video verifier report: ${reviewPath}`);
+  failures.push(`Missing same-session video verifier report: ${reviewPath}`);
 } else {
   const releaseDecision = marker(review, "Release decision");
   const taskMatched = marker(review, "Task matched");
   const videoMatched = marker(review, "Video matched");
+  const reviewedProducer = marker(review, "Video producer");
+  const reviewedClientGuiCapture = marker(review, "Client GUI capture");
   const verifier = marker(review, "Verifier");
   const reviewedSummaryHash = marker(review, "Summary sha256");
   const reviewedMp4Hash = marker(review, "MP4 sha256");
@@ -108,6 +188,17 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   }
   if (videoMatched !== "yes") {
     failures.push(`Video verifier video match is not yes: ${videoMatched || "missing"}`);
+  }
+  if (reviewedProducer && reviewedProducer !== String(producer).toLowerCase()) {
+    failures.push(`Video verifier producer mismatch: ${reviewedProducer}`);
+  }
+  if (requireProducer && producer !== requireProducer) {
+    failures.push(`Acceptance video producer is ${producer}, expected ${requireProducer}`);
+  }
+  if (requireClientGuiCapture && reviewedClientGuiCapture !== "yes") {
+    failures.push(
+      `Video verifier did not confirm normal Minecraft client footage: ${reviewedClientGuiCapture || "missing"}`,
+    );
   }
   if (/^Release decision:\s*fail/im.test(review)) {
     failures.push("Video verifier reported fail");
@@ -134,12 +225,24 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 const lines = [
-  "# MineLink Acceptance Video Release Gate",
+  "# MineLink Goal-Mode Acceptance Video Release Gate",
   "",
+  "- Boundary: `Goal-mode task release requires the Ona-produced acceptance.mp4 plus same-session Codex verifier approval; StartAgent launch/readback alone is not release evidence`",
   `- Review report: \`${reviewPath}\``,
   `- Acceptance summary: \`${summaryPath}\``,
   `- Acceptance MP4: \`${mp4Path}\``,
+  `- Acceptance video origin: \`${originPath}\``,
+  `- Video storage manifest: \`${manifestPath}\``,
+  `- Video producer: \`${producer}\``,
+  `- Video kind: \`${videoKind}\``,
+  `- Required producer: \`${requireProducer || "none"}\``,
   `- MP4 required: \`${requireMp4 ? "yes" : "no"}\``,
+  `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
+  `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
+  `- Storage provider: \`${storageManifest?.storageProvider || "none"}\``,
+  `- Storage object: \`${storageManifest?.objectKey || "none"}\``,
+  `- Storage video URL: ${storageManifest?.videoUrl || "none"}`,
+  `- Scenario reports: \`${scenarioReportCount ?? "unknown"}\``,
   `- Result: \`${failures.length === 0 ? "passed" : "failed"}\``,
   "",
   "## Failures",
