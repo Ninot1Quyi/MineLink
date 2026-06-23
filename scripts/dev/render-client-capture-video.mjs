@@ -148,6 +148,14 @@ const failedTools = toolResults.filter((item) => {
   const result = item?.result ?? {};
   return result.ok === false || result.status === "failed" || result.status === "blocked" || result.error;
 });
+const workToolNamePattern = /^(action|container|craft|furnace|create)\./;
+const successfulWorkTools = toolResults.filter((item) => {
+  const name = String(item?.name ?? "");
+  if (!workToolNamePattern.test(name)) return false;
+  const result = item?.result ?? {};
+  return result.ok !== false && result.status !== "failed" && result.status !== "blocked" && !result.error;
+});
+const successfulAssertions = finalAssertions.filter((assertion) => assertion?.passed === true);
 const reportHash = report ? await sha256(args.report) : "missing";
 
 const agentLog = await readText(path.join(args.logDir, "agent.log"));
@@ -179,6 +187,14 @@ const recorderClientTargetCentered =
 const recorderClientTargetVisible =
   /(?:^|\n)recorderClientTargetVisible=true(?:\n|$)/.test(clientReadyLog) ||
   clientLogText.includes("MineLink recorder client target visible server_agent");
+const recorderWorkVisible =
+  passed &&
+  successfulWorkTools.length > 0 &&
+  successfulAssertions.length > 0 &&
+  recorderTargetMoved &&
+  recorderClientFollow &&
+  recorderClientTargetCentered &&
+  recorderClientTargetVisible;
 
 if (!clientWorldReady) {
   failures.push("Recorder client did not confirm an in-world Minecraft view before acceptance rendering");
@@ -201,6 +217,11 @@ if (!recorderClientTargetCentered) {
 if (!recorderClientTargetVisible) {
   failures.push("Recorder client did not confirm clear line-of-sight visibility for the active server_agent target");
 }
+if (!recorderWorkVisible) {
+  failures.push(
+    "Recorder did not confirm active visible server_agent work for this task; final evidence requires successful work tools, passing assertions, and visible centered follow footage",
+  );
+}
 
 const terminalLines = [
   "MINELINK CLIENT ACCEPTANCE",
@@ -215,6 +236,7 @@ const terminalLines = [
   `client follow: ${recorderClientFollow ? "YES" : "NO"}`,
   `target centered: ${recorderClientTargetCentered ? "YES" : "NO"}`,
   `target visible: ${recorderClientTargetVisible ? "YES" : "NO"}`,
+  `work visible: ${recorderWorkVisible ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
   "",
   "assertions:",
@@ -227,6 +249,7 @@ const terminalLines = [
     const result = item?.result ?? {};
     return `- ${compact(item?.name ?? "tool", 14)} ${compact(result.status ?? (result.ok === false ? "failed" : "ok"), 14)}`;
   }),
+  `work tools: ${successfulWorkTools.length}`,
   ...(failedTools.length > 0 ? ["", `failed tools: ${failedTools.length}`] : []),
   "",
   "agent log:",
@@ -376,6 +399,9 @@ const summaryLines = [
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
+  `- Successful work tools: \`${successfulWorkTools.length}\``,
+  `- Successful final assertions: \`${successfulAssertions.length}\``,
   "- Video kind: `minecraft-client-terminal-composite`",
   `- Client capture source: \`${args.clientVideo}\``,
   `- Report: \`${args.report}\``,
@@ -412,6 +438,10 @@ const origin = {
   recorderClientFollow,
   recorderClientTargetCentered,
   recorderClientTargetVisible,
+  recorderWorkVisible,
+  successfulWorkTools: successfulWorkTools.map((item) => item?.name ?? "tool"),
+  successfulWorkToolCount: successfulWorkTools.length,
+  successfulFinalAssertionCount: successfulAssertions.length,
   scenarioReports: report ? 1 : 0,
   clientVideo: args.clientVideo,
   report: args.report,
@@ -439,6 +469,9 @@ await fs.writeFile(
     `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
     `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
     `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+    `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
+    `- Successful work tools: \`${successfulWorkTools.length}\``,
+    `- Successful final assertions: \`${successfulAssertions.length}\``,
     `- Scenario reports: \`${report ? 1 : 0}\``,
     `- Client video: \`${args.clientVideo}\``,
     `- Report: \`${args.report}\``,

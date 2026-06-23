@@ -157,6 +157,7 @@ const recorderTargetMoved = origin?.recorderTargetMoved === true;
 const recorderClientFollow = origin?.recorderClientFollow === true;
 const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
+const recorderWorkVisible = origin?.recorderWorkVisible === true;
 const resolvedBranch = await gitBranch();
 
 if (requireClientGuiCapture) {
@@ -187,6 +188,9 @@ if (requireClientGuiCapture) {
     }
     if (!recorderClientTargetVisible) {
       failures.push("Acceptance video origin does not confirm clear line-of-sight visibility for the active server_agent target");
+    }
+    if (!recorderWorkVisible) {
+      failures.push("Acceptance video origin does not confirm active visible server_agent work for this task");
     }
   }
 }
@@ -228,6 +232,9 @@ if (requireStorageManifest) {
     if (requireClientGuiCapture && storageManifest.recorderClientTargetVisible !== true) {
       failures.push("Video storage manifest does not confirm recorderClientTargetVisible=true");
     }
+    if (requireClientGuiCapture && storageManifest.recorderWorkVisible !== true) {
+      failures.push("Video storage manifest does not confirm recorderWorkVisible=true");
+    }
   }
 }
 
@@ -256,6 +263,7 @@ const lines = [
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage manifest required: \`${requireStorageManifest ? "yes" : "no"}\``,
   `- Storage provider: \`${md(storageManifest?.storageProvider || "none")}\``,
@@ -289,6 +297,7 @@ const lines = [
   `Recorder client follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder client target centered: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder client target visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder work visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Summary sha256: ${summaryHash}`,
   `MP4 sha256: ${mp4Hash}`,
   "```",

@@ -154,6 +154,7 @@ function body(manifest) {
   const recorderClientFollow = manifest?.recorderClientFollow === true ? "yes" : "no";
   const recorderClientTargetCentered = manifest?.recorderClientTargetCentered === true ? "yes" : "no";
   const recorderClientTargetVisible = manifest?.recorderClientTargetVisible === true ? "yes" : "no";
+  const recorderWorkVisible = manifest?.recorderWorkVisible === true ? "yes" : "no";
   return [
     marker(),
     "MineLink PR video evidence:",
@@ -182,6 +183,7 @@ function body(manifest) {
     `- Recorder client follow: \`${recorderClientFollow}\``,
     `- Recorder client target centered: \`${recorderClientTargetCentered}\``,
     `- Recorder client target visible: \`${recorderClientTargetVisible}\``,
+    `- Recorder work visible: \`${recorderWorkVisible}\``,
     `- Verifier report: \`${args.videoReviewPath}\``,
     `- Release gate report: \`${args.releaseGatePath}\``,
     hasValue(args.artifactUrl)

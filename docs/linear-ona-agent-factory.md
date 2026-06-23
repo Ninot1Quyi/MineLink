@@ -863,11 +863,11 @@ product-video tasks the request and manifest must show
 `clientGuiCapture=yes`, `clientWorldReady=yes`,
 `captureStartedAfterWorldReady=yes`, `recorderAutoFollow=yes`,
 `recorderTargetMoved=yes`, `recorderClientFollow=yes`,
-`recorderClientTargetCentered=yes`, and `recorderClientTargetVisible=yes`;
-loading screens, bootstrap footage, server-only camera intent, static/idle
-targets, occluded targets, off-screen target following, or clients that are not
-visibly following and framing the active `server_agent` are not releaseable
-evidence. It writes
+`recorderClientTargetCentered=yes`, `recorderClientTargetVisible=yes`, and
+`recorderWorkVisible=yes`; loading screens, bootstrap footage, server-only
+camera intent, static/idle targets, no-op tasks, occluded targets, off-screen
+target following, or clients that are not visibly following and framing the
+active `server_agent` while task work succeeds are not releaseable evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 
 ```text
@@ -883,6 +883,7 @@ Recorder target moved: yes
 Recorder client follow: yes
 Recorder client target centered: yes
 Recorder client target visible: yes
+Recorder work visible: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 ```

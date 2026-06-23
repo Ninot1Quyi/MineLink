@@ -1001,11 +1001,15 @@ Current status:
   this as `recorderClientTargetCentered=true`. The recorder client must also
   log `MineLink recorder client target visible server_agent` only after its
   camera has a clear line of sight to the visible `server_agent` marker; the
-  renderer records this as `recorderClientTargetVisible=true`. The release gate must include
+  renderer records this as `recorderClientTargetVisible=true`. The renderer
+  must also set `recorderWorkVisible=true`, derived from a passing scenario, at
+  least one successful work tool (`action.*`, `container.*`, `craft.*`,
+  `furnace.*`, or `create.*`), at least one passing final assertion, and the
+  recorder movement/follow/centered/visible markers. The release gate must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,
-  static/idle target, occluded target, off-screen target following, or
-  non-following client capture cannot be final acceptance evidence. The
+  static/idle target, no-op task, occluded target, off-screen target following,
+  or non-following client capture cannot be final acceptance evidence. The
   finalizer also produces `acceptance-storyboard.png` and
   `acceptance-storyboard.json` for model-readable visual QA, but those files
   are inspection aids only; the deliverable remains the playable
@@ -1067,12 +1071,12 @@ Current status:
   manifest hashes, producer, `clientGuiCapture`, `clientWorldReady`,
   `captureStartedAfterWorldReady`, `recorderAutoFollow`, and
   `recorderTargetMoved`, `recorderClientFollow`,
-  `recorderClientTargetCentered`, and
-  `recorderClientTargetVisible` markers. The gate
+  `recorderClientTargetCentered`, `recorderClientTargetVisible`, and
+  `recorderWorkVisible` markers. The gate
   fails final publication when the summary has `Scenario reports: 0`,
   `No scenario reports found`, no visible active-agent movement, no
-  client-visible follow proof, or no target-centered and target-visible framing
-  proof; a pure text/card MP4 is never sufficient final evidence for
+  client-visible follow proof, no target-centered and target-visible framing
+  proof, or no successful task work visible in the recorder-backed run; a pure text/card MP4 is never sufficient final evidence for
   video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
 - `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at

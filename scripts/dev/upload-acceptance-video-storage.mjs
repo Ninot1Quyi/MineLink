@@ -241,6 +241,7 @@ const report = {
   recorderClientFollow: false,
   recorderClientTargetCentered: false,
   recorderClientTargetVisible: false,
+  recorderWorkVisible: false,
   videoKind: "unknown",
   key: "",
   objectKey: "",
@@ -290,6 +291,7 @@ if (report.failures.length === 0) {
   report.recorderClientFollow = origin?.recorderClientFollow === true;
   report.recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
   report.recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
+  report.recorderWorkVisible = origin?.recorderWorkVisible === true;
   if (dryRun) {
     report.result = "passed";
     report.endpointUrl = "dry-run";
@@ -343,6 +345,7 @@ const manifest = {
   recorderClientFollow: report.recorderClientFollow,
   recorderClientTargetCentered: report.recorderClientTargetCentered,
   recorderClientTargetVisible: report.recorderClientTargetVisible,
+  recorderWorkVisible: report.recorderWorkVisible,
   videoKind: report.videoKind,
   createdAt: report.createdAt,
   boundary: report.boundary,
@@ -375,6 +378,7 @@ const lines = [
   `- Recorder client follow: \`${report.recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${report.recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${report.recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder work visible: \`${report.recorderWorkVisible ? "yes" : "no"}\``,
   `- Storage key: \`${report.key || "none"}\``,
   `- Public video URL: ${report.videoUrl || "none"}`,
   `- Manifest: \`${args.manifestOutput}\``,

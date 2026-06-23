@@ -51,6 +51,7 @@ Recorder target moved: yes
 Recorder client follow: yes
 Recorder client target centered: yes
 Recorder client target visible: yes
+Recorder work visible: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 
@@ -128,6 +129,7 @@ const recorderTargetMoved = origin?.recorderTargetMoved === true;
 const recorderClientFollow = origin?.recorderClientFollow === true;
 const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
+const recorderWorkVisible = origin?.recorderWorkVisible === true;
 const review = await readText(reviewPath);
 const summary = await readText(summaryPath);
 const scenarioReportCount = summaryCount(summary, "Scenario reports");
@@ -184,6 +186,11 @@ if (requireClientGuiCapture) {
         "Acceptance video origin does not confirm clear line-of-sight visibility of the active server_agent",
       );
     }
+    if (!recorderWorkVisible) {
+      failures.push(
+        "Acceptance video origin does not confirm active visible server_agent work for the task",
+      );
+    }
   }
 }
 
@@ -227,6 +234,9 @@ if (storageManifest) {
   if (requireClientGuiCapture && storageManifest.recorderClientTargetVisible !== true) {
     failures.push("Video storage manifest does not confirm recorderClientTargetVisible=true");
   }
+  if (requireClientGuiCapture && storageManifest.recorderWorkVisible !== true) {
+    failures.push("Video storage manifest does not confirm recorderWorkVisible=true");
+  }
 }
 
 if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
@@ -244,6 +254,7 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const reviewedRecorderClientFollow = marker(review, "Recorder client follow");
   const reviewedRecorderClientTargetCentered = marker(review, "Recorder client target centered");
   const reviewedRecorderClientTargetVisible = marker(review, "Recorder client target visible");
+  const reviewedRecorderWorkVisible = marker(review, "Recorder work visible");
   const verifier = marker(review, "Verifier");
   const reviewedSummaryHash = marker(review, "Summary sha256");
   const reviewedMp4Hash = marker(review, "MP4 sha256");
@@ -305,6 +316,11 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
       `Video verifier did not confirm recorder target visibility: ${reviewedRecorderClientTargetVisible || "missing"}`,
     );
   }
+  if (requireClientGuiCapture && reviewedRecorderWorkVisible !== "yes") {
+    failures.push(
+      `Video verifier did not confirm active visible server_agent work: ${reviewedRecorderWorkVisible || "missing"}`,
+    );
+  }
   if (/^Release decision:\s*fail/im.test(review)) {
     failures.push("Video verifier reported fail");
   }
@@ -350,6 +366,7 @@ const lines = [
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage provider: \`${storageManifest?.storageProvider || "none"}\``,
   `- Storage object: \`${storageManifest?.objectKey || "none"}\``,

@@ -215,8 +215,13 @@ not accepted. It must also log
 `MineLink recorder client target visible server_agent` after a raycast confirms
 clear line of sight from the recorder camera to the visible `server_agent`
 marker; release gates record this as `recorderClientTargetVisible=true` so a
-video where the agent is hidden behind terrain or foliage is not accepted. It
-does not grant the agent new MCP tools or bypass any server validation.
+video where the agent is hidden behind terrain or foliage is not accepted. The
+renderer must then set `recorderWorkVisible=true`, which requires a passing
+scenario, at least one successful work tool such as `action.*`, `container.*`,
+`craft.*`, `furnace.*`, or `create.*`, at least one passing final assertion,
+and the recorder movement/follow/centered/visible markers. This blocks videos
+where the agent is merely standing in view. It does not grant the agent new MCP
+tools or bypass any server validation.
 `scripts/dev/render-video-storyboard.mjs` creates a numbered frame grid from
 the final MP4 for model-readable visual QA; it is not a substitute for the
 playable `acceptance.mp4` in PR evidence. The devcontainer, prebuild bootstrap,

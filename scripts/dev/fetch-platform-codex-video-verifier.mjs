@@ -297,6 +297,7 @@ function reviewRequestEvidence(text) {
   const recorderClientFollow = markerValue(text, "Recorder client follow");
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
+  const recorderWorkVisible = markerValue(text, "Recorder work visible");
   const clientGuiCaptureRequired = markerValue(text, "Client GUI capture required");
   const status = markerValue(text, "Request status");
   const failures = [];
@@ -354,6 +355,11 @@ function reviewRequestEvidence(text) {
     } else {
       evidence.push("Review request recorder target-visible marker present");
     }
+    if (!/^yes$/i.test(recorderWorkVisible)) {
+      failures.push(`Video review request requires active visible server_agent work but got ${recorderWorkVisible || "missing"}.`);
+    } else {
+      evidence.push("Review request active visible server_agent work marker present");
+    }
   }
   if (status && status !== "ready") failures.push(`Video review request status is not ready: ${status}.`);
 
@@ -371,6 +377,7 @@ function reviewRequestEvidence(text) {
     recorderClientFollow,
     recorderClientTargetCentered,
     recorderClientTargetVisible,
+    recorderWorkVisible,
     clientGuiCaptureRequired,
   };
 }
@@ -398,6 +405,7 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const recorderClientFollow = markerValue(text, "Recorder client follow");
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
+  const recorderWorkVisible = markerValue(text, "Recorder work visible");
   const result = markerValue(text, ["Result", "Status"]);
   const boundary = markerValue(text, "Boundary");
 
@@ -484,6 +492,11 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   } else if (/^yes$/i.test(recorderClientTargetVisible)) {
     evidence.push("verifier canary recorder target-visible marker accepted");
   }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderWorkVisible)) {
+    failures.push(`Verifier canary Recorder work visible is not yes: ${recorderWorkVisible || "missing"}.`);
+  } else if (/^yes$/i.test(recorderWorkVisible)) {
+    evidence.push("verifier canary active visible server_agent work marker accepted");
+  }
   if (!/^(passed|pass|success|succeeded)$/i.test(result)) failures.push(`Verifier canary Result is not passed: ${result || "missing"}.`);
   else evidence.push("verifier canary result passed");
   if (!/video-verifier-canary only/i.test(boundary)) {
@@ -559,6 +572,7 @@ const reviewLines = [
   `Recorder client follow: ${request.recorderClientFollow || "missing"}`,
   `Recorder client target centered: ${request.recorderClientTargetCentered || "missing"}`,
   `Recorder client target visible: ${request.recorderClientTargetVisible || "missing"}`,
+  `Recorder work visible: ${request.recorderWorkVisible || "missing"}`,
   `Summary sha256: ${request.summaryHash || "missing"}`,
   `MP4 sha256: ${request.mp4Hash || "missing"}`,
   `Task id: ${args.taskId}`,
@@ -629,6 +643,7 @@ await fs.writeFile(
       recorderClientFollow: request.recorderClientFollow,
       recorderClientTargetCentered: request.recorderClientTargetCentered,
       recorderClientTargetVisible: request.recorderClientTargetVisible,
+      recorderWorkVisible: request.recorderWorkVisible,
       clientGuiCaptureRequired: request.clientGuiCaptureRequired,
       evidence,
       failures,

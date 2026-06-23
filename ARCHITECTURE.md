@@ -783,10 +783,16 @@ with terminal evidence. That renderer is the only path allowed to set
 `clientGuiCapture=true`, and it must also set `clientWorldReady=true` plus
 `captureStartedAfterWorldReady=true` plus `recorderAutoFollow=true` plus
 `recorderTargetMoved=true` plus `recorderClientFollow=true` plus
-`recorderClientTargetCentered=true` plus `recorderClientTargetVisible=true`;
+`recorderClientTargetCentered=true` plus `recorderClientTargetVisible=true`
+plus `recorderWorkVisible=true`;
 `scripts/dev/check-video-review.mjs --require-client-gui-capture` rejects
 trace-driven, loading-screen, pre-world, static, non-moving, occluded, and
-non-following videos for these tasks. The finalizer also runs
+non-following videos for these tasks. `recorderWorkVisible=true` is derived
+from the same scenario report and recorder evidence: the scenario must pass, at
+least one world-changing MCP tool such as `action.*`, `container.*`, `craft.*`,
+`furnace.*`, or `create.*` must succeed, at least one final assertion must pass,
+and the recorder must confirm target movement, follow, centered framing, and
+line-of-sight visibility. The finalizer also runs
 `scripts/dev/render-video-storyboard.mjs` after MP4 rendering to create a
 numbered frame grid for model-readable QA; that storyboard is never the final
 deliverable and cannot replace the playable `acceptance.mp4`. The
@@ -862,11 +868,14 @@ view long enough for review; the renderer writes that as
 `MineLink recorder client target visible server_agent` only after the chosen
 camera position has a clear raycast line of sight to the visible
 `server_agent` marker; the renderer writes that as
-`recorderClientTargetVisible=true`. Release gates require all recorder markers
+`recorderClientTargetVisible=true`. The renderer then combines those recorder
+markers with the scenario's successful work tools and final assertions to write
+`recorderWorkVisible=true`. Release gates require all recorder markers
 so loading screens, Mojang bootstrap footage, server-only camera intent,
-static/idle targets, occluded targets, off-screen target following, or normal
-clients that are not visibly following and framing the active `server_agent`
-cannot be published as final Minecraft product evidence.
+static/idle targets, no-op tasks, occluded targets, off-screen target following,
+or normal clients that are not visibly following and framing the active
+`server_agent` while task work succeeds cannot be published as final Minecraft
+product evidence.
 Pull request workflows use
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
 finalizer to upload candidate `acceptance.mp4` to the configured
