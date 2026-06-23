@@ -299,6 +299,9 @@ function reviewRequestEvidence(text) {
   const recorderClientFollow = markerValue(text, "Recorder client follow");
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
+  const recorderReadyBeforeScenario = markerValue(text, "Recorder ready before scenario");
+  const recorderWorkCoverageAdequate = markerValue(text, "Recorder work coverage adequate");
+  const submittedActionsTerminalConfirmed = markerValue(text, "Submitted actions terminal confirmed");
   const recorderWorkVisible = markerValue(text, "Recorder work visible");
   const serverAgentTaskActionVisible = markerValue(text, "Server agent task action visible");
   const clientGuiCaptureRequired = markerValue(text, "Client GUI capture required");
@@ -368,6 +371,27 @@ function reviewRequestEvidence(text) {
     } else {
       evidence.push("Review request recorder target-visible marker present");
     }
+    if (!/^yes$/i.test(recorderReadyBeforeScenario)) {
+      failures.push(
+        `Video review request requires recorder readiness before task work but got ${recorderReadyBeforeScenario || "missing"}.`,
+      );
+    } else {
+      evidence.push("Review request recorder ready-before-work marker present");
+    }
+    if (!/^yes$/i.test(recorderWorkCoverageAdequate)) {
+      failures.push(
+        `Video review request requires adequate visible work coverage but got ${recorderWorkCoverageAdequate || "missing"}.`,
+      );
+    } else {
+      evidence.push("Review request adequate visible work coverage marker present");
+    }
+    if (!/^yes$/i.test(submittedActionsTerminalConfirmed)) {
+      failures.push(
+        `Video review request requires submitted action terminal lifecycle completion but got ${submittedActionsTerminalConfirmed || "missing"}.`,
+      );
+    } else {
+      evidence.push("Review request submitted action terminal marker present");
+    }
     if (!/^yes$/i.test(recorderWorkVisible)) {
       failures.push(`Video review request requires active visible server_agent work but got ${recorderWorkVisible || "missing"}.`);
     } else {
@@ -399,6 +423,9 @@ function reviewRequestEvidence(text) {
     recorderClientFollow,
     recorderClientTargetCentered,
     recorderClientTargetVisible,
+    recorderReadyBeforeScenario,
+    recorderWorkCoverageAdequate,
+    submittedActionsTerminalConfirmed,
     recorderWorkVisible,
     serverAgentTaskActionVisible,
     clientGuiCaptureRequired,
@@ -430,6 +457,9 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const recorderClientFollow = markerValue(text, "Recorder client follow");
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
+  const recorderReadyBeforeScenario = markerValue(text, "Recorder ready before scenario");
+  const recorderWorkCoverageAdequate = markerValue(text, "Recorder work coverage adequate");
+  const submittedActionsTerminalConfirmed = markerValue(text, "Submitted actions terminal confirmed");
   const recorderWorkVisible = markerValue(text, "Recorder work visible");
   const serverAgentTaskActionVisible = markerValue(text, "Server agent task action visible");
   const result = markerValue(text, ["Result", "Status"]);
@@ -528,6 +558,23 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   } else if (/^yes$/i.test(recorderClientTargetVisible)) {
     evidence.push("verifier canary recorder target-visible marker accepted");
   }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderReadyBeforeScenario)) {
+    failures.push(`Verifier canary Recorder ready before scenario is not yes: ${recorderReadyBeforeScenario || "missing"}.`);
+  } else if (/^yes$/i.test(recorderReadyBeforeScenario)) {
+    evidence.push("verifier canary recorder ready-before-work marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderWorkCoverageAdequate)) {
+    failures.push(`Verifier canary Recorder work coverage adequate is not yes: ${recorderWorkCoverageAdequate || "missing"}.`);
+  } else if (/^yes$/i.test(recorderWorkCoverageAdequate)) {
+    evidence.push("verifier canary adequate visible work coverage marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(submittedActionsTerminalConfirmed)) {
+    failures.push(
+      `Verifier canary Submitted actions terminal confirmed is not yes: ${submittedActionsTerminalConfirmed || "missing"}.`,
+    );
+  } else if (/^yes$/i.test(submittedActionsTerminalConfirmed)) {
+    evidence.push("verifier canary submitted action terminal marker accepted");
+  }
   if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderWorkVisible)) {
     failures.push(`Verifier canary Recorder work visible is not yes: ${recorderWorkVisible || "missing"}.`);
   } else if (/^yes$/i.test(recorderWorkVisible)) {
@@ -617,6 +664,9 @@ const reviewLines = [
   `Recorder client follow: ${request.recorderClientFollow || "missing"}`,
   `Recorder client target centered: ${request.recorderClientTargetCentered || "missing"}`,
   `Recorder client target visible: ${request.recorderClientTargetVisible || "missing"}`,
+  `Recorder ready before scenario: ${request.recorderReadyBeforeScenario || "missing"}`,
+  `Recorder work coverage adequate: ${request.recorderWorkCoverageAdequate || "missing"}`,
+  `Submitted actions terminal confirmed: ${request.submittedActionsTerminalConfirmed || "missing"}`,
   `Recorder work visible: ${request.recorderWorkVisible || "missing"}`,
   `Server agent task action visible: ${request.serverAgentTaskActionVisible || "missing"}`,
   `Summary sha256: ${request.summaryHash || "missing"}`,
@@ -691,6 +741,9 @@ await fs.writeFile(
       recorderClientFollow: request.recorderClientFollow,
       recorderClientTargetCentered: request.recorderClientTargetCentered,
       recorderClientTargetVisible: request.recorderClientTargetVisible,
+      recorderReadyBeforeScenario: request.recorderReadyBeforeScenario,
+      recorderWorkCoverageAdequate: request.recorderWorkCoverageAdequate,
+      submittedActionsTerminalConfirmed: request.submittedActionsTerminalConfirmed,
       recorderWorkVisible: request.recorderWorkVisible,
       serverAgentTaskActionVisible: request.serverAgentTaskActionVisible,
       clientGuiCaptureRequired: request.clientGuiCaptureRequired,

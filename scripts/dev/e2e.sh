@@ -370,6 +370,7 @@ start_recorder_client() {
 
   {
     echo "captureStartedAfterWorldReady=true"
+    echo "captureStartedAtEpoch=$(date +%s)"
     echo "ffmpegPid=$ffmpeg_pid"
     echo "ffmpeg started after recorder client world-ready"
   } >> "$client_capture_ready"
@@ -470,7 +471,49 @@ print(json.dumps({"scenario": payload.get("scenario"), "passed": True, "report":
 PY
 
 if truthy_value "$record_client"; then
-  sleep "${MINELINK_RECORDER_POST_SCENARIO_SECONDS:-3}"
+  recorder_post_seconds="${MINELINK_RECORDER_POST_SCENARIO_SECONDS:-12}"
+  recorder_min_work_seconds="${MINELINK_RECORDER_MIN_WORK_VISIBLE_SECONDS:-10}"
+  recorder_visual_timeout="${MINELINK_RECORDER_POST_SCENARIO_READY_TIMEOUT:-30}"
+  {
+    echo "scenarioCompletedAtEpoch=$(date +%s)"
+    echo "recorderPostScenarioSeconds=$recorder_post_seconds"
+    echo "recorderMinWorkVisibleSeconds=$recorder_min_work_seconds"
+    echo "recorderPostScenarioReadyTimeoutSeconds=$recorder_visual_timeout"
+  } >> "$client_capture_ready"
+  wait_for_any_log_text \
+    "MineLink recorder auto-follow active" \
+    "$recorder_visual_timeout" \
+    "$work_dir/logs/server.stdout.log" \
+    "$work_dir/logs/server.stderr.log"
+  wait_for_any_log_text \
+    "MineLink recorder target moved server_agent" \
+    "$recorder_visual_timeout" \
+    "$work_dir/logs/server.stdout.log" \
+    "$work_dir/logs/server.stderr.log"
+  wait_for_any_log_text \
+    "MineLink recorder client following server_agent" \
+    "$recorder_visual_timeout" \
+    "$work_dir/logs/client.stdout.log" \
+    "$work_dir/logs/client.stderr.log"
+  wait_for_any_log_text \
+    "MineLink recorder client target centered server_agent" \
+    "$recorder_visual_timeout" \
+    "$work_dir/logs/client.stdout.log" \
+    "$work_dir/logs/client.stderr.log"
+  wait_for_any_log_text \
+    "MineLink recorder client target visible server_agent" \
+    "$recorder_visual_timeout" \
+    "$work_dir/logs/client.stdout.log" \
+    "$work_dir/logs/client.stderr.log"
+  {
+    echo "recorderWorkHoldStartedAtEpoch=$(date +%s)"
+    echo "recorderWorkHoldReason=post-scenario-visible-server-agent"
+  } >> "$client_capture_ready"
+  sleep "$recorder_post_seconds"
+  {
+    echo "recorderWorkHoldEndedAtEpoch=$(date +%s)"
+    echo "recorderWorkHoldCompleted=true"
+  } >> "$client_capture_ready"
   stop_recorder_client
   {
     if grep -Fq "MineLink recorder auto-follow active" "$work_dir/logs/server.stdout.log" "$work_dir/logs/server.stderr.log" 2>/dev/null; then

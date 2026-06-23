@@ -884,11 +884,14 @@ product-video tasks the request and manifest must show
 `captureStartedAfterWorldReady=yes`, `recorderAutoFollow=yes`,
 `recorderTargetMoved=yes`, `recorderClientFollow=yes`,
 `recorderClientTargetCentered=yes`, `recorderClientTargetVisible=yes`, and
-`recorderWorkVisible=yes`, and `serverAgentTaskActionVisible=yes`; loading
-screens, bootstrap footage, server-only camera intent, static/idle targets,
-no-op tasks, missing right-side MCP/server logs, occluded targets, off-screen
-target following, or clients that are not visibly following and framing the
-active `server_agent` while task work succeeds are not releaseable evidence. It writes
+`recorderReadyBeforeScenario=yes`, `recorderWorkCoverageAdequate=yes`,
+`submittedActionsTerminalConfirmed=yes`, `recorderWorkVisible=yes`, and
+`serverAgentTaskActionVisible=yes`; loading screens, bootstrap footage,
+server-only camera intent, static/idle targets, late-only target appearances,
+submitted-but-not-executed actions, no-op tasks, missing right-side MCP/server
+logs, occluded targets, off-screen target following, or clients that are not
+visibly following and framing the active `server_agent` before and during task
+work are not releaseable evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 The workflow also uploads `acceptance-storyboard.png` and
 `acceptance-storyboard.json` as a separate small artifact for fast visual QA.
@@ -910,6 +913,9 @@ Recorder target moved: yes
 Recorder client follow: yes
 Recorder client target centered: yes
 Recorder client target visible: yes
+Recorder ready before scenario: yes
+Recorder work coverage adequate: yes
+Submitted actions terminal confirmed: yes
 Recorder work visible: yes
 Server agent task action visible: yes
 Summary sha256: <current acceptance-summary.md sha256>

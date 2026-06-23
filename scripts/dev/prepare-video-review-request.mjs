@@ -159,6 +159,20 @@ const recorderTargetMoved = origin?.recorderTargetMoved === true;
 const recorderClientFollow = origin?.recorderClientFollow === true;
 const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
+const recorderReadyBeforeScenario = origin?.recorderReadyBeforeScenario === true;
+const recorderWorkHoldCompleted = origin?.recorderWorkHoldCompleted === true;
+const recorderWorkHoldSeconds = Number.isFinite(origin?.recorderWorkHoldSeconds) ? origin.recorderWorkHoldSeconds : 0;
+const recorderMinWorkVisibleSeconds = Number.isFinite(origin?.recorderMinWorkVisibleSeconds)
+  ? origin.recorderMinWorkVisibleSeconds
+  : 0;
+const recorderCaptureDurationSeconds = Number.isFinite(origin?.recorderCaptureDurationSeconds)
+  ? origin.recorderCaptureDurationSeconds
+  : 0;
+const recorderWorkCoverageAdequate = origin?.recorderWorkCoverageAdequate === true;
+const submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
+const submittedActionPendingCount = Number.isFinite(origin?.submittedActionPendingCount)
+  ? origin.submittedActionPendingCount
+  : 0;
 const recorderWorkVisible = origin?.recorderWorkVisible === true;
 const serverAgentTaskActionVisible = origin?.serverAgentTaskActionVisible === true;
 const resolvedBranch = await gitBranch();
@@ -197,6 +211,25 @@ if (requireClientGuiCapture) {
     }
     if (!recorderClientTargetVisible) {
       failures.push("Acceptance video origin does not confirm clear line-of-sight visibility for the active server_agent target");
+    }
+    if (!recorderReadyBeforeScenario) {
+      failures.push("Acceptance video origin does not confirm the recorder was ready before task work began");
+    }
+    if (!recorderWorkHoldCompleted) {
+      failures.push("Acceptance video origin does not confirm the post-scenario visible work hold completed");
+    }
+    if (recorderWorkHoldSeconds < recorderMinWorkVisibleSeconds) {
+      failures.push(
+        `Acceptance video origin work hold is too short: ${recorderWorkHoldSeconds}s < ${recorderMinWorkVisibleSeconds}s`,
+      );
+    }
+    if (!recorderWorkCoverageAdequate) {
+      failures.push("Acceptance video origin does not confirm adequate visible work coverage");
+    }
+    if (!submittedActionsTerminalConfirmed) {
+      failures.push(
+        `Acceptance video origin does not confirm submitted actions reached terminal lifecycle states; pending=${submittedActionPendingCount}`,
+      );
     }
     if (!recorderWorkVisible) {
       failures.push("Acceptance video origin does not confirm active visible server_agent work for this task");
@@ -250,6 +283,15 @@ if (requireStorageManifest) {
     if (requireClientGuiCapture && storageManifest.recorderClientTargetVisible !== true) {
       failures.push("Video storage manifest does not confirm recorderClientTargetVisible=true");
     }
+    if (requireClientGuiCapture && storageManifest.recorderReadyBeforeScenario !== true) {
+      failures.push("Video storage manifest does not confirm recorderReadyBeforeScenario=true");
+    }
+    if (requireClientGuiCapture && storageManifest.recorderWorkCoverageAdequate !== true) {
+      failures.push("Video storage manifest does not confirm recorderWorkCoverageAdequate=true");
+    }
+    if (requireClientGuiCapture && storageManifest.submittedActionsTerminalConfirmed !== true) {
+      failures.push("Video storage manifest does not confirm submittedActionsTerminalConfirmed=true");
+    }
     if (requireClientGuiCapture && storageManifest.recorderWorkVisible !== true) {
       failures.push("Video storage manifest does not confirm recorderWorkVisible=true");
     }
@@ -286,6 +328,14 @@ const lines = [
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder ready before scenario: \`${recorderReadyBeforeScenario ? "yes" : "no"}\``,
+  `- Recorder work hold completed: \`${recorderWorkHoldCompleted ? "yes" : "no"}\``,
+  `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
+  `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
+  `- Recorder capture duration seconds: \`${recorderCaptureDurationSeconds}\``,
+  `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+  `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
+  `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
   `- Server agent task action visible: \`${serverAgentTaskActionVisible ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
@@ -302,6 +352,8 @@ const lines = [
   "## Verifier Assignment",
   "",
   "Use the current Ona Platform Codex implementation session, not the default Ona Agent, to launch a bounded native Codex verifier subagent that reviews the acceptance summary and MP4 against the task requirements. The verifier must not edit product code and must not re-render the video. It must inspect the artifacts above, using the numbered storyboard only as model-readable QA evidence, and write `.minelink-dev/reports/artifacts/video-review.md`.",
+  "",
+  "The verifier must fail the video if the storyboard or MP4 only shows the server_agent in the final frames, shows an idle target instead of task work, or does not visibly frame the active server_agent during the work window. A passing report requires the recorder to be ready before task work starts and to keep a sufficient visible work window after the scenario.",
   "",
   "For R2-backed candidate videos, the manifest URL is candidate evidence transport only. The verifier must compare the task requirements, acceptance summary, manifest hashes, and MP4 hash; it must not treat storage upload as release approval.",
   "",
@@ -323,6 +375,9 @@ const lines = [
   `Recorder client follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder client target centered: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder client target visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder ready before scenario: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder work coverage adequate: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Submitted actions terminal confirmed: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder work visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Server agent task action visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Summary sha256: ${summaryHash}`,

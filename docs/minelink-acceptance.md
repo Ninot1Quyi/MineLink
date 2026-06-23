@@ -1014,17 +1014,29 @@ Current status:
   log `MineLink recorder client target visible server_agent` only after its
   camera has a clear line of sight to the visible `server_agent` marker; the
   renderer records this as `recorderClientTargetVisible=true`. The renderer
-  must also set `recorderWorkVisible=true`, derived from a passing scenario, at
-  least one successful work tool (`action.*`, `container.*`, `craft.*`,
-  `furnace.*`, or `create.*`), at least one passing final assertion, and the
-  recorder movement/follow/centered/visible markers. The renderer also writes
+  must also set `recorderReadyBeforeScenario=true` before the first scenario
+  work tool runs, so fast tasks cannot finish before the recorder has visibly
+  locked onto the active `server_agent`. After the scenario passes, the harness
+  must keep recording a visible work window and the renderer must set
+  `recorderWorkCoverageAdequate=true` only when that window is at least the
+  configured minimum. For submit-mode tools, the scenario report must also set
+  `submittedActionsTerminalConfirmed=true`; a task submission or accepted action
+  handle is not enough if the action remains queued or running. The renderer
+  must also set `recorderWorkVisible=true`,
+  derived from a passing scenario, at least one successful work tool
+  (`action.*`, `container.*`, `craft.*`, `furnace.*`, or `create.*`), at least
+  one passing final assertion, the recorder movement/follow/centered/visible
+  markers, pre-scenario readiness, adequate work coverage, and terminal
+  lifecycle confirmation for submitted actions. The renderer also writes
   `serverAgentTaskActionVisible=true` from the same condition, so merely seeing
-  an idle `server_agent` is not enough. The release gate must include
+  an idle `server_agent`, seeing the target only near the end, or submitting
+  work without waiting for execution completion is not enough. The release gate
+  must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,
-  static/idle target, no-op task, occluded target, off-screen target following,
-  or non-following client capture cannot be final acceptance evidence. The
-  finalizer also produces `acceptance-storyboard.png` and
+  static/idle target, late-only target appearance, no-op task, occluded target,
+  off-screen target following, or non-following client capture cannot be final
+  acceptance evidence. The finalizer also produces `acceptance-storyboard.png` and
   `acceptance-storyboard.json` for model-readable visual QA, but those files
   are inspection aids only; the deliverable remains the playable
   `acceptance.mp4`.

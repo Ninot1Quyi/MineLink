@@ -219,13 +219,19 @@ not accepted. It must also log
 clear line of sight from the recorder camera to the visible `server_agent`
 marker; release gates record this as `recorderClientTargetVisible=true` so a
 video where the agent is hidden behind terrain or foliage is not accepted. The
+runner must wait for these recorder markers before task work starts and record
+`recorderReadyBeforeScenario=true`; the post-scenario hold must then record
+`recorderWorkCoverageAdequate=true` for the configured visible work window. The
 renderer must then set `recorderWorkVisible=true`, which requires a passing
 scenario, at least one successful work tool such as `action.*`, `container.*`,
 `craft.*`, `furnace.*`, or `create.*`, at least one passing final assertion,
-and the recorder movement/follow/centered/visible markers. The renderer also
-writes `serverAgentTaskActionVisible=true` from that same condition. This
-blocks videos where the agent is merely standing in view. It does not grant the
-agent new MCP tools or bypass any server validation.
+terminal lifecycle confirmation for submit-mode actions, the recorder
+movement/follow/centered/visible markers, pre-scenario readiness, and adequate
+work coverage. The renderer also writes `serverAgentTaskActionVisible=true`
+from that same condition. This blocks videos where the agent is merely standing
+in view, appears only at the end, or has only submitted work without execution
+completion. It does not grant the agent new MCP tools or bypass any server
+validation.
 `scripts/dev/render-video-storyboard.mjs` creates a numbered frame grid from
 the final MP4 for model-readable visual QA; it is not a substitute for the
 playable `acceptance.mp4` in PR evidence. The devcontainer, prebuild bootstrap,

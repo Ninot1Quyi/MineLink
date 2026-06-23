@@ -97,6 +97,7 @@ def main() -> None:
         agent_id = birth.get("agent_id")
         if connect.get("ok") is False or not agent_id:
             raise RuntimeError(f"MineLink session setup failed: connect={connect}, birth={birth}")
+        wait_for_recorder_ready_before_scenario(log_dir)
         catalog = validate_dynamic_catalog(client)
         tools = catalog["default_list"]
         state["catalog_checks"] = catalog
@@ -143,6 +144,7 @@ def main() -> None:
             final_assertions = [{"name": "max_turns_not_exceeded", "passed": False, "max_turns": args.max_turns}]
 
     passed = bool(final_assertions) and all(assertion.get("passed") is True for assertion in final_assertions)
+    submitted_actions = submitted_action_summary(state)
     report: JsonDict = {
         "scenario": scenario,
         "passed": passed,
@@ -160,6 +162,7 @@ def main() -> None:
         "connect": connect,
         "placements": state["placements"],
         "final_assertions": final_assertions,
+        "submitted_actions": submitted_actions,
         "tool_results": state["tool_results"],
         "rpc_messages": rpc_messages,
         "final_inventory": state.get("last_inventory"),
@@ -178,6 +181,82 @@ def main() -> None:
     log("codex_rpc_result", scenario=scenario, passed=passed, report=str(report_path))
     if not passed:
         raise SystemExit(1)
+
+
+def truthy(value: Optional[str]) -> bool:
+    return str(value or "").lower() in {"1", "true", "yes", "on"}
+
+
+def append_recorder_metadata(log_dir: str, lines: Iterable[str]) -> None:
+    ready_log = Path(log_dir) / "client-capture-ready.log"
+    try:
+        ready_log.parent.mkdir(parents=True, exist_ok=True)
+        with ready_log.open("a", encoding="utf-8") as handle:
+            for line in lines:
+                handle.write(f"{line}\n")
+    except OSError:
+        return
+
+
+def log_contains_any(paths: Iterable[Path], text: str) -> bool:
+    for path in paths:
+        try:
+            if text in path.read_text(encoding="utf-8", errors="replace"):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def wait_for_any_log_text(text: str, timeout_seconds: int, paths: Iterable[Path]) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if log_contains_any(paths, text):
+            return True
+        time.sleep(1)
+    return log_contains_any(paths, text)
+
+
+def wait_for_recorder_ready_before_scenario(log_dir: str) -> None:
+    if not truthy(os.environ.get("MINELINK_RECORD_CLIENT")):
+        return
+    if os.environ.get("MINELINK_RUNTIME", "mock") != "neoforge":
+        return
+
+    timeout_seconds = int(os.environ.get("MINELINK_RECORDER_PRE_SCENARIO_READY_TIMEOUT", "60"))
+    server_logs = [Path(log_dir) / "server.stdout.log", Path(log_dir) / "server.stderr.log"]
+    client_logs = [Path(log_dir) / "client.stdout.log", Path(log_dir) / "client.stderr.log"]
+    checks: List[Tuple[str, str, Iterable[Path]]] = [
+        ("recorderPreScenarioAutoFollow", "MineLink recorder auto-follow active", server_logs),
+        ("recorderPreScenarioClientFollow", "MineLink recorder client following server_agent", client_logs),
+        ("recorderPreScenarioTargetVisible", "MineLink recorder client target visible server_agent", client_logs),
+        ("recorderPreScenarioTargetCentered", "MineLink recorder client target centered server_agent", client_logs),
+    ]
+
+    append_recorder_metadata(
+        log_dir,
+        [
+            "recorderReadyBeforeScenario=false",
+            f"recorderPreScenarioReadyTimeoutSeconds={timeout_seconds}",
+            f"recorderPreScenarioWaitStartedAtEpoch={int(time.time())}",
+        ],
+    )
+    for key, text, paths in checks:
+        if wait_for_any_log_text(text, timeout_seconds, paths):
+            append_recorder_metadata(log_dir, [f"{key}=true", f"{key}Log={text}"])
+            continue
+        append_recorder_metadata(log_dir, [f"{key}=false", "recorderReadyBeforeScenario=false"])
+        raise RuntimeError(
+            f"Recorder did not become ready before scenario work: missing {text!r} within {timeout_seconds}s"
+        )
+
+    append_recorder_metadata(
+        log_dir,
+        [
+            "recorderReadyBeforeScenario=true",
+            f"recorderReadyBeforeScenarioAtEpoch={int(time.time())}",
+        ],
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -355,6 +434,7 @@ def run_portal_coop(
             final_assertions = [{"name": "max_turns_not_exceeded", "passed": False, "max_turns": args.max_turns}]
 
     passed = bool(final_assertions) and all(assertion.get("passed") is True for assertion in final_assertions)
+    submitted_actions = submitted_action_summary(state)
     report: JsonDict = {
         "scenario": scenario,
         "passed": passed,
@@ -381,6 +461,7 @@ def run_portal_coop(
         "quota_probe": quota_probe,
         "placements": state["placements"],
         "final_assertions": final_assertions,
+        "submitted_actions": submitted_actions,
         "tool_results": state["tool_results"],
         "rpc_messages": rpc_messages,
         "final_inventory": {
@@ -673,6 +754,49 @@ def run_assertions(assertions: Any, state: JsonDict, global_state: Optional[Json
     if not isinstance(assertions, list):
         raise RuntimeError("mineLinkDecision.final_assertions must be an array")
     return [run_assertion(assertion, state, global_state) for assertion in assertions]
+
+
+def submitted_action_summary(state: JsonDict, global_state: Optional[JsonDict] = None) -> JsonDict:
+    terminal_statuses = {"completed", "failed", "cancelled", "expired"}
+    accepted: Dict[str, JsonDict] = {}
+    observed_statuses: Dict[str, List[str]] = {}
+    for record in tool_records(state, global_state):
+        payload = tool_result_payload(record.get("result", {}))
+        action_id = payload.get("action_id")
+        if not isinstance(action_id, str) or not action_id:
+            arguments = record.get("arguments", {})
+            if isinstance(arguments, dict) and isinstance(arguments.get("action_id"), str):
+                action_id = arguments["action_id"]
+        if not isinstance(action_id, str) or not action_id:
+            continue
+        if payload.get("status") == "accepted":
+            accepted[action_id] = {
+                "tool_name": record.get("name"),
+                "turn": record.get("turn"),
+                "agent": record.get("agent"),
+            }
+        lifecycle_status = payload.get("lifecycle_status")
+        if isinstance(lifecycle_status, str) and lifecycle_status:
+            observed_statuses.setdefault(action_id, []).append(lifecycle_status)
+
+    pending = []
+    terminal = []
+    for action_id in accepted:
+        statuses = observed_statuses.get(action_id, [])
+        if any(status in terminal_statuses for status in statuses):
+            terminal.append(action_id)
+        else:
+            pending.append(action_id)
+
+    return {
+        "accepted_count": len(accepted),
+        "terminal_count": len(terminal),
+        "pending_count": len(pending),
+        "terminal_confirmed": len(pending) == 0,
+        "terminal_statuses": sorted(terminal_statuses),
+        "pending_action_ids": pending,
+        "observed_statuses": observed_statuses,
+    }
 
 
 def run_assertion(assertion: JsonDict, state: JsonDict, global_state: Optional[JsonDict] = None) -> JsonDict:

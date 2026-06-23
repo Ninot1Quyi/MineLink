@@ -156,6 +156,12 @@ function body(manifest) {
   const recorderClientFollow = manifest?.recorderClientFollow === true ? "yes" : "no";
   const recorderClientTargetCentered = manifest?.recorderClientTargetCentered === true ? "yes" : "no";
   const recorderClientTargetVisible = manifest?.recorderClientTargetVisible === true ? "yes" : "no";
+  const recorderReadyBeforeScenario = manifest?.recorderReadyBeforeScenario === true ? "yes" : "no";
+  const recorderWorkCoverageAdequate = manifest?.recorderWorkCoverageAdequate === true ? "yes" : "no";
+  const recorderWorkHoldSeconds = Number.isFinite(manifest?.recorderWorkHoldSeconds)
+    ? manifest.recorderWorkHoldSeconds
+    : "unknown";
+  const submittedActionsTerminalConfirmed = manifest?.submittedActionsTerminalConfirmed === true ? "yes" : "no";
   const recorderWorkVisible = manifest?.recorderWorkVisible === true ? "yes" : "no";
   const serverAgentTaskActionVisible = manifest?.serverAgentTaskActionVisible === true ? "yes" : "no";
   return [
@@ -188,6 +194,10 @@ function body(manifest) {
     `- Recorder client follow: \`${recorderClientFollow}\``,
     `- Recorder client target centered: \`${recorderClientTargetCentered}\``,
     `- Recorder client target visible: \`${recorderClientTargetVisible}\``,
+    `- Recorder ready before scenario: \`${recorderReadyBeforeScenario}\``,
+    `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate}\``,
+    `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
+    `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed}\``,
     `- Recorder work visible: \`${recorderWorkVisible}\``,
     `- Server agent task action visible: \`${serverAgentTaskActionVisible}\``,
     `- Verifier report: \`${args.videoReviewPath}\``,

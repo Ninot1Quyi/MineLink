@@ -53,6 +53,9 @@ Recorder target moved: yes
 Recorder client follow: yes
 Recorder client target centered: yes
 Recorder client target visible: yes
+Recorder ready before scenario: yes
+Recorder work coverage adequate: yes
+Submitted actions terminal confirmed: yes
 Recorder work visible: yes
 Server agent task action visible: yes
 Summary sha256: <current acceptance-summary.md sha256>
@@ -134,6 +137,16 @@ const recorderTargetMoved = origin?.recorderTargetMoved === true;
 const recorderClientFollow = origin?.recorderClientFollow === true;
 const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
+const recorderReadyBeforeScenario = origin?.recorderReadyBeforeScenario === true;
+const recorderWorkCoverageAdequate = origin?.recorderWorkCoverageAdequate === true;
+const recorderWorkHoldSeconds = Number.isFinite(origin?.recorderWorkHoldSeconds) ? origin.recorderWorkHoldSeconds : 0;
+const recorderMinWorkVisibleSeconds = Number.isFinite(origin?.recorderMinWorkVisibleSeconds)
+  ? origin.recorderMinWorkVisibleSeconds
+  : 0;
+const submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
+const submittedActionPendingCount = Number.isFinite(origin?.submittedActionPendingCount)
+  ? origin.submittedActionPendingCount
+  : 0;
 const recorderWorkVisible = origin?.recorderWorkVisible === true;
 const serverAgentTaskActionVisible = origin?.serverAgentTaskActionVisible === true;
 const review = await readText(reviewPath);
@@ -198,6 +211,19 @@ if (requireClientGuiCapture) {
         "Acceptance video origin does not confirm clear line-of-sight visibility of the active server_agent",
       );
     }
+    if (!recorderReadyBeforeScenario) {
+      failures.push("Acceptance video origin does not confirm the recorder was ready before task work began");
+    }
+    if (!recorderWorkCoverageAdequate) {
+      failures.push(
+        `Acceptance video origin does not confirm adequate visible work coverage: hold=${recorderWorkHoldSeconds}s min=${recorderMinWorkVisibleSeconds}s`,
+      );
+    }
+    if (!submittedActionsTerminalConfirmed) {
+      failures.push(
+        `Acceptance video origin does not confirm submitted actions reached terminal lifecycle states; pending=${submittedActionPendingCount}`,
+      );
+    }
     if (!recorderWorkVisible) {
       failures.push(
         "Acceptance video origin does not confirm active visible server_agent work for the task",
@@ -257,6 +283,15 @@ if (storageManifest) {
   if (requireClientGuiCapture && storageManifest.recorderClientTargetVisible !== true) {
     failures.push("Video storage manifest does not confirm recorderClientTargetVisible=true");
   }
+  if (requireClientGuiCapture && storageManifest.recorderReadyBeforeScenario !== true) {
+    failures.push("Video storage manifest does not confirm recorderReadyBeforeScenario=true");
+  }
+  if (requireClientGuiCapture && storageManifest.recorderWorkCoverageAdequate !== true) {
+    failures.push("Video storage manifest does not confirm recorderWorkCoverageAdequate=true");
+  }
+  if (requireClientGuiCapture && storageManifest.submittedActionsTerminalConfirmed !== true) {
+    failures.push("Video storage manifest does not confirm submittedActionsTerminalConfirmed=true");
+  }
   if (requireClientGuiCapture && storageManifest.recorderWorkVisible !== true) {
     failures.push("Video storage manifest does not confirm recorderWorkVisible=true");
   }
@@ -282,6 +317,9 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const reviewedRecorderClientFollow = marker(review, "Recorder client follow");
   const reviewedRecorderClientTargetCentered = marker(review, "Recorder client target centered");
   const reviewedRecorderClientTargetVisible = marker(review, "Recorder client target visible");
+  const reviewedRecorderReadyBeforeScenario = marker(review, "Recorder ready before scenario");
+  const reviewedRecorderWorkCoverageAdequate = marker(review, "Recorder work coverage adequate");
+  const reviewedSubmittedActionsTerminalConfirmed = marker(review, "Submitted actions terminal confirmed");
   const reviewedRecorderWorkVisible = marker(review, "Recorder work visible");
   const reviewedServerAgentTaskActionVisible = marker(review, "Server agent task action visible");
   const verifier = marker(review, "Verifier");
@@ -355,6 +393,21 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
       `Video verifier did not confirm recorder target visibility: ${reviewedRecorderClientTargetVisible || "missing"}`,
     );
   }
+  if (requireClientGuiCapture && reviewedRecorderReadyBeforeScenario !== "yes") {
+    failures.push(
+      `Video verifier did not confirm recorder readiness before task work: ${reviewedRecorderReadyBeforeScenario || "missing"}`,
+    );
+  }
+  if (requireClientGuiCapture && reviewedRecorderWorkCoverageAdequate !== "yes") {
+    failures.push(
+      `Video verifier did not confirm adequate visible work coverage: ${reviewedRecorderWorkCoverageAdequate || "missing"}`,
+    );
+  }
+  if (requireClientGuiCapture && reviewedSubmittedActionsTerminalConfirmed !== "yes") {
+    failures.push(
+      `Video verifier did not confirm submitted action terminal lifecycle completion: ${reviewedSubmittedActionsTerminalConfirmed || "missing"}`,
+    );
+  }
   if (requireClientGuiCapture && reviewedRecorderWorkVisible !== "yes") {
     failures.push(
       `Video verifier did not confirm active visible server_agent work: ${reviewedRecorderWorkVisible || "missing"}`,
@@ -412,6 +465,12 @@ const lines = [
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder ready before scenario: \`${recorderReadyBeforeScenario ? "yes" : "no"}\``,
+  `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+  `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
+  `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
+  `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
+  `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
   `- Server agent task action visible: \`${serverAgentTaskActionVisible ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,

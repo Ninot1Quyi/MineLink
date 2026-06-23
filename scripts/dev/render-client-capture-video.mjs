@@ -126,6 +126,21 @@ function displayValue(value) {
   }
 }
 
+function metadataValue(text, key) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(text ?? "").match(new RegExp(`^${escaped}=(.*)$`, "m"));
+  return match?.[1]?.trim() ?? "";
+}
+
+function metadataBool(text, key) {
+  return /^(1|true|yes|on)$/i.test(metadataValue(text, key));
+}
+
+function metadataNumber(text, key, fallback = 0) {
+  const value = Number.parseFloat(metadataValue(text, key));
+  return Number.isFinite(value) ? value : fallback;
+}
+
 const report = await readJson(args.report);
 const clientVideoStat = await stat(args.clientVideo);
 const failures = [];
@@ -144,6 +159,9 @@ const runtime = report?.runtime ?? "unknown";
 const passed = report?.passed === true;
 const finalAssertions = Array.isArray(report?.final_assertions) ? report.final_assertions : [];
 const toolResults = Array.isArray(report?.tool_results) ? report.tool_results : [];
+const submittedActions = report?.submitted_actions && typeof report.submitted_actions === "object" ? report.submitted_actions : {};
+const submittedActionsTerminalConfirmed = submittedActions.terminal_confirmed !== false;
+const submittedActionPendingCount = Number.isFinite(submittedActions.pending_count) ? submittedActions.pending_count : 0;
 const failedTools = toolResults.filter((item) => {
   const result = item?.result ?? {};
   return result.ok === false || result.status === "failed" || result.status === "blocked" || result.error;
@@ -165,6 +183,7 @@ const clientStdout = await readText(path.join(args.logDir, "client.stdout.log"))
 const clientStderr = await readText(path.join(args.logDir, "client.stderr.log"));
 const serverLogText = `${serverStdout}\n${serverStderr}`;
 const clientLogText = `${clientStdout}\n${clientStderr}`;
+const captureDurationSeconds = clientVideoStat?.isFile() ? await ffprobeDuration(args.clientVideo) : 0;
 const minecraftClientPanel = true;
 const mcpTerminalLogPanel = Boolean(agentLog.trim() || serverLogText.trim() || clientLogText.trim());
 const clientReadyLog = await readText(path.join(args.logDir, "client-capture-ready.log"));
@@ -189,6 +208,21 @@ const recorderClientTargetCentered =
 const recorderClientTargetVisible =
   /(?:^|\n)recorderClientTargetVisible=true(?:\n|$)/.test(clientReadyLog) ||
   clientLogText.includes("MineLink recorder client target visible server_agent");
+const recorderReadyBeforeScenario = metadataBool(clientReadyLog, "recorderReadyBeforeScenario");
+const recorderWorkHoldCompleted = metadataBool(clientReadyLog, "recorderWorkHoldCompleted");
+const recorderMinWorkVisibleSeconds = metadataNumber(clientReadyLog, "recorderMinWorkVisibleSeconds", 10);
+const recorderPostScenarioSeconds = metadataNumber(clientReadyLog, "recorderPostScenarioSeconds", 0);
+const recorderWorkHoldStartedAtEpoch = metadataNumber(clientReadyLog, "recorderWorkHoldStartedAtEpoch", 0);
+const recorderWorkHoldEndedAtEpoch = metadataNumber(clientReadyLog, "recorderWorkHoldEndedAtEpoch", 0);
+const recorderWorkHoldSeconds =
+  recorderWorkHoldStartedAtEpoch > 0 && recorderWorkHoldEndedAtEpoch >= recorderWorkHoldStartedAtEpoch
+    ? recorderWorkHoldEndedAtEpoch - recorderWorkHoldStartedAtEpoch
+    : recorderPostScenarioSeconds;
+const recorderWorkCoverageAdequate =
+  recorderReadyBeforeScenario &&
+  recorderWorkHoldCompleted &&
+  recorderWorkHoldSeconds >= recorderMinWorkVisibleSeconds &&
+  captureDurationSeconds >= recorderMinWorkVisibleSeconds;
 const recorderWorkVisible =
   passed &&
   successfulWorkTools.length > 0 &&
@@ -196,7 +230,9 @@ const recorderWorkVisible =
   recorderTargetMoved &&
   recorderClientFollow &&
   recorderClientTargetCentered &&
-  recorderClientTargetVisible;
+  recorderClientTargetVisible &&
+  recorderWorkCoverageAdequate &&
+  submittedActionsTerminalConfirmed;
 const serverAgentTaskActionVisible = recorderWorkVisible;
 
 if (!clientWorldReady) {
@@ -220,6 +256,21 @@ if (!recorderClientTargetCentered) {
 if (!recorderClientTargetVisible) {
   failures.push("Recorder client did not confirm clear line-of-sight visibility for the active server_agent target");
 }
+if (!recorderReadyBeforeScenario) {
+  failures.push(
+    "Recorder did not confirm the active server_agent was visible, centered, and followed before task work began",
+  );
+}
+if (!recorderWorkCoverageAdequate) {
+  failures.push(
+    `Recorder work coverage is too short or incomplete: hold=${recorderWorkHoldSeconds}s, min=${recorderMinWorkVisibleSeconds}s, capture=${captureDurationSeconds.toFixed(1)}s`,
+  );
+}
+if (!submittedActionsTerminalConfirmed) {
+  failures.push(
+    `Scenario finished with ${submittedActionPendingCount} submitted action(s) still lacking terminal lifecycle confirmation`,
+  );
+}
 if (!recorderWorkVisible) {
   failures.push(
     "Recorder did not confirm active visible server_agent work for this task; final evidence requires successful work tools, passing assertions, and visible centered follow footage",
@@ -242,6 +293,9 @@ const terminalLines = [
   `client follow: ${recorderClientFollow ? "YES" : "NO"}`,
   `target centered: ${recorderClientTargetCentered ? "YES" : "NO"}`,
   `target visible: ${recorderClientTargetVisible ? "YES" : "NO"}`,
+  `ready before work: ${recorderReadyBeforeScenario ? "YES" : "NO"}`,
+  `work hold sec: ${recorderWorkHoldSeconds}`,
+  `actions terminal: ${submittedActionsTerminalConfirmed ? "YES" : "NO"}`,
   `work visible: ${recorderWorkVisible ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
   "",
@@ -407,6 +461,14 @@ const summaryLines = [
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder ready before scenario: \`${recorderReadyBeforeScenario ? "yes" : "no"}\``,
+  `- Recorder work hold completed: \`${recorderWorkHoldCompleted ? "yes" : "no"}\``,
+  `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
+  `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
+  `- Recorder capture duration seconds: \`${captureDurationSeconds.toFixed(3)}\``,
+  `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+  `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
+  `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
   `- Server agent task action visible: \`${serverAgentTaskActionVisible ? "yes" : "no"}\``,
   `- Successful work tools: \`${successfulWorkTools.length}\``,
@@ -449,6 +511,14 @@ const origin = {
   recorderClientFollow,
   recorderClientTargetCentered,
   recorderClientTargetVisible,
+  recorderReadyBeforeScenario,
+  recorderWorkHoldCompleted,
+  recorderWorkHoldSeconds,
+  recorderMinWorkVisibleSeconds,
+  recorderCaptureDurationSeconds: Number(captureDurationSeconds.toFixed(3)),
+  recorderWorkCoverageAdequate,
+  submittedActionsTerminalConfirmed,
+  submittedActionPendingCount,
   recorderWorkVisible,
   serverAgentTaskActionVisible,
   successfulWorkTools: successfulWorkTools.map((item) => item?.name ?? "tool"),
@@ -483,6 +553,14 @@ await fs.writeFile(
     `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
     `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
     `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+    `- Recorder ready before scenario: \`${recorderReadyBeforeScenario ? "yes" : "no"}\``,
+    `- Recorder work hold completed: \`${recorderWorkHoldCompleted ? "yes" : "no"}\``,
+    `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
+    `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
+    `- Recorder capture duration seconds: \`${captureDurationSeconds.toFixed(3)}\``,
+    `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+    `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
+    `- Submitted action pending count: \`${submittedActionPendingCount}\``,
     `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
     `- Server agent task action visible: \`${serverAgentTaskActionVisible ? "yes" : "no"}\``,
     `- Successful work tools: \`${successfulWorkTools.length}\``,

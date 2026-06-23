@@ -889,12 +889,21 @@ camera position has a clear raycast line of sight to the visible
 `server_agent` marker; the renderer writes that as
 `recorderClientTargetVisible=true`. The renderer then combines those recorder
 markers with the scenario's successful work tools and final assertions to write
-`recorderWorkVisible=true`. Release gates require all recorder markers
+`recorderWorkVisible=true`. For video-required product gates, the Codex RPC
+runner must wait for the recorder to report follow, visibility, and centered
+framing after `agent.birth` and before the first work tool is executed; the
+metadata records this as `recorderReadyBeforeScenario=true`. After the scenario
+passes, `e2e.sh` must hold a visible post-scenario work window and the renderer
+must record `recorderWorkCoverageAdequate=true` only when the hold is at least
+the configured minimum. The scenario report must also confirm submit-mode
+actions reached terminal lifecycle states; `submittedActionsTerminalConfirmed`
+prevents a video from ending at action submission time when work is still
+queued or running. Release gates require all recorder markers
 so loading screens, Mojang bootstrap footage, server-only camera intent,
-static/idle targets, no-op tasks, occluded targets, off-screen target following,
-or normal clients that are not visibly following and framing the active
-`server_agent` while task work succeeds cannot be published as final Minecraft
-product evidence.
+static/idle targets, late-only target appearances, no-op tasks, occluded
+targets, off-screen target following, or normal clients that are not visibly
+following and framing the active `server_agent` before and during task work
+cannot be published as final Minecraft product evidence.
 Pull request workflows use
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
 finalizer to upload candidate `acceptance.mp4` to the configured
@@ -966,8 +975,11 @@ rejects zero-report placeholder videos: an `acceptance-summary.md` with
 evidence, even if a verifier report says `Release decision: pass`. A ready
 `video-review-request.md` never releases a task by itself. For client GUI
 captures, the same verifier canary and release gate must also carry
-`Recorder work visible: yes`, proving that the video shows successful task work
-by the followed `server_agent` rather than an idle or merely observed target.
+`Recorder ready before scenario: yes`, `Recorder work coverage adequate: yes`,
+`Submitted actions terminal confirmed: yes`, and `Recorder work visible: yes`,
+proving that the video shows successful task work by the followed
+`server_agent` rather than an idle target, an action submission without
+completion, or a target that only appears in the final frames.
 The GitHub workflow uploads `acceptance-storyboard.png` and its JSON metadata as
 a separate small artifact for fast visual QA. That storyboard helps reviewers
 and models inspect the MP4 content when large artifact or R2 downloads are slow,

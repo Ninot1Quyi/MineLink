@@ -243,6 +243,14 @@ const report = {
   recorderClientFollow: false,
   recorderClientTargetCentered: false,
   recorderClientTargetVisible: false,
+  recorderReadyBeforeScenario: false,
+  recorderWorkHoldCompleted: false,
+  recorderWorkHoldSeconds: 0,
+  recorderMinWorkVisibleSeconds: 0,
+  recorderCaptureDurationSeconds: 0,
+  recorderWorkCoverageAdequate: false,
+  submittedActionsTerminalConfirmed: false,
+  submittedActionPendingCount: 0,
   recorderWorkVisible: false,
   serverAgentTaskActionVisible: false,
   videoKind: "unknown",
@@ -296,6 +304,20 @@ if (report.failures.length === 0) {
   report.recorderClientFollow = origin?.recorderClientFollow === true;
   report.recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
   report.recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
+  report.recorderReadyBeforeScenario = origin?.recorderReadyBeforeScenario === true;
+  report.recorderWorkHoldCompleted = origin?.recorderWorkHoldCompleted === true;
+  report.recorderWorkHoldSeconds = Number.isFinite(origin?.recorderWorkHoldSeconds) ? origin.recorderWorkHoldSeconds : 0;
+  report.recorderMinWorkVisibleSeconds = Number.isFinite(origin?.recorderMinWorkVisibleSeconds)
+    ? origin.recorderMinWorkVisibleSeconds
+    : 0;
+  report.recorderCaptureDurationSeconds = Number.isFinite(origin?.recorderCaptureDurationSeconds)
+    ? origin.recorderCaptureDurationSeconds
+    : 0;
+  report.recorderWorkCoverageAdequate = origin?.recorderWorkCoverageAdequate === true;
+  report.submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
+  report.submittedActionPendingCount = Number.isFinite(origin?.submittedActionPendingCount)
+    ? origin.submittedActionPendingCount
+    : 0;
   report.recorderWorkVisible = origin?.recorderWorkVisible === true;
   report.serverAgentTaskActionVisible = origin?.serverAgentTaskActionVisible === true;
   if (dryRun) {
@@ -353,6 +375,14 @@ const manifest = {
   recorderClientFollow: report.recorderClientFollow,
   recorderClientTargetCentered: report.recorderClientTargetCentered,
   recorderClientTargetVisible: report.recorderClientTargetVisible,
+  recorderReadyBeforeScenario: report.recorderReadyBeforeScenario,
+  recorderWorkHoldCompleted: report.recorderWorkHoldCompleted,
+  recorderWorkHoldSeconds: report.recorderWorkHoldSeconds,
+  recorderMinWorkVisibleSeconds: report.recorderMinWorkVisibleSeconds,
+  recorderCaptureDurationSeconds: report.recorderCaptureDurationSeconds,
+  recorderWorkCoverageAdequate: report.recorderWorkCoverageAdequate,
+  submittedActionsTerminalConfirmed: report.submittedActionsTerminalConfirmed,
+  submittedActionPendingCount: report.submittedActionPendingCount,
   recorderWorkVisible: report.recorderWorkVisible,
   serverAgentTaskActionVisible: report.serverAgentTaskActionVisible,
   videoKind: report.videoKind,
@@ -389,6 +419,14 @@ const lines = [
   `- Recorder client follow: \`${report.recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${report.recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${report.recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder ready before scenario: \`${report.recorderReadyBeforeScenario ? "yes" : "no"}\``,
+  `- Recorder work hold completed: \`${report.recorderWorkHoldCompleted ? "yes" : "no"}\``,
+  `- Recorder work hold seconds: \`${report.recorderWorkHoldSeconds}\``,
+  `- Recorder min work visible seconds: \`${report.recorderMinWorkVisibleSeconds}\``,
+  `- Recorder capture duration seconds: \`${report.recorderCaptureDurationSeconds}\``,
+  `- Recorder work coverage adequate: \`${report.recorderWorkCoverageAdequate ? "yes" : "no"}\``,
+  `- Submitted actions terminal confirmed: \`${report.submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
+  `- Submitted action pending count: \`${report.submittedActionPendingCount}\``,
   `- Recorder work visible: \`${report.recorderWorkVisible ? "yes" : "no"}\``,
   `- Server agent task action visible: \`${report.serverAgentTaskActionVisible ? "yes" : "no"}\``,
   `- Storage key: \`${report.key || "none"}\``,
