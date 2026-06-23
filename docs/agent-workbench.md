@@ -90,9 +90,10 @@ Paste that summary into PRs together with any scenario report paths.
 Use automation to reduce agent memory load:
 
 - Devcontainer bootstrap uses the MineLink GHCR cache-prewarmed image with Node
-  22, Java 21, GitHub CLI, `ffmpeg`, image-provided `python3`, npm cache, and
-  Gradle user-home cache. It still runs `scripts/dev/bootstrap-prebuild.sh`
-  automatically when a cloud worktree is created.
+  22, Java 21, GitHub CLI, `ffmpeg`, `Xvfb`, recorder X11/OpenGL/audio
+  libraries, image-provided `python3`, npm cache, and Gradle user-home cache.
+  It still runs `scripts/dev/bootstrap-prebuild.sh` automatically when a cloud
+  worktree is created.
 - `install-smoke.sh` clones the committed ref into a separate checkout, runs
   `npm ci`, and records install evidence under `.minelink-dev/install-smoke/`.
 - `.ona/automations.yaml` provides Ona-native environment tasks for docs, fast,

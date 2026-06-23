@@ -74,6 +74,17 @@ install_os_packages() {
     curl \
     ffmpeg \
     git \
+    libasound2 \
+    libgl1 \
+    libgl1-mesa-dri \
+    libxcursor1 \
+    libxi6 \
+    libxinerama1 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
+    libxtst6 \
+    libxxf86vm1 \
     python3 \
     python3-pil \
     xvfb

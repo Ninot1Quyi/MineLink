@@ -42,9 +42,10 @@ default devcontainer uses the MineLink GHCR cache-prewarmed image:
 ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering
 ```
 
-The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, image or OS provided
-`python3`, npm cache, and Gradle user-home cache. Do not add a pinned Python
-feature that forces source compilation during cloud rebuilds.
+The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, `Xvfb`, the
+X11/OpenGL/audio libraries used by the Minecraft client recorder, image or OS
+provided `python3`, npm cache, and Gradle user-home cache. Do not add a pinned
+Python feature that forces source compilation during cloud rebuilds.
 
 The prewarmed image is built by GitHub Actions:
 
@@ -106,7 +107,7 @@ environment creation and local devcontainer rebuilds, so task startup does not
 rerun the full NeoForge warmup.
 
 This prebuild bootstrap skips `apt-get` when the prewarmed image already has the
-required OS tools, verifies Node/npm/Python/Java/ffmpeg, runs `npm ci`, `npm run
+required OS tools, verifies Node/npm/Python/Java/ffmpeg/Xvfb, runs `npm ci`, `npm run
 build`, `npm run typecheck`, and runs `mod/neoforge/./gradlew --no-daemon build`
 to warm Gradle, Minecraft, and NeoForge caches before a Codex agent opens the
 environment. It only logs whether `LINEAR_API_KEY` is present; it never prints

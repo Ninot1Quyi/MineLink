@@ -164,6 +164,10 @@ jobs:
             --ona-project "$MINELINK_ONA_PROJECT_ID"
             --require-key
             --require-ona
+            --wait-ona-execution
+            --cancel-ona-execution-on-timeout
+            --ona-execution-timeout-seconds 600
+            --ona-execution-poll-seconds 5
           )
           if [ -n "$issue" ]; then
             args+=(--issue "$issue")

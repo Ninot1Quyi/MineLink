@@ -748,7 +748,8 @@ reuse.
 The reproducible prewarmed image path is `.github/workflows/devcontainer-image.yml`
 plus `.devcontainer/Dockerfile`. GitHub Actions builds the image from a clean
 checkout and pushes `ghcr.io/ninot1quyi/minelink-devcontainer` with Node 22,
-Java 21, GitHub CLI, `ffmpeg`, npm cache, and the Gradle user-home cache. Branch
+Java 21, GitHub CLI, `ffmpeg`, `Xvfb`, the X11/OpenGL/audio libraries required
+by the Minecraft client recorder, npm cache, and the Gradle user-home cache. Branch
 builds publish immutable `sha-*` tags plus sanitized branch tags; `main`
 additionally publishes `main` and `latest`. Immutable tags are the evidence
 anchor, while branch tags are the moving cache source for the matching work

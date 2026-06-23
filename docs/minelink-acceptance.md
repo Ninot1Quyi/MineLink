@@ -623,8 +623,10 @@ Current status:
   task with `triggeredBy: prebuild` and `prebuildRequiresSuccess: true`; the
   devcontainer `postCreateCommand` uses `--light` so normal environment creation
   does not rerun the full NeoForge warmup before a Codex task can start. The
-  bootstrap installs OS tools when missing, verifies Node/npm/Python/Java/ffmpeg,
-  runs `npm ci` when needed, and writes ignored local
+  bootstrap installs OS tools when missing, verifies
+  Node/npm/Python/Java/ffmpeg/Xvfb, installs the X11/OpenGL/audio libraries
+  needed by the Minecraft client recorder when apt is available, runs `npm ci`
+  when needed, and writes ignored local
   `mod/neoforge/run/eula.txt` and `server.properties` files so the real server
   can start without another setup step. Prebuild mode additionally runs
   TypeScript build/typecheck and the NeoForge Gradle build so Java, Gradle,
@@ -640,7 +642,8 @@ Current status:
   `minelink-install-smoke-evidence`.
 - `.github/workflows/devcontainer-image.yml` builds `.devcontainer/Dockerfile`
   and publishes `ghcr.io/ninot1quyi/minelink-devcontainer` with Node 22, Java
-  21, GitHub CLI, `ffmpeg`, npm cache, and Gradle user-home cache. Branch
+  21, GitHub CLI, `ffmpeg`, `Xvfb`, recorder X11/OpenGL/audio libraries, npm
+  cache, and Gradle user-home cache. Branch
   builds publish immutable `sha-*` tags plus sanitized branch tags; `main`
   additionally publishes `main` and `latest`. Immutable tags anchor evidence,
   while branch tags are moving cache sources for the matching work line. This
