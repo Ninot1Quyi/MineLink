@@ -112,6 +112,8 @@ const storageManifest = await readJson(manifestPath);
 const producer = origin?.producer ?? "unknown";
 const videoKind = origin?.videoKind ?? "unknown";
 const clientGuiCapture = origin?.clientGuiCapture === true;
+const clientWorldReady = origin?.clientWorldReady === true;
+const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
 const review = await readText(reviewPath);
 const summary = await readText(summaryPath);
 const scenarioReportCount = summaryCount(summary, "Scenario reports");
@@ -142,6 +144,13 @@ if (requireClientGuiCapture) {
     failures.push(
       `Acceptance video is ${videoKind} with clientGuiCapture=false; Minecraft product gates require normal Minecraft client footage`,
     );
+  } else {
+    if (!clientWorldReady) {
+      failures.push("Acceptance video origin does not confirm the recorder client reached an in-world Minecraft view");
+    }
+    if (!captureStartedAfterWorldReady) {
+      failures.push("Acceptance video origin does not confirm capture started after the recorder client reached the world");
+    }
   }
 }
 
@@ -164,6 +173,12 @@ if (storageManifest) {
   if (requireClientGuiCapture && storageManifest.clientGuiCapture !== true) {
     failures.push("Video storage manifest does not confirm clientGuiCapture=true");
   }
+  if (requireClientGuiCapture && storageManifest.clientWorldReady !== true) {
+    failures.push("Video storage manifest does not confirm clientWorldReady=true");
+  }
+  if (requireClientGuiCapture && storageManifest.captureStartedAfterWorldReady !== true) {
+    failures.push("Video storage manifest does not confirm captureStartedAfterWorldReady=true");
+  }
 }
 
 if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
@@ -174,6 +189,8 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const videoMatched = marker(review, "Video matched");
   const reviewedProducer = marker(review, "Video producer");
   const reviewedClientGuiCapture = marker(review, "Client GUI capture");
+  const reviewedClientWorldReady = marker(review, "Client world ready");
+  const reviewedCaptureStartedAfterWorldReady = marker(review, "Capture started after world ready");
   const verifier = marker(review, "Verifier");
   const reviewedSummaryHash = marker(review, "Summary sha256");
   const reviewedMp4Hash = marker(review, "MP4 sha256");
@@ -198,6 +215,16 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   if (requireClientGuiCapture && reviewedClientGuiCapture !== "yes") {
     failures.push(
       `Video verifier did not confirm normal Minecraft client footage: ${reviewedClientGuiCapture || "missing"}`,
+    );
+  }
+  if (requireClientGuiCapture && reviewedClientWorldReady !== "yes") {
+    failures.push(
+      `Video verifier did not confirm in-world Minecraft capture: ${reviewedClientWorldReady || "missing"}`,
+    );
+  }
+  if (requireClientGuiCapture && reviewedCaptureStartedAfterWorldReady !== "yes") {
+    failures.push(
+      `Video verifier did not confirm capture-after-world-ready: ${reviewedCaptureStartedAfterWorldReady || "missing"}`,
     );
   }
   if (/^Release decision:\s*fail/im.test(review)) {
@@ -238,6 +265,8 @@ const lines = [
   `- Required producer: \`${requireProducer || "none"}\``,
   `- MP4 required: \`${requireMp4 ? "yes" : "no"}\``,
   `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
+  `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
+  `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage provider: \`${storageManifest?.storageProvider || "none"}\``,
   `- Storage object: \`${storageManifest?.objectKey || "none"}\``,

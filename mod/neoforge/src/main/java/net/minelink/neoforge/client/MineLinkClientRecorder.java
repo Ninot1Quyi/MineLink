@@ -18,6 +18,8 @@ public final class MineLinkClientRecorder {
     private static boolean connecting;
     private static boolean connected;
     private static int ticks;
+    private static boolean worldReadyLogged;
+    private static int worldReadyTicks;
 
     private MineLinkClientRecorder() {
     }
@@ -34,12 +36,20 @@ public final class MineLinkClientRecorder {
     }
 
     private static void onClientTick(ClientTickEvent.Post event) {
-        if (!enabled() || connected || connecting) {
+        if (!enabled()) {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
+        if (connected) {
+            observeWorldReady(minecraft);
+            return;
+        }
+        if (connecting) {
+            return;
+        }
         if (minecraft.level != null || minecraft.player != null) {
             connected = true;
+            observeWorldReady(minecraft);
             return;
         }
         ticks++;
@@ -63,13 +73,35 @@ public final class MineLinkClientRecorder {
     private static void onClientLoggedIn(ClientPlayerNetworkEvent.LoggingIn event) {
         connected = true;
         connecting = false;
+        worldReadyLogged = false;
+        worldReadyTicks = 0;
         MineLinkMod.LOGGER.info("MineLink recorder client joined {}", address());
     }
 
     private static void onClientLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
         connected = false;
         connecting = false;
+        worldReadyLogged = false;
+        worldReadyTicks = 0;
         ticks = 0;
+    }
+
+    private static void observeWorldReady(Minecraft minecraft) {
+        boolean inWorld = minecraft.level != null && minecraft.player != null && minecraft.screen == null;
+        if (!inWorld) {
+            worldReadyTicks = 0;
+            return;
+        }
+        worldReadyTicks++;
+        int readyTicks = positiveInt(setting(
+            "MINELINK_RECORDER_CLIENT_WORLD_READY_TICKS",
+            "minelink.recorder.client.worldReadyTicks",
+            "20"
+        ), 20);
+        if (!worldReadyLogged && worldReadyTicks >= readyTicks) {
+            worldReadyLogged = true;
+            MineLinkMod.LOGGER.info("MineLink recorder client in world {}", address());
+        }
     }
 
     private static boolean enabled() {

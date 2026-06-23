@@ -772,8 +772,10 @@ artifact. For Minecraft/NeoForge product-video tasks, the finalizer must use
 the Minecraft window through Xvfb/ffmpeg, and then runs
 `scripts/dev/render-client-capture-video.mjs` to compose the normal client view
 with terminal evidence. That renderer is the only path allowed to set
-`clientGuiCapture=true`; `scripts/dev/check-video-review.mjs
---require-client-gui-capture` rejects trace-driven videos for these tasks. The
+`clientGuiCapture=true`, and it must also set `clientWorldReady=true` plus
+`captureStartedAfterWorldReady=true`; `scripts/dev/check-video-review.mjs
+--require-client-gui-capture` rejects trace-driven, loading-screen, and
+pre-world videos for these tasks. The
 recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` when
 headless capture dependencies are missing, so an older Ona prebuild can either
 self-install `ffmpeg`, `Xvfb`, and the required X11/OpenGL libraries with
@@ -824,7 +826,13 @@ fallbacks, not the preferred large-video transport. The
 recorder client is an observer only: the server creates a visible
 `server_agent` marker and an invisible camera anchor that continuously follows
 the agent for recording, but it does not add MCP tools, world-query authority,
-materials, or any bypass around server-side checks. Pull request workflows use
+materials, or any bypass around server-side checks. The client recorder must
+emit `MineLink recorder client in world` after the Minecraft client has a
+world, player, and no blocking screen; `e2e.sh` starts ffmpeg only after that
+marker and writes `clientWorldReady=true` plus
+`captureStartedAfterWorldReady=true` into the capture metadata. Release gates
+require those markers so loading screens or Mojang bootstrap footage cannot be
+published as final Minecraft product evidence. Pull request workflows use
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
 finalizer to upload candidate `acceptance.mp4` to the configured
 S3-compatible video store, currently Cloudflare R2 via

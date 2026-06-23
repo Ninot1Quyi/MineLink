@@ -138,6 +138,8 @@ const storageManifest = await readJson(manifestPath);
 const producer = origin?.producer ?? "unknown";
 const videoKind = origin?.videoKind ?? "unknown";
 const clientGuiCapture = origin?.clientGuiCapture === true;
+const clientWorldReady = origin?.clientWorldReady === true;
+const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
 const resolvedBranch = await gitBranch();
 
 if (requireClientGuiCapture) {
@@ -147,6 +149,13 @@ if (requireClientGuiCapture) {
     failures.push(
       `Acceptance video is ${videoKind} with clientGuiCapture=false; normal Minecraft client footage is required`,
     );
+  } else {
+    if (!clientWorldReady) {
+      failures.push("Acceptance video origin does not confirm the recorder client reached an in-world Minecraft view");
+    }
+    if (!captureStartedAfterWorldReady) {
+      failures.push("Acceptance video origin does not confirm capture started after the recorder client reached the world");
+    }
   }
 }
 
@@ -165,6 +174,12 @@ if (requireStorageManifest) {
     }
     if (requireClientGuiCapture && storageManifest.clientGuiCapture !== true) {
       failures.push("Video storage manifest does not confirm clientGuiCapture=true");
+    }
+    if (requireClientGuiCapture && storageManifest.clientWorldReady !== true) {
+      failures.push("Video storage manifest does not confirm clientWorldReady=true");
+    }
+    if (requireClientGuiCapture && storageManifest.captureStartedAfterWorldReady !== true) {
+      failures.push("Video storage manifest does not confirm captureStartedAfterWorldReady=true");
     }
   }
 }
@@ -185,6 +200,8 @@ const lines = [
   `- Video producer: \`${md(producer)}\``,
   `- Video kind: \`${md(videoKind)}\``,
   `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
+  `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
+  `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage manifest required: \`${requireStorageManifest ? "yes" : "no"}\``,
   `- Storage provider: \`${md(storageManifest?.storageProvider || "none")}\``,

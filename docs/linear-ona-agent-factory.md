@@ -849,7 +849,11 @@ current artifact hashes, storage manifest, and verifier assignment. Before
 publishing or merging video evidence, the current Ona Platform Codex
 implementation session must launch a bounded native Codex verifier subagent to
 inspect that request, the task requirements, `acceptance-summary.md`, the
-storage manifest, and the `acceptance.mp4` hash. It writes
+storage manifest, the `acceptance.mp4` hash, and the client-capture readiness
+markers. For Minecraft product-video tasks the request and manifest must show
+`clientGuiCapture=yes`, `clientWorldReady=yes`, and
+`captureStartedAfterWorldReady=yes`; loading screens or bootstrap footage are
+not releaseable evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 
 ```text
@@ -857,6 +861,9 @@ Verifier: Ona Platform Codex
 Release decision: pass
 Task matched: yes
 Video matched: yes
+Client GUI capture: yes
+Client world ready: yes
+Capture started after world ready: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 ```
@@ -864,9 +871,9 @@ MP4 sha256: <current acceptance.mp4 sha256>
 The full-chain canary may embed the review-request hashes directly so it can
 prove the same-session subagent handoff without moving large media through the
 repository. Real video-required tasks still need the verifier subagent to have
-access to the actual MP4 hash and storage manifest, and the GitHub runner must
-later download the MP4 from R2 and verify `mp4Sha256`. Hash-only canary
-evidence must not be called real video inspection.
+access to the actual MP4 hash, storage manifest, and readiness markers, and
+the GitHub runner must later download the MP4 from R2 and verify `mp4Sha256`.
+Hash-only canary evidence must not be called real video inspection.
 
 Then run:
 

@@ -234,6 +234,8 @@ const report = {
   mp4Sha256: "",
   summarySha256: "",
   clientGuiCapture: false,
+  clientWorldReady: false,
+  captureStartedAfterWorldReady: false,
   videoKind: "unknown",
   key: "",
   objectKey: "",
@@ -276,6 +278,8 @@ if (report.failures.length === 0) {
   report.summarySha256 = await sha256File(args.summaryPath);
   report.videoKind = origin?.videoKind ?? "unknown";
   report.clientGuiCapture = origin?.clientGuiCapture === true;
+  report.clientWorldReady = origin?.clientWorldReady === true;
+  report.captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
   if (dryRun) {
     report.result = "passed";
     report.endpointUrl = "dry-run";
@@ -322,6 +326,8 @@ const manifest = {
   mp4Sha256: report.mp4Sha256,
   summarySha256: report.summarySha256,
   clientGuiCapture: report.clientGuiCapture,
+  clientWorldReady: report.clientWorldReady,
+  captureStartedAfterWorldReady: report.captureStartedAfterWorldReady,
   videoKind: report.videoKind,
   createdAt: report.createdAt,
   boundary: report.boundary,
@@ -347,6 +353,8 @@ const lines = [
   `- MP4 SHA256: \`${report.mp4Sha256 || "none"}\``,
   `- Summary SHA256: \`${report.summarySha256 || "none"}\``,
   `- Client GUI capture: \`${report.clientGuiCapture ? "yes" : "no"}\``,
+  `- Client world ready: \`${report.clientWorldReady ? "yes" : "no"}\``,
+  `- Capture started after world ready: \`${report.captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Storage key: \`${report.key || "none"}\``,
   `- Public video URL: ${report.videoUrl || "none"}`,
   `- Manifest: \`${args.manifestOutput}\``,

@@ -290,6 +290,8 @@ function reviewRequestEvidence(text) {
   const mp4Hash = markerValue(text, "MP4 sha256");
   const videoProducer = markerValue(text, "Video producer");
   const clientGuiCapture = markerValue(text, "Client GUI capture");
+  const clientWorldReady = markerValue(text, "Client world ready");
+  const captureStartedAfterWorldReady = markerValue(text, "Capture started after world ready");
   const clientGuiCaptureRequired = markerValue(text, "Client GUI capture required");
   const status = markerValue(text, "Request status");
   const failures = [];
@@ -315,10 +317,27 @@ function reviewRequestEvidence(text) {
   if (/^yes$/i.test(clientGuiCaptureRequired)) {
     if (!/^yes$/i.test(clientGuiCapture)) failures.push(`Video review request requires client GUI capture but got ${clientGuiCapture || "missing"}.`);
     else evidence.push("Review request client GUI capture present");
+    if (!/^yes$/i.test(clientWorldReady)) failures.push(`Video review request requires an in-world client view but got ${clientWorldReady || "missing"}.`);
+    else evidence.push("Review request client world-ready marker present");
+    if (!/^yes$/i.test(captureStartedAfterWorldReady)) {
+      failures.push(`Video review request requires capture after world-ready but got ${captureStartedAfterWorldReady || "missing"}.`);
+    } else {
+      evidence.push("Review request capture-after-world-ready marker present");
+    }
   }
   if (status && status !== "ready") failures.push(`Video review request status is not ready: ${status}.`);
 
-  return { failures, evidence, summaryHash, mp4Hash, videoProducer, clientGuiCapture, clientGuiCaptureRequired };
+  return {
+    failures,
+    evidence,
+    summaryHash,
+    mp4Hash,
+    videoProducer,
+    clientGuiCapture,
+    clientWorldReady,
+    captureStartedAfterWorldReady,
+    clientGuiCaptureRequired,
+  };
 }
 
 function validateVerifierCanary(text, agentExecutionId, expected) {
@@ -337,6 +356,8 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const summaryHash = markerValue(text, "Summary sha256");
   const mp4Hash = markerValue(text, "MP4 sha256");
   const clientGuiCapture = markerValue(text, "Client GUI capture");
+  const clientWorldReady = markerValue(text, "Client world ready");
+  const captureStartedAfterWorldReady = markerValue(text, "Capture started after world ready");
   const result = markerValue(text, ["Result", "Status"]);
   const boundary = markerValue(text, "Boundary");
 
@@ -385,6 +406,18 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
     failures.push(`Verifier canary Client GUI capture is not yes: ${clientGuiCapture || "missing"}.`);
   } else if (/^yes$/i.test(clientGuiCapture)) {
     evidence.push("verifier canary client GUI capture accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(clientWorldReady)) {
+    failures.push(`Verifier canary Client world ready is not yes: ${clientWorldReady || "missing"}.`);
+  } else if (/^yes$/i.test(clientWorldReady)) {
+    evidence.push("verifier canary client world-ready marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(captureStartedAfterWorldReady)) {
+    failures.push(
+      `Verifier canary Capture started after world ready is not yes: ${captureStartedAfterWorldReady || "missing"}.`,
+    );
+  } else if (/^yes$/i.test(captureStartedAfterWorldReady)) {
+    evidence.push("verifier canary capture-after-world-ready marker accepted");
   }
   if (!/^(passed|pass|success|succeeded)$/i.test(result)) failures.push(`Verifier canary Result is not passed: ${result || "missing"}.`);
   else evidence.push("verifier canary result passed");
@@ -454,6 +487,8 @@ const reviewLines = [
   `Video matched: ${failures.length === 0 ? "yes" : "no"}`,
   `Video producer: ${request.videoProducer || "missing"}`,
   `Client GUI capture: ${request.clientGuiCapture || "missing"}`,
+  `Client world ready: ${request.clientWorldReady || "missing"}`,
+  `Capture started after world ready: ${request.captureStartedAfterWorldReady || "missing"}`,
   `Summary sha256: ${request.summaryHash || "missing"}`,
   `MP4 sha256: ${request.mp4Hash || "missing"}`,
   `Task id: ${args.taskId}`,
@@ -517,6 +552,8 @@ await fs.writeFile(
       mp4Hash: request.mp4Hash,
       videoProducer: request.videoProducer,
       clientGuiCapture: request.clientGuiCapture,
+      clientWorldReady: request.clientWorldReady,
+      captureStartedAfterWorldReady: request.captureStartedAfterWorldReady,
       clientGuiCaptureRequired: request.clientGuiCaptureRequired,
       evidence,
       failures,

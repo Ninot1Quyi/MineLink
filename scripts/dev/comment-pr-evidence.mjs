@@ -134,6 +134,8 @@ function body(manifest) {
   const manifestHash = manifest?.mp4Sha256 || "unknown";
   const manifestSummaryHash = manifest?.summarySha256 || "unknown";
   const clientGuiCapture = manifest?.clientGuiCapture === true ? "yes" : "no";
+  const clientWorldReady = manifest?.clientWorldReady === true ? "yes" : "no";
+  const captureStartedAfterWorldReady = manifest?.captureStartedAfterWorldReady === true ? "yes" : "no";
   return [
     marker(),
     "MineLink PR video evidence:",
@@ -155,6 +157,8 @@ function body(manifest) {
     `- Manifest MP4 SHA256: \`${manifestHash}\``,
     `- Manifest summary SHA256: \`${manifestSummaryHash}\``,
     `- Client GUI capture: \`${clientGuiCapture}\``,
+    `- Client world ready: \`${clientWorldReady}\``,
+    `- Capture started after world ready: \`${captureStartedAfterWorldReady}\``,
     `- Verifier report: \`${args.videoReviewPath}\``,
     `- Release gate report: \`${args.releaseGatePath}\``,
     hasValue(args.artifactUrl)

@@ -122,6 +122,7 @@ client_pid=""
 ffmpeg_pid=""
 xvfb_pid=""
 client_capture=""
+client_capture_ready=""
 kill_tree() {
   pid="$1"
   if command -v pgrep >/dev/null 2>&1; then
@@ -177,6 +178,7 @@ PY
       "$work_dir/logs/gateway.stderr.log" \
       "$work_dir/logs/agent.log" \
       "$work_dir/logs/client-config.log" \
+      "$work_dir/logs/client-capture-ready.log" \
       "$work_dir/logs/recorder-xvfb.log" \
       "$work_dir/logs/recorder-ffmpeg.log" \
       "$work_dir/logs/client.stdout.log" \
@@ -303,17 +305,7 @@ start_recorder_client() {
   fi
 
   client_capture="$work_dir/reports/client-capture.mp4"
-  ffmpeg -y -hide_banner -loglevel warning \
-    -f x11grab \
-    -video_size "$recorder_video_size" \
-    -framerate "$recorder_fps" \
-    -i "$DISPLAY" \
-    -an \
-    -pix_fmt yuv420p \
-    "$client_capture" \
-    > "$work_dir/logs/recorder-ffmpeg.log" \
-    2>&1 &
-  ffmpeg_pid="$!"
+  client_capture_ready="$work_dir/logs/client-capture-ready.log"
 
   export MINELINK_RECORDER_CLIENT_ENABLED="${MINELINK_RECORDER_CLIENT_ENABLED:-1}"
   export MINELINK_RECORDER_CLIENT_USERNAME="${MINELINK_RECORDER_CLIENT_USERNAME:-MineLinkRecorder}"
@@ -349,6 +341,40 @@ start_recorder_client() {
     "${MINELINK_RECORDER_CLIENT_JOIN_TIMEOUT:-120}" \
     "$work_dir/logs/client.stdout.log" \
     "$work_dir/logs/client.stderr.log"
+
+  wait_for_any_log_text \
+    "MineLink recorder client in world" \
+    "${MINELINK_RECORDER_CLIENT_WORLD_READY_TIMEOUT:-180}" \
+    "$work_dir/logs/client.stdout.log" \
+    "$work_dir/logs/client.stderr.log"
+
+  {
+    echo "MineLink recorder client in world confirmed"
+    echo "clientWorldReady=true"
+    echo "DISPLAY=$DISPLAY"
+    echo "clientCapture=$client_capture"
+    echo "worldReadyLog=MineLink recorder client in world"
+  } > "$client_capture_ready"
+
+  ffmpeg -y -hide_banner -loglevel warning \
+    -f x11grab \
+    -video_size "$recorder_video_size" \
+    -framerate "$recorder_fps" \
+    -i "$DISPLAY" \
+    -an \
+    -pix_fmt yuv420p \
+    "$client_capture" \
+    > "$work_dir/logs/recorder-ffmpeg.log" \
+    2>&1 &
+  ffmpeg_pid="$!"
+
+  {
+    echo "captureStartedAfterWorldReady=true"
+    echo "ffmpegPid=$ffmpeg_pid"
+    echo "ffmpeg started after recorder client world-ready"
+  } >> "$client_capture_ready"
+
+  sleep "${MINELINK_RECORDER_CAPTURE_STABILIZE_SECONDS:-2}"
 }
 
 stop_recorder_client() {

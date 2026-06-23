@@ -139,6 +139,20 @@ const reportHash = report ? await sha256(args.report) : "missing";
 const agentLog = await readText(path.join(args.logDir, "agent.log"));
 const serverStdout = await readText(path.join(args.logDir, "server.stdout.log"));
 const clientStdout = await readText(path.join(args.logDir, "client.stdout.log"));
+const clientReadyLog = await readText(path.join(args.logDir, "client-capture-ready.log"));
+const clientWorldReady =
+  /(?:^|\n)clientWorldReady=true(?:\n|$)/.test(clientReadyLog) ||
+  clientReadyLog.includes("MineLink recorder client in world confirmed");
+const captureStartedAfterWorldReady =
+  /(?:^|\n)captureStartedAfterWorldReady=true(?:\n|$)/.test(clientReadyLog) ||
+  clientReadyLog.includes("ffmpeg started after recorder client world-ready");
+
+if (!clientWorldReady) {
+  failures.push("Recorder client did not confirm an in-world Minecraft view before acceptance rendering");
+}
+if (!captureStartedAfterWorldReady) {
+  failures.push("Client capture did not start after the recorder client reached the Minecraft world");
+}
 
 const terminalLines = [
   "MINELINK CLIENT ACCEPTANCE",
@@ -146,6 +160,8 @@ const terminalLines = [
   `scenario: ${compact(scenario, 28)}`,
   `runtime: ${compact(runtime, 30)}`,
   `result: ${passed ? "PASS" : "FAIL"}`,
+  `world ready: ${clientWorldReady ? "YES" : "NO"}`,
+  `capture after ready: ${captureStartedAfterWorldReady ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
   "",
   "assertions:",
@@ -300,6 +316,8 @@ const summaryLines = [
   `- Runtime: \`${runtime}\``,
   `- Passed: \`${passed ? "yes" : "no"}\``,
   "- Client GUI capture: `yes`",
+  `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
+  `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   "- Video kind: `minecraft-client-terminal-composite`",
   `- Client capture source: \`${args.clientVideo}\``,
   `- Report: \`${args.report}\``,
@@ -329,6 +347,8 @@ const origin = {
   producer: args.producer,
   videoKind: "minecraft-client-terminal-composite",
   clientGuiCapture: true,
+  clientWorldReady,
+  captureStartedAfterWorldReady,
   scenarioReports: report ? 1 : 0,
   clientVideo: args.clientVideo,
   report: args.report,
@@ -349,6 +369,8 @@ await fs.writeFile(
     `- Producer: \`${args.producer}\``,
     "- Video kind: `minecraft-client-terminal-composite`",
     "- Client GUI capture: `yes`",
+    `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
+    `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
     `- Scenario reports: \`${report ? 1 : 0}\``,
     `- Client video: \`${args.clientVideo}\``,
     `- Report: \`${args.report}\``,
