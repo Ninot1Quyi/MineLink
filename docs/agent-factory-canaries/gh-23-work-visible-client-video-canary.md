@@ -7,9 +7,10 @@ Session id: 019ef38c-a2a4-744b-b67d-0d31aa7c33ea
 Platform evidence: Ona AgentService StartAgent launched the configured Codex agent id with codexSettings; GitHub runner will verify the API readback separately.
 Task id: gh-23-work-visible-client-video-canary
 Branch: codex/gh-23-work-visible-client-video-canary
-Result: passed
+Result: blocked
 Validation: bash scripts/dev/verify-agent-task.sh --scope docs
-Validation result: passed
+Validation result: blocked
 Boundary: implementation-canary only; does not prove MineLink product acceptance.
+Blocker: validation fails because source commit 7f3d629 includes architecture-sensitive script changes relative to origin/main without an ARCHITECTURE.md update, which is outside this canary-file-only scope.
 
 Remaining gaps: video verifier, PR release, and full product acceptance are still separate gates.
