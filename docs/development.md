@@ -153,18 +153,25 @@ artifacts.
 Trace-driven acceptance artifacts can be rendered with:
 
 ```bash
-node scripts/dev/render-acceptance-video.mjs --require-mp4
+node scripts/dev/render-acceptance-video.mjs --producer ona-task-finalizer --require-mp4
 node scripts/dev/prepare-video-review-request.mjs --require-mp4
 ```
 
 The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and
 `.minelink-dev/reports/artifacts/acceptance.mp4`; `--require-mp4` makes missing
-`ffmpeg` support fail the command. Use `--task-requirements` to embed the
-bounded task contract. The review-request script writes
+`ffmpeg` support fail the command. The MP4 is a composite evidence video: it
+must include at least one scenario report, MineLink server-observation or
+assertion evidence, command/timeline context, and terminal log excerpts. A
+`Reports: 0` static card is not releasable final evidence. For final
+video-required tasks, render from the Ona task/finalizer environment with
+producer `ona-task-finalizer`; a `github-actions-canary` producer is only
+chain-test evidence. Use
+`--task-requirements` to embed the bounded task contract. The review-request script writes
 `.minelink-dev/reports/artifacts/video-review-request.md` with the current
 summary and MP4 hashes plus the exact markers that the release gate will
-enforce. For tasks labeled `video-required`, a separate Ona Platform Codex
-verifier must compare that request with the rendered summary/MP4 and write:
+enforce. For tasks labeled `video-required`, the current Ona Platform Codex
+implementation session must launch a bounded native Codex verifier subagent to
+compare that request with the rendered summary/MP4 and write:
 
 ```text
 .minelink-dev/reports/artifacts/video-review.md
@@ -173,8 +180,93 @@ verifier must compare that request with the rendered summary/MP4 and write:
 The release gate is:
 
 ```bash
-node scripts/dev/check-video-review.mjs --require-mp4
+node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer
 ```
+
+The release gate rejects zero-report summaries even when the verifier report is
+otherwise marked `pass`.
+
+Minecraft/NeoForge product-video tasks require real client footage, not the
+trace-driven server-observation renderer:
+
+```bash
+MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_RECORD_CLIENT=1 bash scripts/dev/e2e.sh mine_tree
+node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer --require-client-gui-capture
+```
+
+`MINELINK_RECORD_CLIENT=1` starts the NeoForge `runClient` recorder, joins the
+local dev server as `MineLinkRecorder`, records the actual Minecraft window with
+Xvfb/ffmpeg, and composes that client view with terminal evidence through
+`scripts/dev/render-client-capture-video.mjs`. The server-side recorder helper
+only moves an observer camera anchor and visible marker for video review; it
+does not grant the agent new MCP tools or bypass any server validation.
+
+Full-chain canaries use the Platform Codex task environment as the artifact
+producer. After the implementation readback exists, GitHub Actions runs:
+
+```bash
+node scripts/dev/run-ona-finalizer-artifacts.mjs --environment-id <ona-env> --task-id gh-123 --branch codex/gh-123-task
+```
+
+That command uses `ona environment exec` to run the validation, summary,
+`render-video`, and `prepare-video` finalizer stages inside the Ona
+devcontainer, then copies `.minelink-dev/reports` back to the runner for the
+same implementation Codex execution to launch its verifier subagent. After
+`video-review.md` is written, run the bridge again with
+`--stage-group release-upload`; the Ona release finalizer checks the existing
+MP4/review hashes, uploads the verified MP4 to external storage, and copies the
+upload report back for PR comments. The finalizer checks out the task branch
+for task content, then fetches finalizer scripts from the workflow/source ref so
+stale task branches cannot regenerate review requests with old defaults. It is
+an artifact/finalizer bridge only; Platform Codex API readback and branch
+evidence remain the implementation and verifier proof. Platform Codex launch
+commands default to `AGENT_MODE_GOAL`, the explicit Goal mode used for
+persistent delivery. Repeated canary runs may reuse the same branch evidence
+paths; the fetch steps wait for the current Goal-mode session markers, reviewed
+commit, and artifact hashes before releasing instead of accepting stale branch
+files.
+
+For PR review visibility, the Ona release finalizer uploads the verifier
+approved MP4 to the configured S3-compatible video store. GitHub then updates
+the PR with the returned public MP4 URL:
+
+```bash
+node scripts/dev/run-ona-finalizer-artifacts.mjs --stage-group release-upload --environment-id <ona-env> --task-id gh-123 --branch codex/gh-123-task
+node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --artifact-url URL --video-url URL
+```
+
+The release finalizer calls the storage uploader inside the Ona task
+environment. The storage uploader reads `MINELINK_VIDEO_STORAGE_PROVIDER`,
+`MINELINK_VIDEO_STORAGE_ENDPOINT`, `MINELINK_VIDEO_STORAGE_REGION`,
+`MINELINK_VIDEO_STORAGE_BUCKET`, `MINELINK_VIDEO_PUBLIC_BASE_URL`,
+`MINELINK_VIDEO_STORAGE_PREFIX`, `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID`, and
+`MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY`. The access key and secret must live
+only in GitHub/Ona secrets. The PR comment helper now requires a playable MP4
+URL by default. Use `--allow-artifact-only` only for local debugging, not for
+automated PR evidence comments. The legacy `publish-pr-video-evidence.mjs`
+GitHub evidence-branch path is a manual fallback only when external storage is
+not available.
+The playable link is for review ergonomics. It does not make a GitHub canary
+video equivalent to final Ona task acceptance.
+
+Agent-factory runs should also stop task environments after terminal success or
+failure:
+
+```bash
+node scripts/dev/cleanup-ona-resources.mjs --stop
+```
+
+The cleanup script reads environment ids from
+`.minelink-dev/reports/ona-platform-codex-api-session.json` by default, checks
+the Ona project id and dirty workspace count, writes
+`.minelink-dev/reports/ona-resource-cleanup.{md,json}`, and skips dirty or
+non-MineLink environments unless explicitly overridden. This is resource hygiene
+only; it does not release or accept a task.
+
+Full-chain factory jobs pass `--allow-dirty` after task evidence has been
+fetched, because the Ona finalizer intentionally leaves report artifacts in the
+task workspace before GitHub uploads the evidence bundle. This stops the task
+environment without deleting the PR branch or changing product evidence.
 
 Ona agent-factory implementation and video review must use the Ona Platform
 Codex agent option. The default Ona Agent mode is not accepted as MineLink
@@ -312,6 +404,12 @@ These are still smoke gates; complete server menu, Create, social runtime, and
 long release soak coverage remain separate product gates. This path
 is intentionally separate from the fast mock CI path because first-run
 Minecraft/NeoForge dependency resolution and server startup are much slower.
+The e2e harness has two independent wall-clock guards: server startup uses
+`MINELINK_SERVER_START_TIMEOUT`, and the agent replay phase uses
+`MINELINK_AGENT_TIMEOUT_SECONDS` with `MINELINK_AGENT_TIMEOUT_GRACE_SECONDS`
+before force-kill. The agent timeout defaults to 300 seconds for NeoForge and
+120 seconds for mock runtime so a stuck MCP request or replay fails with the
+normal e2e log bundle instead of waiting for the full workflow job timeout.
 
 Short stability soak runs repeat e2e scenarios and writes structured evidence:
 

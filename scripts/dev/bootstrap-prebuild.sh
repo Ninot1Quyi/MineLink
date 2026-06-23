@@ -47,7 +47,7 @@ install_os_packages() {
   fi
 
   local missing=()
-  for command_name in curl ffmpeg git; do
+  for command_name in curl ffmpeg git Xvfb; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       missing+=("$command_name")
     fi
@@ -70,7 +70,8 @@ install_os_packages() {
     ca-certificates \
     curl \
     ffmpeg \
-    git
+    git \
+    xvfb
 }
 
 check_runtime_versions() {
@@ -82,6 +83,7 @@ check_runtime_versions() {
   run python3 --version
   run java -version
   run ffmpeg -version
+  run bash -lc 'command -v Xvfb'
   if command -v gh >/dev/null 2>&1; then
     run gh --version
   else
@@ -148,6 +150,7 @@ warm_neoforge_workspace() {
   pushd mod/neoforge >/dev/null
   run ./gradlew --no-daemon --version
   run ./gradlew --no-daemon build
+  run ./gradlew --no-daemon prepareClientRun downloadAssets
   popd >/dev/null
 }
 
