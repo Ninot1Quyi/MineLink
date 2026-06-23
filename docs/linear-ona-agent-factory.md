@@ -409,7 +409,9 @@ Video-required tasks may pass `MINELINK_ONA_ENVIRONMENT_CLASS_ID` or the
 `environment_class_id` workflow input so the launcher creates the task
 environment on a larger Ona class. This is capacity selection for the
 environment only; it does not bypass the Goal-mode Codex readback, finalizer,
-video verifier, or release gates.
+video verifier, or release gates. The selected class must also be enabled for
+the MineLink Ona project, not only listed at organization scope; otherwise the
+launcher records a class-not-configured blocker and no Codex session starts.
 The launcher uses the model's available context window and defaults the
 configurable reasoning effort to `CODEX_REASONING_EFFORT_EXTRA_HIGH`; no
 separate launcher-side context-window-size field is currently part of the

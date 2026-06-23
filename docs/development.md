@@ -137,7 +137,10 @@ Set `MINELINK_ONA_ENVIRONMENT_CLASS_ID` or the `environment_class_id` workflow
 input when the baseline must use a specific Ona class. The default Small class
 is enough for docs and fast tasks, but real Minecraft client recording should
 use Regular or larger capacity so the NeoForge server, client, Xvfb, ffmpeg,
-and Codex finalizer are not competing on a 2 vCPU machine. If the refresh later
+and Codex finalizer are not competing on a 2 vCPU machine. The selected class
+must be configured for the MineLink Ona project; an organization-visible class
+that is not project-allowed fails before bootstrap with a class-not-configured
+precondition error. If the refresh later
 stalls or fails but a completed baseline already exists, the artifact is marked
 `partial`: the failed refresh is not accepted as a new baseline, but the
 existing environment baseline can still be used while the refresh is retried or

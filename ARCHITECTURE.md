@@ -432,7 +432,10 @@ the specific Codex session and platform-mode evidence. Task environments can be
 created with an explicit Ona environment class through
 `MINELINK_ONA_ENVIRONMENT_CLASS_ID` or the `environment_class_id` workflow
 input; video-required NeoForge/client recorder jobs should use Regular or
-larger classes instead of relying on the default Small baseline. The implementation
+larger classes instead of relying on the default Small baseline. The requested
+class must be configured for the MineLink Ona project, not merely visible in the
+organization class list; otherwise Ona rejects environment creation before
+Codex starts. The implementation
 finalizer renders the trace-driven MP4 before the verifier runs; the release
 finalizer must not re-render the MP4 after video review. It checks the existing
 artifact hashes. In GitHub-driven full-chain canaries, the runner uses
