@@ -823,6 +823,12 @@ Current status:
   video review, PR release, or `product-accepted` gate. The canary file alone
   must not be used as the final readback because the canonical `Commit:` value
   is the fetched branch head.
+  If Goal-mode Codex writes the exact canary file but does not commit/push, the
+  fetcher can recover only that file from the recorded Ona environment after
+  checking the expected branch, task, session, Goal-mode, pass, validation, and
+  boundary markers. The recovered state is accepted only after the GitHub branch
+  readback succeeds; this recovery does not release product code, video
+  evidence, or a product acceptance gate.
   The next canary slice adds `full-chain-canary` to the same workflow. It runs
   the implementation canary, renders trace-driven acceptance artifacts, starts
   a separate Platform Codex `video-verifier-canary` session, fetches

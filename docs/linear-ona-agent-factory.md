@@ -476,6 +476,13 @@ file markers to match task, branch, session id, and docs validation, and writes
 `.minelink-dev/reports/ona-codex-implementation-session.md` with the fetched
 branch head as `Commit:`. The canary markdown file by itself is not accepted
 implementation readback and this mode does not count as product acceptance.
+If Goal-mode Codex leaves that exact canary file uncommitted in the recorded
+Ona environment, the fetch script may run a guarded canary-only salvage: it
+checks the expected branch, task, session, Goal-mode, result, validation, and
+boundary markers, commits only `docs/agent-factory-canaries/<task>.md`, pushes
+the branch, and then repeats the normal GitHub readback. This is only a bridge
+recovery for the implementation canary edge; it cannot release product code or
+skip video verification.
 `full-chain-canary` extends that pilot to the next edge. The workflow runs
 `scripts/dev/run-ona-finalizer-artifacts.mjs` inside the implementation task's
 Ona environment to render the trace-driven acceptance summary/MP4 and write the

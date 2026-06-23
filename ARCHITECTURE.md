@@ -353,6 +353,14 @@ readback with the remote branch head commit and canary markers into the normal
 `.minelink-dev/reports/ona-codex-implementation-session.md` file. The canary
 file alone is not accepted readback, because the final `Commit:` marker comes
 from the GitHub branch head fetched by the workflow.
+If Goal-mode Codex writes the exact task-bound canary file inside the Ona
+environment but fails to push it, the fetcher may perform a guarded salvage: it
+enters the recorded Ona environment, refuses any branch other than the expected
+task branch, stages only `docs/agent-factory-canaries/<task>.md`, checks the
+current task/session/Goal-mode/pass markers, commits that one file, pushes the
+branch, and then restarts the normal GitHub API readback. This recovery path is
+canary-only; it cannot publish arbitrary product code or bypass downstream
+video gates.
 When the canary path already exists from an earlier rehearsal, the fetcher must
 keep polling until the file markers match the current AgentService execution,
 task, branch, and Goal-mode request. Stale branch content is a pending async
@@ -902,8 +910,11 @@ non-terminal Goal-mode readback once AgentService proves the requested Codex
 agent id and Codex settings. Task completion is then proven by the separate
 task-bound branch/commit readback from
 `scripts/dev/fetch-platform-codex-canary.mjs`, not by waiting for the Goal
-session to become terminal. For video-required work, the Goal-mode task release
-gate is stricter than launch/readback: the Ona finalizer must produce
+session to become terminal. A guarded canary-only salvage can recover a missing
+commit/push from the recorded Ona environment, but the accepted completion
+evidence is still the post-salvage GitHub branch readback. For video-required
+work, the Goal-mode task release gate is stricter than launch/readback: the Ona
+finalizer must produce
 `acceptance.mp4`, the same implementation session must run the bounded Codex
 verifier subagent, and `scripts/dev/check-video-review.mjs` must pass before PR
 publication or status writeback can claim release evidence.

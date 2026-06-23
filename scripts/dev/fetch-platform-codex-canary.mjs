@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Buffer } from "node:buffer";
+import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -80,6 +81,34 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function sanitizeOutput(value) {
+  const withoutSecretLines = String(value ?? "")
+    .split(/\r?\n/)
+    .map((line) => {
+      if (/(^|_)(TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL|PRIVATE|API_KEY)(_|=|$)/i.test(line)) {
+        return line.replace(/=.*/, "=[redacted]");
+      }
+      return line;
+    })
+    .join("\n");
+  return withoutSecretLines
+    .replace(/(ghp|github_pat|lin_api|sk-[A-Za-z0-9_-]*|cfat_[A-Za-z0-9_-]+)/gi, "[redacted]")
+    .replace(/\b[A-Fa-f0-9]{40,}\b/g, "[redacted-hex]")
+    .slice(0, 4000);
+}
+
+function runCommand(command, commandArgs, options = {}) {
+  return spawnSync(command, commandArgs, {
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+    ...options,
+    env: {
+      ...process.env,
+      ...(options.env ?? {}),
+    },
+  });
+}
+
 async function readJson(filePath) {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8"));
@@ -142,7 +171,122 @@ async function fetchRemoteCanary() {
   };
 }
 
-async function loadCanary(validateRemote) {
+function salvageScript() {
+  return [
+    "set -euo pipefail",
+    "",
+    'expected_branch="${MINELINK_EXPECTED_BRANCH:?}"',
+    'canary_path="${MINELINK_CANARY_PATH:?}"',
+    'task_id="${MINELINK_TASK_ID:?}"',
+    'session_id="${MINELINK_AGENT_EXECUTION_ID:?}"',
+    'agent_mode="${MINELINK_AGENT_MODE:?}"',
+    "",
+    'current_branch="$(git branch --show-current)"',
+    'if [ "$current_branch" != "$expected_branch" ]; then',
+    '  echo "Refusing canary salvage: current branch \'$current_branch\' is not expected branch \'$expected_branch\'." >&2',
+    "  exit 20",
+    "fi",
+    "",
+    'if [ ! -f "$canary_path" ]; then',
+    '  echo "Refusing canary salvage: expected canary file \'$canary_path\' is missing." >&2',
+    "  exit 21",
+    "fi",
+    "",
+    "require_marker() {",
+    '  local marker="$1"',
+    '  if ! grep -F -- "$marker" "$canary_path" >/dev/null; then',
+    '    echo "Refusing canary salvage: marker \'$marker\' is missing from \'$canary_path\'." >&2',
+    "    exit 22",
+    "  fi",
+    "}",
+    "",
+    'require_marker "MineLink Platform Codex Implementation Canary"',
+    'require_marker "Agent execution mode: $agent_mode"',
+    'require_marker "Session id: $session_id"',
+    'require_marker "Task id: $task_id"',
+    'require_marker "Branch: $expected_branch"',
+    'require_marker "Result: passed"',
+    'require_marker "Validation result: passed"',
+    'require_marker "Boundary: implementation-canary only; does not prove MineLink product acceptance."',
+    "",
+    "if ! git config user.name >/dev/null; then",
+    '  git config user.name "MineLink Automation"',
+    "fi",
+    "if ! git config user.email >/dev/null; then",
+    '  git config user.email "actions@github.com"',
+    "fi",
+    "",
+    'git add -- "$canary_path"',
+    'if ! git diff --cached --quiet -- "$canary_path"; then',
+    "  git commit \\",
+    '    -m "Record Platform Codex implementation handoff" \\',
+    '    -m "Constraint: Commit only the task-bound implementation canary produced in the Ona environment." \\',
+    '    -m "Confidence: medium" \\',
+    '    -m "Scope-risk: narrow" \\',
+    '    -m "Tested: Canary markers and docs validation marker checked before push." \\',
+    '    -m "Not-tested: Product acceptance video; downstream release gates run separately."',
+    "fi",
+    "",
+    'git push origin "HEAD:$expected_branch"',
+    "git rev-parse HEAD",
+    "",
+  ].join("\n");
+}
+
+function shellQuote(value) {
+  return `'${String(value ?? "").replace(/'/g, `'\\''`)}'`;
+}
+
+async function salvageOnaCanary(apiSession, api) {
+  const environmentId = apiSession?.environmentId ?? "";
+  if (!hasValue(environmentId)) {
+    return { attempted: false, ok: false, message: "Ona canary salvage skipped: API session did not record environmentId." };
+  }
+  if (!hasValue(api?.agentExecutionId) || !hasValue(api?.agentMode)) {
+    return { attempted: false, ok: false, message: "Ona canary salvage skipped: API session did not record execution id and mode." };
+  }
+
+  const remoteScript = [
+    `export MINELINK_EXPECTED_BRANCH=${shellQuote(args.branch)}`,
+    `export MINELINK_CANARY_PATH=${shellQuote(args.canaryPath)}`,
+    `export MINELINK_TASK_ID=${shellQuote(args.taskId)}`,
+    `export MINELINK_AGENT_EXECUTION_ID=${shellQuote(api.agentExecutionId)}`,
+    `export MINELINK_AGENT_MODE=${shellQuote(api.agentMode)}`,
+    salvageScript(),
+  ].join("\n");
+
+  const result = runCommand(
+    "ona",
+    [
+      "environment",
+      "exec",
+      environmentId,
+      "--working-dir",
+      "/workspaces/MineLink",
+      "--timeout",
+      "180",
+      "--",
+      `bash -lc ${shellQuote(remoteScript)}`,
+    ],
+  );
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+  if (result.status === 0) {
+    return {
+      attempted: true,
+      ok: true,
+      message: `Ona canary salvage pushed ${args.canaryPath} from environment ${environmentId}.`,
+      output: sanitizeOutput(output),
+    };
+  }
+  return {
+    attempted: true,
+    ok: false,
+    message: `Ona canary salvage failed in environment ${environmentId} with exit ${result.status ?? "unknown"}.`,
+    output: sanitizeOutput(output),
+  };
+}
+
+async function loadCanary(validateRemote, options = {}) {
   if (hasValue(args.canaryFile)) {
     const text = await fs.readFile(args.canaryFile, "utf8");
     const candidate = {
@@ -161,6 +305,7 @@ async function loadCanary(validateRemote) {
   let lastError = null;
   let lastCandidate = null;
   let lastCheck = null;
+  let salvageAttempt = null;
   do {
     try {
       const candidate = await fetchRemoteCanary();
@@ -179,6 +324,13 @@ async function loadCanary(validateRemote) {
       }
     } catch (error) {
       lastError = error;
+      if (!salvageAttempt && options.salvageRemote) {
+        salvageAttempt = await options.salvageRemote(error);
+        if (salvageAttempt?.ok) {
+          await sleep(Math.min(5000, Math.max(1000, args.pollSeconds * 1000)));
+          continue;
+        }
+      }
     }
     if (Date.now() >= deadline || args.waitSeconds === 0) break;
     await sleep(Math.max(1, args.pollSeconds) * 1000);
@@ -189,8 +341,26 @@ async function loadCanary(validateRemote) {
       ...lastCandidate,
       remoteCheck: lastCheck,
       remoteWaitFailure:
-        lastError?.message ?? `Timed out waiting for current Platform Codex implementation evidence at ${args.canaryPath}.`,
+        [
+          lastError?.message ?? `Timed out waiting for current Platform Codex implementation evidence at ${args.canaryPath}.`,
+          salvageAttempt && !salvageAttempt.ok ? salvageAttempt.message : "",
+          salvageAttempt && !salvageAttempt.ok && salvageAttempt.output ? salvageAttempt.output : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
     };
+  }
+  if (salvageAttempt && !salvageAttempt.ok) {
+    const error = new Error(
+      [
+        lastError?.message ?? "Timed out waiting for Platform Codex canary branch evidence.",
+        salvageAttempt.message,
+        salvageAttempt.output,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+    throw error;
   }
   throw lastError ?? new Error("Timed out waiting for Platform Codex canary branch evidence.");
 }
@@ -317,7 +487,16 @@ let canary = null;
 try {
   const validateRemote =
     api.failures.length === 0 ? (candidate) => validateCanary(candidate.text, api.agentExecutionId, api.agentMode) : null;
-  canary = await loadCanary(validateRemote);
+  canary = await loadCanary(validateRemote, {
+    salvageRemote:
+      api.failures.length === 0
+        ? async () => {
+            const salvage = await salvageOnaCanary(apiSession, api);
+            if (salvage?.ok) evidence.push(salvage.message);
+            return salvage;
+          }
+        : null,
+  });
   evidence.push(`canary file ${args.canaryPath}`);
   if (canary.htmlUrl) evidence.push(`canary URL ${canary.htmlUrl}`);
   if (canary.remoteWaitFailure) failures.push(canary.remoteWaitFailure);
