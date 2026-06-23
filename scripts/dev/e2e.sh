@@ -2,6 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
+repo_root="$(pwd -P)"
 
 scenario="${1:-mine_tree}"
 port="${MINELINK_PORT:-}"
@@ -175,6 +176,7 @@ PY
       "$work_dir/logs/gateway.stdout.log" \
       "$work_dir/logs/gateway.stderr.log" \
       "$work_dir/logs/agent.log" \
+      "$work_dir/logs/client-config.log" \
       "$work_dir/logs/recorder-xvfb.log" \
       "$work_dir/logs/recorder-ffmpeg.log" \
       "$work_dir/logs/client.stdout.log" \
@@ -319,8 +321,19 @@ start_recorder_client() {
   export MINELINK_RECORDER_CLIENT_WIDTH="${MINELINK_RECORDER_CLIENT_WIDTH:-960}"
   export MINELINK_RECORDER_CLIENT_HEIGHT="${MINELINK_RECORDER_CLIENT_HEIGHT:-720}"
   export MINELINK_RECORDER_CLIENT_CONNECT_DELAY_TICKS="${MINELINK_RECORDER_CLIENT_CONNECT_DELAY_TICKS:-40}"
-  export MINELINK_RECORDER_CLIENT_GAME_DIR="${MINELINK_RECORDER_CLIENT_GAME_DIR:-run-client}"
-  mkdir -p "mod/neoforge/$MINELINK_RECORDER_CLIENT_GAME_DIR"
+  recorder_client_game_dir="${MINELINK_RECORDER_CLIENT_GAME_DIR:-$work_dir/recorder-game-dir}"
+  case "$recorder_client_game_dir" in
+    /*) ;;
+    *) recorder_client_game_dir="$repo_root/$recorder_client_game_dir" ;;
+  esac
+  mkdir -p "$recorder_client_game_dir"
+  export MINELINK_RECORDER_CLIENT_GAME_DIR="$recorder_client_game_dir"
+  {
+    echo "MINELINK_RECORDER_CLIENT_GAME_DIR=$MINELINK_RECORDER_CLIENT_GAME_DIR"
+    echo "MINELINK_RECORDER_CLIENT_ADDRESS=$MINELINK_RECORDER_CLIENT_ADDRESS"
+    echo "MINELINK_RECORDER_CLIENT_USERNAME=$MINELINK_RECORDER_CLIENT_USERNAME"
+    echo "DISPLAY=$DISPLAY"
+  } > "$work_dir/logs/client-config.log"
 
   (
     cd mod/neoforge

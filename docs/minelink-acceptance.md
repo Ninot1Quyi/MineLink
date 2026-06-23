@@ -983,7 +983,11 @@ Current status:
   `ffmpeg` or `Xvfb` is missing; this lets an older Ona task environment
   self-install recorder packages when apt/sudo is available, or fail with an
   explicit recorder-dependency report instead of silently downgrading to a
-  placeholder MP4.
+  placeholder MP4. The recorder client resolves
+  `MINELINK_RECORDER_CLIENT_GAME_DIR` to a task-local absolute path under the
+  client-capture directory and records it in `logs/client-config.log`; this
+  prevents NeoForge `runClient --gameDir` from depending on the Gradle working
+  directory in Ona.
 - `scripts/dev/prepare-video-review-request.mjs` generates
   `.minelink-dev/reports/artifacts/video-review-request.md` with the current
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
@@ -1003,9 +1007,10 @@ Current status:
   rendering fails. Following the reviewed commit is required for reused canary
   branches because the remote branch head can move after Goal-mode Codex
   finishes. Client-video failures must also write
-  `reports/e2e-failure-log-tail.txt` with client and recorder logs last, so
-  reviewers can diagnose Minecraft client startup failures from GitHub
-  artifacts even when the stage output is truncated.
+  `reports/e2e-failure-log-tail.txt` with the recorder client config, client
+  logs, and recorder logs last, so reviewers can diagnose Minecraft client
+  startup failures from GitHub artifacts even when the stage output is
+  truncated.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

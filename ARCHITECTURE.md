@@ -770,7 +770,11 @@ passwordless apt/sudo or fail early with
 `.minelink-dev/reports/client-recorder-deps.{md,json}` identifying the missing
 dependency edge. New prebuild images should still include those packages; the
 self-bootstrap path is a compatibility guard for already-created task
-environments, not a replacement for the prebuild baseline.
+environments, not a replacement for the prebuild baseline. The recorder client
+uses a task-local absolute `MINELINK_RECORDER_CLIENT_GAME_DIR` under the
+client-capture work directory and writes that resolved path to
+`logs/client-config.log`, so NeoForge `runClient --gameDir` validation is not
+dependent on the Gradle working directory inside Ona.
 The Ona finalizer checks out the task branch for task content, then injects the
 current workflow-source finalizer scripts, `e2e.sh`, client-video renderer,
 recorder dependency bootstrap, and matching `ARCHITECTURE.md` from the pinned
@@ -789,8 +793,9 @@ finalizer also receives the PR base branch and fetches it before running
 branch they will actually target instead of falling back to `origin/main`. When a client-video run fails, the artifact
 tarball includes `.minelink-dev/client-capture-*` logs in addition to
 `.minelink-dev/reports`, and `e2e.sh` writes
-`reports/e2e-failure-log-tail.txt` with the client and recorder logs at the end
-so GitHub truncation still preserves the most useful failure evidence. Stage
+`reports/e2e-failure-log-tail.txt` with `client-config.log`, client logs, and
+recorder logs at the end so GitHub truncation still preserves the most useful
+failure evidence. Stage
 reports preserve both the head and tail of long command output so recorder,
 Minecraft client, and MCP server failures can be diagnosed from GitHub
 artifacts. The
