@@ -482,9 +482,12 @@ report with the created draft PR URL. That edge requires the
 `AGENT_FACTORY_GITHUB_TOKEN` repository secret because repository policy can
 block the default Actions `GITHUB_TOKEN` from creating pull requests. When the
 PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits for the GitHub PR
-check rollup. The final PR evidence edge is separate from generic status
-writeback: `scripts/dev/comment-pr-evidence.mjs` must publish a GitHub
-user-attachments MP4 URL before the chain can mark `pr_video_evidence` passed.
+check rollup and de-duplicates repeated check runs by workflow/check name,
+keeping the latest run so stale push-event checks for the same head commit do
+not block the PR-only evidence edge. The final PR evidence edge is separate
+from generic status writeback: `scripts/dev/comment-pr-evidence.mjs` must
+publish a GitHub user-attachments MP4 URL before the chain can mark
+`pr_video_evidence` passed.
 Only after that edge runs does `scripts/dev/sync-github-status.mjs` comment the
 linked GitHub issue or PR with either `final-video-published` or
 `blocked-final-video-publication`, and `scripts/dev/sync-linear-status.mjs`

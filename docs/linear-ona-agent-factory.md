@@ -572,8 +572,11 @@ repository policy from creating pull requests.
 After the draft PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits
 for the PR check rollup, writes
 `.minelink-dev/reports/agent-factory-pr-ci.{md,json}`, and the final chain
-refresh records the PR checks URL for the `pr -> ci` edge. The next downstream
-edge is playable PR video evidence, not generic status writeback. The
+refresh records the PR checks URL for the `pr -> ci` edge. The wait script
+groups repeated check runs by workflow/check name and keeps the latest run, so
+stale push-event duplicates for the same head commit cannot fail or block an
+otherwise current PR check set. The next downstream edge is playable PR video
+evidence, not generic status writeback. The
 `full-chain-canary` workflow runs `scripts/dev/comment-pr-evidence.mjs` after
 artifact upload; that step must publish a GitHub user-attachments MP4 URL
 before `pr_video_evidence` is passed. Only then does the workflow run

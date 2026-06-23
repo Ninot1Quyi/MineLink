@@ -848,7 +848,10 @@ Current status:
   from creating pull requests. The workflow then calls
   `scripts/dev/wait-agent-factory-pr-ci.mjs` to wait for the PR check rollup,
   writes `.minelink-dev/reports/agent-factory-pr-ci.{md,json}`, and refreshes
-  the chain report with `--ci-url`. That remains chain evidence only; status
+  the chain report with `--ci-url`. The PR CI wait path now de-duplicates
+  repeated check runs by workflow/check name and keeps the latest run, so stale
+  push-event checks for the same head commit are reported as ignored duplicates
+  instead of blocking the PR edge. That remains chain evidence only; status
   writeback and human acceptance are separate downstream gates.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with

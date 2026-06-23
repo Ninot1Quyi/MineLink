@@ -74,14 +74,20 @@ function normalizeCheck(item) {
   const type = item?.__typename ?? "Unknown";
   const name = item?.name || item?.context || "unknown";
   const detailsUrl = item?.detailsUrl || item?.targetUrl || "";
+  const workflowName = item?.workflowName || "";
+  const startedAt = item?.startedAt || "";
+  const completedAt = item?.completedAt || "";
 
   if (type === "CheckRun") {
     return {
       type,
       name,
+      workflowName,
       status: String(item.status ?? "").toLowerCase(),
       conclusion: String(item.conclusion ?? "").toLowerCase(),
       detailsUrl,
+      startedAt,
+      completedAt,
       completed: String(item.status ?? "").toLowerCase() === "completed",
       passed: ["success", "skipped", "neutral"].includes(String(item.conclusion ?? "").toLowerCase()),
     };
@@ -92,9 +98,12 @@ function normalizeCheck(item) {
     return {
       type,
       name,
+      workflowName,
       status: state,
       conclusion: state,
       detailsUrl,
+      startedAt,
+      completedAt,
       completed: state !== "pending",
       passed: state === "success",
     };
@@ -103,16 +112,54 @@ function normalizeCheck(item) {
   return {
     type,
     name,
+    workflowName,
     status: "unknown",
     conclusion: "unknown",
     detailsUrl,
+    startedAt,
+    completedAt,
     completed: false,
     passed: false,
   };
 }
 
+function checkKey(check) {
+  return `${check.type}:${check.workflowName || "status"}:${check.name}`;
+}
+
+function epoch(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function dedupeChecks(checks) {
+  const latest = new Map();
+  const ignored = [];
+  for (const check of checks) {
+    const key = checkKey(check);
+    const existing = latest.get(key);
+    if (!existing) {
+      latest.set(key, check);
+      continue;
+    }
+    const existingStarted = epoch(existing.startedAt);
+    const currentStarted = epoch(check.startedAt);
+    const currentIsNewer =
+      currentStarted > existingStarted ||
+      (currentStarted === existingStarted && epoch(check.completedAt) > epoch(existing.completedAt));
+    if (currentIsNewer) {
+      ignored.push(existing);
+      latest.set(key, check);
+    } else {
+      ignored.push(check);
+    }
+  }
+  return { checks: [...latest.values()], ignored };
+}
+
 function summarizeChecks(checks) {
-  const normalized = checks.map(normalizeCheck);
+  const normalizedAll = checks.map(normalizeCheck);
+  const { checks: normalized, ignored } = dedupeChecks(normalizedAll);
   const pending = normalized.filter((check) => !check.completed);
   const failed = normalized.filter((check) => check.completed && !check.passed);
   const passed = normalized.filter((check) => check.completed && check.passed);
@@ -120,7 +167,7 @@ function summarizeChecks(checks) {
   if (normalized.length === 0) result = "missing";
   else if (failed.length > 0) result = "failed";
   else if (pending.length === 0) result = "passed";
-  return { result, checks: normalized, passed, pending, failed };
+  return { result, checks: normalized, ignored, passed, pending, failed };
 }
 
 function sleep(ms) {
@@ -178,6 +225,7 @@ while (failures.length === 0) {
     headSha: body?.headRefOid ?? "",
     result: summary.result,
     checks: summary.checks,
+    ignoredChecks: summary.ignored,
     failures: summary.failed.map((check) => `${check.name}: ${check.conclusion || check.status}`),
   };
 
@@ -221,9 +269,18 @@ const lines = [
   ...(report.checks.length > 0
     ? report.checks.map(
         (check) =>
-          `| ${escapeMd(check.name)} | ${escapeMd(check.type)} | \`${escapeMd(check.status)}\` | \`${escapeMd(check.conclusion || "none")}\` | ${escapeMd(check.detailsUrl || "none")} |`,
+          `| ${escapeMd(check.workflowName ? `${check.workflowName} / ${check.name}` : check.name)} | ${escapeMd(check.type)} | \`${escapeMd(check.status)}\` | \`${escapeMd(check.conclusion || "none")}\` | ${escapeMd(check.detailsUrl || "none")} |`,
       )
     : ["| none | none | `missing` | `missing` | none |"]),
+  "",
+  "## Ignored Duplicate Checks",
+  "",
+  ...(report.ignoredChecks?.length > 0
+    ? report.ignoredChecks.map(
+        (check) =>
+          `- ${escapeMd(check.workflowName ? `${check.workflowName} / ${check.name}` : check.name)}: \`${escapeMd(check.conclusion || check.status)}\` (${escapeMd(check.detailsUrl || "no url")})`,
+      )
+    : ["- none"]),
   "",
   "## Failures",
   "",
