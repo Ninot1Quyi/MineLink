@@ -1069,6 +1069,16 @@ Current status:
   runs `render-storyboard` after `render-video`; missing storyboard evidence
   blocks a client-GUI video review request, but storyboard evidence never
   releases a task without the MP4.
+- Full-chain canaries must revalidate the implementation canary after the
+  same-session video verifier writes its canary and before release upload. The
+  current branch head must still contain current task/session-bound
+  implementation evidence with `Result: passed`; a later Goal-mode overwrite to
+  `Result: blocked`, stale markers, or mismatched session evidence must stop the
+  release gate.
+- The GitHub workflow uploads `acceptance-storyboard.png` and
+  `acceptance-storyboard.json` as a separate small artifact for quick visual QA
+  and model-readable frame inspection. That artifact is not a substitute for
+  the final playable MP4.
 - GitHub PR publication treats R2 as candidate video transport only. The
   final PR comment must use a `github.com/user-attachments/assets/...` MP4 URL
   so the GitHub page renders an inline video player. The optional

@@ -399,6 +399,24 @@ jobs:
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             "${chain_args[@]}"
 
+      - name: Revalidate implementation canary after verifier
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/dev/fetch-platform-codex-canary.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --wait-seconds 0 \
+            --output .minelink-dev/reports/ona-codex-implementation-session-after-verifier.md \
+            --json-output .minelink-dev/reports/ona-codex-implementation-session-after-verifier.json
+          node scripts/dev/check-platform-codex-evidence.mjs \
+            --implementation \
+            --implementation-readback .minelink-dev/reports/ona-codex-implementation-session-after-verifier.md \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH"
+
       - name: Run Ona finalizer video release gate
         id: ona-video-release
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
@@ -614,6 +632,19 @@ jobs:
         with:
           name: minelink-ona-platform-codex-probe
           path: .minelink-dev/reports/
+          include-hidden-files: true
+
+      - name: Upload acceptance storyboard evidence
+        id: upload-acceptance-storyboard
+        if: ${{ always() && hashFiles('.minelink-dev/reports/artifacts/acceptance-storyboard.png') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-acceptance-storyboard
+          path: |
+            .minelink-dev/reports/artifacts/acceptance-storyboard.png
+            .minelink-dev/reports/artifacts/acceptance-storyboard.json
+            .minelink-dev/reports/artifacts/video-review.md
+            .minelink-dev/reports/artifacts/video-release-gate.md
           include-hidden-files: true
 
       - name: Comment canary PR video evidence

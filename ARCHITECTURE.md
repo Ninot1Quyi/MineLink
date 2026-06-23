@@ -387,6 +387,13 @@ commit, implementation session id, Goal-mode marker, summary hash, MP4 hash,
 and video producer before passing. This proves only the bounded
 `acceptance_video -> video_verifier` chain handoff for a canary task; it does
 not prove real product implementation or human acceptance.
+For `full-chain-canary`, the workflow re-fetches the implementation canary
+after verifier evidence is fetched and before the release finalizer runs. This
+guards against a long-running Goal-mode session later overwriting the same
+branch with `Result: blocked` or otherwise changing the implementation canary
+after its first accepted readback. The release gate must fail closed unless the
+current branch head still contains task/session-bound implementation evidence
+with `Result: passed`.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform
@@ -956,6 +963,10 @@ evidence, even if a verifier report says `Release decision: pass`. A ready
 captures, the same verifier canary and release gate must also carry
 `Recorder work visible: yes`, proving that the video shows successful task work
 by the followed `server_agent` rather than an idle or merely observed target.
+The GitHub workflow uploads `acceptance-storyboard.png` and its JSON metadata as
+a separate small artifact for fast visual QA. That storyboard helps reviewers
+and models inspect the MP4 content when large artifact or R2 downloads are slow,
+but it is never accepted as the final video deliverable.
 
 Gate 3 perception smoke uses stable vanilla fixture blocks for repeatable real
 NeoForge evidence: glass/leaves for translucent, torch for empty-collision

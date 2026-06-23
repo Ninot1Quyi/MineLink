@@ -534,6 +534,11 @@ path already exists from an earlier run, the fetch script polls until the file
 contains the current Goal-mode execution id, reviewed commit, and artifact
 hashes; stale branch content is a timeout failure, not release evidence. This
 is still automation-chain evidence only; it does not prove product acceptance.
+For `full-chain-canary`, the workflow must re-fetch the implementation canary
+after the verifier canary is accepted and before release upload. The branch head
+must still contain current task/session-bound implementation evidence with
+`Result: passed`; if the Goal-mode session later overwrote the canary with
+`Result: blocked` or stale markers, the release gate fails closed.
 After the candidate MP4 is rendered, the Ona implementation finalizer uploads
 it with `scripts/dev/upload-acceptance-video-storage.mjs` and writes
 `video-storage-manifest.json`; that upload is candidate evidence transport, not
@@ -883,6 +888,10 @@ camera intent, static/idle targets, no-op tasks, occluded targets, off-screen
 target following, or clients that are not visibly following and framing the
 active `server_agent` while task work succeeds are not releaseable evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
+The workflow also uploads `acceptance-storyboard.png` and
+`acceptance-storyboard.json` as a separate small artifact for fast visual QA.
+That artifact is only an inspection aid; PR release still requires the playable
+MP4, storage manifest, same-session verifier report, and release gate.
 
 ```text
 Verifier: Ona Platform Codex

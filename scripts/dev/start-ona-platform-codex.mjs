@@ -220,6 +220,7 @@ function implementationCanaryPrompt(context = {}) {
     "Git:",
     "- Commit the canary file with an English Lore commit message explaining that this proves a bounded Platform Codex task handoff.",
     "- Push the target branch to origin.",
+    "- After pushing a canary with Result: passed, stop the task. Do not keep validating, do not rewrite the canary, and do not downgrade it to Result: blocked in a later commit.",
     "- Do not create a PR for this canary unless the user explicitly asks.",
   ].join("\n");
 }
