@@ -112,6 +112,20 @@ function compact(value, maxLength = 74) {
   return `${text.slice(0, maxLength - 3)}...`;
 }
 
+function displayValue(value) {
+  if (value == null) {
+    return "";
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 const report = await readJson(args.report);
 const clientVideoStat = await stat(args.clientVideo);
 const failures = [];
@@ -140,7 +154,9 @@ const agentLog = await readText(path.join(args.logDir, "agent.log"));
 const serverStdout = await readText(path.join(args.logDir, "server.stdout.log"));
 const serverStderr = await readText(path.join(args.logDir, "server.stderr.log"));
 const clientStdout = await readText(path.join(args.logDir, "client.stdout.log"));
+const clientStderr = await readText(path.join(args.logDir, "client.stderr.log"));
 const serverLogText = `${serverStdout}\n${serverStderr}`;
+const clientLogText = `${clientStdout}\n${clientStderr}`;
 const clientReadyLog = await readText(path.join(args.logDir, "client-capture-ready.log"));
 const clientWorldReady =
   /(?:^|\n)clientWorldReady=true(?:\n|$)/.test(clientReadyLog) ||
@@ -151,6 +167,9 @@ const captureStartedAfterWorldReady =
 const recorderAutoFollow =
   /(?:^|\n)recorderAutoFollow=true(?:\n|$)/.test(clientReadyLog) ||
   serverLogText.includes("MineLink recorder auto-follow active");
+const recorderClientFollow =
+  /(?:^|\n)recorderClientFollow=true(?:\n|$)/.test(clientReadyLog) ||
+  clientLogText.includes("MineLink recorder client following server_agent");
 
 if (!clientWorldReady) {
   failures.push("Recorder client did not confirm an in-world Minecraft view before acceptance rendering");
@@ -160,6 +179,9 @@ if (!captureStartedAfterWorldReady) {
 }
 if (!recorderAutoFollow) {
   failures.push("Recorder client did not confirm auto-follow camera binding to the active server_agent");
+}
+if (!recorderClientFollow) {
+  failures.push("Recorder client did not confirm a visible client-side follow target for the active server_agent");
 }
 
 const terminalLines = [
@@ -171,12 +193,13 @@ const terminalLines = [
   `world ready: ${clientWorldReady ? "YES" : "NO"}`,
   `capture after ready: ${captureStartedAfterWorldReady ? "YES" : "NO"}`,
   `auto follow: ${recorderAutoFollow ? "YES" : "NO"}`,
+  `client follow: ${recorderClientFollow ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
   "",
   "assertions:",
   ...(finalAssertions.length === 0
     ? ["- none"]
-    : finalAssertions.slice(0, 8).map((assertion) => `- ${compact(assertion, 34)}`)),
+    : finalAssertions.slice(0, 8).map((assertion) => `- ${compact(displayValue(assertion), 34)}`)),
   "",
   "tools:",
   ...toolResults.slice(0, 8).map((item) => {
@@ -328,13 +351,14 @@ const summaryLines = [
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
+  `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   "- Video kind: `minecraft-client-terminal-composite`",
   `- Client capture source: \`${args.clientVideo}\``,
   `- Report: \`${args.report}\``,
   "",
   "## Final Assertions",
   "",
-  ...(finalAssertions.length === 0 ? ["- none"] : finalAssertions.map((assertion) => `- ${assertion}`)),
+  ...(finalAssertions.length === 0 ? ["- none"] : finalAssertions.map((assertion) => `- ${displayValue(assertion)}`)),
   "",
   "## Boundary",
   "",
@@ -360,6 +384,7 @@ const origin = {
   clientWorldReady,
   captureStartedAfterWorldReady,
   recorderAutoFollow,
+  recorderClientFollow,
   scenarioReports: report ? 1 : 0,
   clientVideo: args.clientVideo,
   report: args.report,
@@ -383,6 +408,7 @@ await fs.writeFile(
     `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
     `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
     `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
+    `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
     `- Scenario reports: \`${report ? 1 : 0}\``,
     `- Client video: \`${args.clientVideo}\``,
     `- Report: \`${args.report}\``,

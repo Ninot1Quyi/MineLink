@@ -48,6 +48,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.RelativeMovement;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -192,6 +193,10 @@ public final class MineLinkEndpointBootstrap {
             avatar.setInvulnerable(true);
             avatar.setNoBasePlate(true);
             avatar.setShowArms(true);
+            avatar.setGlowingTag(true);
+            avatar.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.GOLDEN_HELMET));
+            avatar.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+            avatar.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.OAK_LOG));
             avatar.setCustomName(Component.literal(agent.displayName + " server_agent"));
             avatar.setCustomNameVisible(true);
             level.addFreshEntity(avatar);
@@ -200,6 +205,7 @@ public final class MineLinkEndpointBootstrap {
         Vec3 pos = agent.position();
         avatar.moveTo(pos.x, pos.y, pos.z, agent.entity.getYRot(), agent.entity.getXRot());
         avatar.setYHeadRot(agent.entity.getYRot());
+        avatar.setGlowingTag(true);
 
         ArmorStand cameraAnchor = agent.recorderCameraAnchor;
         if (cameraAnchor == null || cameraAnchor.isRemoved()) {
@@ -225,7 +231,7 @@ public final class MineLinkEndpointBootstrap {
         if (agent.recorderCameraAnchor == null) {
             return;
         }
-        Vec3 agentPos = agent.position();
+        Vec3 agentPos = agent.position().add(0.0D, 1.35D, 0.0D);
         Vec3 cameraPos = agent.recorderCameraAnchor.position();
         float yaw = yawToward(cameraPos, agentPos);
         float pitch = pitchToward(cameraPos, agentPos);
@@ -248,7 +254,7 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private void positionCameraAnchor(ArmorStand cameraAnchor, AgentBody agent) {
-        Vec3 agentPos = agent.position();
+        Vec3 agentPos = agent.position().add(0.0D, 1.35D, 0.0D);
         double distance = recorderCameraDistance();
         double height = recorderCameraHeight();
         double x = agentPos.x - distance;

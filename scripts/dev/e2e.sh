@@ -470,6 +470,7 @@ print(json.dumps({"scenario": payload.get("scenario"), "passed": True, "report":
 PY
 
 if truthy_value "$record_client"; then
+  sleep "${MINELINK_RECORDER_POST_SCENARIO_SECONDS:-3}"
   stop_recorder_client
   {
     if grep -Fq "MineLink recorder auto-follow active" "$work_dir/logs/server.stdout.log" "$work_dir/logs/server.stderr.log" 2>/dev/null; then
@@ -477,6 +478,12 @@ if truthy_value "$record_client"; then
       echo "autoFollowLog=MineLink recorder auto-follow active"
     else
       echo "recorderAutoFollow=false"
+    fi
+    if grep -Fq "MineLink recorder client following server_agent" "$work_dir/logs/client.stdout.log" "$work_dir/logs/client.stderr.log" 2>/dev/null; then
+      echo "recorderClientFollow=true"
+      echo "clientFollowLog=MineLink recorder client following server_agent"
+    else
+      echo "recorderClientFollow=false"
     fi
   } >> "$client_capture_ready"
   branch_name="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf '%s' unknown)"

@@ -983,7 +983,10 @@ Current status:
   server-side recorder helper must also log
   `MineLink recorder auto-follow active` after the spectator recorder is bound
   to the agent-following camera anchor; the renderer records this as
-  `recorderAutoFollow=true`. The release gate must include
+  `recorderAutoFollow=true`. The recorder client must also log
+  `MineLink recorder client following server_agent` after it sees the visible
+  agent marker and steers the recorded camera toward it; the renderer records
+  this as `recorderClientFollow=true`. The release gate must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture, or
   non-following client capture cannot be final acceptance evidence.
@@ -1039,9 +1042,10 @@ Current status:
   match markers, the required Ona video producer, and current summary/MP4
   hashes. When a storage manifest is present, the gate also verifies the
   manifest hashes, producer, `clientGuiCapture`, `clientWorldReady`,
-  `captureStartedAfterWorldReady`, and `recorderAutoFollow` markers. The gate
-  fails final publication when the summary has `Scenario reports: 0` or
-  `No scenario reports found`; a pure text/card MP4 is never sufficient final
+  `captureStartedAfterWorldReady`, `recorderAutoFollow`, and
+  `recorderClientFollow` markers. The gate fails final publication when the
+  summary has `Scenario reports: 0`, `No scenario reports found`, or no
+  client-visible follow proof; a pure text/card MP4 is never sufficient final
   evidence for video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
 - `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at

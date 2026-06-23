@@ -200,8 +200,11 @@ Xvfb/ffmpeg, and composes that client view with terminal evidence through
 `scripts/dev/render-client-capture-video.mjs`. The server-side recorder helper
 only moves an observer camera anchor and visible marker for video review; it
 must log `MineLink recorder auto-follow active` so release gates can verify the
-recorder followed the active `server_agent`. It does not grant the agent new
-MCP tools or bypass any server validation.
+server-side recorder binding followed the active `server_agent`. The recorder
+client must also log `MineLink recorder client following server_agent` so release
+gates can verify the captured client view actually saw and followed the visible
+agent marker. It does not grant the agent new MCP tools or bypass any server
+validation.
 
 Full-chain canaries use the Platform Codex task environment as the artifact
 producer. After the implementation readback exists, GitHub Actions runs:

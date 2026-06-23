@@ -47,6 +47,7 @@ Client GUI capture: yes
 Client world ready: yes
 Capture started after world ready: yes
 Recorder auto-follow: yes
+Recorder client follow: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 
@@ -120,6 +121,7 @@ const clientGuiCapture = origin?.clientGuiCapture === true;
 const clientWorldReady = origin?.clientWorldReady === true;
 const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
 const recorderAutoFollow = origin?.recorderAutoFollow === true;
+const recorderClientFollow = origin?.recorderClientFollow === true;
 const review = await readText(reviewPath);
 const summary = await readText(summaryPath);
 const scenarioReportCount = summaryCount(summary, "Scenario reports");
@@ -160,6 +162,9 @@ if (requireClientGuiCapture) {
     if (!recorderAutoFollow) {
       failures.push("Acceptance video origin does not confirm recorder auto-follow of the active server_agent");
     }
+    if (!recorderClientFollow) {
+      failures.push("Acceptance video origin does not confirm recorder client-visible follow of the active server_agent");
+    }
   }
 }
 
@@ -191,6 +196,9 @@ if (storageManifest) {
   if (requireClientGuiCapture && storageManifest.recorderAutoFollow !== true) {
     failures.push("Video storage manifest does not confirm recorderAutoFollow=true");
   }
+  if (requireClientGuiCapture && storageManifest.recorderClientFollow !== true) {
+    failures.push("Video storage manifest does not confirm recorderClientFollow=true");
+  }
 }
 
 if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
@@ -204,6 +212,7 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const reviewedClientWorldReady = marker(review, "Client world ready");
   const reviewedCaptureStartedAfterWorldReady = marker(review, "Capture started after world ready");
   const reviewedRecorderAutoFollow = marker(review, "Recorder auto-follow");
+  const reviewedRecorderClientFollow = marker(review, "Recorder client follow");
   const verifier = marker(review, "Verifier");
   const reviewedSummaryHash = marker(review, "Summary sha256");
   const reviewedMp4Hash = marker(review, "MP4 sha256");
@@ -243,6 +252,11 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   if (requireClientGuiCapture && reviewedRecorderAutoFollow !== "yes") {
     failures.push(
       `Video verifier did not confirm recorder auto-follow: ${reviewedRecorderAutoFollow || "missing"}`,
+    );
+  }
+  if (requireClientGuiCapture && reviewedRecorderClientFollow !== "yes") {
+    failures.push(
+      `Video verifier did not confirm recorder client-visible follow: ${reviewedRecorderClientFollow || "missing"}`,
     );
   }
   if (/^Release decision:\s*fail/im.test(review)) {
@@ -286,6 +300,7 @@ const lines = [
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
+  `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage provider: \`${storageManifest?.storageProvider || "none"}\``,
   `- Storage object: \`${storageManifest?.objectKey || "none"}\``,

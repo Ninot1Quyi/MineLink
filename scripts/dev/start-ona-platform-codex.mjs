@@ -235,6 +235,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
   const clientWorldReady = requestValue(request, "Client world ready") || "unknown";
   const captureStartedAfterWorldReady = requestValue(request, "Capture started after world ready") || "unknown";
   const recorderAutoFollow = requestValue(request, "Recorder auto-follow") || "unknown";
+  const recorderClientFollow = requestValue(request, "Recorder client follow") || "unknown";
   const clientGuiCaptureRequired = requestValue(request, "Client GUI capture required") || "no";
   const requestTaskId = requestValue(request, "Task id") || args.taskId;
   const requestBranch = requestValue(request, "Branch") || args.branch;
@@ -251,10 +252,11 @@ async function videoVerifierCanaryPrompt(context = {}) {
     "Task matched: yes",
     "Video matched: yes",
     `Video producer: ${videoProducer}`,
-    `Client GUI capture: ${clientGuiCaptureRequired === "yes" ? "yes" : clientGuiCapture}`,
-    `Client world ready: ${clientGuiCaptureRequired === "yes" ? "yes" : clientWorldReady}`,
-    `Capture started after world ready: ${clientGuiCaptureRequired === "yes" ? "yes" : captureStartedAfterWorldReady}`,
-    `Recorder auto-follow: ${clientGuiCaptureRequired === "yes" ? "yes" : recorderAutoFollow}`,
+    `Client GUI capture: ${clientGuiCapture}`,
+    `Client world ready: ${clientWorldReady}`,
+    `Capture started after world ready: ${captureStartedAfterWorldReady}`,
+    `Recorder auto-follow: ${recorderAutoFollow}`,
+    `Recorder client follow: ${recorderClientFollow}`,
     `Summary sha256: ${summaryHash}`,
     `MP4 sha256: ${mp4Hash}`,
     `Task id: ${args.taskId}`,
@@ -290,6 +292,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- Client world ready: ${clientWorldReady}`,
     `- Capture started after world ready: ${captureStartedAfterWorldReady}`,
     `- Recorder auto-follow: ${recorderAutoFollow}`,
+    `- Recorder client follow: ${recorderClientFollow}`,
     `- Client GUI capture required: ${clientGuiCaptureRequired}`,
     "",
     "Critical path:",

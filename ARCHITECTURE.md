@@ -773,7 +773,8 @@ the Minecraft window through Xvfb/ffmpeg, and then runs
 `scripts/dev/render-client-capture-video.mjs` to compose the normal client view
 with terminal evidence. That renderer is the only path allowed to set
 `clientGuiCapture=true`, and it must also set `clientWorldReady=true` plus
-`captureStartedAfterWorldReady=true` plus `recorderAutoFollow=true`;
+`captureStartedAfterWorldReady=true` plus `recorderAutoFollow=true` plus
+`recorderClientFollow=true`;
 `scripts/dev/check-video-review.mjs --require-client-gui-capture` rejects
 trace-driven, loading-screen, pre-world, and non-following videos for these
 tasks. The
@@ -835,9 +836,13 @@ marker and writes `clientWorldReady=true` plus
 recorder helper must also emit `MineLink recorder auto-follow active` after the
 recorder player is switched to spectator camera mode and bound to the
 agent-following camera anchor; the renderer writes that as
-`recorderAutoFollow=true`. Release gates require those markers so loading
-screens, Mojang bootstrap footage, or normal clients that are not following the
-active `server_agent` cannot be published as final Minecraft product evidence.
+`recorderAutoFollow=true`. The recorder client must also log
+`MineLink recorder client following server_agent` after it sees the visible
+agent marker and continuously steers the recorded view toward it; the renderer
+writes that as `recorderClientFollow=true`. Release gates require both markers
+so loading screens, Mojang bootstrap footage, server-only camera intent, or
+normal clients that are not visibly following the active `server_agent` cannot
+be published as final Minecraft product evidence.
 Pull request workflows use
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
 finalizer to upload candidate `acceptance.mp4` to the configured
