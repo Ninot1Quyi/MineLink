@@ -981,9 +981,20 @@ finalizer and same-session verifier pass, uses the downloaded and hash-checked
 `acceptance.mp4`, and attempts to create the GitHub inline playback URL. This
 uses GitHub's web attachment flow, so it requires
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` as a secret. PATs and the Actions
-`GITHUB_TOKEN` are not sufficient for attachment upload; if the cookie is
-missing the bridge writes a skipped report and the final PR evidence comment
-still fails closed. PR-producing full-chain dispatches additionally run the
+`GITHUB_TOKEN` are not sufficient for attachment upload and cannot mint a
+GitHub web session cookie. R2 public URLs plus HTML `<video>` markup are also
+not sufficient because GitHub PR Markdown does not render external video embeds
+as the native issue/PR player. If the cookie is missing the bridge writes a
+skipped report and the final PR evidence comment still fails closed. The bridge
+uses bounded retries, request timeouts, cookie marker reporting, and
+failure-kind classification so rejected cookies and transient policy,
+object-upload, or finalization failures are diagnosable. Refresh the cookie with
+`npm run agent-factory:refresh-github-cookie -- --repository Ninot1Quyi/MineLink`
+from a local trusted workstation; the helper opens a dedicated Chrome profile,
+waits for an explicit GitHub login, captures only `github.com` cookies from
+that profile, and writes the value directly to the GitHub repository secret
+without printing it. PR-producing
+full-chain dispatches additionally run the
 same requirement as an early credential preflight, so missing inline-video
 publication authority is visible before Ona work starts. That preflight is a
 hard gate for `create_pr=true` canaries: if neither a cookie nor a manual

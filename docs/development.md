@@ -308,6 +308,30 @@ node scripts/dev/run-ona-finalizer-artifacts.mjs --stage-group release-upload --
 node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --artifact-url URL --video-url https://github.com/user-attachments/assets/... --require-github-attachment-video
 ```
 
+GitHub PR comments do not accept an R2 public MP4 plus raw HTML `<video>` as
+final inline playback evidence; external video markup is sanitized or rendered
+as a link. Use `scripts/dev/upload-github-user-attachment.mjs` to create the
+GitHub attachment URL after the Ona finalizer video has passed hash download
+verification and same-session Codex video review. The helper uses
+`MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` because PATs and `GITHUB_TOKEN` can
+identify the repository but cannot create GitHub web comment attachments. It
+has bounded retries and writes `.minelink-dev/reports/github-user-attachment-upload.md`
+with a sanitized failure kind when the cookie is missing, stale, rejected, or
+when GitHub's attachment policy/object/finalization calls fail.
+
+To refresh the cookie without pasting it into chat or committing it, run the
+local helper below. It opens a dedicated Chrome profile, waits for an explicit
+GitHub login, captures only `github.com` cookies from that profile, and writes
+them directly to the repository secret through `gh secret set`.
+
+```bash
+npm run agent-factory:refresh-github-cookie -- --repository Ninot1Quyi/MineLink
+```
+
+This is a local operator step, not a CI login flow. It does not read your normal
+browser profile and does not print cookie values. CI still consumes only the
+`MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` repository secret.
+
 The release finalizer calls the storage uploader inside the Ona task
 environment. The storage uploader reads `MINELINK_VIDEO_STORAGE_PROVIDER`,
 `MINELINK_VIDEO_STORAGE_ENDPOINT`, `MINELINK_VIDEO_STORAGE_REGION`,

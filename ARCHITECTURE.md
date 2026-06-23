@@ -952,9 +952,19 @@ publishing an R2 link as playable evidence. MineLink can optionally create that
 attachment with `scripts/dev/upload-github-user-attachment.mjs`, but that bridge
 requires an explicit GitHub web attachment cookie secret
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; PATs and `GITHUB_TOKEN` can identify
-the repository but do not create comment attachments by themselves. When the
-cookie is absent the script writes a skipped report and the PR publication gate
-remains blocked. Full-chain PR-producing workflows run an early
+the repository but do not create comment attachments by themselves, and they
+cannot be exchanged for a GitHub web session cookie. The attachment bridge uses
+bounded retries, request timeouts, sanitized cookie-signal reporting, and
+failure-kind classification so stale cookies, rejected web sessions, transient
+policy failures, object-upload failures, and finalization failures are recorded
+as distinct blockers. `scripts/dev/refresh-github-attachment-cookie.mjs`
+provides the supported refresh path: a local operator opens a dedicated Chrome
+profile, explicitly logs in to GitHub, and the helper writes only the resulting
+`github.com` cookie header directly to the repository secret through
+`gh secret set` without printing cookie values. It does not run in CI and does
+not read the operator's normal browser profile. When the cookie is absent the
+upload script writes a skipped report and the PR publication gate remains
+blocked. Full-chain PR-producing workflows run an early
 `scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
 preflight. That preflight is a hard gate for `create_pr=true` canaries: it
 accepts either `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or a manually provided

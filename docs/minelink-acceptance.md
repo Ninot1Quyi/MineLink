@@ -1135,7 +1135,20 @@ Current status:
   `scripts/dev/upload-github-user-attachment.mjs` bridge requires
   `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; if it is not configured, the
   workflow must record the skipped attachment upload and block the final PR
-  video comment instead of publishing an R2-only link as final evidence. For
+  video comment instead of publishing an R2-only link as final evidence. R2
+  public URLs plus HTML `<video>` markup are not accepted as a substitute,
+  because GitHub PR Markdown strips external video embeds. PATs and Actions
+  tokens cannot be exchanged for a GitHub web session cookie; the bridge must
+  either receive an explicit cookie secret or a pre-existing
+  `github.com/user-attachments/assets/...` MP4 URL. The upload helper now
+  records retry attempts, cookie marker signals, and a failure kind such as
+  `github-web-cookie-rejected`, `github-attachment-policy-failed`, or
+  `github-attachment-finalization-failed` so this edge can be repaired without
+  weakening the release gate. The supported refresh path is the local
+  `npm run agent-factory:refresh-github-cookie -- --repository Ninot1Quyi/MineLink`
+  helper, which opens a dedicated Chrome profile, waits for an explicit GitHub
+  login, captures only `github.com` cookies from that profile, and writes the
+  value directly to the GitHub repository secret without printing it. For
   PR-producing full-chain runs, the workflow also runs
   `scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
   as a non-blocking preflight so missing inline-video publication authority is

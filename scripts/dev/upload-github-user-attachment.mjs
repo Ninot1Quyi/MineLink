@@ -11,6 +11,9 @@ const defaults = {
   contentType: process.env.MINELINK_GITHUB_ATTACHMENT_CONTENT_TYPE ?? "",
   cookie: process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE ?? process.env.GITHUB_USER_ATTACHMENTS_COOKIE ?? "",
   token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "",
+  attempts: Number(process.env.MINELINK_GITHUB_ATTACHMENT_UPLOAD_ATTEMPTS ?? 3),
+  retryDelayMs: Number(process.env.MINELINK_GITHUB_ATTACHMENT_RETRY_DELAY_MS ?? 1500),
+  timeoutMs: Number(process.env.MINELINK_GITHUB_ATTACHMENT_TIMEOUT_MS ?? 30000),
   output: ".minelink-dev/reports/github-user-attachment-upload.md",
   jsonOutput: ".minelink-dev/reports/github-user-attachment-upload.json",
 };
@@ -29,6 +32,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--content-type") args.contentType = readValue();
   else if (arg === "--cookie") args.cookie = readValue();
   else if (arg === "--token") args.token = readValue();
+  else if (arg === "--attempts") args.attempts = Number(readValue());
+  else if (arg === "--retry-delay-ms") args.retryDelayMs = Number(readValue());
+  else if (arg === "--timeout-ms") args.timeoutMs = Number(readValue());
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--require-upload") requireUpload = true;
@@ -43,7 +49,12 @@ This uses GitHub's web attachment flow, which currently requires a GitHub web
 session cookie in MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE. PAT/GITHUB_TOKEN can
 read the repository id, but cannot create user-attachments by itself. If the
 cookie is missing and --require-upload is not set, the script writes a skipped
-report and exits successfully so the downstream release gate can fail closed.`);
+report and exits successfully so the downstream release gate can fail closed.
+
+Reliability options:
+  --attempts N          Retry count for transient web/object-store failures.
+  --retry-delay-ms N    Base retry delay in milliseconds.
+  --timeout-ms N        Per-request timeout in milliseconds.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -78,6 +89,48 @@ function compact(text) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 1200);
+}
+
+function boundedNumber(value, fallback, min, max) {
+  return Number.isFinite(value) && value >= min && value <= max ? value : fallback;
+}
+
+args.attempts = boundedNumber(args.attempts, 3, 1, 8);
+args.retryDelayMs = boundedNumber(args.retryDelayMs, 1500, 100, 30000);
+args.timeoutMs = boundedNumber(args.timeoutMs, 30000, 1000, 120000);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryableHttpStatus(status) {
+  return [408, 409, 423, 425, 429, 500, 502, 503, 504].includes(status);
+}
+
+function classifyFailure(message) {
+  const text = String(message ?? "").toLowerCase();
+  if (text.includes("not configured")) return "missing-github-web-cookie";
+  if (text.includes("policy request failed with http 401") || text.includes("policy request failed with http 403")) {
+    return "github-web-cookie-rejected";
+  }
+  if (text.includes("policy request failed")) return "github-attachment-policy-failed";
+  if (text.includes("object upload failed")) return "github-attachment-object-upload-failed";
+  if (text.includes("finalization failed")) return "github-attachment-finalization-failed";
+  if (text.includes("did not return asset.href")) return "github-attachment-missing-href";
+  if (text.includes("repository id lookup failed")) return "github-repository-id-lookup-failed";
+  return "unknown";
+}
+
+function cookieSignals(cookie) {
+  const text = String(cookie ?? "");
+  return {
+    present: hasValue(text),
+    hasLoggedIn: /(?:^|;\s*)logged_in=yes(?:;|$)/.test(text),
+    hasDotcomUser: /(?:^|;\s*)dotcom_user=/.test(text),
+    hasGhSess: /(?:^|;\s*)_gh_sess=/.test(text),
+    hasUserSession: /(?:^|;\s*)user_session=/.test(text),
+    hasHostUserSessionSameSite: /(?:^|;\s*)__Host-user_session_same_site=/.test(text),
+  };
 }
 
 function contentTypeFor(fileName) {
@@ -123,10 +176,9 @@ async function readRepositoryId() {
   if (!/^[^/\s]+\/[^/\s]+$/.test(args.repository)) {
     throw new Error("--repository must be owner/repo when --repository-id is omitted.");
   }
-  const response = await fetch(`https://api.github.com/repos/${args.repository}`, {
+  const { response, text } = await requestText("github-repository-id", `https://api.github.com/repos/${args.repository}`, {
     headers: githubHeaders(),
   });
-  const text = await response.text();
   if (!response.ok) {
     throw new Error(`GitHub repository id lookup failed with HTTP ${response.status}: ${compact(text)}`);
   }
@@ -136,7 +188,7 @@ async function readRepositoryId() {
 }
 
 async function uploadPolicy(repositoryId, fileName, size, contentType) {
-  const response = await fetch("https://github.com/upload/policies/assets", {
+  const { response, text } = await requestText("github-attachment-policy", "https://github.com/upload/policies/assets", {
     method: "POST",
     headers: webHeaders({
       "GitHub-Verified-Fetch": "true",
@@ -149,7 +201,6 @@ async function uploadPolicy(repositoryId, fileName, size, contentType) {
       content_type: contentType,
     }),
   });
-  const text = await response.text();
   if (!response.ok) {
     throw new Error(`GitHub user-attachment policy request failed with HTTP ${response.status}: ${compact(text)}`);
   }
@@ -157,7 +208,7 @@ async function uploadPolicy(repositoryId, fileName, size, contentType) {
 }
 
 async function uploadToObjectStore(policy, fileBlob) {
-  const response = await fetch(policy.upload_url, {
+  const { response, text } = await requestText("github-attachment-object-upload", policy.upload_url, {
     method: "POST",
     headers: webHeaders({
       ...(policy.same_origin ? { authenticity_token: policy.upload_authenticity_token } : {}),
@@ -168,14 +219,16 @@ async function uploadToObjectStore(policy, fileBlob) {
       file: fileBlob,
     }),
   });
-  const text = await response.text();
   if (!response.ok) {
     throw new Error(`GitHub user-attachment object upload failed with HTTP ${response.status}: ${compact(text)}`);
   }
 }
 
 async function finalizeUpload(policy) {
-  const response = await fetch(new URL(policy.asset_upload_url, "https://github.com/").toString(), {
+  const { response, text } = await requestText(
+    "github-attachment-finalization",
+    new URL(policy.asset_upload_url, "https://github.com/").toString(),
+    {
     method: "PUT",
     headers: webHeaders({
       Accept: "application/json",
@@ -184,8 +237,8 @@ async function finalizeUpload(policy) {
     body: toForm({
       authenticity_token: policy.asset_upload_authenticity_token,
     }),
-  });
-  const text = await response.text();
+    },
+  );
   if (!response.ok) {
     throw new Error(`GitHub user-attachment finalization failed with HTTP ${response.status}: ${compact(text)}`);
   }
@@ -206,7 +259,22 @@ async function writeReports(report) {
     `Repository: ${report.repository || "missing"}`,
     `Repository id: ${report.repositoryId || "missing"}`,
     `Attachment URL: ${report.href || "missing"}`,
+    `Failure kind: ${report.failureKind || "none"}`,
+    `Attempts: ${report.attempts.length}`,
     `Boundary: ${report.boundary}`,
+    "",
+    "## Cookie Signals",
+    "",
+    ...Object.entries(report.cookieSignals).map(([key, value]) => `- ${key}: \`${value ? "yes" : "no"}\``),
+    "",
+    "## Attempt Log",
+    "",
+    ...(report.attempts.length === 0
+      ? ["- none"]
+      : report.attempts.map(
+          (attempt) =>
+            `- ${attempt.phase} attempt ${attempt.attempt}: ${attempt.status} in ${attempt.durationMs}ms${attempt.retryable ? " (retryable)" : ""}${attempt.message ? ` - ${attempt.message}` : ""}`,
+        )),
     "",
     "## Failures",
     "",
@@ -223,6 +291,46 @@ async function writeReports(report) {
   }
 }
 
+async function requestText(phase, url, options) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= args.attempts; attempt += 1) {
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(args.timeoutMs),
+      });
+      const text = await response.text();
+      const retryable = !response.ok && retryableHttpStatus(response.status) && attempt < args.attempts;
+      report.attempts.push({
+        phase,
+        attempt,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+        retryable,
+        message: response.ok ? "" : compact(text),
+      });
+      if (!retryable) return { response, text };
+      await sleep(args.retryDelayMs * attempt);
+    } catch (error) {
+      const message = compact(error?.message ?? error);
+      const retryable = attempt < args.attempts;
+      lastError = new Error(`${phase} request failed: ${message}`);
+      report.attempts.push({
+        phase,
+        attempt,
+        status: "network-error",
+        durationMs: Date.now() - startedAt,
+        retryable,
+        message,
+      });
+      if (!retryable) break;
+      await sleep(args.retryDelayMs * attempt);
+    }
+  }
+  throw lastError ?? new Error(`${phase} request failed`);
+}
+
 const report = {
   createdAt: new Date().toISOString(),
   result: "pending",
@@ -236,6 +344,9 @@ const report = {
   id: "",
   href: "",
   asset: null,
+  failureKind: "",
+  cookieSignals: cookieSignals(args.cookie),
+  attempts: [],
   failures: [],
   boundary:
     "GitHub user-attachments transport only; release still requires Ona finalizer video, same-session Codex verifier, and check-video-review gate",
@@ -244,6 +355,7 @@ const report = {
 try {
   if (!hasValue(args.cookie)) {
     report.result = "skipped";
+    report.failureKind = "missing-github-web-cookie";
     report.failures.push(
       "MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE is not configured; cannot create a GitHub inline video attachment.",
     );
@@ -251,6 +363,13 @@ try {
     await writeReports(report);
     console.log(`GitHub user attachment upload skipped; wrote ${args.output}`);
     process.exit(0);
+  }
+
+  const signals = report.cookieSignals;
+  if (!signals.hasUserSession && !signals.hasHostUserSessionSameSite) {
+    report.failures.push(
+      "MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE is present but does not include common GitHub web session markers; upload may fail if the cookie is incomplete.",
+    );
   }
 
   const buffer = await fs.readFile(args.filePath);
@@ -284,7 +403,9 @@ try {
   console.log(`GitHub user attachment upload passed; wrote ${args.output}`);
 } catch (error) {
   report.result = "blocked";
-  report.failures.push(compact(error?.message ?? error));
+  const message = compact(error?.message ?? error);
+  report.failureKind = classifyFailure(message);
+  report.failures.push(message);
   await writeReports(report);
   console.error(`GitHub user attachment upload blocked; wrote ${args.output}`);
   process.exit(1);
