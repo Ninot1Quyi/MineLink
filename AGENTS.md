@@ -210,6 +210,21 @@ Reports must distinguish:
   Ona Agent mode, `ona environment ssh`, and the checked-in Ona CLI automation
   are debugging, synchronization, validation, or artifact surfaces only and
   must not be described as final MineLink agent execution evidence.
+- Programmatic Ona Codex launch probes must use
+  `scripts/dev/start-ona-platform-codex.mjs` with an explicit
+  `MINELINK_ONA_CODEX_AGENT_ID`. Do not omit `agentId`, do not use the known
+  default Ona automation agent id, and do not treat a launch probe as task
+  implementation evidence.
+- Ona Platform Codex task execution must request Goal mode through
+  `AGENT_MODE_GOAL` unless the task is an explicitly documented diagnostic.
+  Accepted task and verifier readbacks must include
+  `Agent execution mode: AGENT_MODE_GOAL`; one-shot `AGENT_MODE_EXECUTION`
+  evidence is not accepted for long-running factory delivery.
+- Goal-mode `StartAgent` launch/readback evidence proves only that the intended
+  Codex Goal session started. It is not a task release gate. For video-required
+  work, the Goal-mode release gate passes only after the Ona task finalizer has
+  produced `acceptance.mp4`, the same implementation session's Codex verifier
+  has written `video-review.md`, and `check-video-review.mjs` has passed.
 - Self-reported `Identity: I am Codex running in Ona Platform Codex` is a
   diagnostic only. The default Ona Agent can echo it. Ona work is accepted only
   with platform-side Codex selector/API evidence plus task/branch/commit-bound
@@ -218,10 +233,17 @@ Reports must distinguish:
   watcher to start the checked-in Ona automation. If the chain cannot
   automatically start the Ona Platform Codex option, record that edge as
   blocked; do not substitute generic Ona Agent evidence.
-- Video-required tasks must produce `acceptance.mp4`, then a separate Ona
-  Platform Codex verifier must compare the task requirements against the
-  summary/video and write `video-review.md`. `check-video-review.mjs` must pass
-  before publishing or merging the video evidence.
+- Video-required tasks must produce `acceptance.mp4`, then the same Ona
+  Platform Codex implementation session must launch a bounded native verifier
+  subagent to compare the task requirements against the summary/video and write
+  `video-review.md`. `check-video-review.mjs` must pass before publishing or
+  merging the video evidence.
+- PR-visible acceptance videos should be uploaded to the configured external
+  video store from the Ona release finalizer through
+  `scripts/dev/upload-acceptance-video-storage.mjs`; GitHub runners may publish
+  the returned public URL but must not re-render or substitute the final task
+  video. Do not make the GitHub evidence branch the default storage path for
+  video binaries when external storage is configured.
 - Do not leak GitHub tokens, admission tokens, Microsoft credentials,
   OpenAI/API keys, EULA files, or server secrets.
 

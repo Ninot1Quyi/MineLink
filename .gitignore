@@ -14,6 +14,7 @@ __pycache__/
 build/
 out/
 mod/neoforge/run/
+mod/neoforge/run-client/
 
 # IDE
 .idea/
