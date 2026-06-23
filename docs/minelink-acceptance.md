@@ -987,7 +987,10 @@ Current status:
   `MINELINK_RECORDER_CLIENT_GAME_DIR` to a task-local absolute path under the
   client-capture directory and records it in `logs/client-config.log`; this
   prevents NeoForge `runClient --gameDir` from depending on the Gradle working
-  directory in Ona.
+  directory in Ona. The NeoForge run config must set ModDevGradle's
+  `gameDirectory` property for that path instead of adding another
+  `programArgument '--gameDir'`, because ModDevGradle already contributes the
+  client gameDir argument.
 - `scripts/dev/prepare-video-review-request.mjs` generates
   `.minelink-dev/reports/artifacts/video-review-request.md` with the current
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This

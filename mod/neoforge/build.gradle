@@ -52,8 +52,7 @@ neoForge {
             client()
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             if (truthyEnv("MINELINK_RECORDER_CLIENT_ENABLED")) {
-                programArgument '--gameDir'
-                programArgument(System.getenv("MINELINK_RECORDER_CLIENT_GAME_DIR") ?: 'run-client')
+                gameDirectory = file(System.getenv("MINELINK_RECORDER_CLIENT_GAME_DIR") ?: 'run-client')
                 programArgument '--username'
                 programArgument(System.getenv("MINELINK_RECORDER_CLIENT_USERNAME") ?: 'MineLinkRecorder')
                 programArgument '--width'

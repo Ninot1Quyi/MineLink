@@ -774,7 +774,10 @@ environments, not a replacement for the prebuild baseline. The recorder client
 uses a task-local absolute `MINELINK_RECORDER_CLIENT_GAME_DIR` under the
 client-capture work directory and writes that resolved path to
 `logs/client-config.log`, so NeoForge `runClient --gameDir` validation is not
-dependent on the Gradle working directory inside Ona.
+dependent on the Gradle working directory inside Ona. The NeoForge client run
+sets the ModDevGradle `gameDirectory` property for that path instead of
+appending another `--gameDir` program argument; appending the argument would
+collide with ModDevGradle's built-in client gameDir argument.
 The Ona finalizer checks out the task branch for task content, then injects the
 current workflow-source finalizer scripts, `e2e.sh`, client-video renderer,
 recorder dependency bootstrap, and matching `ARCHITECTURE.md` from the pinned

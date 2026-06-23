@@ -504,7 +504,9 @@ is truncated. The recorder client resolves
 `MINELINK_RECORDER_CLIENT_GAME_DIR` to a task-local absolute path under the
 client-capture directory before launching NeoForge `runClient`, so the
 `--gameDir` argument is independent of Ona or Gradle working-directory
-differences. The
+differences. The NeoForge client run uses ModDevGradle's `gameDirectory`
+property rather than adding a second `programArgument '--gameDir'`, because
+ModDevGradle already supplies the actual launch argument. The
 workflow then sends
 `--video-verifier-canary` back to the same
 implementation AgentService execution, waits for
