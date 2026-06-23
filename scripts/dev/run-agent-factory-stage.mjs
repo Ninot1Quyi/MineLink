@@ -11,10 +11,20 @@ const defaults = {
   onaProject: process.env.MINELINK_ONA_PROJECT ?? "",
   onaAutomation: process.env.MINELINK_ONA_AUTOMATION ?? "",
   branch: process.env.MINELINK_BRANCH ?? "",
+  commit: process.env.MINELINK_COMMIT ?? "",
+  base: process.env.MINELINK_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
   prTitle: process.env.MINELINK_PR_TITLE ?? "",
   acceptanceGate: process.env.MINELINK_ACCEPTANCE_GATE ?? "unspecified",
   validationScope: process.env.MINELINK_VALIDATION_SCOPE ?? "docs",
   scenarios: process.env.MINELINK_SCENARIOS ?? "none",
+  videoProducer: process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ?? "ona-task-finalizer",
+  requiredVideoProducer:
+    process.env.MINELINK_ACCEPTANCE_VIDEO_REQUIRED_PRODUCER ??
+    process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ??
+    "ona-task-finalizer",
+  requireClientGuiCapture:
+    process.env.MINELINK_REQUIRE_CLIENT_GUI_CAPTURE === "1" ||
+    process.env.MINELINK_REQUIRE_CLIENT_GUI_CAPTURE === "true",
   outputDir: ".minelink-dev/reports",
 };
 const videoReviewRequestArtifact = ".minelink-dev/reports/artifacts/video-review-request.md";
@@ -26,6 +36,7 @@ const allStages = [
   "render-video",
   "prepare-video",
   "check-video-release",
+  "upload-video",
   "sync-in-review",
   "create-pr",
   "final-report",
@@ -55,10 +66,15 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-project") args.onaProject = readValue();
   else if (arg === "--ona-automation") args.onaAutomation = readValue();
   else if (arg === "--branch") args.branch = readValue();
+  else if (arg === "--commit") args.commit = readValue();
+  else if (arg === "--base") args.base = readValue();
   else if (arg === "--pr-title") args.prTitle = readValue();
   else if (arg === "--acceptance-gate") args.acceptanceGate = readValue();
   else if (arg === "--validation-scope") args.validationScope = readValue();
   else if (arg === "--scenarios") args.scenarios = readValue();
+  else if (arg === "--video-producer") args.videoProducer = readValue();
+  else if (arg === "--required-video-producer") args.requiredVideoProducer = readValue();
+  else if (arg === "--require-client-gui-capture") args.requireClientGuiCapture = true;
   else if (arg === "--output-dir") args.outputDir = readValue();
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/run-agent-factory-stage.mjs --stage <stage> [context]
@@ -71,8 +87,9 @@ Use --stage implementation-finalize to run validation, evidence summary,
 acceptance video rendering, and video-review request preparation after the
 implementation Platform Codex readback exists.
 
-Use --stage release-finalize to run video release, status sync, PR creation,
-and final reporting after both implementation and verifier readbacks exist.
+Use --stage release-finalize to run video release, external video upload,
+status sync, PR creation, and final reporting after both implementation and
+verifier readbacks exist.
 
 Use --stage all to run every guarded finalizer stage inside one Ona task. This
 keeps the evidence gates per stage while avoiding repeated Ona/Codex task
@@ -84,13 +101,52 @@ scheduling overhead in manual diagnostics.`);
   }
 }
 
+function requiresClientGuiCapture() {
+  return args.requireClientGuiCapture || String(args.validationScope || "").toLowerCase() === "neoforge";
+}
+
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function sanitize(text) {
-  return String(text ?? "")
+  const sanitized = String(text ?? "")
     .replace(/(lin_api_)[A-Za-z0-9]+/g, "$1[redacted]")
     .replace(/(github_pat_)[A-Za-z0-9_]+/g, "$1[redacted]")
     .replace(/(ghp_)[A-Za-z0-9_]+/g, "$1[redacted]")
-    .slice(0, 6000)
     .trim();
+  if (sanitized.length <= 12000) return sanitized;
+  return [
+    sanitized.slice(0, 4000),
+    "",
+    "... output truncated; preserving tail for failure diagnosis ...",
+    "",
+    sanitized.slice(-8000),
+  ].join("\n");
+}
+
+function shellQuote(value) {
+  return `'${String(value ?? "").replace(/'/g, `'\\''`)}'`;
+}
+
+function firstScenario(value) {
+  const scenario = String(value ?? "")
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .find((item) => item && item !== "none");
+  return scenario || "mine_tree";
+}
+
+function verifyBaseRef() {
+  const value = String(args.base || "codex/minelink-mvp-engineering").trim();
+  if (!value) return "origin/codex/minelink-mvp-engineering";
+  if (/^(origin\/|refs\/|HEAD\b|[0-9a-f]{7,40}$)/.test(value)) return value;
+  return `origin/${value}`;
 }
 
 function selfInvocationArgs(stage) {
@@ -110,6 +166,10 @@ function selfInvocationArgs(stage) {
     args.onaAutomation || "",
     "--branch",
     args.branch || "",
+    "--commit",
+    args.commit || "",
+    "--base",
+    args.base || "codex/minelink-mvp-engineering",
     "--pr-title",
     args.prTitle || "",
     "--acceptance-gate",
@@ -118,6 +178,11 @@ function selfInvocationArgs(stage) {
     args.validationScope || "docs",
     "--scenarios",
     args.scenarios || "none",
+    "--video-producer",
+    args.videoProducer || "ona-task-finalizer",
+    "--required-video-producer",
+    args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
+    ...(requiresClientGuiCapture() ? ["--require-client-gui-capture"] : []),
     "--output-dir",
     args.outputDir,
   ];
@@ -141,7 +206,7 @@ function git(argsList) {
 }
 
 function currentCommit() {
-  return git(["rev-parse", "--short", "HEAD"]) || process.env.MINELINK_COMMIT || "";
+  return args.commit || process.env.MINELINK_COMMIT || git(["rev-parse", "HEAD"]) || git(["rev-parse", "--short", "HEAD"]) || "";
 }
 
 function stageReportPath(stage) {
@@ -198,8 +263,12 @@ function chainArgs(status, requireVerifier = false) {
     "partial",
     "--branch",
     args.branch || "unknown",
+    "--commit",
+    currentCommit(),
     "--acceptance-gate",
     args.acceptanceGate || "unspecified",
+    "--require-video-producer",
+    args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
     "--require-platform-codex-implementation",
   ];
   if (requireVerifier) result.push("--require-platform-codex-verifier");
@@ -332,6 +401,8 @@ switch (args.stage) {
         args.validationScope || "docs",
         "--scenarios",
         args.scenarios || "none",
+        "--base",
+        verifyBaseRef(),
       ],
       { requireImplementation: true },
     );
@@ -345,11 +416,48 @@ switch (args.stage) {
     );
     break;
   case "render-video":
-    await runCommandStage(
-      args.stage,
-      process.execPath,
-      [
-        "scripts/dev/render-acceptance-video.mjs",
+    if (requiresClientGuiCapture()) {
+      {
+        const scenario = firstScenario(args.scenarios);
+        const workDir = `.minelink-dev/client-capture-${scenario}`;
+        const command = [
+          "MINELINK_RUNTIME=neoforge",
+          "MINELINK_ACCEPT_EULA=1",
+          "MINELINK_RECORD_CLIENT=1",
+          "MINELINK_RECORDER_FORCE_XVFB=1",
+          "MINELINK_RECORDER_AUTO_INSTALL_DEPS=1",
+          `MINELINK_TASK_ID=${shellQuote(args.taskId)}`,
+          `MINELINK_COMMIT=${shellQuote(currentCommit())}`,
+          `MINELINK_ACCEPTANCE_VIDEO_PRODUCER=${shellQuote(args.videoProducer || "ona-task-finalizer")}`,
+          `MINELINK_WORK_DIR=${shellQuote(workDir)}`,
+          `bash scripts/dev/e2e.sh ${shellQuote(scenario)}`,
+        ].join(" ");
+        await runCommandStage(args.stage, "bash", ["-lc", command], { requireImplementation: true });
+      }
+    } else {
+      await runCommandStage(
+        args.stage,
+        process.execPath,
+        [
+          "scripts/dev/render-acceptance-video.mjs",
+          "--task-id",
+          args.taskId,
+          "--branch",
+          args.branch || "unknown",
+          "--task-requirements",
+          "docs/minelink-acceptance.md",
+          "--producer",
+          args.videoProducer || "ona-task-finalizer",
+          "--require-mp4",
+        ],
+        { requireImplementation: true },
+      );
+    }
+    break;
+  case "prepare-video":
+    {
+      const commandArgs = [
+        "scripts/dev/prepare-video-review-request.mjs",
         "--task-id",
         args.taskId,
         "--branch",
@@ -357,24 +465,48 @@ switch (args.stage) {
         "--task-requirements",
         "docs/minelink-acceptance.md",
         "--require-mp4",
-      ],
-      { requireImplementation: true },
-    );
-    break;
-  case "prepare-video":
-    await runCommandStage(
-      args.stage,
-      process.execPath,
-      ["scripts/dev/prepare-video-review-request.mjs", "--require-mp4"],
-      { requireImplementation: true },
-    );
+      ];
+      if (requiresClientGuiCapture()) commandArgs.push("--require-client-gui-capture");
+      if (await fileExists(".minelink-dev/reports/artifacts/video-storage-manifest.json")) {
+        commandArgs.push("--require-storage-manifest");
+      }
+      await runCommandStage(args.stage, process.execPath, commandArgs, { requireImplementation: true });
+    }
     break;
   case "check-video-release":
+    {
+      const commandArgs = [
+        "scripts/dev/check-video-review.mjs",
+        "--require-mp4",
+        "--require-producer",
+        args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
+      ];
+      if (requiresClientGuiCapture()) commandArgs.push("--require-client-gui-capture");
+      await runCommandStage(args.stage, process.execPath, commandArgs, {
+        requireImplementation: true,
+        requireVerifier: true,
+      });
+    }
+    break;
+  case "upload-video":
     await runCommandStage(
       args.stage,
       process.execPath,
-      ["scripts/dev/check-video-review.mjs", "--require-mp4"],
-      { requireImplementation: true, requireVerifier: true },
+      [
+        "scripts/dev/upload-acceptance-video-storage.mjs",
+        "--task-id",
+        args.taskId,
+        "--branch",
+        args.branch || "unknown",
+        "--commit",
+        currentCommit(),
+        "--producer",
+        args.videoProducer || "ona-task-finalizer",
+        "--run-id",
+        process.env.MINELINK_RUN_ID || process.env.GITHUB_RUN_ID || "ona-finalizer",
+        "--require-upload",
+      ],
+      { requireImplementation: true },
     );
     break;
   case "sync-in-review":
@@ -400,6 +532,8 @@ switch (args.stage) {
         "scripts/dev/create-agent-factory-pr.mjs",
         "--branch",
         args.branch || "unknown",
+        "--base",
+        args.base || "codex/minelink-mvp-engineering",
         "--title",
         args.prTitle || `Advance ${args.taskId}`,
         "--task-id",

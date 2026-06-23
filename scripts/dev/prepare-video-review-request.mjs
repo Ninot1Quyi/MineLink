@@ -9,11 +9,15 @@ const execFileAsync = promisify(execFile);
 
 let summaryPath = ".minelink-dev/reports/artifacts/acceptance-summary.md";
 let mp4Path = ".minelink-dev/reports/artifacts/acceptance.mp4";
+let originPath = ".minelink-dev/reports/artifacts/acceptance-video-origin.json";
+let manifestPath = ".minelink-dev/reports/artifacts/video-storage-manifest.json";
 let outputPath = ".minelink-dev/reports/artifacts/video-review-request.md";
 let taskId = process.env.MINELINK_TASK_ID ?? "local";
 let branch = process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "";
 let taskRequirements = process.env.MINELINK_TASK_REQUIREMENTS ?? "";
 let requireMp4 = false;
+let requireClientGuiCapture = false;
+let requireStorageManifest = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -21,6 +25,10 @@ for (let index = 2; index < process.argv.length; index += 1) {
     summaryPath = process.argv[++index] ?? "";
   } else if (arg === "--mp4") {
     mp4Path = process.argv[++index] ?? "";
+  } else if (arg === "--origin") {
+    originPath = process.argv[++index] ?? "";
+  } else if (arg === "--manifest") {
+    manifestPath = process.argv[++index] ?? "";
   } else if (arg === "--output") {
     outputPath = process.argv[++index] ?? "";
   } else if (arg === "--task-id") {
@@ -31,8 +39,12 @@ for (let index = 2; index < process.argv.length; index += 1) {
     taskRequirements = process.argv[++index] ?? "";
   } else if (arg === "--require-mp4") {
     requireMp4 = true;
+  } else if (arg === "--require-client-gui-capture") {
+    requireClientGuiCapture = true;
+  } else if (arg === "--require-storage-manifest") {
+    requireStorageManifest = true;
   } else if (arg === "-h" || arg === "--help") {
-    console.log(`Usage: node scripts/dev/prepare-video-review-request.mjs [--require-mp4]
+    console.log(`Usage: node scripts/dev/prepare-video-review-request.mjs [--require-mp4] [--require-client-gui-capture]
 
 Creates the handoff package for the dedicated Ona Platform Codex video
 verifier. The request includes current artifact hashes and the exact verifier
@@ -60,6 +72,14 @@ async function stat(filePath) {
 async function sha256(filePath) {
   const buffer = await fs.readFile(filePath);
   return createHash("sha256").update(buffer).digest("hex");
+}
+
+async function readJson(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 async function gitBranch() {
@@ -113,7 +133,77 @@ if (requireMp4 && (!mp4Stat?.isFile() || mp4Stat.size === 0)) {
 const summaryHash = summaryStat?.isFile() ? await sha256(summaryPath) : "missing";
 const mp4Hash = mp4Stat?.isFile() ? await sha256(mp4Path) : "missing";
 const mp4Metadata = mp4Stat?.isFile() ? await ffprobe(mp4Path) : "missing";
+const origin = await readJson(originPath);
+const storageManifest = await readJson(manifestPath);
+const producer = origin?.producer ?? "unknown";
+const videoKind = origin?.videoKind ?? "unknown";
+const clientGuiCapture = origin?.clientGuiCapture === true;
+const clientWorldReady = origin?.clientWorldReady === true;
+const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
+const recorderAutoFollow = origin?.recorderAutoFollow === true;
+const recorderClientFollow = origin?.recorderClientFollow === true;
+const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const resolvedBranch = await gitBranch();
+
+if (requireClientGuiCapture) {
+  if (!origin) {
+    failures.push(`Missing acceptance video origin metadata: ${originPath}`);
+  } else if (!clientGuiCapture) {
+    failures.push(
+      `Acceptance video is ${videoKind} with clientGuiCapture=false; normal Minecraft client footage is required`,
+    );
+  } else {
+    if (!clientWorldReady) {
+      failures.push("Acceptance video origin does not confirm the recorder client reached an in-world Minecraft view");
+    }
+    if (!captureStartedAfterWorldReady) {
+      failures.push("Acceptance video origin does not confirm capture started after the recorder client reached the world");
+    }
+    if (!recorderAutoFollow) {
+      failures.push("Acceptance video origin does not confirm recorder auto-follow of the active server_agent");
+    }
+    if (!recorderClientFollow) {
+      failures.push("Acceptance video origin does not confirm the recorder client visibly followed the active server_agent");
+    }
+    if (!recorderClientTargetCentered) {
+      failures.push("Acceptance video origin does not confirm the active server_agent target is centered in the client view");
+    }
+  }
+}
+
+if (requireStorageManifest) {
+  if (!storageManifest) {
+    failures.push(`Missing required video storage manifest: ${manifestPath}`);
+  } else {
+    if (storageManifest.mp4Sha256 !== mp4Hash) {
+      failures.push(`Video storage manifest MP4 hash mismatch: ${storageManifest.mp4Sha256 || "missing"}`);
+    }
+    if (storageManifest.summarySha256 !== summaryHash) {
+      failures.push(`Video storage manifest summary hash mismatch: ${storageManifest.summarySha256 || "missing"}`);
+    }
+    if (storageManifest.producer && storageManifest.producer !== producer) {
+      failures.push(`Video storage manifest producer mismatch: ${storageManifest.producer}`);
+    }
+    if (requireClientGuiCapture && storageManifest.clientGuiCapture !== true) {
+      failures.push("Video storage manifest does not confirm clientGuiCapture=true");
+    }
+    if (requireClientGuiCapture && storageManifest.clientWorldReady !== true) {
+      failures.push("Video storage manifest does not confirm clientWorldReady=true");
+    }
+    if (requireClientGuiCapture && storageManifest.captureStartedAfterWorldReady !== true) {
+      failures.push("Video storage manifest does not confirm captureStartedAfterWorldReady=true");
+    }
+    if (requireClientGuiCapture && storageManifest.recorderAutoFollow !== true) {
+      failures.push("Video storage manifest does not confirm recorderAutoFollow=true");
+    }
+    if (requireClientGuiCapture && storageManifest.recorderClientFollow !== true) {
+      failures.push("Video storage manifest does not confirm recorderClientFollow=true");
+    }
+    if (requireClientGuiCapture && storageManifest.recorderClientTargetCentered !== true) {
+      failures.push("Video storage manifest does not confirm recorderClientTargetCentered=true");
+    }
+  }
+}
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
@@ -126,6 +216,21 @@ const lines = [
   `- Task requirements: \`${md(taskRequirements || "unspecified")}\``,
   `- Acceptance summary: \`${summaryPath}\``,
   `- Acceptance MP4: \`${mp4Path}\``,
+  `- Acceptance video origin: \`${originPath}\``,
+  `- Video storage manifest: \`${manifestPath}\``,
+  `- Video producer: \`${md(producer)}\``,
+  `- Video kind: \`${md(videoKind)}\``,
+  `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
+  `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
+  `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
+  `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
+  `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
+  `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
+  `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
+  `- Storage manifest required: \`${requireStorageManifest ? "yes" : "no"}\``,
+  `- Storage provider: \`${md(storageManifest?.storageProvider || "none")}\``,
+  `- Storage object: \`${md(storageManifest?.objectKey || "none")}\``,
+  `- Storage video URL: ${storageManifest?.videoUrl || "none"}`,
   `- Summary sha256: \`${summaryHash}\``,
   `- MP4 sha256: \`${mp4Hash}\``,
   `- MP4 metadata: \`${md(mp4Metadata).replaceAll("\n", "; ")}\``,
@@ -133,7 +238,9 @@ const lines = [
   "",
   "## Verifier Assignment",
   "",
-  "Use Ona Platform Codex, not the default Ona Agent, to review the acceptance summary and MP4 against the task requirements. The verifier must not edit product code and must not re-render the video. It must inspect the artifacts above and write `.minelink-dev/reports/artifacts/video-review.md`.",
+  "Use the current Ona Platform Codex implementation session, not the default Ona Agent, to launch a bounded native Codex verifier subagent that reviews the acceptance summary and MP4 against the task requirements. The verifier must not edit product code and must not re-render the video. It must inspect the artifacts above and write `.minelink-dev/reports/artifacts/video-review.md`.",
+  "",
+  "For R2-backed candidate videos, the manifest URL is candidate evidence transport only. The verifier must compare the task requirements, acceptance summary, manifest hashes, and MP4 hash; it must not treat storage upload as release approval.",
   "",
   "The review file must include these exact markers with the current hashes:",
   "",
@@ -142,6 +249,13 @@ const lines = [
   "Release decision: pass|fail",
   "Task matched: yes|no",
   "Video matched: yes|no",
+  `Video producer: ${producer}`,
+  `Client GUI capture: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Client world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Capture started after world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder auto-follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder client follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder client target centered: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Summary sha256: ${summaryHash}`,
   `MP4 sha256: ${mp4Hash}`,
   "```",
@@ -149,14 +263,14 @@ const lines = [
   "After `video-review.md` is written, run:",
   "",
   "```bash",
-  "node scripts/dev/check-video-review.mjs --require-mp4",
+  `node scripts/dev/check-video-review.mjs --require-mp4${requireClientGuiCapture ? " --require-client-gui-capture" : ""}`,
   "```",
   "",
   "## Release Boundary",
   "",
   "- A ready request does not release the task.",
   "- A decodable MP4 does not prove full MineLink product completion.",
-  "- The release gate passes only after the separate Ona Platform Codex verifier writes a matching review and `check-video-review.mjs` succeeds.",
+  "- The release gate passes only after the same-session Ona Platform Codex verifier subagent writes a matching review and `check-video-review.mjs` succeeds.",
   "",
   "## Request Failures",
   "",
