@@ -142,6 +142,7 @@ jobs:
           node scripts/dev/check-agent-factory-secrets.mjs --repo "$GITHUB_REPOSITORY" --require-github-secrets --require-ona-context
 
       - name: Preflight GitHub inline video publication
+        continue-on-error: true
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}

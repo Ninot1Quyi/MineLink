@@ -1118,7 +1118,9 @@ Current status:
   video comment instead of publishing an R2-only link as final evidence. For
   PR-producing full-chain runs, the workflow also runs
   `scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
-  before starting Ona so missing inline-video publication authority fails fast.
+  as a non-blocking preflight so missing inline-video publication authority is
+  visible before Ona starts, while finalizer/video-verifier evidence can still
+  be produced before the final PR publication gate fails closed.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

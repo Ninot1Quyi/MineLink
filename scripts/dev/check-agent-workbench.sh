@@ -163,6 +163,7 @@ require_text ".github/workflows/ona-platform-codex-probe.yml" "Request implement
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Run Ona finalizer acceptance video request"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "run-ona-finalizer-artifacts.mjs"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Preflight GitHub inline video publication"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "continue-on-error: true"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "--require-github-attachment-cookie"
 require_text ".github/workflows/ona-platform-codex-probe.yml" '--commit "$reviewed_commit"'
 require_text ".github/workflows/ona-platform-codex-probe.yml" "--readback-execution"
