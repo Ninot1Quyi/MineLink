@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has a manual/path-filtered Ona prebuild refresh fallback for `codex/minelink-mvp-engineering`, but public Ona automation `agent` steps currently launch the default Agent rather than Codex, so automatic Ona Platform Codex implementation/verifier launch is blocked until a documented Codex selector/API or externally verified Codex session evidence exists; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has a manual/path-filtered Ona prebuild refresh fallback for `codex/minelink-mvp-engineering`, but public Ona automation `agent` steps currently launch the default Agent rather than Codex. Ona's documented `StartAgent(agentId, codexSettings)` API now has GitHub Actions identity-canary evidence for programmatic Ona Platform Codex launch/readback, but automatic task implementation, video verifier launch, PR finalization, server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -787,6 +787,63 @@ Current status:
   `failed_precondition: agent is disabled by organization policy`. This is
   negative launch evidence: policy gating does not switch public automation
   agent steps to Codex.
+  `scripts/dev/start-ona-platform-codex.mjs` now captures the documented Ona
+  AgentService candidate path for programmatic Codex launch: `StartAgent` with
+  an explicit Codex `agentId` and `codexSettings`, `SendToAgentExecution` for
+  the task prompt, and `GetAgentExecution` for `spec.agentId` plus
+  Codex-settings readback. The launcher now requests `AGENT_MODE_GOAL`, the
+  explicit persistent Goal selector; generated task readbacks
+  must include `Agent execution mode: AGENT_MODE_GOAL`, while one-shot
+  `AGENT_MODE_EXECUTION` evidence remains insufficient for factory delivery.
+  This is not accepted product evidence yet. It does not replace the
+  task-bound implementation and verifier readback files required by the
+  finalizer. The launcher now ignores stopped historical Ona
+  environments unless `MINELINK_ONA_ENVIRONMENT_ID` explicitly names one; without
+  a running environment, canary workflows create a task environment from the
+  completed project/prebuild baseline and wait for it to reach running before
+  calling `StartAgent`. GitHub Actions run
+  `27928149039` proved the
+  repository-secret `ONA_TOKEN` path, policy readback, `StartAgent`,
+  `SendToAgentExecution`, and `GetAgentExecution` for the allowed Codex app
+  agent id. The readback reported a matching `spec.agentId`, present
+  `codexSettings`, `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`,
+  conversation URLs, and token-usage counters. It did not expose structured
+  `status.outputs`, so this upgrades only the `platform_codex_launch` chain
+  edge; the downstream implementation session, validation, acceptance MP4
+  review, PR finalization, and status writeback remain unaccepted.
+  The next probe slice adds `implementation-canary` mode to
+  `.github/workflows/ona-platform-codex-probe.yml`. That mode sends a
+  docs-only task to the accepted AgentService Codex execution, expects the
+  session to push only `docs/agent-factory-canaries/<task>.md` on a
+  task-bound branch, and then runs
+  `scripts/dev/fetch-platform-codex-canary.mjs` to combine the API readback,
+  remote branch head commit, and canary markers into the canonical
+  `.minelink-dev/reports/ona-codex-implementation-session.md`. This is still
+  chain handoff evidence only; it does not prove a MineLink product feature,
+  video review, PR release, or `product-accepted` gate. The canary file alone
+  must not be used as the final readback because the canonical `Commit:` value
+  is the fetched branch head.
+  The next canary slice adds `full-chain-canary` to the same workflow. It runs
+  the implementation canary, renders trace-driven acceptance artifacts, starts
+  a separate Platform Codex `video-verifier-canary` session, fetches
+  `docs/agent-factory-canaries/<task>-video-verifier.md`, and uses
+  `scripts/dev/fetch-platform-codex-video-verifier.mjs` to write
+  `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the local
+  hash-checked `video-review.md`. This can upgrade only the
+  `acceptance_video -> video_verifier` automation-chain edge for a canary task;
+  it does not prove real product implementation, real Minecraft behavior, or
+  any `product-accepted` gate. The same workflow can now be run with
+  `create_pr=true` to prove the next automation-chain edge: after the release
+  gate passes, it calls `scripts/dev/create-agent-factory-pr.mjs`, creates or
+  updates a draft PR from the canary branch, writes
+  `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
+  report with `--pr-url`. That edge requires the `AGENT_FACTORY_GITHUB_TOKEN`
+  repository secret because the default Actions `GITHUB_TOKEN` can be blocked
+  from creating pull requests. The workflow then calls
+  `scripts/dev/wait-agent-factory-pr-ci.mjs` to wait for the PR check rollup,
+  writes `.minelink-dev/reports/agent-factory-pr-ci.{md,json}`, and refreshes
+  the chain report with `--ci-url`. That remains chain evidence only; status
+  writeback and human acceptance are separate downstream gates.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only
@@ -883,23 +940,119 @@ Current status:
   updated fail-closed remote factory can complete task-only wrappers without
   starting the disabled default Agent. This is still not product-accepted until
   a real dispatch proves implementation, validation, MP4, separate verifier,
-  release gate, PR, CI, and status writeback edges end to end.
+  release gate, PR, CI, and status writeback edges end to end. The current
+  follow-up adds `scripts/dev/sync-github-status.mjs` and the workflow
+  `Sync final canary status` step so a GitHub-only canary is no longer blocked
+  by an absent Linear issue; linked GitHub+Linear tasks still require both
+  writeback reports.
+- `scripts/dev/sync-github-status.mjs` writes
+  `.minelink-dev/reports/github-status.{md,json}` and comments the linked
+  GitHub issue or PR with the final chain evidence paths without exposing token
+  values.
+- `scripts/dev/trigger-agent-factory-full-chain.mjs` reads
+  `.minelink-dev/reports/agent-factory-dispatch.json` and starts
+  `.github/workflows/ona-platform-codex-probe.yml` in `full-chain-canary` mode
+  for the accepted issue task. This is the current bridge from a GitHub issue
+  source event into the already guarded Platform Codex/video/PR/CI/status
+  canary chain. It must pass the issue-derived `validationScope` and
+  `scenarios` into the full-chain workflow so NeoForge-required tasks produce
+  NeoForge-backed video evidence instead of a docs-only finalizer run.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.
-- `scripts/dev/render-acceptance-video.mjs` generates a trace-driven
+- `scripts/dev/render-acceptance-video.mjs` generates a trace-driven composite
   `.minelink-dev/reports/artifacts/acceptance-summary.md` and
   `.minelink-dev/reports/artifacts/acceptance.mp4`; the real NeoForge GitHub
   workflow installs `ffmpeg` and runs the renderer with `--require-mp4`.
+  The MP4 must contain task evidence, not a static placeholder: the current
+  renderer shows MineLink server-observation/assertion evidence on the left and
+  command paths, tool timelines, and terminal log excerpts on the right. The
+  renderer also writes `acceptance-video-origin.{json,md}`. A
+  `github-actions-canary` producer is chain evidence only; final task
+  acceptance requires the MP4 to be produced in the Ona task/finalizer
+  environment with producer `ona-task-finalizer`; the release gate must require
+  that producer and the verifier must review that exact hash.
+  For Minecraft/NeoForge product-video tasks, trace-driven MP4s remain
+  diagnostic only. The accepted path is `MINELINK_RECORD_CLIENT=1` with a real
+  NeoForge `runClient` recorder and
+  `scripts/dev/render-client-capture-video.mjs`, which writes
+  `clientGuiCapture=true` in `acceptance-video-origin.json`. The recorder must
+  also wait for the client-side `MineLink recorder client in world` marker and
+  start ffmpeg after that marker, which records `clientWorldReady=true` and
+  `captureStartedAfterWorldReady=true` in the origin and storage manifest. The
+  server-side recorder helper must also log
+  `MineLink recorder auto-follow active` after the spectator recorder is bound
+  to the agent-following camera anchor; the renderer records this as
+  `recorderAutoFollow=true`. The recorder client must also log
+  `MineLink recorder client following server_agent` after it sees the visible
+  agent marker and steers the recorded camera toward it; the renderer records
+  this as `recorderClientFollow=true`. The release gate must include
+  `--require-client-gui-capture`; otherwise a static card, reports digest,
+  server-observation-only video, loading screen, Mojang bootstrap capture, or
+  non-following client capture cannot be final acceptance evidence.
+  Headless recorder runs call `scripts/dev/ensure-client-recorder-deps.sh` when
+  `ffmpeg` or `Xvfb` is missing; this lets an older Ona task environment
+  self-install recorder packages when apt/sudo is available, or fail with an
+  explicit recorder-dependency report instead of silently downgrading to a
+  placeholder MP4. The recorder client resolves
+  `MINELINK_RECORDER_CLIENT_GAME_DIR` to a task-local absolute path under the
+  client-capture directory and records it in `logs/client-config.log`; this
+  prevents NeoForge `runClient --gameDir` from depending on the Gradle working
+  directory in Ona. The NeoForge run config must set ModDevGradle's
+  `gameDirectory` property for that path instead of adding another
+  `programArgument '--gameDir'`, because ModDevGradle already contributes the
+  client gameDir argument.
 - `scripts/dev/prepare-video-review-request.mjs` generates
   `.minelink-dev/reports/artifacts/video-review-request.md` with the current
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
   request artifact is a handoff package only and does not release the task.
+- `scripts/dev/run-ona-finalizer-artifacts.mjs` runs finalizer stages inside
+  the Ona task environment, but after checking out the task branch it injects
+  the current workflow/source-commit finalizer scripts. This keeps task content
+  task-branch-bound while preventing stale orchestration scripts from producing
+  mismatched review requests such as `Task id: local`. The injection also
+  carries the matching `ARCHITECTURE.md` and client/server recorder helpers so
+  architecture guard failures represent real task drift rather than a
+  source-script/task-doc hybrid. The finalizer must pin the source ref to a
+  commit before fetching the PR base or task branch, checkout the task branch
+  at the full reviewed commit reported by the Platform Codex implementation
+  readback, validate against the PR base branch rather than a hard-coded
+  default, and return client-capture logs in its artifact bundle when video
+  rendering fails. The injected recorder helper set includes the client
+  recorder Java source and server recorder source so the in-world readiness
+  marker, auto-follow marker, and stricter renderer checks are tested together.
+  Following the reviewed commit is required for reused canary
+  branches because the remote branch head can move after Goal-mode Codex
+  finishes. Client-video failures must also write
+  `reports/e2e-failure-log-tail.txt` with the recorder client config, client
+  logs, and recorder logs last, so reviewers can diagnose Minecraft client
+  startup failures from GitHub artifacts even when the stage output is
+  truncated. The finalizer artifact bridge must use R2-first video transport
+  when storage is configured: after `acceptance.mp4` is rendered inside Ona,
+  the finalizer uploads it as candidate evidence, writes
+  `.minelink-dev/reports/artifacts/video-storage-manifest.json`, and returns
+  only small reports, logs, and manifests through the chunk bridge. The GitHub
+  runner must download the MP4 from the manifest URL and fail closed unless
+  the bytes match `mp4Sha256`. The fixed-size base64 chunk bridge remains for
+  reports, client-capture logs, and no-R2 fallback; it is no longer the
+  preferred large-`acceptance.mp4` transport.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
-  separate Ona Platform Codex verifier writes
+  same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
-  match markers and current summary/MP4 hashes. The gate writes
+  match markers, the required Ona video producer, and current summary/MP4
+  hashes. When a storage manifest is present, the gate also verifies the
+  manifest hashes, producer, `clientGuiCapture`, `clientWorldReady`,
+  `captureStartedAfterWorldReady`, `recorderAutoFollow`, and
+  `recorderClientFollow` markers. The gate fails final publication when the
+  summary has `Scenario reports: 0`, `No scenario reports found`, or no
+  client-visible follow proof; a pure text/card MP4 is never sufficient final
+  evidence for video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
+- `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at
+  terminal factory cleanup when they belong to the MineLink project and have no
+  uncommitted workspace changes. The cleanup report is resource evidence only;
+  it does not prove implementation correctness, video correctness, or product
+  acceptance.
 - Ona CLI bootstrap has been exercised against the MineLink cloud environment:
   `ona environment start`, `ona environment exec`, and
   `ona environment devcontainer rebuild` reached `/workspaces/MineLink` on
@@ -913,7 +1066,8 @@ Current status:
   packaging, native Linear webhook enablement, Ona Platform Codex
   implementation/verifier launch and readback for the current PR, Ona native
   `pullRequest` success, acceptance MP4 availability in every environment,
-  dedicated video verifier completion, or real NeoForge install acceptance.
+  same-session video verifier subagent completion, verifier access to the actual
+  MP4 for real video-required tasks, or real NeoForge install acceptance.
 - Earlier generic Ona Agent executions are process smoke only. They do not
   count as MineLink agent execution evidence because Ona work must select the
   Platform Codex agent mode.
