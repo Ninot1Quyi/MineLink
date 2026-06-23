@@ -38,12 +38,17 @@ import net.minecraft.recipebook.PlaceRecipe;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.RelativeMovement;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -102,6 +107,7 @@ public final class MineLinkEndpointBootstrap {
     private final MinecraftServer server;
     private final RuntimeState runtimeState = new RuntimeState();
     private HttpServer httpServer;
+    private int recorderFollowTick = 0;
 
     public MineLinkEndpointBootstrap(MinecraftServer server) {
         this.server = server;
@@ -137,6 +143,192 @@ public final class MineLinkEndpointBootstrap {
         httpServer.stop(1);
         httpServer = null;
         MineLinkMod.LOGGER.info("MineLink HTTP protocol endpoint stopped");
+    }
+
+    public void onPlayerLoggedIn(Player player) {
+        if (!(player instanceof ServerPlayer serverPlayer) || !recorderEnabled()) {
+            return;
+        }
+        AgentBody latestAgent = runtimeState.latestAgent();
+        if (latestAgent != null) {
+            updateRecorderAvatar(latestAgent);
+            positionRecorderPlayer(serverPlayer, latestAgent);
+        }
+    }
+
+    public void onServerTick() {
+        if (!recorderEnabled()) {
+            return;
+        }
+        int interval = recorderFollowIntervalTicks();
+        recorderFollowTick = (recorderFollowTick + 1) % interval;
+        if (recorderFollowTick != 0) {
+            return;
+        }
+        AgentBody latestAgent = runtimeState.latestAgent();
+        if (latestAgent != null) {
+            updateRecorder(latestAgent);
+        }
+    }
+
+    private void updateRecorder(AgentBody agent) {
+        if (!recorderEnabled()) {
+            return;
+        }
+        updateRecorderAvatar(agent);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (isRecorderPlayer(player)) {
+                positionRecorderPlayer(player, agent);
+            }
+        }
+    }
+
+    private void updateRecorderAvatar(AgentBody agent) {
+        ServerLevel level = server.overworld();
+        ArmorStand avatar = agent.recorderAvatar;
+        if (avatar == null || avatar.isRemoved()) {
+            avatar = new ArmorStand(level, agent.position().x, agent.position().y, agent.position().z);
+            avatar.setNoGravity(true);
+            avatar.setInvulnerable(true);
+            avatar.setNoBasePlate(true);
+            avatar.setShowArms(true);
+            avatar.setCustomName(Component.literal(agent.displayName + " server_agent"));
+            avatar.setCustomNameVisible(true);
+            level.addFreshEntity(avatar);
+            agent.recorderAvatar = avatar;
+        }
+        Vec3 pos = agent.position();
+        avatar.moveTo(pos.x, pos.y, pos.z, agent.entity.getYRot(), agent.entity.getXRot());
+        avatar.setYHeadRot(agent.entity.getYRot());
+
+        ArmorStand cameraAnchor = agent.recorderCameraAnchor;
+        if (cameraAnchor == null || cameraAnchor.isRemoved()) {
+            cameraAnchor = new ArmorStand(level, pos.x, pos.y, pos.z);
+            cameraAnchor.setNoGravity(true);
+            cameraAnchor.setInvulnerable(true);
+            cameraAnchor.setInvisible(true);
+            cameraAnchor.setSilent(true);
+            cameraAnchor.setNoBasePlate(true);
+            level.addFreshEntity(cameraAnchor);
+            agent.recorderCameraAnchor = cameraAnchor;
+        }
+        positionCameraAnchor(cameraAnchor, agent);
+    }
+
+    private void positionRecorderPlayer(ServerPlayer player, AgentBody agent) {
+        if (!isRecorderPlayer(player)) {
+            return;
+        }
+        if (agent.recorderCameraAnchor == null || agent.recorderCameraAnchor.isRemoved()) {
+            updateRecorderAvatar(agent);
+        }
+        if (agent.recorderCameraAnchor == null) {
+            return;
+        }
+        Vec3 agentPos = agent.position();
+        Vec3 cameraPos = agent.recorderCameraAnchor.position();
+        float yaw = yawToward(cameraPos, agentPos);
+        float pitch = pitchToward(cameraPos, agentPos);
+        if (player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
+            player.gameMode.changeGameModeForPlayer(GameType.SPECTATOR);
+        }
+        player.teleportTo(server.overworld(), cameraPos.x, cameraPos.y, cameraPos.z, Set.of(), yaw, pitch);
+        player.setCamera(agent.recorderCameraAnchor);
+        if (!agent.recorderAutoFollowLogged) {
+            agent.recorderAutoFollowLogged = true;
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder auto-follow active: recorder={} agent={} camera={},{},{}",
+                player.getGameProfile().getName(),
+                agent.displayName,
+                String.format("%.2f", cameraPos.x),
+                String.format("%.2f", cameraPos.y),
+                String.format("%.2f", cameraPos.z)
+            );
+        }
+    }
+
+    private void positionCameraAnchor(ArmorStand cameraAnchor, AgentBody agent) {
+        Vec3 agentPos = agent.position();
+        double distance = recorderCameraDistance();
+        double height = recorderCameraHeight();
+        double x = agentPos.x - distance;
+        double y = agentPos.y + height;
+        double z = agentPos.z - distance;
+        Vec3 cameraPos = new Vec3(x, y, z);
+        float yaw = yawToward(cameraPos, agentPos);
+        float pitch = pitchToward(cameraPos, agentPos);
+        cameraAnchor.moveTo(x, y, z, yaw, pitch);
+        cameraAnchor.setYHeadRot(yaw);
+        cameraAnchor.setXRot(pitch);
+    }
+
+    private void removeRecorderAvatar(AgentBody agent) {
+        if (agent.recorderAvatar != null) {
+            agent.recorderAvatar.discard();
+            agent.recorderAvatar = null;
+        }
+        if (agent.recorderCameraAnchor != null) {
+            agent.recorderCameraAnchor.discard();
+            agent.recorderCameraAnchor = null;
+        }
+    }
+
+    private static boolean recorderEnabled() {
+        return truthy(setting("MINELINK_RECORDER_ENABLED", "minelink.recorder.enabled", "false"));
+    }
+
+    private static boolean isRecorderPlayer(ServerPlayer player) {
+        return player.getGameProfile().getName().equals(setting(
+            "MINELINK_RECORDER_PLAYER_NAME",
+            "minelink.recorder.playerName",
+            "MineLinkRecorder"
+        ));
+    }
+
+    private static double recorderCameraDistance() {
+        return parseDoubleSetting("MINELINK_RECORDER_CAMERA_DISTANCE", "minelink.recorder.cameraDistance", 5.0D);
+    }
+
+    private static double recorderCameraHeight() {
+        return parseDoubleSetting("MINELINK_RECORDER_CAMERA_HEIGHT", "minelink.recorder.cameraHeight", 3.0D);
+    }
+
+    private static int recorderFollowIntervalTicks() {
+        return parseIntSetting("MINELINK_RECORDER_FOLLOW_INTERVAL_TICKS", "minelink.recorder.followIntervalTicks", 2);
+    }
+
+    private static double parseDoubleSetting(String envName, String propertyName, double fallback) {
+        try {
+            return Double.parseDouble(setting(envName, propertyName, String.valueOf(fallback)));
+        } catch (RuntimeException error) {
+            return fallback;
+        }
+    }
+
+    private static int parseIntSetting(String envName, String propertyName, int fallback) {
+        try {
+            return Math.max(1, Integer.parseInt(setting(envName, propertyName, String.valueOf(fallback))));
+        } catch (RuntimeException error) {
+            return fallback;
+        }
+    }
+
+    private static boolean truthy(String value) {
+        return value.equalsIgnoreCase("1") || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("yes");
+    }
+
+    private static float yawToward(Vec3 from, Vec3 to) {
+        double dx = to.x - from.x;
+        double dz = to.z - from.z;
+        return (float)(Math.toDegrees(Math.atan2(dz, dx)) - 90.0D);
+    }
+
+    private static float pitchToward(Vec3 from, Vec3 to) {
+        double dx = to.x - from.x;
+        double dy = to.y - from.y;
+        double dz = to.z - from.z;
+        double horizontal = Math.sqrt(dx * dx + dz * dz);
+        return (float)(-Math.toDegrees(Math.atan2(dy, horizontal)));
     }
 
     private void handleHealth(HttpExchange exchange) throws IOException {
@@ -267,6 +459,7 @@ public final class MineLinkEndpointBootstrap {
         }
         String seedPrompt = stringValue(request, "seed_prompt", "A cautious but curious newcomer.");
         AgentBody agent = runtimeState.birth(server.overworld(), ownerId, seedPrompt);
+        updateRecorder(agent);
 
         JsonObject response = baseResponse(request, "agent.birth_result");
         response.addProperty("agent_id", agent.agentId);
@@ -415,6 +608,7 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private JsonObject removeBody(JsonObject request, AgentBody agent, JsonObject arguments) {
+        removeRecorderAvatar(agent);
         int cancelledActions = agent.prepareRemove(stringValue(arguments, "reason", "server_agent body was removed."));
         String ownerId = agent.ownerId;
         String agentId = agent.agentId;
@@ -837,6 +1031,7 @@ public final class MineLinkEndpointBootstrap {
         result.addProperty("collision", collision);
         result.add("position", vector(agent.position()));
         response.add("result", result);
+        updateRecorder(agent);
         return response;
     }
 
@@ -849,6 +1044,14 @@ public final class MineLinkEndpointBootstrap {
         if (blockRef.expired()) {
             return failure(request, "expired_ref", "Block ref has expired.");
         }
+        agent.entity.moveTo(
+            agent.position().x,
+            agent.position().y,
+            agent.position().z,
+            faceYaw(blockRef.pos, agent.position()),
+            agent.entity.getXRot()
+        );
+        updateRecorder(agent);
 
         JsonObject response = baseResponse(request, "tool.execute_result");
         response.addProperty("status", "completed");
@@ -928,6 +1131,7 @@ public final class MineLinkEndpointBootstrap {
         result.addProperty("estimated_mining_ticks", estimatedTicks);
         result.add("drops", pickedUp.deepCopy());
         response.add("result", result);
+        updateRecorder(agent);
         return response;
     }
 
@@ -989,6 +1193,7 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject response = toolCompleted(request);
         response.add("result", result);
+        updateRecorder(agent);
         return response;
     }
 
@@ -1076,6 +1281,7 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject response = toolCompleted(request);
         response.add("result", result);
+        updateRecorder(agent);
         return response;
     }
 
@@ -1100,6 +1306,7 @@ public final class MineLinkEndpointBootstrap {
             result.add("position", blockPosition(target.ref.pos));
             JsonObject response = toolCompleted(request);
             response.add("result", result);
+            updateRecorder(agent);
             return response;
         }
 
@@ -1185,6 +1392,7 @@ public final class MineLinkEndpointBootstrap {
         );
         JsonObject response = toolCompleted(request);
         response.add("result", containerSnapshot(agent));
+        updateRecorder(agent);
         return response;
     }
 
@@ -1279,6 +1487,7 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject response = toolCompleted(request);
         response.add("result", result);
+        updateRecorder(agent);
         return response;
     }
 
@@ -1334,6 +1543,7 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject response = toolCompleted(request);
         response.add("result", result);
+        updateRecorder(agent);
         return response;
     }
 
@@ -1398,6 +1608,7 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject response = toolCompleted(request);
         response.add("result", result);
+        updateRecorder(agent);
         return response;
     }
 
@@ -1499,6 +1710,7 @@ public final class MineLinkEndpointBootstrap {
 
         JsonObject response = toolCompleted(request);
         response.add("result", result);
+        updateRecorder(agent);
         return response;
     }
 
@@ -3441,6 +3653,14 @@ public final class MineLinkEndpointBootstrap {
             return agents.get(agentId);
         }
 
+        private AgentBody latestAgent() {
+            AgentBody latest = null;
+            for (AgentBody agent : agents.values()) {
+                latest = agent;
+            }
+            return latest;
+        }
+
         private AgentBody removeAgent(String agentId) {
             return agents.remove(agentId);
         }
@@ -3805,6 +4025,9 @@ public final class MineLinkEndpointBootstrap {
         private int actionSeq = 0;
         private int queueDepth = 0;
         private boolean frozen = false;
+        private ArmorStand recorderAvatar;
+        private ArmorStand recorderCameraAnchor;
+        private boolean recorderAutoFollowLogged = false;
 
         private AgentBody(String agentId, String displayName, String ownerId, String seedPrompt, FakePlayer entity, BlockPos fixtureBase, String fixtureName) {
             this.agentId = agentId;
