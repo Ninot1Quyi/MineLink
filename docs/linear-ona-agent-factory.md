@@ -565,11 +565,11 @@ create PRs, the workflow now runs an early
 `scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
 preflight. That preflight accepts either
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or an explicit
-`github_attachment_video_url` input. If both are missing, the preflight records
-the blocker but does not stop Ona Platform Codex or the Minecraft finalizer;
-the chain still needs the real video and verifier artifacts for diagnosis. The
-run fails closed later at the final PR video publication edge unless a GitHub
-user-attachments URL is available. When a canary run renders
+`github_attachment_video_url` input. If both are missing, the preflight fails
+before Ona Platform Codex or the Minecraft finalizer starts, because the run
+cannot publish the required PR-playable final evidence. The later attachment
+upload step also uses `--require-upload`, so a skipped upload cannot be treated
+as releasable evidence. When a canary run renders
 the MP4 on the GitHub runner, the artifact origin must say
 `github-actions-canary`; that video is acceptable for chain testing only. Final
 task acceptance requires an Ona-produced video artifact, with
@@ -985,9 +985,10 @@ uses GitHub's web attachment flow, so it requires
 missing the bridge writes a skipped report and the final PR evidence comment
 still fails closed. PR-producing full-chain dispatches additionally run the
 same requirement as an early credential preflight, so missing inline-video
-publication authority is visible before Ona work starts, but that preflight is
-non-blocking so finalizer/video-verifier evidence can still be produced before
-the final PR publication gate fails closed.
+publication authority is visible before Ona work starts. That preflight is a
+hard gate for `create_pr=true` canaries: if neither a cookie nor a manual
+`github_attachment_video_url` is available, the run stops before the expensive
+Ona/Minecraft path instead of discovering the blocker after release.
 
 `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID` and
 `MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY` must be configured only as GitHub or

@@ -145,7 +145,6 @@ jobs:
           node scripts/dev/check-agent-factory-secrets.mjs --repo "$GITHUB_REPOSITORY" --require-github-secrets --require-ona-context
 
       - name: Preflight GitHub inline video publication
-        continue-on-error: true
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -629,7 +628,8 @@ jobs:
           node scripts/dev/upload-github-user-attachment.mjs \
             --repository "$GITHUB_REPOSITORY" \
             --file .minelink-dev/reports/artifacts/acceptance.mp4 \
-            --name acceptance.mp4
+            --name acceptance.mp4 \
+            --require-upload
 
       - name: Upload probe evidence
         id: upload-probe-evidence

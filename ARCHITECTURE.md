@@ -944,15 +944,15 @@ requires an explicit GitHub web attachment cookie secret
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; PATs and `GITHUB_TOKEN` can identify
 the repository but do not create comment attachments by themselves. When the
 cookie is absent the script writes a skipped report and the PR publication gate
-remains blocked. Full-chain PR-producing workflows also run an early
+remains blocked. Full-chain PR-producing workflows run an early
 `scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
-preflight, but that preflight is non-blocking: it records whether the
-release-to-PR inline playback edge will be blocked while still allowing the Ona
-finalizer to produce and verify real Minecraft video evidence. If neither the
-cookie nor a manually provided `github_attachment_video_url` is available, the
-run must fail closed at PR video publication, after preserving the finalizer
-artifacts and blocker evidence. The GitHub Actions artifact remains the raw
-evidence bundle. The older
+preflight. That preflight is a hard gate for `create_pr=true` canaries: it
+accepts either `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or a manually provided
+`github_attachment_video_url`, and otherwise fails before starting the expensive
+Ona/Minecraft finalizer path. The upload step also runs
+`scripts/dev/upload-github-user-attachment.mjs --require-upload` so a skipped
+attachment upload cannot be treated as releasable evidence. The GitHub Actions
+artifact remains the raw evidence bundle. The older
 `scripts/dev/publish-pr-video-evidence.mjs`
 path is a manual fallback only and must not be used for final PR playback,
 because video binaries must not be committed to the repository evidence branch.
