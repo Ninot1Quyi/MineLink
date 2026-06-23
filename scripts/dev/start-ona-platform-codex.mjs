@@ -247,6 +247,9 @@ async function videoVerifierCanaryPrompt(context = {}) {
   const recorderClientTargetVisible = requestValue(request, "Recorder client target visible") || "unknown";
   const recorderReadyBeforeScenario = requestValue(request, "Recorder ready before scenario") || "unknown";
   const recorderWorkCoverageAdequate = requestValue(request, "Recorder work coverage adequate") || "unknown";
+  const recorderVisibleMining = requestValue(request, "Recorder visible mining") || "unknown";
+  const requiresVisibleMining = requestValue(request, "Requires visible mining") || "unknown";
+  const recorderScenarioActionVisible = requestValue(request, "Recorder scenario action visible") || "unknown";
   const submittedActionsTerminalConfirmed = requestValue(request, "Submitted actions terminal confirmed") || "unknown";
   const recorderWorkVisible = requestValue(request, "Recorder work visible") || "unknown";
   const serverAgentTaskActionVisible = requestValue(request, "Server agent task action visible") || "unknown";
@@ -278,6 +281,9 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `Recorder client target visible: ${recorderClientTargetVisible}`,
     `Recorder ready before scenario: ${recorderReadyBeforeScenario}`,
     `Recorder work coverage adequate: ${recorderWorkCoverageAdequate}`,
+    `Recorder visible mining: ${recorderVisibleMining}`,
+    `Requires visible mining: ${requiresVisibleMining}`,
+    `Recorder scenario action visible: ${recorderScenarioActionVisible}`,
     `Submitted actions terminal confirmed: ${submittedActionsTerminalConfirmed}`,
     `Recorder work visible: ${recorderWorkVisible}`,
     `Server agent task action visible: ${serverAgentTaskActionVisible}`,
@@ -324,6 +330,9 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- Recorder client target visible: ${recorderClientTargetVisible}`,
     `- Recorder ready before scenario: ${recorderReadyBeforeScenario}`,
     `- Recorder work coverage adequate: ${recorderWorkCoverageAdequate}`,
+    `- Recorder visible mining: ${recorderVisibleMining}`,
+    `- Requires visible mining: ${requiresVisibleMining}`,
+    `- Recorder scenario action visible: ${recorderScenarioActionVisible}`,
     `- Submitted actions terminal confirmed: ${submittedActionsTerminalConfirmed}`,
     `- Recorder work visible: ${recorderWorkVisible}`,
     `- Server agent task action visible: ${serverAgentTaskActionVisible}`,

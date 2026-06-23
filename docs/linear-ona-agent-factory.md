@@ -892,6 +892,8 @@ product-video tasks the request and manifest must show
 `recorderTargetMoved=yes`, `recorderClientFollow=yes`,
 `recorderClientTargetCentered=yes`, `recorderClientTargetVisible=yes`, and
 `recorderReadyBeforeScenario=yes`, `recorderWorkCoverageAdequate=yes`,
+`recorderVisibleMining=yes` when the scenario requires mining,
+`recorderScenarioActionVisible=yes`,
 `submittedActionsTerminalConfirmed=yes`, `recorderWorkVisible=yes`, and
 `serverAgentTaskActionVisible=yes`; loading screens, bootstrap footage,
 server-only camera intent, static/idle targets, late-only target appearances,
@@ -922,6 +924,9 @@ Recorder client target centered: yes
 Recorder client target visible: yes
 Recorder ready before scenario: yes
 Recorder work coverage adequate: yes
+Recorder visible mining: yes
+Requires visible mining: yes|no
+Recorder scenario action visible: yes
 Submitted actions terminal confirmed: yes
 Recorder work visible: yes
 Server agent task action visible: yes

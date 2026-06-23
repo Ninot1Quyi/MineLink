@@ -998,10 +998,12 @@ evidence, even if a verifier report says `Release decision: pass`. A ready
 `video-review-request.md` never releases a task by itself. For client GUI
 captures, the same verifier canary and release gate must also carry
 `Recorder ready before scenario: yes`, `Recorder work coverage adequate: yes`,
-`Submitted actions terminal confirmed: yes`, and `Recorder work visible: yes`,
-proving that the video shows successful task work by the followed
-`server_agent` rather than an idle target, an action submission without
-completion, or a target that only appears in the final frames.
+`Recorder visible mining: yes` when mining is required,
+`Recorder scenario action visible: yes`,
+`Submitted actions terminal confirmed: yes`, and
+`Recorder work visible: yes`, proving that the video shows successful task work
+by the followed `server_agent` rather than an idle target, an action submission
+without completion, or a target that only appears in the final frames.
 The GitHub workflow uploads `acceptance-storyboard.png` and its JSON metadata as
 a separate small artifact for fast visual QA. That storyboard helps reviewers
 and models inspect the MP4 content when large artifact or R2 downloads are slow,
