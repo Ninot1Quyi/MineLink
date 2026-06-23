@@ -788,9 +788,12 @@ finalizer also receives the PR base branch and fetches it before running
 `verify-agent-task.sh --base`, so canary branches are validated against the
 branch they will actually target instead of falling back to `origin/main`. When a client-video run fails, the artifact
 tarball includes `.minelink-dev/client-capture-*` logs in addition to
-`.minelink-dev/reports`, and stage reports preserve both the head and tail of
-long command output so recorder, Minecraft client, and MCP server failures can
-be diagnosed from GitHub artifacts. The
+`.minelink-dev/reports`, and `e2e.sh` writes
+`reports/e2e-failure-log-tail.txt` with the client and recorder logs at the end
+so GitHub truncation still preserves the most useful failure evidence. Stage
+reports preserve both the head and tail of long command output so recorder,
+Minecraft client, and MCP server failures can be diagnosed from GitHub
+artifacts. The
 recorder client is an observer only: the server creates a visible
 `server_agent` marker and an invisible camera anchor that continuously follows
 the agent for recording, but it does not add MCP tools, world-query authority,

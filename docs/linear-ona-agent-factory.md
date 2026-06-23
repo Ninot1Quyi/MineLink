@@ -497,7 +497,10 @@ reviewed commit, not the latest remote branch head. The finalizer receives the
 workflow PR base and passes it to `verify-agent-task.sh --base`, and its
 artifact tarball includes
 `.minelink-dev/client-capture-*` logs so failed recorder runs expose the real
-Minecraft/client/MCP log tail. The workflow then sends
+Minecraft/client/MCP log tail. `e2e.sh` also writes
+`reports/e2e-failure-log-tail.txt` with client and recorder logs last so the
+stage report remains useful when long NeoForge output is truncated. The
+workflow then sends
 `--video-verifier-canary` back to the same
 implementation AgentService execution, waits for
 `docs/agent-factory-canaries/<task>-video-verifier.md`, then runs

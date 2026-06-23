@@ -1002,7 +1002,10 @@ Current status:
   default, and return client-capture logs in its artifact bundle when video
   rendering fails. Following the reviewed commit is required for reused canary
   branches because the remote branch head can move after Goal-mode Codex
-  finishes.
+  finishes. Client-video failures must also write
+  `reports/e2e-failure-log-tail.txt` with client and recorder logs last, so
+  reviewers can diagnose Minecraft client startup failures from GitHub
+  artifacts even when the stage output is truncated.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

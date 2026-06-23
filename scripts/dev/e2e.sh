@@ -167,21 +167,25 @@ print(json.dumps(
 ))
 PY
   fi
-  for log_file in \
-    "$work_dir/logs/agent.log" \
-    "$work_dir/logs/client.stdout.log" \
-    "$work_dir/logs/client.stderr.log" \
-    "$work_dir/logs/recorder-ffmpeg.log" \
-    "$work_dir/logs/recorder-xvfb.log" \
-    "$work_dir/logs/gateway.stdout.log" \
-    "$work_dir/logs/gateway.stderr.log" \
-    "$work_dir/logs/server.stdout.log" \
-    "$work_dir/logs/server.stderr.log"; do
-    if [ -f "$log_file" ]; then
-      echo "---- tail $log_file ----" >&2
-      tail -n 160 "$log_file" >&2 || true
-    fi
-  done
+  failure_tail="$work_dir/reports/e2e-failure-log-tail.txt"
+  {
+    for log_file in \
+      "$work_dir/logs/server.stdout.log" \
+      "$work_dir/logs/server.stderr.log" \
+      "$work_dir/logs/gateway.stdout.log" \
+      "$work_dir/logs/gateway.stderr.log" \
+      "$work_dir/logs/agent.log" \
+      "$work_dir/logs/recorder-xvfb.log" \
+      "$work_dir/logs/recorder-ffmpeg.log" \
+      "$work_dir/logs/client.stdout.log" \
+      "$work_dir/logs/client.stderr.log"; do
+      if [ -f "$log_file" ]; then
+        echo "---- tail $log_file ----"
+        tail -n 160 "$log_file" || true
+      fi
+    done
+  } > "$failure_tail" 2>/dev/null || true
+  cat "$failure_tail" >&2 || true
 }
 
 cleanup() {
