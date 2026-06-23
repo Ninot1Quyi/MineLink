@@ -875,18 +875,17 @@ S3-compatible video store, currently Cloudflare R2 via
 or re-render; it runs `check-video-review.mjs`, preserves the manifest, and lets
 the GitHub runner re-download and verify the MP4 hash before
 `scripts/dev/comment-pr-evidence.mjs` publishes PR evidence. GitHub issue and
-PR Markdown strips external `<video>` embeds, so Cloudflare R2 URLs are durable
-playback links, not guaranteed inline GitHub players. Inline playback on the
-GitHub page requires a GitHub-uploaded attachment URL such as
-`github.com/user-attachments/assets/...`; that upload path is a separate
-remaining factory capability and must not be faked with HTML. The GitHub
-Actions artifact remains the raw evidence bundle. The older
-`scripts/dev/publish-pr-video-evidence.mjs` path is a manual fallback only and
-must not be the default automated path when external video storage is
-configured, because default automation should not commit video binaries to the
-repository evidence branch. These PR-visible links are review convenience only;
-the video producer metadata still decides whether an artifact is GitHub canary
-evidence or final Ona task evidence. Full-chain dispatches must pass the task's
+PR Markdown strips external `<video>` embeds, so Cloudflare R2 URLs are
+candidate transport links only. Final PR video evidence must use a GitHub
+user-attachment MP4 URL such as `github.com/user-attachments/assets/...`; when
+that URL is missing the release-to-PR edge must fail closed instead of
+publishing an R2 link as playable evidence. The GitHub Actions artifact remains
+the raw evidence bundle. The older `scripts/dev/publish-pr-video-evidence.mjs`
+path is a manual fallback only and must not be used for final PR playback,
+because video binaries must not be committed to the repository evidence branch.
+These PR-visible links are review convenience only; the video producer metadata
+still decides whether an artifact is GitHub canary evidence or final Ona task
+evidence. Full-chain dispatches must pass the task's
 validation scope and scenarios through to the Ona finalizer; they must not
 silently downgrade a `neoforge` issue to `docs` or `none` before video
 rendering. Video-required tasks must

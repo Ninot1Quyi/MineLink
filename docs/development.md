@@ -251,12 +251,13 @@ commit, and artifact hashes before releasing instead of accepting stale branch
 files.
 
 For PR review visibility, the Ona release finalizer uploads the verifier
-approved MP4 to the configured S3-compatible video store. GitHub then updates
-the PR with the returned public MP4 URL:
+approved MP4 to the configured S3-compatible video store as candidate
+transport. GitHub PR inline playback still requires a GitHub user-attachment
+MP4 URL; R2 URLs are not accepted as final playable PR evidence:
 
 ```bash
 node scripts/dev/run-ona-finalizer-artifacts.mjs --stage-group release-upload --environment-id <ona-env> --task-id gh-123 --branch codex/gh-123-task
-node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --artifact-url URL --video-url URL
+node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr 123 --artifact-url URL --video-url https://github.com/user-attachments/assets/... --require-github-attachment-video
 ```
 
 The release finalizer calls the storage uploader inside the Ona task
@@ -266,10 +267,12 @@ environment. The storage uploader reads `MINELINK_VIDEO_STORAGE_PROVIDER`,
 `MINELINK_VIDEO_STORAGE_PREFIX`, `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID`, and
 `MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY`. The access key and secret must live
 only in GitHub/Ona secrets. The PR comment helper now requires a playable MP4
-URL by default. Use `--allow-artifact-only` only for local debugging, not for
+URL by default, and final PR evidence must add
+`--require-github-attachment-video` so R2/external URLs cannot be published as
+inline playback. Use `--allow-artifact-only` only for local debugging, not for
 automated PR evidence comments. The legacy `publish-pr-video-evidence.mjs`
-GitHub evidence-branch path is a manual fallback only when external storage is
-not available.
+GitHub evidence-branch path is not acceptable for final PR playback because it
+commits video binaries to a repository branch.
 The playable link is for review ergonomics. It does not make a GitHub canary
 video equivalent to final Ona task acceptance.
 

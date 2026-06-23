@@ -93,6 +93,9 @@ on:
         description: Comma-separated scenarios for finalizer validation
         required: false
         default: none
+      github_attachment_video_url:
+        description: GitHub user-attachments MP4 URL for inline PR playback; R2 URLs are candidate storage only
+        required: false
 
 permissions:
   contents: write
@@ -583,6 +586,7 @@ jobs:
         if: ${{ always() && (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          INPUT_GITHUB_ATTACHMENT_VIDEO_URL: ${{ inputs.github_attachment_video_url }}
           MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer
           MINELINK_ACCEPTANCE_VIDEO_BOUNDARY: Full-chain canary video produced by the Ona task finalizer and reviewed by the same Platform Codex implementation session. Product acceptance still depends on task scope and MineLink gate evidence.
         run: |
@@ -591,17 +595,24 @@ jobs:
             echo "Could not parse PR number from $MINELINK_AGENT_FACTORY_PR_URL"
             exit 1
           fi
+          if [ -z "${INPUT_GITHUB_ATTACHMENT_VIDEO_URL:-}" ]; then
+            echo "Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback."
+            echo "The Ona finalizer R2 URL remains candidate storage only: ${{ steps.ona-video-release.outputs.video-url }}"
+            exit 1
+          fi
           node scripts/dev/comment-pr-evidence.mjs \
             --repository "$GITHUB_REPOSITORY" \
             --pr "$pr_number" \
             --artifact-name minelink-ona-platform-codex-probe \
             --artifact-id "${{ steps.upload-probe-evidence.outputs.artifact-id }}" \
             --artifact-url "${{ steps.upload-probe-evidence.outputs.artifact-url }}" \
-            --video-url "${{ steps.ona-video-release.outputs.video-url }}" \
-            --raw-video-url "${{ steps.ona-video-release.outputs.raw-video-url }}" \
+            --video-url "$INPUT_GITHUB_ATTACHMENT_VIDEO_URL" \
+            --raw-video-url "$INPUT_GITHUB_ATTACHMENT_VIDEO_URL" \
             --manifest .minelink-dev/reports/artifacts/video-storage-manifest.json \
             --video-review .minelink-dev/reports/artifacts/video-review.md \
             --release-gate .minelink-dev/reports/artifacts/video-release-gate.md \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
-            --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY"
+            --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY" \
+            --require-github-attachment-video \
+            --require-comment

@@ -540,15 +540,15 @@ it with `scripts/dev/upload-acceptance-video-storage.mjs` and writes
 release approval. After the release gate, the Ona release finalizer copies the
 manifest, upload report, verifier report, and release-gate report back. GitHub
 Actions downloads the R2 MP4 from the manifest URL, verifies `mp4Sha256`, and
-only then writes the public MP4 URL into the PR through
-`scripts/dev/comment-pr-evidence.mjs`; it must not re-render or substitute the
-final task video. GitHub renders external MP4 URLs as links and strips external
-`<video>` tags from issue/PR Markdown, so R2 proves public playback but not
-GitHub-native inline playback. A directly playable GitHub PR player requires a
-GitHub-uploaded attachment URL, which is a separate remaining factory edge.
-GitHub Actions artifacts remain the raw
-evidence bundle; the default chain must not commit the video binary to the
-repository evidence branch when external storage is configured. When a
+only then allows the PR publishing step to continue. The PR publishing step
+must use `scripts/dev/comment-pr-evidence.mjs --require-github-attachment-video`
+with a GitHub user-attachment MP4 URL; it must not re-render, substitute the
+final task video, or publish the R2 URL as final playable evidence. A directly
+playable GitHub PR player requires a GitHub-uploaded attachment URL, which is
+the current release-to-PR blocker until a safe automated attachment upload
+surface exists. GitHub Actions artifacts remain the raw evidence bundle; the
+default chain must not commit the video binary to the repository evidence
+branch when external storage is configured. When a
 canary run renders the MP4 on the GitHub runner, the artifact origin must say
 `github-actions-canary`; that video is acceptable for chain testing only. Final
 task acceptance requires an Ona-produced video artifact, with
@@ -916,13 +916,15 @@ The implementation finalizer has already called
 `scripts/dev/upload-acceptance-video-storage.mjs --require-upload` inside the
 same Ona task environment. The release finalizer copies back the manifest,
 upload report, verifier report, and release gate report; the GitHub runner then
-downloads the R2 MP4 from `videoUrl` and verifies `mp4Sha256` before publishing
-PR evidence. GitHub comments with the returned public URL and artifact links;
-it does not generate or replace the final task video. External storage URLs are
-not GitHub-native attachment URLs, so they are clickable playback links in PR
-Markdown. Inline playback on the GitHub page requires a GitHub attachment URL;
-when no attachment exists, the comment must explicitly provide the R2 playable
-URL, artifact zip, manifest path, and verifier report.
+downloads the R2 MP4 from `videoUrl` and verifies `mp4Sha256`. R2 remains
+candidate evidence transport; it is not the final PR playback surface. Final PR
+video evidence must publish a GitHub user-attachment MP4 URL such as
+`github.com/user-attachments/assets/...` through
+`scripts/dev/comment-pr-evidence.mjs --require-github-attachment-video`. If no
+attachment URL exists, the release-to-PR edge must fail closed and record the
+missing attachment as the blocker instead of posting an R2-only comment. GitHub
+Actions artifacts remain the raw evidence bundle; the workflow must not commit
+video binaries to a repository evidence branch.
 
 `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID` and
 `MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY` must be configured only as GitHub or

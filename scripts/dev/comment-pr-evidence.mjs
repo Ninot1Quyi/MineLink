@@ -30,6 +30,7 @@ const args = {
 let dryRun = false;
 let requireComment = false;
 let allowArtifactOnly = false;
+let requireGithubAttachmentVideo = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -56,13 +57,16 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--dry-run") dryRun = true;
   else if (arg === "--require-comment") requireComment = true;
   else if (arg === "--allow-artifact-only") allowArtifactOnly = true;
+  else if (arg === "--require-github-attachment-video") requireGithubAttachmentVideo = true;
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/comment-pr-evidence.mjs --repository owner/repo --pr N --video-url URL [--artifact-url URL]
 
 Upserts a PR comment that links to the GitHub artifact containing
 .minelink-dev/reports/artifacts/acceptance.mp4 and, by default, requires a
 playable MP4 URL. This is a review-surface helper only; it does not
-alter acceptance gate status.`);
+alter acceptance gate status. Use --require-github-attachment-video for final
+PR evidence that must render through GitHub's user-attachments player; R2 or
+other external URLs are candidate transport only in that mode.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -94,6 +98,7 @@ function compact(text) {
 
 function validate() {
   const failures = [];
+  const inlineVideoUrl = args.rawVideoUrl || args.videoUrl;
   if (!/^[^/\s]+\/[^/\s]+$/.test(args.repository)) failures.push("--repository must be owner/repo");
   if (!/^\d+$/.test(String(args.pr))) failures.push("--pr must be a pull request number");
   if (!hasValue(args.artifactName)) failures.push("--artifact-name cannot be empty");
@@ -102,6 +107,11 @@ function validate() {
   }
   if (!hasValue(args.artifactUrl) && !hasValue(args.videoUrl)) {
     failures.push("at least one of --artifact-url or --video-url is required");
+  }
+  if (requireGithubAttachmentVideo && !githubInlineAttachment(inlineVideoUrl)) {
+    failures.push(
+      "--require-github-attachment-video requires a GitHub user attachment URL; R2/external URLs are candidate storage only",
+    );
   }
   if (!hasValue(args.videoPath)) failures.push("--video-path cannot be empty");
   return failures;
@@ -130,7 +140,7 @@ function body(manifest) {
     ? "GitHub inline video attachment:"
     : "External MP4 playback URL:";
   const playbackNote = inlineVideoUrl && !inlineExpected
-    ? "Note: GitHub renders external MP4 URLs as links. Inline playback on the PR page requires a GitHub-uploaded attachment URL; use the R2 URL or artifact when no attachment URL is available."
+    ? "Note: GitHub renders external MP4 URLs as links. Inline PR playback requires a GitHub user attachment URL; R2/external URLs are candidate transport only and do not satisfy final playable video evidence."
     : "";
   const provider = manifest?.storageProvider || "unknown";
   const objectKey = manifest?.objectKey || "unknown";
@@ -249,6 +259,7 @@ const report = {
   videoUrl: args.videoUrl,
   rawVideoUrl: args.rawVideoUrl,
   githubInlinePlaybackExpected: githubInlineAttachment(args.rawVideoUrl || args.videoUrl),
+  githubAttachmentVideoRequired: requireGithubAttachmentVideo,
   videoPath: args.videoPath,
   manifestPath: args.manifestPath,
   videoReviewPath: args.videoReviewPath,
@@ -288,6 +299,7 @@ const lines = [
   `- Playable video URL: ${args.videoUrl || "none"}`,
   `- Raw video URL: ${args.rawVideoUrl || "none"}`,
   `- GitHub inline playback expected: \`${report.githubInlinePlaybackExpected ? "yes" : "no"}\``,
+  `- GitHub attachment video required: \`${report.githubAttachmentVideoRequired ? "yes" : "no"}\``,
   `- Acceptance video path: \`${args.videoPath}\``,
   `- Video storage manifest: \`${args.manifestPath}\``,
   `- Verifier report: \`${args.videoReviewPath}\``,
