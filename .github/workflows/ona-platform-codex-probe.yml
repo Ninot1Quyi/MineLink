@@ -45,6 +45,9 @@ on:
         description: Ona task environment wait seconds before StartAgent
         required: false
         default: "600"
+      environment_class_id:
+        description: Optional Ona environment class id for task environments
+        required: false
       task_id:
         description: Task id for implementation-canary mode
         required: false
@@ -186,6 +189,7 @@ jobs:
           INPUT_MODE: ${{ inputs.mode || 'identity-canary' }}
           INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '30' }}
           INPUT_ENVIRONMENT_WAIT_SECONDS: ${{ inputs.environment_wait_seconds || '600' }}
+          INPUT_ENVIRONMENT_CLASS_ID: ${{ inputs.environment_class_id || vars.MINELINK_ONA_ENVIRONMENT_CLASS_ID }}
           INPUT_TASK_ID: ${{ inputs.task_id }}
           INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
@@ -208,6 +212,9 @@ jobs:
                 --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
                 --wait-seconds "${INPUT_WAIT_SECONDS:-30}"
               )
+              if [ -n "${INPUT_ENVIRONMENT_CLASS_ID:-}" ]; then
+                args+=(--environment-class-id "$INPUT_ENVIRONMENT_CLASS_ID")
+              fi
             else
               task_id="${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}"
               target_branch="${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}"
@@ -229,6 +236,9 @@ jobs:
                 --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
                 --wait-seconds "${INPUT_WAIT_SECONDS:-600}"
               )
+              if [ -n "${INPUT_ENVIRONMENT_CLASS_ID:-}" ]; then
+                args+=(--environment-class-id "$INPUT_ENVIRONMENT_CLASS_ID")
+              fi
             fi
           fi
           node "${args[@]}"

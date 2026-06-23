@@ -11,6 +11,7 @@ const defaults = {
   organizationId: process.env.MINELINK_ONA_ORGANIZATION_ID ?? "",
   projectId: process.env.MINELINK_ONA_PROJECT_ID ?? DEFAULT_PROJECT_ID,
   environmentId: process.env.MINELINK_ONA_ENVIRONMENT_ID ?? "",
+  environmentClassId: process.env.MINELINK_ONA_ENVIRONMENT_CLASS_ID ?? "",
   environmentName: process.env.MINELINK_ONA_ENVIRONMENT_NAME ?? "",
   environmentWaitSeconds: Number(process.env.MINELINK_ONA_ENVIRONMENT_WAIT_SECONDS ?? 600),
   environmentPollSeconds: Number(process.env.MINELINK_ONA_ENVIRONMENT_POLL_SECONDS ?? 10),
@@ -58,6 +59,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--organization-id") args.organizationId = readValue();
   else if (arg === "--project-id") args.projectId = readValue();
   else if (arg === "--environment-id") args.environmentId = readValue();
+  else if (arg === "--environment-class-id") args.environmentClassId = readValue();
   else if (arg === "--environment-name") args.environmentName = readValue();
   else if (arg === "--environment-wait-seconds") args.environmentWaitSeconds = Number(readValue());
   else if (arg === "--environment-poll-seconds") args.environmentPollSeconds = Number(readValue());
@@ -104,6 +106,7 @@ Options:
   --project-id <uuid>          Ona project id. Defaults to the MineLink project id.
   --organization-id <uuid>     Ona organization id for --discover-policies.
   --environment-id <uuid>      Explicit running Ona environment id for in-environment agents.
+  --environment-class-id <id>  Ona environment class for --create-environment.
   --agent-mode <enum>          AgentService mode. Defaults to AGENT_MODE_GOAL.
   --create-environment         Create and poll a fresh task environment before StartAgent.
   --dry-run                    Validate inputs and write the request body without API calls.
@@ -502,7 +505,7 @@ async function waitForRunningEnvironment(environmentId) {
 
 async function createTaskEnvironment(report) {
   const name = environmentName();
-  const result = run("ona", [
+  const createArgs = [
     "environment",
     "create",
     args.projectId,
@@ -511,7 +514,11 @@ async function createTaskEnvironment(report) {
     name,
     "--timeout",
     "60s",
-  ]);
+  ];
+  if (hasValue(args.environmentClassId)) {
+    createArgs.push("--class-id", args.environmentClassId);
+  }
+  const result = run("ona", createArgs);
   if (result.status !== 0) {
     throw new Error(`ona environment create failed: ${sanitize(result.stderr || result.stdout)}`);
   }
@@ -523,6 +530,7 @@ async function createTaskEnvironment(report) {
   report.environmentId = environmentId;
   report.environmentBootstrap.created = true;
   report.environmentBootstrap.name = name;
+  report.environmentBootstrap.classId = args.environmentClassId;
   report.environmentBootstrap.createOutput = sanitize(result.stdout);
   report.steps.push("CreateEnvironment");
 
@@ -535,6 +543,7 @@ async function createTaskEnvironment(report) {
   const prebuildId = latest?.metadata?.prebuildId ?? "";
   report.evidence.push(`environment=${environmentId}`);
   report.evidence.push(`environmentPhase=${phase || "missing"}`);
+  if (hasValue(args.environmentClassId)) report.evidence.push(`environmentClass=${args.environmentClassId}`);
   if (hasValue(machinePhase)) report.evidence.push(`environmentMachinePhase=${machinePhase}`);
   if (hasValue(prebuildId)) report.evidence.push(`environmentPrebuild=${prebuildId}`);
   if (!isRunningEnvironment(latest)) {
@@ -825,6 +834,7 @@ const report = {
     createRequested: createEnvironment,
     explicitEnvironmentId,
     created: false,
+    classId: args.environmentClassId,
     name: "",
     attempts: [],
     readback: null,
@@ -981,6 +991,7 @@ const lines = [
   `- Create requested: ${code(report.environmentBootstrap.createRequested ? "yes" : "no")}`,
   `- Explicit environment id: ${code(report.environmentBootstrap.explicitEnvironmentId ? "yes" : "no")}`,
   `- Created environment: ${code(report.environmentBootstrap.created ? "yes" : "no")}`,
+  `- Environment class id: ${code(report.environmentBootstrap.classId || "default")}`,
   `- Environment name: ${code(report.environmentBootstrap.name)}`,
   ...(report.environmentBootstrap.attempts.length > 0
     ? [

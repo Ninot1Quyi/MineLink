@@ -11,6 +11,7 @@ const defaults = {
   taskSuffix: "",
   waitSeconds: "300",
   environmentWaitSeconds: "600",
+  environmentClassId: process.env.MINELINK_ONA_ENVIRONMENT_CLASS_ID ?? "",
   branchWaitSeconds: "300",
   ciWaitSeconds: "900",
   prBaseBranch: process.env.MINELINK_PR_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
@@ -34,6 +35,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--task-suffix") args.taskSuffix = readValue();
   else if (arg === "--wait-seconds") args.waitSeconds = readValue();
   else if (arg === "--environment-wait-seconds") args.environmentWaitSeconds = readValue();
+  else if (arg === "--environment-class-id") args.environmentClassId = readValue();
   else if (arg === "--branch-wait-seconds") args.branchWaitSeconds = readValue();
   else if (arg === "--ci-wait-seconds") args.ciWaitSeconds = readValue();
   else if (arg === "--pr-base-branch") args.prBaseBranch = readValue();
@@ -127,6 +129,8 @@ const workflowArgs = [
   "-f",
   `environment_wait_seconds=${args.environmentWaitSeconds}`,
   "-f",
+  `environment_class_id=${args.environmentClassId}`,
+  "-f",
   `branch_wait_seconds=${args.branchWaitSeconds}`,
   "-f",
   `ci_wait_seconds=${args.ciWaitSeconds}`,
@@ -211,6 +215,7 @@ const report = {
   linearIssue,
   validationScope,
   scenarios,
+  environmentClassId: args.environmentClassId,
   prTitle: title,
   runId,
   runUrl,
@@ -231,6 +236,7 @@ const lines = [
   `- Linear issue: \`${linearIssue}\``,
   `- Validation scope: \`${validationScope}\``,
   `- Scenarios: \`${scenarios}\``,
+  `- Environment class id: \`${args.environmentClassId || "default"}\``,
   `- PR title: \`${title}\``,
   `- Workflow run: ${runUrl || "best-effort-unavailable"}`,
   "",

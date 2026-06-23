@@ -405,6 +405,11 @@ the organization total-environment quota, `full-chain-canary` runs
 launching Goal-mode Codex. That preflight prune is project-scoped quota hygiene,
 not task evidence; it skips running/starting environments and records every
 deleted or skipped environment in `.minelink-dev/reports/`.
+Video-required tasks may pass `MINELINK_ONA_ENVIRONMENT_CLASS_ID` or the
+`environment_class_id` workflow input so the launcher creates the task
+environment on a larger Ona class. This is capacity selection for the
+environment only; it does not bypass the Goal-mode Codex readback, finalizer,
+video verifier, or release gates.
 The launcher uses the model's available context window and defaults the
 configurable reasoning effort to `CODEX_REASONING_EFFORT_EXTRA_HIGH`; no
 separate launcher-side context-window-size field is currently part of the

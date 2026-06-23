@@ -428,7 +428,11 @@ project, and current project/environment metadata shows the
 `codex/minelink-mvp-engineering` clone target plus a project-scoped
 `codex_auth` secret. That proves the project can be prepared for Codex work,
 but it is not enough to prove the automated chain unless the task run records
-the specific Codex session and platform-mode evidence. The implementation
+the specific Codex session and platform-mode evidence. Task environments can be
+created with an explicit Ona environment class through
+`MINELINK_ONA_ENVIRONMENT_CLASS_ID` or the `environment_class_id` workflow
+input; video-required NeoForge/client recorder jobs should use Regular or
+larger classes instead of relying on the default Small baseline. The implementation
 finalizer renders the trace-driven MP4 before the verifier runs; the release
 finalizer must not re-render the MP4 after video review. It checks the existing
 artifact hashes. In GitHub-driven full-chain canaries, the runner uses
