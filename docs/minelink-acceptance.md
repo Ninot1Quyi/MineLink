@@ -1013,7 +1013,10 @@ Current status:
   `reports/e2e-failure-log-tail.txt` with the recorder client config, client
   logs, and recorder logs last, so reviewers can diagnose Minecraft client
   startup failures from GitHub artifacts even when the stage output is
-  truncated.
+  truncated. The finalizer artifact bridge must return reports and
+  client-capture logs through a manifest plus fixed-size base64 chunks with a
+  SHA-256 check, not a single large stdout marker payload, so a large
+  `acceptance.mp4` cannot be lost by Ona CLI JSON truncation or escaping.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

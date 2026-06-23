@@ -500,7 +500,11 @@ artifact tarball includes
 Minecraft/client/MCP log tail. `e2e.sh` also writes
 `reports/e2e-failure-log-tail.txt` with `client-config.log`, client logs, and
 recorder logs last so the stage report remains useful when long NeoForge output
-is truncated. The recorder client resolves
+is truncated. The finalizer artifact bridge downloads the resulting report
+bundle with a manifest plus fixed-size base64 chunks and verifies the tarball
+SHA-256 locally, so a successful remote finalizer is not lost when a client
+capture makes the tarball too large for one Ona CLI stdout/JSON payload. The
+recorder client resolves
 `MINELINK_RECORDER_CLIENT_GAME_DIR` to a task-local absolute path under the
 client-capture directory before launching NeoForge `runClient`, so the
 `--gameDir` argument is independent of Ona or Gradle working-directory

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -227,18 +228,43 @@ function remoteBranchName(value) {
   return normalized.startsWith("origin/") ? normalized.slice("origin/".length) : normalized;
 }
 
+function parseJsonCandidate(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Continue below.
+  }
+  for (const [open, close] of [
+    ["[", "]"],
+    ["{", "}"],
+  ]) {
+    const start = text.indexOf(open);
+    const end = text.lastIndexOf(close);
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        // Keep looking.
+      }
+    }
+  }
+  return null;
+}
+
+function firstPayload(payload) {
+  return Array.isArray(payload) ? payload[0] ?? {} : payload;
+}
+
 function extractJsonOutput(stdout) {
   const text = String(stdout ?? "").trim();
   if (!text) return {};
-  try {
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed[0] ?? {} : parsed;
-  } catch {
-    return { raw: text };
-  }
+  const parsed = parseJsonCandidate(text);
+  return parsed === null ? { raw: text } : firstPayload(parsed);
 }
 
 function outputText(payload, fallback) {
+  if (Array.isArray(payload)) return outputText(payload[0] ?? {}, fallback);
+  if (typeof payload === "string") return payload;
   if (!payload || typeof payload !== "object") return fallback;
   return (
     payload.stdout ??
@@ -247,9 +273,22 @@ function outputText(payload, fallback) {
     payload.result?.stdout ??
     payload.result?.stderr ??
     payload.result?.output ??
+    payload.data?.stdout ??
+    payload.data?.stderr ??
+    payload.data?.output ??
     payload.logs ??
     fallback
   );
+}
+
+function parseJsonObject(text) {
+  const parsed = parseJsonCandidate(String(text ?? "").trim());
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  throw new Error("expected a JSON object");
+}
+
+function sha256(buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
 }
 
 function exitCode(payload, fallbackStatus) {
@@ -359,12 +398,20 @@ const report = {
   commandExitCode: null,
   remotePid: "",
   execOutput: "",
+  artifactTransfer: {
+    mode: "chunked-base64",
+    manifestPath: ".minelink-dev/ona-finalizer-artifacts-manifest.json",
+    chunkDir: ".minelink-dev/ona-finalizer-artifact-chunks",
+    chunkSize: 48_000,
+    chunkCount: 0,
+    fetchedChunks: 0,
+    byteCount: 0,
+    sha256: "",
+  },
   boundary:
     "Ona finalizer artifact bridge only. Platform Codex API readback remains the implementation/verifier evidence.",
 };
 
-const markerStart = "__MINELINK_FINALIZER_ARTIFACTS_TAR_BASE64_START__";
-const markerEnd = "__MINELINK_FINALIZER_ARTIFACTS_TAR_BASE64_END__";
 let extractedCurrentTarball = false;
 
 if (failures.length === 0) {
@@ -536,45 +583,131 @@ if (failures.length === 0) {
     }
 
     if (done || failures.some((failure) => failure.includes("timed out"))) {
-      const fetchScript = [
+      const remoteChunkDir = ".minelink-dev/ona-finalizer-artifact-chunks";
+      const remoteManifest = ".minelink-dev/ona-finalizer-artifacts-manifest.json";
+      const remoteBase64 = ".minelink-dev/ona-finalizer-artifacts.tar.gz.b64";
+      const chunkSize = report.artifactTransfer.chunkSize;
+      const prepareChunksScript = [
         "set -euo pipefail",
-        `if test -s ${shellQuote(remoteTarball)}; then`,
-        `  printf '\\n${markerStart}\\n'`,
-        `  base64 ${shellQuote(remoteTarball)} | tr -d '\\n'`,
-        `  printf '\\n${markerEnd}\\n'`,
-        "else",
+        `if test ! -s ${shellQuote(remoteTarball)}; then`,
         "  echo __MINELINK_FINALIZER_REMOTE_NO_TARBALL__",
         "  echo __MINELINK_FINALIZER_REMOTE_LOG_TAIL__",
         `  tail -n 240 ${shellQuote(remoteLog)} 2>/dev/null || true`,
         "  exit 2",
         "fi",
+        `rm -rf ${shellQuote(remoteChunkDir)}`,
+        `mkdir -p ${shellQuote(remoteChunkDir)}`,
+        `base64 ${shellQuote(remoteTarball)} | tr -d '\\n' > ${shellQuote(remoteBase64)}`,
+        `split -b ${chunkSize} -d -a 6 ${shellQuote(remoteBase64)} ${shellQuote(`${remoteChunkDir}/chunk-`)}`,
+        `byte_count="$(wc -c < ${shellQuote(remoteTarball)} | tr -d ' ')"`,
+        `chunk_count="$(find ${shellQuote(remoteChunkDir)} -type f -name 'chunk-*' | wc -l | tr -d ' ')"`,
+        `tar_sha="$(sha256sum ${shellQuote(remoteTarball)} 2>/dev/null | awk '{print $1}' || shasum -a 256 ${shellQuote(remoteTarball)} | awk '{print $1}')"`,
+        `cat > ${shellQuote(remoteManifest)} <<EOF`,
+        `{`,
+        `  "tarball": ${JSON.stringify(remoteTarball)},`,
+        `  "chunkDir": ${JSON.stringify(remoteChunkDir)},`,
+        `  "chunkPrefix": "chunk-",`,
+        `  "chunkSize": ${chunkSize},`,
+        `  "chunkCount": $chunk_count,`,
+        `  "byteCount": $byte_count,`,
+        `  "sha256": "$tar_sha"`,
+        `}`,
+        `EOF`,
+        `cat ${shellQuote(remoteManifest)}`,
       ].join("\n");
-      const fetch = runOnaExec(fetchScript, Math.max(args.execTimeoutSeconds, 55));
-      const start = fetch.stdout.indexOf(markerStart);
-      const end = fetch.stdout.indexOf(markerEnd);
-      if (fetch.cliExitCode !== 0 || fetch.remoteExitCode !== 0) {
-        failures.push(`ona environment exec failed while fetching finalizer artifacts: ${fetch.cliExitCode || fetch.remoteExitCode}`);
-      }
-      if (start < 0 || end < 0 || end <= start) {
-        failures.push("Ona finalizer output did not contain artifact tar markers.");
-        lastPollOutput = [lastPollOutput, fetch.text].filter(Boolean).join("\n");
+      const prepareChunks = runOnaExec(prepareChunksScript, Math.max(args.execTimeoutSeconds, 55));
+      if (prepareChunks.cliExitCode !== 0 || prepareChunks.remoteExitCode !== 0) {
+        failures.push(
+          `ona environment exec failed while preparing chunked finalizer artifacts: ${
+            prepareChunks.cliExitCode || prepareChunks.remoteExitCode
+          }`,
+        );
+        lastPollOutput = [lastPollOutput, prepareChunks.text].filter(Boolean).join("\n");
       } else {
-        const base64 = fetch.stdout.slice(start + markerStart.length, end).replace(/\s+/g, "");
+        let manifest;
         try {
-          const tarball = Buffer.from(base64, "base64");
-          await fs.mkdir(path.dirname(args.tarOutput), { recursive: true });
-          await fs.writeFile(args.tarOutput, tarball);
-          const tar = spawnSync("tar", ["-xzf", args.tarOutput, "-C", ".minelink-dev"], {
-            encoding: "utf8",
-            stdio: "pipe",
-          });
-          if (tar.status !== 0) {
-            failures.push(`tar extraction failed: ${sanitize(tar.stderr || tar.stdout)}`);
-          } else {
-            extractedCurrentTarball = true;
-          }
+          manifest = parseJsonObject(prepareChunks.stdout);
         } catch (error) {
-          failures.push(`Failed to decode/extract artifact tarball: ${error instanceof Error ? error.message : error}`);
+          failures.push(
+            `Ona finalizer artifact manifest was not parseable JSON: ${
+              error instanceof Error ? error.message : error
+            }`,
+          );
+          lastPollOutput = [lastPollOutput, prepareChunks.text].filter(Boolean).join("\n");
+        }
+
+        if (manifest) {
+          const chunkCount = Number(manifest.chunkCount);
+          const byteCount = Number(manifest.byteCount);
+          const manifestChunkDir = String(manifest.chunkDir || remoteChunkDir);
+          const chunkPrefix = String(manifest.chunkPrefix || "chunk-");
+          const expectedSha = String(manifest.sha256 || "");
+          report.artifactTransfer.manifestPath = remoteManifest;
+          report.artifactTransfer.chunkDir = manifestChunkDir;
+          report.artifactTransfer.chunkSize = Number(manifest.chunkSize || chunkSize);
+          report.artifactTransfer.chunkCount = Number.isFinite(chunkCount) ? chunkCount : 0;
+          report.artifactTransfer.byteCount = Number.isFinite(byteCount) ? byteCount : 0;
+          report.artifactTransfer.sha256 = expectedSha;
+
+          if (!Number.isInteger(chunkCount) || chunkCount < 1) {
+            failures.push(`Ona finalizer artifact manifest has invalid chunkCount: ${manifest.chunkCount}`);
+          }
+          if (!Number.isFinite(byteCount) || byteCount < 1) {
+            failures.push(`Ona finalizer artifact manifest has invalid byteCount: ${manifest.byteCount}`);
+          }
+          if (!/^[a-f0-9]{64}$/i.test(expectedSha)) {
+            failures.push(`Ona finalizer artifact manifest has invalid sha256: ${expectedSha || "missing"}`);
+          }
+
+          let base64 = "";
+          for (let index = 0; failures.length === 0 && index < chunkCount; index += 1) {
+            const chunkName = `${chunkPrefix}${String(index).padStart(6, "0")}`;
+            const chunkPath = `${manifestChunkDir}/${chunkName}`;
+            const chunk = runOnaExec(`cat ${shellQuote(chunkPath)}`, Math.max(args.execTimeoutSeconds, 20));
+            if (chunk.cliExitCode !== 0 || chunk.remoteExitCode !== 0) {
+              failures.push(
+                `ona environment exec failed while fetching finalizer artifact chunk ${index + 1}/${chunkCount}: ${
+                  chunk.cliExitCode || chunk.remoteExitCode
+                }`,
+              );
+              lastPollOutput = [lastPollOutput, chunk.text].filter(Boolean).join("\n");
+              break;
+            }
+            const chunkText = String(chunk.stdout ?? "").replace(/\s+/g, "");
+            if (!chunkText) {
+              failures.push(`Ona finalizer artifact chunk ${index + 1}/${chunkCount} was empty.`);
+              lastPollOutput = [lastPollOutput, chunk.text].filter(Boolean).join("\n");
+              break;
+            }
+            base64 += chunkText;
+            report.artifactTransfer.fetchedChunks = index + 1;
+          }
+
+          if (failures.length === 0) {
+            try {
+              const tarball = Buffer.from(base64, "base64");
+              const actualSha = sha256(tarball);
+              if (actualSha !== expectedSha) {
+                failures.push(`Ona finalizer artifact sha256 mismatch: expected ${expectedSha}, got ${actualSha}`);
+              } else if (tarball.length !== byteCount) {
+                failures.push(`Ona finalizer artifact byte count mismatch: expected ${byteCount}, got ${tarball.length}`);
+              } else {
+                await fs.mkdir(path.dirname(args.tarOutput), { recursive: true });
+                await fs.writeFile(args.tarOutput, tarball);
+                const tar = spawnSync("tar", ["-xzf", args.tarOutput, "-C", ".minelink-dev"], {
+                  encoding: "utf8",
+                  stdio: "pipe",
+                });
+                if (tar.status !== 0) {
+                  failures.push(`tar extraction failed: ${sanitize(tar.stderr || tar.stdout)}`);
+                } else {
+                  extractedCurrentTarball = true;
+                }
+              }
+            } catch (error) {
+              failures.push(`Failed to decode/extract artifact tarball: ${error instanceof Error ? error.message : error}`);
+            }
+          }
         }
       }
     }
@@ -631,6 +764,16 @@ const lines = [
   ...(report.injectedSourceFiles?.length > 0
     ? report.injectedSourceFiles.map((file) => `- \`${file}\``)
     : ["- none"]),
+  "",
+  "## Artifact Transfer",
+  "",
+  `- Mode: \`${report.artifactTransfer.mode}\``,
+  `- Manifest: \`${report.artifactTransfer.manifestPath}\``,
+  `- Chunk directory: \`${report.artifactTransfer.chunkDir}\``,
+  `- Chunk size: \`${report.artifactTransfer.chunkSize}\``,
+  `- Chunks fetched: \`${report.artifactTransfer.fetchedChunks}/${report.artifactTransfer.chunkCount}\``,
+  `- Byte count: \`${report.artifactTransfer.byteCount}\``,
+  `- SHA256: \`${report.artifactTransfer.sha256 || "none"}\``,
   "",
   "## Extracted Artifact Files",
   "",

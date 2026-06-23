@@ -801,7 +801,10 @@ recorder logs at the end so GitHub truncation still preserves the most useful
 failure evidence. Stage
 reports preserve both the head and tail of long command output so recorder,
 Minecraft client, and MCP server failures can be diagnosed from GitHub
-artifacts. The
+artifacts. The artifact bridge prepares a remote manifest plus fixed-size
+base64 chunks under `.minelink-dev/ona-finalizer-artifact-chunks` and verifies
+the tarball SHA-256 after downloading, so large client-video bundles do not
+depend on a single oversized Ona CLI stdout payload or JSON marker parse. The
 recorder client is an observer only: the server creates a visible
 `server_agent` marker and an invisible camera anchor that continuously follows
 the agent for recording, but it does not add MCP tools, world-query authority,
