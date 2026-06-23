@@ -28,15 +28,26 @@ RUN mkdir -p -m 0755 /etc/apt/keyrings \
     ffmpeg \
     gh \
     git \
+    libgl1 \
+    libgl1-mesa-dri \
+    libxcursor1 \
+    libxi6 \
+    libxinerama1 \
+    libxrandr2 \
+    libxxf86vm1 \
+    python3-pil \
+    xvfb \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
 RUN node --version \
   && npm --version \
   && python3 --version \
+  && python3 -c 'import PIL' \
   && java -version \
   && gh --version \
-  && ffmpeg -version
+  && ffmpeg -version \
+  && command -v Xvfb
 
 USER node
 WORKDIR /tmp/minelink-prewarm
@@ -69,7 +80,7 @@ ENV JAVA_HOME=/usr/local/openjdk-21
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 LABEL org.opencontainers.image.title="MineLink prewarmed devcontainer"
-LABEL org.opencontainers.image.description="Node 22, Java 21, ffmpeg, GitHub CLI, npm cache, and Gradle user-home cache for Ona/Codex development."
+LABEL org.opencontainers.image.description="Node 22, Java 21, ffmpeg, Xvfb, GitHub CLI, npm cache, and Gradle user-home cache for Ona/Codex development."
 LABEL org.opencontainers.image.source="https://github.com/Ninot1Quyi/MineLink"
 
 COPY --from=prewarm --chown=node:node /home/node/.npm /home/node/.npm
