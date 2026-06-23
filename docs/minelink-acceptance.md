@@ -980,9 +980,13 @@ Current status:
   also wait for the client-side `MineLink recorder client in world` marker and
   start ffmpeg after that marker, which records `clientWorldReady=true` and
   `captureStartedAfterWorldReady=true` in the origin and storage manifest. The
-  release gate must include `--require-client-gui-capture`; otherwise a static
-  card, reports digest, server-observation-only video, loading screen, or
-  Mojang bootstrap capture cannot be final acceptance evidence.
+  server-side recorder helper must also log
+  `MineLink recorder auto-follow active` after the spectator recorder is bound
+  to the agent-following camera anchor; the renderer records this as
+  `recorderAutoFollow=true`. The release gate must include
+  `--require-client-gui-capture`; otherwise a static card, reports digest,
+  server-observation-only video, loading screen, Mojang bootstrap capture, or
+  non-following client capture cannot be final acceptance evidence.
   Headless recorder runs call `scripts/dev/ensure-client-recorder-deps.sh` when
   `ffmpeg` or `Xvfb` is missing; this lets an older Ona task environment
   self-install recorder packages when apt/sudo is available, or fail with an
@@ -1004,7 +1008,7 @@ Current status:
   the current workflow/source-commit finalizer scripts. This keeps task content
   task-branch-bound while preventing stale orchestration scripts from producing
   mismatched review requests such as `Task id: local`. The injection also
-  carries the matching `ARCHITECTURE.md` and client recorder helpers so
+  carries the matching `ARCHITECTURE.md` and client/server recorder helpers so
   architecture guard failures represent real task drift rather than a
   source-script/task-doc hybrid. The finalizer must pin the source ref to a
   commit before fetching the PR base or task branch, checkout the task branch
@@ -1012,8 +1016,9 @@ Current status:
   readback, validate against the PR base branch rather than a hard-coded
   default, and return client-capture logs in its artifact bundle when video
   rendering fails. The injected recorder helper set includes the client
-  recorder Java source so the in-world readiness marker and stricter renderer
-  checks are tested together. Following the reviewed commit is required for reused canary
+  recorder Java source and server recorder source so the in-world readiness
+  marker, auto-follow marker, and stricter renderer checks are tested together.
+  Following the reviewed commit is required for reused canary
   branches because the remote branch head can move after Goal-mode Codex
   finishes. Client-video failures must also write
   `reports/e2e-failure-log-tail.txt` with the recorder client config, client
@@ -1033,9 +1038,9 @@ Current status:
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
   match markers, the required Ona video producer, and current summary/MP4
   hashes. When a storage manifest is present, the gate also verifies the
-  manifest hashes, producer, `clientGuiCapture`, `clientWorldReady`, and
-  `captureStartedAfterWorldReady` markers. The gate fails final publication
-  when the summary has `Scenario reports: 0` or
+  manifest hashes, producer, `clientGuiCapture`, `clientWorldReady`,
+  `captureStartedAfterWorldReady`, and `recorderAutoFollow` markers. The gate
+  fails final publication when the summary has `Scenario reports: 0` or
   `No scenario reports found`; a pure text/card MP4 is never sufficient final
   evidence for video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.

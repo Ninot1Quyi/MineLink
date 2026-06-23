@@ -471,6 +471,14 @@ PY
 
 if truthy_value "$record_client"; then
   stop_recorder_client
+  {
+    if grep -Fq "MineLink recorder auto-follow active" "$work_dir/logs/server.stdout.log" "$work_dir/logs/server.stderr.log" 2>/dev/null; then
+      echo "recorderAutoFollow=true"
+      echo "autoFollowLog=MineLink recorder auto-follow active"
+    else
+      echo "recorderAutoFollow=false"
+    fi
+  } >> "$client_capture_ready"
   branch_name="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf '%s' unknown)"
   node scripts/dev/render-client-capture-video.mjs \
     --client-video "$client_capture" \

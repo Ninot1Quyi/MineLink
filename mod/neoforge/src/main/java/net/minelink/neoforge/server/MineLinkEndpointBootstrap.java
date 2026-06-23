@@ -234,6 +234,17 @@ public final class MineLinkEndpointBootstrap {
         }
         player.teleportTo(server.overworld(), cameraPos.x, cameraPos.y, cameraPos.z, Set.of(), yaw, pitch);
         player.setCamera(agent.recorderCameraAnchor);
+        if (!agent.recorderAutoFollowLogged) {
+            agent.recorderAutoFollowLogged = true;
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder auto-follow active: recorder={} agent={} camera={},{},{}",
+                player.getGameProfile().getName(),
+                agent.displayName,
+                String.format("%.2f", cameraPos.x),
+                String.format("%.2f", cameraPos.y),
+                String.format("%.2f", cameraPos.z)
+            );
+        }
     }
 
     private void positionCameraAnchor(ArmorStand cameraAnchor, AgentBody agent) {
@@ -4016,6 +4027,7 @@ public final class MineLinkEndpointBootstrap {
         private boolean frozen = false;
         private ArmorStand recorderAvatar;
         private ArmorStand recorderCameraAnchor;
+        private boolean recorderAutoFollowLogged = false;
 
         private AgentBody(String agentId, String displayName, String ownerId, String seedPrompt, FakePlayer entity, BlockPos fixtureBase, String fixtureName) {
             this.agentId = agentId;

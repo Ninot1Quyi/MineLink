@@ -43,6 +43,10 @@ Verifier: Ona Platform Codex
 Release decision: pass
 Task matched: yes
 Video matched: yes
+Client GUI capture: yes
+Client world ready: yes
+Capture started after world ready: yes
+Recorder auto-follow: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 
@@ -50,7 +54,8 @@ Any missing video, missing report, negative marker, or non-pass decision fails
 the release gate. Use --require-producer <producer> to require a specific video
 origin such as ona-environment. Use --require-client-gui-capture for Minecraft
 product video gates that must show a real Minecraft client view rather than a
-trace-driven server-observation composite.`);
+trace-driven server-observation composite, must start after the client reaches
+the world, and must follow the active server_agent.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -114,6 +119,7 @@ const videoKind = origin?.videoKind ?? "unknown";
 const clientGuiCapture = origin?.clientGuiCapture === true;
 const clientWorldReady = origin?.clientWorldReady === true;
 const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
+const recorderAutoFollow = origin?.recorderAutoFollow === true;
 const review = await readText(reviewPath);
 const summary = await readText(summaryPath);
 const scenarioReportCount = summaryCount(summary, "Scenario reports");
@@ -151,6 +157,9 @@ if (requireClientGuiCapture) {
     if (!captureStartedAfterWorldReady) {
       failures.push("Acceptance video origin does not confirm capture started after the recorder client reached the world");
     }
+    if (!recorderAutoFollow) {
+      failures.push("Acceptance video origin does not confirm recorder auto-follow of the active server_agent");
+    }
   }
 }
 
@@ -179,6 +188,9 @@ if (storageManifest) {
   if (requireClientGuiCapture && storageManifest.captureStartedAfterWorldReady !== true) {
     failures.push("Video storage manifest does not confirm captureStartedAfterWorldReady=true");
   }
+  if (requireClientGuiCapture && storageManifest.recorderAutoFollow !== true) {
+    failures.push("Video storage manifest does not confirm recorderAutoFollow=true");
+  }
 }
 
 if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
@@ -191,6 +203,7 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const reviewedClientGuiCapture = marker(review, "Client GUI capture");
   const reviewedClientWorldReady = marker(review, "Client world ready");
   const reviewedCaptureStartedAfterWorldReady = marker(review, "Capture started after world ready");
+  const reviewedRecorderAutoFollow = marker(review, "Recorder auto-follow");
   const verifier = marker(review, "Verifier");
   const reviewedSummaryHash = marker(review, "Summary sha256");
   const reviewedMp4Hash = marker(review, "MP4 sha256");
@@ -225,6 +238,11 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   if (requireClientGuiCapture && reviewedCaptureStartedAfterWorldReady !== "yes") {
     failures.push(
       `Video verifier did not confirm capture-after-world-ready: ${reviewedCaptureStartedAfterWorldReady || "missing"}`,
+    );
+  }
+  if (requireClientGuiCapture && reviewedRecorderAutoFollow !== "yes") {
+    failures.push(
+      `Video verifier did not confirm recorder auto-follow: ${reviewedRecorderAutoFollow || "missing"}`,
     );
   }
   if (/^Release decision:\s*fail/im.test(review)) {
@@ -267,6 +285,7 @@ const lines = [
   `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
+  `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage provider: \`${storageManifest?.storageProvider || "none"}\``,
   `- Storage object: \`${storageManifest?.objectKey || "none"}\``,

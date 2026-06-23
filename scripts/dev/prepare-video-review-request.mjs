@@ -140,6 +140,7 @@ const videoKind = origin?.videoKind ?? "unknown";
 const clientGuiCapture = origin?.clientGuiCapture === true;
 const clientWorldReady = origin?.clientWorldReady === true;
 const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
+const recorderAutoFollow = origin?.recorderAutoFollow === true;
 const resolvedBranch = await gitBranch();
 
 if (requireClientGuiCapture) {
@@ -155,6 +156,9 @@ if (requireClientGuiCapture) {
     }
     if (!captureStartedAfterWorldReady) {
       failures.push("Acceptance video origin does not confirm capture started after the recorder client reached the world");
+    }
+    if (!recorderAutoFollow) {
+      failures.push("Acceptance video origin does not confirm recorder auto-follow of the active server_agent");
     }
   }
 }
@@ -181,6 +185,9 @@ if (requireStorageManifest) {
     if (requireClientGuiCapture && storageManifest.captureStartedAfterWorldReady !== true) {
       failures.push("Video storage manifest does not confirm captureStartedAfterWorldReady=true");
     }
+    if (requireClientGuiCapture && storageManifest.recorderAutoFollow !== true) {
+      failures.push("Video storage manifest does not confirm recorderAutoFollow=true");
+    }
   }
 }
 
@@ -202,6 +209,7 @@ const lines = [
   `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
+  `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage manifest required: \`${requireStorageManifest ? "yes" : "no"}\``,
   `- Storage provider: \`${md(storageManifest?.storageProvider || "none")}\``,
@@ -227,6 +235,9 @@ const lines = [
   "Video matched: yes|no",
   `Video producer: ${producer}`,
   `Client GUI capture: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Client world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Capture started after world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Recorder auto-follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Summary sha256: ${summaryHash}`,
   `MP4 sha256: ${mp4Hash}`,
   "```",

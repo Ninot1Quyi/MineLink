@@ -138,7 +138,9 @@ const reportHash = report ? await sha256(args.report) : "missing";
 
 const agentLog = await readText(path.join(args.logDir, "agent.log"));
 const serverStdout = await readText(path.join(args.logDir, "server.stdout.log"));
+const serverStderr = await readText(path.join(args.logDir, "server.stderr.log"));
 const clientStdout = await readText(path.join(args.logDir, "client.stdout.log"));
+const serverLogText = `${serverStdout}\n${serverStderr}`;
 const clientReadyLog = await readText(path.join(args.logDir, "client-capture-ready.log"));
 const clientWorldReady =
   /(?:^|\n)clientWorldReady=true(?:\n|$)/.test(clientReadyLog) ||
@@ -146,12 +148,18 @@ const clientWorldReady =
 const captureStartedAfterWorldReady =
   /(?:^|\n)captureStartedAfterWorldReady=true(?:\n|$)/.test(clientReadyLog) ||
   clientReadyLog.includes("ffmpeg started after recorder client world-ready");
+const recorderAutoFollow =
+  /(?:^|\n)recorderAutoFollow=true(?:\n|$)/.test(clientReadyLog) ||
+  serverLogText.includes("MineLink recorder auto-follow active");
 
 if (!clientWorldReady) {
   failures.push("Recorder client did not confirm an in-world Minecraft view before acceptance rendering");
 }
 if (!captureStartedAfterWorldReady) {
   failures.push("Client capture did not start after the recorder client reached the Minecraft world");
+}
+if (!recorderAutoFollow) {
+  failures.push("Recorder client did not confirm auto-follow camera binding to the active server_agent");
 }
 
 const terminalLines = [
@@ -162,6 +170,7 @@ const terminalLines = [
   `result: ${passed ? "PASS" : "FAIL"}`,
   `world ready: ${clientWorldReady ? "YES" : "NO"}`,
   `capture after ready: ${captureStartedAfterWorldReady ? "YES" : "NO"}`,
+  `auto follow: ${recorderAutoFollow ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
   "",
   "assertions:",
@@ -180,7 +189,7 @@ const terminalLines = [
   ...tailLines(agentLog, 8).map((line) => compact(line, 36)),
   "",
   "server/client:",
-  ...tailLines(serverStdout, 4).map((line) => compact(line, 36)),
+  ...tailLines(serverLogText, 4).map((line) => compact(line, 36)),
   ...tailLines(clientStdout, 4).map((line) => compact(line, 36)),
 ].slice(0, 42);
 
@@ -318,6 +327,7 @@ const summaryLines = [
   "- Client GUI capture: `yes`",
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
+  `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
   "- Video kind: `minecraft-client-terminal-composite`",
   `- Client capture source: \`${args.clientVideo}\``,
   `- Report: \`${args.report}\``,
@@ -349,6 +359,7 @@ const origin = {
   clientGuiCapture: true,
   clientWorldReady,
   captureStartedAfterWorldReady,
+  recorderAutoFollow,
   scenarioReports: report ? 1 : 0,
   clientVideo: args.clientVideo,
   report: args.report,
@@ -371,6 +382,7 @@ await fs.writeFile(
     "- Client GUI capture: `yes`",
     `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
     `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
+    `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
     `- Scenario reports: \`${report ? 1 : 0}\``,
     `- Client video: \`${args.clientVideo}\``,
     `- Report: \`${args.report}\``,

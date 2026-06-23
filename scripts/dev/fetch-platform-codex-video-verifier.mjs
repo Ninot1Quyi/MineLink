@@ -292,6 +292,7 @@ function reviewRequestEvidence(text) {
   const clientGuiCapture = markerValue(text, "Client GUI capture");
   const clientWorldReady = markerValue(text, "Client world ready");
   const captureStartedAfterWorldReady = markerValue(text, "Capture started after world ready");
+  const recorderAutoFollow = markerValue(text, "Recorder auto-follow");
   const clientGuiCaptureRequired = markerValue(text, "Client GUI capture required");
   const status = markerValue(text, "Request status");
   const failures = [];
@@ -324,6 +325,11 @@ function reviewRequestEvidence(text) {
     } else {
       evidence.push("Review request capture-after-world-ready marker present");
     }
+    if (!/^yes$/i.test(recorderAutoFollow)) {
+      failures.push(`Video review request requires recorder auto-follow but got ${recorderAutoFollow || "missing"}.`);
+    } else {
+      evidence.push("Review request recorder auto-follow marker present");
+    }
   }
   if (status && status !== "ready") failures.push(`Video review request status is not ready: ${status}.`);
 
@@ -336,6 +342,7 @@ function reviewRequestEvidence(text) {
     clientGuiCapture,
     clientWorldReady,
     captureStartedAfterWorldReady,
+    recorderAutoFollow,
     clientGuiCaptureRequired,
   };
 }
@@ -358,6 +365,7 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const clientGuiCapture = markerValue(text, "Client GUI capture");
   const clientWorldReady = markerValue(text, "Client world ready");
   const captureStartedAfterWorldReady = markerValue(text, "Capture started after world ready");
+  const recorderAutoFollow = markerValue(text, "Recorder auto-follow");
   const result = markerValue(text, ["Result", "Status"]);
   const boundary = markerValue(text, "Boundary");
 
@@ -418,6 +426,11 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
     );
   } else if (/^yes$/i.test(captureStartedAfterWorldReady)) {
     evidence.push("verifier canary capture-after-world-ready marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderAutoFollow)) {
+    failures.push(`Verifier canary Recorder auto-follow is not yes: ${recorderAutoFollow || "missing"}.`);
+  } else if (/^yes$/i.test(recorderAutoFollow)) {
+    evidence.push("verifier canary recorder auto-follow marker accepted");
   }
   if (!/^(passed|pass|success|succeeded)$/i.test(result)) failures.push(`Verifier canary Result is not passed: ${result || "missing"}.`);
   else evidence.push("verifier canary result passed");
@@ -489,6 +502,7 @@ const reviewLines = [
   `Client GUI capture: ${request.clientGuiCapture || "missing"}`,
   `Client world ready: ${request.clientWorldReady || "missing"}`,
   `Capture started after world ready: ${request.captureStartedAfterWorldReady || "missing"}`,
+  `Recorder auto-follow: ${request.recorderAutoFollow || "missing"}`,
   `Summary sha256: ${request.summaryHash || "missing"}`,
   `MP4 sha256: ${request.mp4Hash || "missing"}`,
   `Task id: ${args.taskId}`,
@@ -554,6 +568,7 @@ await fs.writeFile(
       clientGuiCapture: request.clientGuiCapture,
       clientWorldReady: request.clientWorldReady,
       captureStartedAfterWorldReady: request.captureStartedAfterWorldReady,
+      recorderAutoFollow: request.recorderAutoFollow,
       clientGuiCaptureRequired: request.clientGuiCaptureRequired,
       evidence,
       failures,

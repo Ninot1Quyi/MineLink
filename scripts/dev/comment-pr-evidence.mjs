@@ -136,6 +136,7 @@ function body(manifest) {
   const clientGuiCapture = manifest?.clientGuiCapture === true ? "yes" : "no";
   const clientWorldReady = manifest?.clientWorldReady === true ? "yes" : "no";
   const captureStartedAfterWorldReady = manifest?.captureStartedAfterWorldReady === true ? "yes" : "no";
+  const recorderAutoFollow = manifest?.recorderAutoFollow === true ? "yes" : "no";
   return [
     marker(),
     "MineLink PR video evidence:",
@@ -159,6 +160,7 @@ function body(manifest) {
     `- Client GUI capture: \`${clientGuiCapture}\``,
     `- Client world ready: \`${clientWorldReady}\``,
     `- Capture started after world ready: \`${captureStartedAfterWorldReady}\``,
+    `- Recorder auto-follow: \`${recorderAutoFollow}\``,
     `- Verifier report: \`${args.videoReviewPath}\``,
     `- Release gate report: \`${args.releaseGatePath}\``,
     hasValue(args.artifactUrl)

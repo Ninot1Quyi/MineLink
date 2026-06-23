@@ -852,8 +852,9 @@ inspect that request, the task requirements, `acceptance-summary.md`, the
 storage manifest, the `acceptance.mp4` hash, and the client-capture readiness
 markers. For Minecraft product-video tasks the request and manifest must show
 `clientGuiCapture=yes`, `clientWorldReady=yes`, and
-`captureStartedAfterWorldReady=yes`; loading screens or bootstrap footage are
-not releaseable evidence. It writes
+`captureStartedAfterWorldReady=yes`, and `recorderAutoFollow=yes`; loading
+screens, bootstrap footage, or clients that are not following the active
+`server_agent` are not releaseable evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 
 ```text
@@ -864,6 +865,7 @@ Video matched: yes
 Client GUI capture: yes
 Client world ready: yes
 Capture started after world ready: yes
+Recorder auto-follow: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 ```

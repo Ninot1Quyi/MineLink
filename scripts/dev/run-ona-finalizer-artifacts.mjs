@@ -511,6 +511,7 @@ if (failures.length === 0) {
     { filePath: "scripts/dev/e2e.sh", executable: true },
     { filePath: "scripts/dev/ensure-client-recorder-deps.sh", executable: true },
     { filePath: "mod/neoforge/src/main/java/net/minelink/neoforge/client/MineLinkClientRecorder.java", executable: false },
+    { filePath: "mod/neoforge/src/main/java/net/minelink/neoforge/server/MineLinkEndpointBootstrap.java", executable: false },
   ];
   const sourceScripts = sourceFiles.filter((file) => file.executable).map((file) => file.filePath);
   report.injectedSourceFiles = sourceFiles.map((file) => file.filePath);

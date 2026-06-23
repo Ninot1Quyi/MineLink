@@ -236,6 +236,7 @@ const report = {
   clientGuiCapture: false,
   clientWorldReady: false,
   captureStartedAfterWorldReady: false,
+  recorderAutoFollow: false,
   videoKind: "unknown",
   key: "",
   objectKey: "",
@@ -280,6 +281,7 @@ if (report.failures.length === 0) {
   report.clientGuiCapture = origin?.clientGuiCapture === true;
   report.clientWorldReady = origin?.clientWorldReady === true;
   report.captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
+  report.recorderAutoFollow = origin?.recorderAutoFollow === true;
   if (dryRun) {
     report.result = "passed";
     report.endpointUrl = "dry-run";
@@ -328,6 +330,7 @@ const manifest = {
   clientGuiCapture: report.clientGuiCapture,
   clientWorldReady: report.clientWorldReady,
   captureStartedAfterWorldReady: report.captureStartedAfterWorldReady,
+  recorderAutoFollow: report.recorderAutoFollow,
   videoKind: report.videoKind,
   createdAt: report.createdAt,
   boundary: report.boundary,
@@ -355,6 +358,7 @@ const lines = [
   `- Client GUI capture: \`${report.clientGuiCapture ? "yes" : "no"}\``,
   `- Client world ready: \`${report.clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${report.captureStartedAfterWorldReady ? "yes" : "no"}\``,
+  `- Recorder auto-follow: \`${report.recorderAutoFollow ? "yes" : "no"}\``,
   `- Storage key: \`${report.key || "none"}\``,
   `- Public video URL: ${report.videoUrl || "none"}`,
   `- Manifest: \`${args.manifestOutput}\``,
