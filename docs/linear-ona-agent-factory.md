@@ -548,8 +548,15 @@ playable GitHub PR player requires a GitHub-uploaded attachment URL, which is
 the current release-to-PR blocker until a safe automated attachment upload
 surface exists. GitHub Actions artifacts remain the raw evidence bundle; the
 default chain must not commit the video binary to the repository evidence
-branch when external storage is configured. When a
-canary run renders the MP4 on the GitHub runner, the artifact origin must say
+branch when external storage is configured. For `full-chain-canary` runs that
+create PRs, the workflow now runs an early
+`scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
+preflight. That preflight accepts either
+`MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or an explicit
+`github_attachment_video_url` input. If both are missing, the run stops before
+starting Ona Platform Codex so the chain does not spend a full validation cycle
+only to fail at the final PR video publication edge. When a canary run renders
+the MP4 on the GitHub runner, the artifact origin must say
 `github-actions-canary`; that video is acceptable for chain testing only. Final
 task acceptance requires an Ona-produced video artifact, with
 `acceptance-video-origin.json` showing producer `ona-task-finalizer`, the
@@ -942,7 +949,9 @@ uses GitHub's web attachment flow, so it requires
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` as a secret. PATs and the Actions
 `GITHUB_TOKEN` are not sufficient for attachment upload; if the cookie is
 missing the bridge writes a skipped report and the final PR evidence comment
-still fails closed.
+still fails closed. PR-producing full-chain dispatches additionally run the
+same requirement as an early credential preflight, so missing inline-video
+publication authority is visible before Ona work starts.
 
 `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID` and
 `MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY` must be configured only as GitHub or

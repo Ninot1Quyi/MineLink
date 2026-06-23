@@ -7,11 +7,13 @@ const args = {
   repo: process.env.GITHUB_REPOSITORY ?? "",
   output: ".minelink-dev/reports/agent-factory-secrets.md",
   jsonOutput: ".minelink-dev/reports/agent-factory-secrets.json",
+  githubAttachmentUrl: process.env.MINELINK_GITHUB_ATTACHMENT_VIDEO_URL ?? "",
 };
 
 let requireGithubSecrets = false;
 let requireOnaContext = false;
 let requireLinearEnv = false;
+let requireGithubAttachmentCookie = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
@@ -19,9 +21,11 @@ for (let index = 2; index < process.argv.length; index += 1) {
   if (arg === "--repo") args.repo = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
+  else if (arg === "--github-attachment-url") args.githubAttachmentUrl = readValue();
   else if (arg === "--require-github-secrets") requireGithubSecrets = true;
   else if (arg === "--require-ona-context") requireOnaContext = true;
   else if (arg === "--require-linear-env") requireLinearEnv = true;
+  else if (arg === "--require-github-attachment-cookie") requireGithubAttachmentCookie = true;
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/check-agent-factory-secrets.mjs [options]
 
@@ -30,9 +34,12 @@ agent factory. It never prints secret values.
 
 Options:
   --repo owner/name              GitHub repository to inspect.
+  --github-attachment-url url    Existing GitHub user-attachments MP4 URL, if manually provided.
   --require-github-secrets       Fail if ONA_TOKEN, LINEAR_API_KEY, or AGENT_FACTORY_GITHUB_TOKEN is missing.
   --require-ona-context          Fail if local/runner Ona CLI has no active context.
   --require-linear-env           Fail if LINEAR_API_KEY is not present in the current environment.
+  --require-github-attachment-cookie
+                                  Fail if final PR video publication lacks both a GitHub web attachment cookie and a provided attachment URL.
 `);
     process.exit(0);
   } else {
@@ -76,12 +83,26 @@ function parseSecretNames(output) {
   );
 }
 
+function githubInlineAttachment(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "github.com" && parsed.pathname.startsWith("/user-attachments/assets/")) return true;
+    if (parsed.hostname === "user-images.githubusercontent.com") return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 const repo = inferRepo();
 const env = {
   onaTokenPresent: Boolean(process.env.ONA_TOKEN || process.env.GITPOD_TOKEN),
   linearKeyPresent: Boolean(process.env.LINEAR_API_KEY),
   agentFactoryGithubTokenPresent: Boolean(process.env.AGENT_FACTORY_GITHUB_TOKEN),
   ghTokenPresent: Boolean(process.env.GH_TOKEN || process.env.GITHUB_TOKEN),
+  githubUserAttachmentsCookiePresent: Boolean(
+    process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE || process.env.GITHUB_USER_ATTACHMENTS_COOKIE,
+  ),
   githubActions: Boolean(process.env.GITHUB_ACTIONS),
 };
 
@@ -115,6 +136,47 @@ record(
     : "environment variable is missing",
   "",
 );
+record(
+  "current MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE",
+  env.githubUserAttachmentsCookiePresent ? "present" : "missing",
+  env.githubUserAttachmentsCookiePresent
+    ? "environment variable is present"
+    : "environment variable is missing",
+  "",
+);
+record(
+  "configured GitHub attachment video URL",
+  args.githubAttachmentUrl ? "present" : "missing",
+  args.githubAttachmentUrl
+    ? "manual github.com/user-attachments MP4 URL was provided"
+    : "manual GitHub attachment URL was not provided",
+  "",
+);
+
+if (requireGithubAttachmentCookie && args.githubAttachmentUrl && !githubInlineAttachment(args.githubAttachmentUrl)) {
+  record(
+    "final PR inline video publication",
+    "blocked",
+    "manual video URL is not a GitHub user-attachments URL",
+    "Pass a github.com/user-attachments/assets/... MP4 URL or configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE.",
+  );
+} else if (requireGithubAttachmentCookie && !env.githubUserAttachmentsCookiePresent && !args.githubAttachmentUrl) {
+  record(
+    "final PR inline video publication",
+    "blocked",
+    "no GitHub web attachment cookie and no manual GitHub attachment URL are available",
+    "Configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE or pass github_attachment_video_url before running full-chain PR video publication.",
+  );
+} else if (requireGithubAttachmentCookie) {
+  record(
+    "final PR inline video publication",
+    "passed",
+    args.githubAttachmentUrl
+      ? "manual GitHub attachment URL can be used for final PR playback"
+      : "GitHub web attachment cookie can create the PR playback attachment",
+    "",
+  );
+}
 
 const ghAuth = run("gh", ["auth", "status"]);
 record(

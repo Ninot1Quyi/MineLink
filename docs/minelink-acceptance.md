@@ -1075,7 +1075,10 @@ Current status:
   `scripts/dev/upload-github-user-attachment.mjs` bridge requires
   `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; if it is not configured, the
   workflow must record the skipped attachment upload and block the final PR
-  video comment instead of publishing an R2-only link as final evidence.
+  video comment instead of publishing an R2-only link as final evidence. For
+  PR-producing full-chain runs, the workflow also runs
+  `scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
+  before starting Ona so missing inline-video publication authority fails fast.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

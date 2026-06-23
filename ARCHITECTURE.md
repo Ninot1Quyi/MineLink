@@ -901,8 +901,13 @@ requires an explicit GitHub web attachment cookie secret
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; PATs and `GITHUB_TOKEN` can identify
 the repository but do not create comment attachments by themselves. When the
 cookie is absent the script writes a skipped report and the PR publication gate
-remains blocked. The GitHub Actions artifact remains
-the raw evidence bundle. The older `scripts/dev/publish-pr-video-evidence.mjs`
+remains blocked. Full-chain PR-producing workflows also run an early
+`scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
+preflight before starting Ona work; if neither the cookie nor a manually
+provided `github_attachment_video_url` is available, the run fails fast instead
+of spending the full Ona/NeoForge cycle before blocking at PR publication. The
+GitHub Actions artifact remains the raw evidence bundle. The older
+`scripts/dev/publish-pr-video-evidence.mjs`
 path is a manual fallback only and must not be used for final PR playback,
 because video binaries must not be committed to the repository evidence branch.
 These PR-visible links are review convenience only; the video producer metadata

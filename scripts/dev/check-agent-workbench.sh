@@ -162,8 +162,12 @@ require_text ".github/workflows/ona-platform-codex-probe.yml" "MINELINK_PLATFORM
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Request implementation Codex verifier subagent"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Run Ona finalizer acceptance video request"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "run-ona-finalizer-artifacts.mjs"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "Preflight GitHub inline video publication"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "--require-github-attachment-cookie"
 require_text ".github/workflows/ona-platform-codex-probe.yml" '--commit "$reviewed_commit"'
 require_text ".github/workflows/ona-platform-codex-probe.yml" "--readback-execution"
+require_text "scripts/dev/check-agent-factory-secrets.mjs" "githubUserAttachmentsCookiePresent"
+require_text "scripts/dev/check-agent-factory-secrets.mjs" "--require-github-attachment-cookie"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "shouldSendPromptToExistingExecution"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "native Codex subagent/verifier"
 require_text ".github/workflows/devcontainer-image.yml" "ghcr.io/ninot1quyi/minelink-devcontainer"
