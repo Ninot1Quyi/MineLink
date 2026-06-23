@@ -234,6 +234,8 @@ const report = {
   mp4Sha256: "",
   summarySha256: "",
   clientGuiCapture: false,
+  minecraftClientPanel: false,
+  mcpTerminalLogPanel: false,
   clientWorldReady: false,
   captureStartedAfterWorldReady: false,
   recorderAutoFollow: false,
@@ -242,6 +244,7 @@ const report = {
   recorderClientTargetCentered: false,
   recorderClientTargetVisible: false,
   recorderWorkVisible: false,
+  serverAgentTaskActionVisible: false,
   videoKind: "unknown",
   key: "",
   objectKey: "",
@@ -284,6 +287,8 @@ if (report.failures.length === 0) {
   report.summarySha256 = await sha256File(args.summaryPath);
   report.videoKind = origin?.videoKind ?? "unknown";
   report.clientGuiCapture = origin?.clientGuiCapture === true;
+  report.minecraftClientPanel = origin?.minecraftClientPanel === true;
+  report.mcpTerminalLogPanel = origin?.mcpTerminalLogPanel === true;
   report.clientWorldReady = origin?.clientWorldReady === true;
   report.captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
   report.recorderAutoFollow = origin?.recorderAutoFollow === true;
@@ -292,6 +297,7 @@ if (report.failures.length === 0) {
   report.recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
   report.recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
   report.recorderWorkVisible = origin?.recorderWorkVisible === true;
+  report.serverAgentTaskActionVisible = origin?.serverAgentTaskActionVisible === true;
   if (dryRun) {
     report.result = "passed";
     report.endpointUrl = "dry-run";
@@ -338,6 +344,8 @@ const manifest = {
   mp4Sha256: report.mp4Sha256,
   summarySha256: report.summarySha256,
   clientGuiCapture: report.clientGuiCapture,
+  minecraftClientPanel: report.minecraftClientPanel,
+  mcpTerminalLogPanel: report.mcpTerminalLogPanel,
   clientWorldReady: report.clientWorldReady,
   captureStartedAfterWorldReady: report.captureStartedAfterWorldReady,
   recorderAutoFollow: report.recorderAutoFollow,
@@ -346,6 +354,7 @@ const manifest = {
   recorderClientTargetCentered: report.recorderClientTargetCentered,
   recorderClientTargetVisible: report.recorderClientTargetVisible,
   recorderWorkVisible: report.recorderWorkVisible,
+  serverAgentTaskActionVisible: report.serverAgentTaskActionVisible,
   videoKind: report.videoKind,
   createdAt: report.createdAt,
   boundary: report.boundary,
@@ -371,6 +380,8 @@ const lines = [
   `- MP4 SHA256: \`${report.mp4Sha256 || "none"}\``,
   `- Summary SHA256: \`${report.summarySha256 || "none"}\``,
   `- Client GUI capture: \`${report.clientGuiCapture ? "yes" : "no"}\``,
+  `- Minecraft client panel: \`${report.minecraftClientPanel ? "yes" : "no"}\``,
+  `- MCP terminal log panel: \`${report.mcpTerminalLogPanel ? "yes" : "no"}\``,
   `- Client world ready: \`${report.clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${report.captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${report.recorderAutoFollow ? "yes" : "no"}\``,
@@ -379,6 +390,7 @@ const lines = [
   `- Recorder client target centered: \`${report.recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${report.recorderClientTargetVisible ? "yes" : "no"}\``,
   `- Recorder work visible: \`${report.recorderWorkVisible ? "yes" : "no"}\``,
+  `- Server agent task action visible: \`${report.serverAgentTaskActionVisible ? "yes" : "no"}\``,
   `- Storage key: \`${report.key || "none"}\``,
   `- Public video URL: ${report.videoUrl || "none"}`,
   `- Manifest: \`${args.manifestOutput}\``,

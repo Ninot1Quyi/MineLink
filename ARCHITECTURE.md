@@ -402,12 +402,12 @@ Codex readback.
 The final flow must use the Ona Platform Codex agent option for implementation,
 then a same-session native Codex verifier subagent for video review, not the
 default Ona Agent and not manual
-SSH. GitHub Actions may store or publish CI MP4 artifacts, but final
-task-acceptance video evidence must identify the video producer. A
-`github-actions-canary` video proves only the automation chain; a final
-task-acceptance video must be produced in the Ona task/finalizer environment
-with producer `ona-task-finalizer`, then verified by hash against that exact
-artifact with `check-video-review.mjs --require-producer ona-task-finalizer`.
+SSH. Ordinary GitHub CI may upload `.minelink-dev` reports and summarized
+evidence, but it must not publish a PR comment that looks like final acceptance
+video evidence. Final task-acceptance video must be produced in the Ona
+task/finalizer environment with producer `ona-task-finalizer`, then verified by
+hash against that exact artifact with
+`check-video-review.mjs --require-producer ona-task-finalizer`.
 PR-visible video evidence must include a public playable MP4 URL, preferably
 from the configured external video store. Actions artifact zip links are useful
 for logs and reports, but they are not accepted as the visible video surface by
@@ -784,29 +784,34 @@ The script writes a trace-driven composite
 `.minelink-dev/reports/artifacts/acceptance.mp4`. The MP4 is a report/log
 visualization: the left panel renders MineLink server-observation and
 assertion evidence, while the right panel renders command paths, tool timelines,
-and terminal log excerpts. GitHub's real NeoForge workflow and the Ona Platform
-Codex probe workflow install `ffmpeg` and require the MP4 before uploading
-evidence, so missing video support is a workflow failure instead of a silent
-`.unavailable` artifact. This artifact is not proof of client GUI perception and
-not a gate-status upgrade unless the task also supplies a real client-capture
+and terminal log excerpts. Ordinary GitHub CI may upload these reports only
+when explicitly requested; it must not re-render or publish final PR video
+evidence. Final task videos are generated in the Ona finalizer environment.
+This trace-driven artifact is not proof of client GUI perception and not a
+gate-status upgrade unless the task also supplies a real client-capture
 artifact. For Minecraft/NeoForge product-video tasks, the finalizer must use
 `MINELINK_RECORD_CLIENT=1`, which starts a real NeoForge `runClient`, records
 the Minecraft window through Xvfb/ffmpeg, and then runs
 `scripts/dev/render-client-capture-video.mjs` to compose the normal client view
 with terminal evidence. That renderer is the only path allowed to set
-`clientGuiCapture=true`, and it must also set `clientWorldReady=true` plus
-`captureStartedAfterWorldReady=true` plus `recorderAutoFollow=true` plus
-`recorderTargetMoved=true` plus `recorderClientFollow=true` plus
-`recorderClientTargetCentered=true` plus `recorderClientTargetVisible=true`
-plus `recorderWorkVisible=true`;
+`clientGuiCapture=true`, and it must also set `minecraftClientPanel=true`,
+`mcpTerminalLogPanel=true`, `clientWorldReady=true`,
+`captureStartedAfterWorldReady=true`, `recorderAutoFollow=true`,
+`recorderTargetMoved=true`, `recorderClientFollow=true`,
+`recorderClientTargetCentered=true`, `recorderClientTargetVisible=true`,
+`recorderWorkVisible=true`, and `serverAgentTaskActionVisible=true`;
 `scripts/dev/check-video-review.mjs --require-client-gui-capture` rejects
 trace-driven, loading-screen, pre-world, static, non-moving, occluded, and
-non-following videos for these tasks. `recorderWorkVisible=true` is derived
-from the same scenario report and recorder evidence: the scenario must pass, at
-least one world-changing MCP tool such as `action.*`, `container.*`, `craft.*`,
-`furnace.*`, or `create.*` must succeed, at least one final assertion must pass,
-and the recorder must confirm target movement, follow, centered framing, and
-line-of-sight visibility. The finalizer also runs
+non-following videos for these tasks. `minecraftClientPanel=true` means the
+left side is the normal Minecraft client capture; `mcpTerminalLogPanel=true`
+means the right third contains terminal evidence from the matching
+MCP/server/agent logs. `recorderWorkVisible=true` and
+`serverAgentTaskActionVisible=true` are derived from the same scenario report
+and recorder evidence: the scenario must pass, at least one world-changing MCP
+tool such as `action.*`, `container.*`, `craft.*`, `furnace.*`, or `create.*`
+must succeed, at least one final assertion must pass, and the recorder must
+confirm target movement, follow, centered framing, and line-of-sight
+visibility. The finalizer also runs
 `scripts/dev/render-video-storyboard.mjs` after MP4 rendering to create a
 numbered frame grid for model-readable QA; that storyboard is never the final
 deliverable and cannot replace the playable `acceptance.mp4`. The

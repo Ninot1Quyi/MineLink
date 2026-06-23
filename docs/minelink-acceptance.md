@@ -65,8 +65,10 @@ Required:
 - CI runs build, tests, mock `mine_tree`, `create_smoke`, `craft_smoke`,
   `furnace_smoke`, `craft_negative`, `guard_boundaries`,
   `body_lifecycle`, `perception_shapes`, and `portal_coop`, plus real NeoForge
-  smoke for those scenarios, renders a required trace-driven acceptance MP4,
-  and uploads `.minelink-dev/` evidence.
+  smoke for those scenarios, and uploads `.minelink-dev/` evidence. Ordinary
+  GitHub CI must not publish final acceptance-video PR comments; final video
+  evidence belongs to the Ona task/finalizer plus same-session Codex verifier
+  release path.
 - `scripts/dev/build.sh` records Java/NeoForge readiness as valid JSON.
 - No GitHub token, admission token, Microsoft credential, EULA acceptance, or server secret is committed.
 
@@ -974,23 +976,27 @@ Current status:
   without exposing the key value in logs or repository files.
 - `scripts/dev/render-acceptance-video.mjs` generates a trace-driven composite
   `.minelink-dev/reports/artifacts/acceptance-summary.md` and
-  `.minelink-dev/reports/artifacts/acceptance.mp4`; the real NeoForge GitHub
-  workflow installs `ffmpeg` and runs the renderer with `--require-mp4`.
+  `.minelink-dev/reports/artifacts/acceptance.mp4` when explicitly requested.
   The MP4 must contain task evidence, not a static placeholder: the current
   renderer shows MineLink server-observation/assertion evidence on the left and
   command paths, tool timelines, and terminal log excerpts on the right. The
   renderer also writes `acceptance-video-origin.{json,md}`. A
-  `github-actions-canary` producer is chain evidence only; final task
-  acceptance requires the MP4 to be produced in the Ona task/finalizer
-  environment with producer `ona-task-finalizer`; the release gate must require
-  that producer and the verifier must review that exact hash.
+  `github-actions-canary` producer is chain evidence only; ordinary GitHub CI
+  no longer publishes PR video evidence. Final task acceptance requires the MP4
+  to be produced in the Ona task/finalizer environment with producer
+  `ona-task-finalizer`; the release gate must require that producer and the
+  verifier must review that exact hash.
   For Minecraft/NeoForge product-video tasks, trace-driven MP4s remain
   diagnostic only. The accepted path is `MINELINK_RECORD_CLIENT=1` with a real
   NeoForge `runClient` recorder and
   `scripts/dev/render-client-capture-video.mjs`, which writes
-  `clientGuiCapture=true` in `acceptance-video-origin.json`. The recorder must
-  also wait for the client-side `MineLink recorder client in world` marker and
-  start ffmpeg after that marker, which records `clientWorldReady=true` and
+  `clientGuiCapture=true`, `minecraftClientPanel=true`, and
+  `mcpTerminalLogPanel=true` in `acceptance-video-origin.json`. These markers
+  mean the final MP4 is the accepted 1280x720 composite: the left panel is the
+  normal Minecraft client capture and the right third is terminal evidence from
+  the matching MCP/server/agent logs. The recorder must also wait for the
+  client-side `MineLink recorder client in world` marker and start ffmpeg after
+  that marker, which records `clientWorldReady=true` and
   `captureStartedAfterWorldReady=true` in the origin and storage manifest. The
   server-side recorder helper must also log
   `MineLink recorder auto-follow active` after the spectator recorder is bound
@@ -1011,7 +1017,9 @@ Current status:
   must also set `recorderWorkVisible=true`, derived from a passing scenario, at
   least one successful work tool (`action.*`, `container.*`, `craft.*`,
   `furnace.*`, or `create.*`), at least one passing final assertion, and the
-  recorder movement/follow/centered/visible markers. The release gate must include
+  recorder movement/follow/centered/visible markers. The renderer also writes
+  `serverAgentTaskActionVisible=true` from the same condition, so merely seeing
+  an idle `server_agent` is not enough. The release gate must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,
   static/idle target, no-op task, occluded target, off-screen target following,

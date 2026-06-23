@@ -165,6 +165,8 @@ const clientStdout = await readText(path.join(args.logDir, "client.stdout.log"))
 const clientStderr = await readText(path.join(args.logDir, "client.stderr.log"));
 const serverLogText = `${serverStdout}\n${serverStderr}`;
 const clientLogText = `${clientStdout}\n${clientStderr}`;
+const minecraftClientPanel = true;
+const mcpTerminalLogPanel = Boolean(agentLog.trim() || serverLogText.trim() || clientLogText.trim());
 const clientReadyLog = await readText(path.join(args.logDir, "client-capture-ready.log"));
 const clientWorldReady =
   /(?:^|\n)clientWorldReady=true(?:\n|$)/.test(clientReadyLog) ||
@@ -195,6 +197,7 @@ const recorderWorkVisible =
   recorderClientFollow &&
   recorderClientTargetCentered &&
   recorderClientTargetVisible;
+const serverAgentTaskActionVisible = recorderWorkVisible;
 
 if (!clientWorldReady) {
   failures.push("Recorder client did not confirm an in-world Minecraft view before acceptance rendering");
@@ -221,6 +224,9 @@ if (!recorderWorkVisible) {
   failures.push(
     "Recorder did not confirm active visible server_agent work for this task; final evidence requires successful work tools, passing assertions, and visible centered follow footage",
   );
+}
+if (!mcpTerminalLogPanel) {
+  failures.push("Client acceptance video cannot prove the right-side MCP/server terminal log panel because no matching runtime logs were found");
 }
 
 const terminalLines = [
@@ -392,6 +398,8 @@ const summaryLines = [
   `- Runtime: \`${runtime}\``,
   `- Passed: \`${passed ? "yes" : "no"}\``,
   "- Client GUI capture: `yes`",
+  `- Minecraft client panel: \`${minecraftClientPanel ? "yes" : "no"}\``,
+  `- MCP terminal log panel: \`${mcpTerminalLogPanel ? "yes" : "no"}\``,
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
@@ -400,6 +408,7 @@ const summaryLines = [
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
+  `- Server agent task action visible: \`${serverAgentTaskActionVisible ? "yes" : "no"}\``,
   `- Successful work tools: \`${successfulWorkTools.length}\``,
   `- Successful final assertions: \`${successfulAssertions.length}\``,
   "- Video kind: `minecraft-client-terminal-composite`",
@@ -413,7 +422,7 @@ const summaryLines = [
   "## Boundary",
   "",
   "- The left panel is a real Minecraft client recording from the same e2e run.",
-  "- The right panel is a terminal evidence digest from the matching report and logs.",
+  "- The right panel is a terminal evidence digest from the matching MCP/server/agent logs.",
   "- This proves the recorded scenario only; it does not upgrade unrelated MineLink gates.",
   "",
   "## Render Failures",
@@ -431,6 +440,8 @@ const origin = {
   producer: args.producer,
   videoKind: "minecraft-client-terminal-composite",
   clientGuiCapture: true,
+  minecraftClientPanel,
+  mcpTerminalLogPanel,
   clientWorldReady,
   captureStartedAfterWorldReady,
   recorderAutoFollow,
@@ -439,6 +450,7 @@ const origin = {
   recorderClientTargetCentered,
   recorderClientTargetVisible,
   recorderWorkVisible,
+  serverAgentTaskActionVisible,
   successfulWorkTools: successfulWorkTools.map((item) => item?.name ?? "tool"),
   successfulWorkToolCount: successfulWorkTools.length,
   successfulFinalAssertionCount: successfulAssertions.length,
@@ -462,6 +474,8 @@ await fs.writeFile(
     `- Producer: \`${args.producer}\``,
     "- Video kind: `minecraft-client-terminal-composite`",
     "- Client GUI capture: `yes`",
+    `- Minecraft client panel: \`${minecraftClientPanel ? "yes" : "no"}\``,
+    `- MCP terminal log panel: \`${mcpTerminalLogPanel ? "yes" : "no"}\``,
     `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
     `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
     `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
@@ -470,6 +484,7 @@ await fs.writeFile(
     `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
     `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
     `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
+    `- Server agent task action visible: \`${serverAgentTaskActionVisible ? "yes" : "no"}\``,
     `- Successful work tools: \`${successfulWorkTools.length}\``,
     `- Successful final assertions: \`${successfulAssertions.length}\``,
     `- Scenario reports: \`${report ? 1 : 0}\``,

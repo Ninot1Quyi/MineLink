@@ -233,6 +233,8 @@ async function videoVerifierCanaryPrompt(context = {}) {
   const mp4Hash = requestValue(request, "MP4 sha256") || "missing";
   const videoProducer = requestValue(request, "Video producer") || "unknown";
   const clientGuiCapture = requestValue(request, "Client GUI capture") || "unknown";
+  const minecraftClientPanel = requestValue(request, "Minecraft client panel") || "unknown";
+  const mcpTerminalLogPanel = requestValue(request, "MCP terminal log panel") || "unknown";
   const clientWorldReady = requestValue(request, "Client world ready") || "unknown";
   const captureStartedAfterWorldReady = requestValue(request, "Capture started after world ready") || "unknown";
   const recorderAutoFollow = requestValue(request, "Recorder auto-follow") || "unknown";
@@ -241,6 +243,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
   const recorderClientTargetCentered = requestValue(request, "Recorder client target centered") || "unknown";
   const recorderClientTargetVisible = requestValue(request, "Recorder client target visible") || "unknown";
   const recorderWorkVisible = requestValue(request, "Recorder work visible") || "unknown";
+  const serverAgentTaskActionVisible = requestValue(request, "Server agent task action visible") || "unknown";
   const clientGuiCaptureRequired = requestValue(request, "Client GUI capture required") || "no";
   const requestTaskId = requestValue(request, "Task id") || args.taskId;
   const requestBranch = requestValue(request, "Branch") || args.branch;
@@ -258,6 +261,8 @@ async function videoVerifierCanaryPrompt(context = {}) {
     "Video matched: yes",
     `Video producer: ${videoProducer}`,
     `Client GUI capture: ${clientGuiCapture}`,
+    `Minecraft client panel: ${minecraftClientPanel}`,
+    `MCP terminal log panel: ${mcpTerminalLogPanel}`,
     `Client world ready: ${clientWorldReady}`,
     `Capture started after world ready: ${captureStartedAfterWorldReady}`,
     `Recorder auto-follow: ${recorderAutoFollow}`,
@@ -266,6 +271,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `Recorder client target centered: ${recorderClientTargetCentered}`,
     `Recorder client target visible: ${recorderClientTargetVisible}`,
     `Recorder work visible: ${recorderWorkVisible}`,
+    `Server agent task action visible: ${serverAgentTaskActionVisible}`,
     `Summary sha256: ${summaryHash}`,
     `MP4 sha256: ${mp4Hash}`,
     `Task id: ${args.taskId}`,
@@ -298,6 +304,8 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- Acceptance MP4 sha256: ${mp4Hash}`,
     `- Acceptance video producer: ${videoProducer}`,
     `- Client GUI capture: ${clientGuiCapture}`,
+    `- Minecraft client panel: ${minecraftClientPanel}`,
+    `- MCP terminal log panel: ${mcpTerminalLogPanel}`,
     `- Client world ready: ${clientWorldReady}`,
     `- Capture started after world ready: ${captureStartedAfterWorldReady}`,
     `- Recorder auto-follow: ${recorderAutoFollow}`,
@@ -306,6 +314,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- Recorder client target centered: ${recorderClientTargetCentered}`,
     `- Recorder client target visible: ${recorderClientTargetVisible}`,
     `- Recorder work visible: ${recorderWorkVisible}`,
+    `- Server agent task action visible: ${serverAgentTaskActionVisible}`,
     `- Client GUI capture required: ${clientGuiCaptureRequired}`,
     "",
     "Critical path:",

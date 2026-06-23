@@ -879,12 +879,14 @@ storage manifest, the `acceptance.mp4` hash, and the client-capture readiness
 markers. `acceptance-storyboard.png` is included only as model-readable visual
 QA; the final deliverable remains the playable `acceptance.mp4`. For Minecraft
 product-video tasks the request and manifest must show
-`clientGuiCapture=yes`, `clientWorldReady=yes`,
+`clientGuiCapture=yes`, `minecraftClientPanel=yes`,
+`mcpTerminalLogPanel=yes`, `clientWorldReady=yes`,
 `captureStartedAfterWorldReady=yes`, `recorderAutoFollow=yes`,
 `recorderTargetMoved=yes`, `recorderClientFollow=yes`,
 `recorderClientTargetCentered=yes`, `recorderClientTargetVisible=yes`, and
-`recorderWorkVisible=yes`; loading screens, bootstrap footage, server-only
-camera intent, static/idle targets, no-op tasks, occluded targets, off-screen
+`recorderWorkVisible=yes`, and `serverAgentTaskActionVisible=yes`; loading
+screens, bootstrap footage, server-only camera intent, static/idle targets,
+no-op tasks, missing right-side MCP/server logs, occluded targets, off-screen
 target following, or clients that are not visibly following and framing the
 active `server_agent` while task work succeeds are not releaseable evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
@@ -899,6 +901,8 @@ Release decision: pass
 Task matched: yes
 Video matched: yes
 Client GUI capture: yes
+Minecraft client panel: yes
+MCP terminal log panel: yes
 Client world ready: yes
 Capture started after world ready: yes
 Recorder auto-follow: yes
@@ -907,6 +911,7 @@ Recorder client follow: yes
 Recorder client target centered: yes
 Recorder client target visible: yes
 Recorder work visible: yes
+Server agent task action visible: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 ```

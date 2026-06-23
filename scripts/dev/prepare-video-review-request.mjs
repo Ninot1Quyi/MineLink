@@ -150,6 +150,8 @@ const storageManifest = await readJson(manifestPath);
 const producer = origin?.producer ?? "unknown";
 const videoKind = origin?.videoKind ?? "unknown";
 const clientGuiCapture = origin?.clientGuiCapture === true;
+const minecraftClientPanel = origin?.minecraftClientPanel === true;
+const mcpTerminalLogPanel = origin?.mcpTerminalLogPanel === true;
 const clientWorldReady = origin?.clientWorldReady === true;
 const captureStartedAfterWorldReady = origin?.captureStartedAfterWorldReady === true;
 const recorderAutoFollow = origin?.recorderAutoFollow === true;
@@ -158,6 +160,7 @@ const recorderClientFollow = origin?.recorderClientFollow === true;
 const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
 const recorderWorkVisible = origin?.recorderWorkVisible === true;
+const serverAgentTaskActionVisible = origin?.serverAgentTaskActionVisible === true;
 const resolvedBranch = await gitBranch();
 
 if (requireClientGuiCapture) {
@@ -168,6 +171,12 @@ if (requireClientGuiCapture) {
       `Acceptance video is ${videoKind} with clientGuiCapture=false; normal Minecraft client footage is required`,
     );
   } else {
+    if (!minecraftClientPanel) {
+      failures.push("Acceptance video origin does not confirm a left-side normal Minecraft client panel");
+    }
+    if (!mcpTerminalLogPanel) {
+      failures.push("Acceptance video origin does not confirm a right-side MCP/server terminal log panel");
+    }
     if (!clientWorldReady) {
       failures.push("Acceptance video origin does not confirm the recorder client reached an in-world Minecraft view");
     }
@@ -192,6 +201,9 @@ if (requireClientGuiCapture) {
     if (!recorderWorkVisible) {
       failures.push("Acceptance video origin does not confirm active visible server_agent work for this task");
     }
+    if (!serverAgentTaskActionVisible) {
+      failures.push("Acceptance video origin does not confirm the visible server_agent is performing the requested task");
+    }
   }
 }
 
@@ -210,6 +222,12 @@ if (requireStorageManifest) {
     }
     if (requireClientGuiCapture && storageManifest.clientGuiCapture !== true) {
       failures.push("Video storage manifest does not confirm clientGuiCapture=true");
+    }
+    if (requireClientGuiCapture && storageManifest.minecraftClientPanel !== true) {
+      failures.push("Video storage manifest does not confirm minecraftClientPanel=true");
+    }
+    if (requireClientGuiCapture && storageManifest.mcpTerminalLogPanel !== true) {
+      failures.push("Video storage manifest does not confirm mcpTerminalLogPanel=true");
     }
     if (requireClientGuiCapture && storageManifest.clientWorldReady !== true) {
       failures.push("Video storage manifest does not confirm clientWorldReady=true");
@@ -235,6 +253,9 @@ if (requireStorageManifest) {
     if (requireClientGuiCapture && storageManifest.recorderWorkVisible !== true) {
       failures.push("Video storage manifest does not confirm recorderWorkVisible=true");
     }
+    if (requireClientGuiCapture && storageManifest.serverAgentTaskActionVisible !== true) {
+      failures.push("Video storage manifest does not confirm serverAgentTaskActionVisible=true");
+    }
   }
 }
 
@@ -256,6 +277,8 @@ const lines = [
   `- Video producer: \`${md(producer)}\``,
   `- Video kind: \`${md(videoKind)}\``,
   `- Client GUI capture: \`${clientGuiCapture ? "yes" : "no"}\``,
+  `- Minecraft client panel: \`${minecraftClientPanel ? "yes" : "no"}\``,
+  `- MCP terminal log panel: \`${mcpTerminalLogPanel ? "yes" : "no"}\``,
   `- Client world ready: \`${clientWorldReady ? "yes" : "no"}\``,
   `- Capture started after world ready: \`${captureStartedAfterWorldReady ? "yes" : "no"}\``,
   `- Recorder auto-follow: \`${recorderAutoFollow ? "yes" : "no"}\``,
@@ -264,6 +287,7 @@ const lines = [
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
+  `- Server agent task action visible: \`${serverAgentTaskActionVisible ? "yes" : "no"}\``,
   `- Client GUI capture required: \`${requireClientGuiCapture ? "yes" : "no"}\``,
   `- Storage manifest required: \`${requireStorageManifest ? "yes" : "no"}\``,
   `- Storage provider: \`${md(storageManifest?.storageProvider || "none")}\``,
@@ -290,6 +314,8 @@ const lines = [
   "Video matched: yes|no",
   `Video producer: ${producer}`,
   `Client GUI capture: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Minecraft client panel: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `MCP terminal log panel: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Client world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Capture started after world ready: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder auto-follow: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
@@ -298,6 +324,7 @@ const lines = [
   `Recorder client target centered: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder client target visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Recorder work visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
+  `Server agent task action visible: ${requireClientGuiCapture ? "yes" : "yes|no"}`,
   `Summary sha256: ${summaryHash}`,
   `MP4 sha256: ${mp4Hash}`,
   "```",

@@ -147,6 +147,8 @@ function body(manifest) {
   const manifestHash = manifest?.mp4Sha256 || "unknown";
   const manifestSummaryHash = manifest?.summarySha256 || "unknown";
   const clientGuiCapture = manifest?.clientGuiCapture === true ? "yes" : "no";
+  const minecraftClientPanel = manifest?.minecraftClientPanel === true ? "yes" : "no";
+  const mcpTerminalLogPanel = manifest?.mcpTerminalLogPanel === true ? "yes" : "no";
   const clientWorldReady = manifest?.clientWorldReady === true ? "yes" : "no";
   const captureStartedAfterWorldReady = manifest?.captureStartedAfterWorldReady === true ? "yes" : "no";
   const recorderAutoFollow = manifest?.recorderAutoFollow === true ? "yes" : "no";
@@ -155,6 +157,7 @@ function body(manifest) {
   const recorderClientTargetCentered = manifest?.recorderClientTargetCentered === true ? "yes" : "no";
   const recorderClientTargetVisible = manifest?.recorderClientTargetVisible === true ? "yes" : "no";
   const recorderWorkVisible = manifest?.recorderWorkVisible === true ? "yes" : "no";
+  const serverAgentTaskActionVisible = manifest?.serverAgentTaskActionVisible === true ? "yes" : "no";
   return [
     marker(),
     "MineLink PR video evidence:",
@@ -176,6 +179,8 @@ function body(manifest) {
     `- Manifest MP4 SHA256: \`${manifestHash}\``,
     `- Manifest summary SHA256: \`${manifestSummaryHash}\``,
     `- Client GUI capture: \`${clientGuiCapture}\``,
+    `- Minecraft client panel: \`${minecraftClientPanel}\``,
+    `- MCP terminal log panel: \`${mcpTerminalLogPanel}\``,
     `- Client world ready: \`${clientWorldReady}\``,
     `- Capture started after world ready: \`${captureStartedAfterWorldReady}\``,
     `- Recorder auto-follow: \`${recorderAutoFollow}\``,
@@ -184,6 +189,7 @@ function body(manifest) {
     `- Recorder client target centered: \`${recorderClientTargetCentered}\``,
     `- Recorder client target visible: \`${recorderClientTargetVisible}\``,
     `- Recorder work visible: \`${recorderWorkVisible}\``,
+    `- Server agent task action visible: \`${serverAgentTaskActionVisible}\``,
     `- Verifier report: \`${args.videoReviewPath}\``,
     `- Release gate report: \`${args.releaseGatePath}\``,
     hasValue(args.artifactUrl)

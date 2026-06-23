@@ -30,9 +30,10 @@ permissions:
   pull-requests: write
 
 jobs:
-  neoforge-smoke:
+  neoforge-build:
+    name: NeoForge build checks
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,129 +45,85 @@ jobs:
           distribution: "temurin"
           java-version: "21"
           cache: "gradle"
-      - name: Install acceptance video renderer
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg python3-pil xvfb libgl1 libgl1-mesa-dri libxcursor1 libxi6 libxinerama1 libxrandr2 libxxf86vm1
       - run: npm ci
       - run: npm run build
       - run: npm run typecheck
       - run: ./gradlew --no-daemon build
         working-directory: mod/neoforge
-      - name: NeoForge Create smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-          MINELINK_ENABLE_CREATE: "1"
-      - name: NeoForge mine tree smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge HTTP Gateway mine tree smoke
-        run: MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/neoforge-http-mine_tree bash scripts/dev/e2e.sh mine_tree
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge container and crafting smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge furnace container smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge container and crafting negative smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge guard boundaries smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge body lifecycle smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge perception shapes smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge portal cooperation smoke
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
-      - name: NeoForge short stability soak
-        run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
-        env:
-          MINELINK_RUNTIME: neoforge
-          MINELINK_ACCEPT_EULA: "1"
       - name: Summarize MineLink evidence
         if: always()
         run: node scripts/dev/summarize-evidence.mjs --append-step-summary
-      - name: Render MineLink acceptance artifacts
-        if: always()
-        run: |
-          node scripts/dev/render-acceptance-video.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --pr-url "$MINELINK_PR_URL" --task-requirements docs/minelink-acceptance.md --require-mp4
-          node scripts/dev/prepare-video-review-request.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --task-requirements docs/minelink-acceptance.md --require-mp4
-        env:
-          MINELINK_PR_URL: ${{ github.event.pull_request.html_url || github.server_url }}
-      - name: Upload PR video evidence to external storage
-        id: upload-video-storage
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}
-          MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
-          MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
-          MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
-          MINELINK_VIDEO_STORAGE_BUCKET: ${{ vars.MINELINK_VIDEO_STORAGE_BUCKET }}
-          MINELINK_VIDEO_PUBLIC_BASE_URL: ${{ vars.MINELINK_VIDEO_PUBLIC_BASE_URL }}
-          MINELINK_VIDEO_STORAGE_PREFIX: ${{ vars.MINELINK_VIDEO_STORAGE_PREFIX }}
-          MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID: ${{ secrets.MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID }}
-          MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY }}
-        run: |
-          node scripts/dev/upload-acceptance-video-storage.mjs \
-            --task-id "pr-${MINELINK_PR_NUMBER}" \
-            --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
-            --run-id "$GITHUB_RUN_ID" \
-            --require-upload
       - uses: actions/upload-artifact@v4
-        id: upload-evidence
         if: always()
         with:
-          name: minelink-neoforge-smoke-evidence
+          name: minelink-neoforge-build-evidence
           path: |
             .minelink-dev/
             mod/neoforge/run/logs/
           include-hidden-files: true
-      - name: Comment PR video evidence
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.upload-evidence.outputs.artifact-url != '' && steps.upload-video-storage.outputs.video-url != ''
+
+  neoforge-smoke:
+    name: NeoForge smoke (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    needs: neoforge-build
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [create, movement, crafting, guards, portal-soak]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+          cache: "gradle"
+      - run: npm ci
+      - run: npm run build
+      - name: Run NeoForge smoke group
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}
-          MINELINK_ARTIFACT_NAME: minelink-neoforge-smoke-evidence
-          MINELINK_ARTIFACT_ID: ${{ steps.upload-evidence.outputs.artifact-id }}
-          MINELINK_ARTIFACT_URL: ${{ steps.upload-evidence.outputs.artifact-url }}
-          MINELINK_WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: github-actions
-          MINELINK_ACCEPTANCE_VIDEO_BOUNDARY: GitHub NeoForge smoke canary video for PR review. Final task acceptance still requires an Ona task/finalizer video with producer ona-task-finalizer and same-session Codex verifier approval.
+          MINELINK_RUNTIME: neoforge
+          MINELINK_ACCEPT_EULA: "1"
         run: |
-          node scripts/dev/comment-pr-evidence.mjs \
-            --repository "$GITHUB_REPOSITORY" \
-            --pr "$MINELINK_PR_NUMBER" \
-            --artifact-name "$MINELINK_ARTIFACT_NAME" \
-            --artifact-id "$MINELINK_ARTIFACT_ID" \
-            --artifact-url "$MINELINK_ARTIFACT_URL" \
-            --video-url "${{ steps.upload-video-storage.outputs.video-url }}" \
-            --raw-video-url "${{ steps.upload-video-storage.outputs.raw-video-url }}" \
-            --run-url "$MINELINK_WORKFLOW_RUN_URL" \
-            --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
-            --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY"
+          case "${{ matrix.group }}" in
+            create)
+              MINELINK_ENABLE_CREATE=1 MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
+              ;;
+            movement)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
+              MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/neoforge-http-mine_tree bash scripts/dev/e2e.sh mine_tree
+              ;;
+            crafting)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
+              ;;
+            guards)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
+              ;;
+            portal-soak)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
+              ;;
+            *)
+              echo "Unknown NeoForge smoke group: ${{ matrix.group }}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Summarize MineLink evidence
+        if: always()
+        run: node scripts/dev/summarize-evidence.mjs --append-step-summary
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minelink-neoforge-smoke-evidence-${{ matrix.group }}
+          path: |
+            .minelink-dev/
+            mod/neoforge/run/logs/
+          include-hidden-files: true

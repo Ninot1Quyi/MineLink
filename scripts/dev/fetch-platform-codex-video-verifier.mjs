@@ -290,6 +290,8 @@ function reviewRequestEvidence(text) {
   const mp4Hash = markerValue(text, "MP4 sha256");
   const videoProducer = markerValue(text, "Video producer");
   const clientGuiCapture = markerValue(text, "Client GUI capture");
+  const minecraftClientPanel = markerValue(text, "Minecraft client panel");
+  const mcpTerminalLogPanel = markerValue(text, "MCP terminal log panel");
   const clientWorldReady = markerValue(text, "Client world ready");
   const captureStartedAfterWorldReady = markerValue(text, "Capture started after world ready");
   const recorderAutoFollow = markerValue(text, "Recorder auto-follow");
@@ -298,6 +300,7 @@ function reviewRequestEvidence(text) {
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
   const recorderWorkVisible = markerValue(text, "Recorder work visible");
+  const serverAgentTaskActionVisible = markerValue(text, "Server agent task action visible");
   const clientGuiCaptureRequired = markerValue(text, "Client GUI capture required");
   const status = markerValue(text, "Request status");
   const failures = [];
@@ -323,6 +326,16 @@ function reviewRequestEvidence(text) {
   if (/^yes$/i.test(clientGuiCaptureRequired)) {
     if (!/^yes$/i.test(clientGuiCapture)) failures.push(`Video review request requires client GUI capture but got ${clientGuiCapture || "missing"}.`);
     else evidence.push("Review request client GUI capture present");
+    if (!/^yes$/i.test(minecraftClientPanel)) {
+      failures.push(`Video review request requires a left-side Minecraft client panel but got ${minecraftClientPanel || "missing"}.`);
+    } else {
+      evidence.push("Review request Minecraft client panel marker present");
+    }
+    if (!/^yes$/i.test(mcpTerminalLogPanel)) {
+      failures.push(`Video review request requires a right-side MCP/server terminal log panel but got ${mcpTerminalLogPanel || "missing"}.`);
+    } else {
+      evidence.push("Review request MCP/server terminal log panel marker present");
+    }
     if (!/^yes$/i.test(clientWorldReady)) failures.push(`Video review request requires an in-world client view but got ${clientWorldReady || "missing"}.`);
     else evidence.push("Review request client world-ready marker present");
     if (!/^yes$/i.test(captureStartedAfterWorldReady)) {
@@ -360,6 +373,13 @@ function reviewRequestEvidence(text) {
     } else {
       evidence.push("Review request active visible server_agent work marker present");
     }
+    if (!/^yes$/i.test(serverAgentTaskActionVisible)) {
+      failures.push(
+        `Video review request requires visible server_agent task action but got ${serverAgentTaskActionVisible || "missing"}.`,
+      );
+    } else {
+      evidence.push("Review request visible server_agent task action marker present");
+    }
   }
   if (status && status !== "ready") failures.push(`Video review request status is not ready: ${status}.`);
 
@@ -370,6 +390,8 @@ function reviewRequestEvidence(text) {
     mp4Hash,
     videoProducer,
     clientGuiCapture,
+    minecraftClientPanel,
+    mcpTerminalLogPanel,
     clientWorldReady,
     captureStartedAfterWorldReady,
     recorderAutoFollow,
@@ -378,6 +400,7 @@ function reviewRequestEvidence(text) {
     recorderClientTargetCentered,
     recorderClientTargetVisible,
     recorderWorkVisible,
+    serverAgentTaskActionVisible,
     clientGuiCaptureRequired,
   };
 }
@@ -398,6 +421,8 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const summaryHash = markerValue(text, "Summary sha256");
   const mp4Hash = markerValue(text, "MP4 sha256");
   const clientGuiCapture = markerValue(text, "Client GUI capture");
+  const minecraftClientPanel = markerValue(text, "Minecraft client panel");
+  const mcpTerminalLogPanel = markerValue(text, "MCP terminal log panel");
   const clientWorldReady = markerValue(text, "Client world ready");
   const captureStartedAfterWorldReady = markerValue(text, "Capture started after world ready");
   const recorderAutoFollow = markerValue(text, "Recorder auto-follow");
@@ -406,6 +431,7 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
   const recorderWorkVisible = markerValue(text, "Recorder work visible");
+  const serverAgentTaskActionVisible = markerValue(text, "Server agent task action visible");
   const result = markerValue(text, ["Result", "Status"]);
   const boundary = markerValue(text, "Boundary");
 
@@ -455,6 +481,16 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   } else if (/^yes$/i.test(clientGuiCapture)) {
     evidence.push("verifier canary client GUI capture accepted");
   }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(minecraftClientPanel)) {
+    failures.push(`Verifier canary Minecraft client panel is not yes: ${minecraftClientPanel || "missing"}.`);
+  } else if (/^yes$/i.test(minecraftClientPanel)) {
+    evidence.push("verifier canary Minecraft client panel accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(mcpTerminalLogPanel)) {
+    failures.push(`Verifier canary MCP terminal log panel is not yes: ${mcpTerminalLogPanel || "missing"}.`);
+  } else if (/^yes$/i.test(mcpTerminalLogPanel)) {
+    evidence.push("verifier canary MCP/server terminal log panel accepted");
+  }
   if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(clientWorldReady)) {
     failures.push(`Verifier canary Client world ready is not yes: ${clientWorldReady || "missing"}.`);
   } else if (/^yes$/i.test(clientWorldReady)) {
@@ -496,6 +532,13 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
     failures.push(`Verifier canary Recorder work visible is not yes: ${recorderWorkVisible || "missing"}.`);
   } else if (/^yes$/i.test(recorderWorkVisible)) {
     evidence.push("verifier canary active visible server_agent work marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(serverAgentTaskActionVisible)) {
+    failures.push(
+      `Verifier canary Server agent task action visible is not yes: ${serverAgentTaskActionVisible || "missing"}.`,
+    );
+  } else if (/^yes$/i.test(serverAgentTaskActionVisible)) {
+    evidence.push("verifier canary visible server_agent task action marker accepted");
   }
   if (!/^(passed|pass|success|succeeded)$/i.test(result)) failures.push(`Verifier canary Result is not passed: ${result || "missing"}.`);
   else evidence.push("verifier canary result passed");
@@ -565,6 +608,8 @@ const reviewLines = [
   `Video matched: ${failures.length === 0 ? "yes" : "no"}`,
   `Video producer: ${request.videoProducer || "missing"}`,
   `Client GUI capture: ${request.clientGuiCapture || "missing"}`,
+  `Minecraft client panel: ${request.minecraftClientPanel || "missing"}`,
+  `MCP terminal log panel: ${request.mcpTerminalLogPanel || "missing"}`,
   `Client world ready: ${request.clientWorldReady || "missing"}`,
   `Capture started after world ready: ${request.captureStartedAfterWorldReady || "missing"}`,
   `Recorder auto-follow: ${request.recorderAutoFollow || "missing"}`,
@@ -573,6 +618,7 @@ const reviewLines = [
   `Recorder client target centered: ${request.recorderClientTargetCentered || "missing"}`,
   `Recorder client target visible: ${request.recorderClientTargetVisible || "missing"}`,
   `Recorder work visible: ${request.recorderWorkVisible || "missing"}`,
+  `Server agent task action visible: ${request.serverAgentTaskActionVisible || "missing"}`,
   `Summary sha256: ${request.summaryHash || "missing"}`,
   `MP4 sha256: ${request.mp4Hash || "missing"}`,
   `Task id: ${args.taskId}`,
@@ -636,6 +682,8 @@ await fs.writeFile(
       mp4Hash: request.mp4Hash,
       videoProducer: request.videoProducer,
       clientGuiCapture: request.clientGuiCapture,
+      minecraftClientPanel: request.minecraftClientPanel,
+      mcpTerminalLogPanel: request.mcpTerminalLogPanel,
       clientWorldReady: request.clientWorldReady,
       captureStartedAfterWorldReady: request.captureStartedAfterWorldReady,
       recorderAutoFollow: request.recorderAutoFollow,
@@ -644,6 +692,7 @@ await fs.writeFile(
       recorderClientTargetCentered: request.recorderClientTargetCentered,
       recorderClientTargetVisible: request.recorderClientTargetVisible,
       recorderWorkVisible: request.recorderWorkVisible,
+      serverAgentTaskActionVisible: request.serverAgentTaskActionVisible,
       clientGuiCaptureRequired: request.clientGuiCaptureRequired,
       evidence,
       failures,

@@ -11,7 +11,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  verify:
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,85 +22,73 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+      - run: npm ci
       - name: Architecture guard
         run: bash scripts/dev/check-architecture-guard.sh --base "${{ github.event.pull_request.base.sha || 'origin/main' }}"
       - name: Agent workbench guard
         run: bash scripts/dev/check-agent-workbench.sh
-      - run: npm ci
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
       - run: npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
-      - run: MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/http-mine_tree bash scripts/dev/e2e.sh mine_tree
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
       - name: Summarize MineLink evidence
         if: always()
         run: node scripts/dev/summarize-evidence.mjs --append-step-summary
-      - name: Install acceptance video renderer
-        if: always()
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg python3-pil
-      - name: Render MineLink acceptance artifacts
-        if: always()
-        run: node scripts/dev/render-acceptance-video.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --pr-url "$MINELINK_PR_URL" --require-mp4
-        env:
-          MINELINK_PR_URL: ${{ github.event.pull_request.html_url || github.server_url }}
-      - name: Upload PR video evidence to external storage
-        id: upload-video-storage
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}
-          MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
-          MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
-          MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
-          MINELINK_VIDEO_STORAGE_BUCKET: ${{ vars.MINELINK_VIDEO_STORAGE_BUCKET }}
-          MINELINK_VIDEO_PUBLIC_BASE_URL: ${{ vars.MINELINK_VIDEO_PUBLIC_BASE_URL }}
-          MINELINK_VIDEO_STORAGE_PREFIX: ${{ vars.MINELINK_VIDEO_STORAGE_PREFIX }}
-          MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID: ${{ secrets.MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID }}
-          MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY }}
-        run: |
-          node scripts/dev/upload-acceptance-video-storage.mjs \
-            --task-id "pr-${MINELINK_PR_NUMBER}" \
-            --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
-            --run-id "$GITHUB_RUN_ID" \
-            --require-upload
       - uses: actions/upload-artifact@v4
-        id: upload-evidence
         if: always()
         with:
-          name: minelink-dev-evidence
+          name: minelink-ci-static-evidence
           path: .minelink-dev/
           include-hidden-files: true
-      - name: Comment PR video evidence
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.upload-evidence.outputs.artifact-url != '' && steps.upload-video-storage.outputs.video-url != ''
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}
-          MINELINK_ARTIFACT_NAME: minelink-dev-evidence
-          MINELINK_ARTIFACT_ID: ${{ steps.upload-evidence.outputs.artifact-id }}
-          MINELINK_ARTIFACT_URL: ${{ steps.upload-evidence.outputs.artifact-url }}
-          MINELINK_WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: github-actions
-          MINELINK_ACCEPTANCE_VIDEO_BOUNDARY: GitHub CI canary video for PR review. Final task acceptance still requires an Ona task/finalizer video with producer ona-task-finalizer and same-session Codex verifier approval.
+
+  mock-e2e:
+    name: Mock e2e (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, crafting, guards, soak]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+      - name: Run mock e2e group
         run: |
-          node scripts/dev/comment-pr-evidence.mjs \
-            --repository "$GITHUB_REPOSITORY" \
-            --pr "$MINELINK_PR_NUMBER" \
-            --artifact-name "$MINELINK_ARTIFACT_NAME" \
-            --artifact-id "$MINELINK_ARTIFACT_ID" \
-            --artifact-url "$MINELINK_ARTIFACT_URL" \
-            --video-url "${{ steps.upload-video-storage.outputs.video-url }}" \
-            --raw-video-url "${{ steps.upload-video-storage.outputs.raw-video-url }}" \
-            --run-url "$MINELINK_WORKFLOW_RUN_URL" \
-            --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
-            --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY"
+          case "${{ matrix.group }}" in
+            core)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
+              MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/http-mine_tree bash scripts/dev/e2e.sh mine_tree
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
+              ;;
+            crafting)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
+              ;;
+            guards)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
+              ;;
+            soak)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
+              ;;
+            *)
+              echo "Unknown mock e2e group: ${{ matrix.group }}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Summarize MineLink evidence
+        if: always()
+        run: node scripts/dev/summarize-evidence.mjs --append-step-summary
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minelink-ci-mock-e2e-${{ matrix.group }}
+          path: .minelink-dev/
+          include-hidden-files: true

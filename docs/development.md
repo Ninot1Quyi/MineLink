@@ -197,7 +197,10 @@ node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-tas
 `MINELINK_RECORD_CLIENT=1` starts the NeoForge `runClient` recorder, joins the
 local dev server as `MineLinkRecorder`, records the actual Minecraft window with
 Xvfb/ffmpeg, and composes that client view with terminal evidence through
-`scripts/dev/render-client-capture-video.mjs`. The server-side recorder helper
+`scripts/dev/render-client-capture-video.mjs`. The renderer writes
+`minecraftClientPanel=true` for the left-side normal Minecraft client capture
+and `mcpTerminalLogPanel=true` for the right-side MCP/server/agent terminal log
+digest; both markers are required for release. The server-side recorder helper
 only moves an observer camera anchor and visible marker for video review; it
 must log `MineLink recorder auto-follow active` so release gates can verify the
 server-side recorder binding followed the active `server_agent`. The recorder
@@ -219,9 +222,10 @@ video where the agent is hidden behind terrain or foliage is not accepted. The
 renderer must then set `recorderWorkVisible=true`, which requires a passing
 scenario, at least one successful work tool such as `action.*`, `container.*`,
 `craft.*`, `furnace.*`, or `create.*`, at least one passing final assertion,
-and the recorder movement/follow/centered/visible markers. This blocks videos
-where the agent is merely standing in view. It does not grant the agent new MCP
-tools or bypass any server validation.
+and the recorder movement/follow/centered/visible markers. The renderer also
+writes `serverAgentTaskActionVisible=true` from that same condition. This
+blocks videos where the agent is merely standing in view. It does not grant the
+agent new MCP tools or bypass any server validation.
 `scripts/dev/render-video-storyboard.mjs` creates a numbered frame grid from
 the final MP4 for model-readable visual QA; it is not a substitute for the
 playable `acceptance.mp4` in PR evidence. The devcontainer, prebuild bootstrap,
@@ -543,7 +547,9 @@ CI is split into two layers:
   server smoke for `create_smoke`, `mine_tree`, HTTP `mine_tree`,
   `craft_smoke`, `furnace_smoke`, `craft_negative`, `guard_boundaries`,
   `body_lifecycle`, `perception_shapes`, and `portal_coop`, then runs a short
-  real NeoForge stability soak, installs `ffmpeg`, and requires a trace-driven
-  acceptance MP4 before artifact upload on push, pull request,
-  `workflow_dispatch`, and a daily schedule. Keep long Create worlds and
-  release-length soak tests on a future self-hosted runner profile.
+  real NeoForge stability soak and uploads `.minelink-dev` reports on push,
+  pull request, `workflow_dispatch`, and a daily schedule. It does not publish
+  final acceptance-video PR comments; playable final task video evidence is
+  produced by the Ona task/finalizer and released only after same-session Codex
+  verifier approval. Keep long Create worlds and release-length soak tests on a
+  future self-hosted runner profile.
