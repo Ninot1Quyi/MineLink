@@ -812,7 +812,13 @@ artifact. For Minecraft/NeoForge product-video tasks, the finalizer must use
 `MINELINK_RECORD_CLIENT=1`, which starts a real NeoForge `runClient`, records
 the Minecraft window through Xvfb/ffmpeg, and then runs
 `scripts/dev/render-client-capture-video.mjs` to compose the normal client view
-with terminal evidence. That renderer is the only path allowed to set
+with terminal evidence. Capture and terminal rendering are intentionally split:
+while Minecraft is running, `e2e.sh` records only the client window and writes
+MCP/server/client logs to files; after the scenario and Java processes stop,
+the renderer turns those logs into the right-side terminal panel and composites
+the final MP4. The `split-game-capture-post-terminal-composite` path keeps
+terminal rendering and final encoding from competing with Minecraft client
+rendering during the task. That renderer is the only path allowed to set
 `clientGuiCapture=true`, and it must also set `minecraftClientPanel=true`,
 `mcpTerminalLogPanel=true`, `clientWorldReady=true`,
 `captureStartedAfterWorldReady=true`, `recorderAutoFollow=true`,
@@ -848,6 +854,11 @@ finalizer also runs
 `scripts/dev/render-video-storyboard.mjs` after MP4 rendering to create a
 numbered frame grid for model-readable QA; that storyboard is never the final
 deliverable and cannot replace the playable `acceptance.mp4`. The
+video-required finalizer does not run the same NeoForge scenario twice: its
+`validate` stage runs fast repository checks, and the recorder-backed
+`render-video` stage is the real NeoForge scenario evidence for that task.
+This preserves real Minecraft proof while avoiding duplicate server/client
+startup and duplicate Java load. The
 recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` when
 headless capture dependencies are missing, so an older Ona prebuild can either
 self-install `ffmpeg`, `Xvfb`, the required X11/OpenGL libraries, and
@@ -883,7 +894,10 @@ tarball includes `.minelink-dev/client-capture-*` logs in addition to
 `.minelink-dev/reports`, and `e2e.sh` writes
 `reports/e2e-failure-log-tail.txt` with `client-config.log`, client logs, and
 recorder logs at the end so GitHub truncation still preserves the most useful
-failure evidence. Stage
+failure evidence. The recorder also writes `logs/resource-snapshots.log` around
+dependency checks, client startup, ffmpeg startup, and recorder shutdown so
+slow or choppy videos can be attributed to CPU, memory, or process contention
+instead of guesswork. Stage
 reports preserve both the head and tail of long command output so recorder,
 Minecraft client, and MCP server failures can be diagnosed from GitHub
 artifacts. For large MP4s, the default path is R2-first: the Ona finalizer

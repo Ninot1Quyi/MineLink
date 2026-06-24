@@ -15,6 +15,7 @@ const defaults = {
   taskId: process.env.MINELINK_TASK_ID ?? process.env.GITHUB_RUN_ID ?? "local",
   branch: process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "",
   producer: process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ?? "ona-task-finalizer",
+  outputFps: process.env.MINELINK_ACCEPTANCE_VIDEO_FPS ?? "15",
   requireMp4: false,
 };
 
@@ -37,7 +38,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
 Creates MineLink acceptance artifacts from a real Minecraft client capture and
 the matching e2e report/logs. The output MP4 is a 1280x720 composite: the left
 960px are the Minecraft client view, and the right 320px are terminal evidence.
-This is the only renderer that may set clientGuiCapture=true.`);
+The final composite is rendered after the e2e run so terminal evidence does not
+compete with Minecraft rendering during capture. This is the only renderer that
+may set clientGuiCapture=true.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -331,6 +334,7 @@ const terminalLines = [
 
 const terminalTextPath = path.join(args.outputDir, "acceptance-terminal-panel.txt");
 const terminalImagePath = path.join(args.outputDir, "acceptance-terminal-panel.ppm");
+const outputFps = Number.parseInt(String(args.outputFps), 10) > 0 ? String(args.outputFps) : "15";
 await fs.writeFile(terminalTextPath, `${terminalLines.join("\n")}\n`, "utf8");
 
 const glyphs = {
@@ -485,7 +489,9 @@ const summaryLines = [
   `- Successful work tools: \`${successfulWorkTools.length}\``,
   `- Successful final assertions: \`${successfulAssertions.length}\``,
   "- Video kind: `minecraft-client-terminal-composite`",
+  "- Capture/composite mode: `split-game-capture-post-terminal-composite`",
   `- Client capture source: \`${args.clientVideo}\``,
+  `- Terminal panel source: \`${terminalTextPath}\``,
   `- Report: \`${args.report}\``,
   "",
   "## Final Assertions",
@@ -495,7 +501,7 @@ const summaryLines = [
   "## Boundary",
   "",
   "- The left panel is a real Minecraft client recording from the same e2e run.",
-  "- The right panel is a terminal evidence digest from the matching MCP/server/agent logs.",
+  "- The right panel is rendered after capture from the matching MCP/server/agent logs so terminal rendering does not compete with Minecraft during the scenario.",
   "- This proves the recorded scenario only; it does not upgrade unrelated MineLink gates.",
   "",
   "## Render Failures",
@@ -512,6 +518,8 @@ const origin = {
   branch: args.branch || "unknown",
   producer: args.producer,
   videoKind: "minecraft-client-terminal-composite",
+  splitCaptureComposite: true,
+  captureCompositionMode: "split-game-capture-post-terminal-composite",
   clientGuiCapture: true,
   minecraftClientPanel,
   mcpTerminalLogPanel,
@@ -543,6 +551,7 @@ const origin = {
   report: args.report,
   terminalPanel: terminalTextPath,
   terminalPanelImage: terminalImagePath,
+  outputFps,
   boundary:
     "Real Minecraft client capture plus terminal evidence from the same MineLink NeoForge e2e run; scenario-scoped acceptance only.",
 };
@@ -557,6 +566,7 @@ await fs.writeFile(
     `- Branch: \`${args.branch || "unknown"}\``,
     `- Producer: \`${args.producer}\``,
     "- Video kind: `minecraft-client-terminal-composite`",
+    "- Capture/composite mode: `split-game-capture-post-terminal-composite`",
     "- Client GUI capture: `yes`",
     `- Minecraft client panel: \`${minecraftClientPanel ? "yes" : "no"}\``,
     `- MCP terminal log panel: \`${mcpTerminalLogPanel ? "yes" : "no"}\``,
@@ -618,8 +628,20 @@ if (failures.length === 0) {
         "-an",
         "-t",
         duration.toFixed(3),
+        "-r",
+        outputFps,
+        "-c:v",
+        "libx264",
+        "-preset",
+        process.env.MINELINK_ACCEPTANCE_COMPOSITE_X264_PRESET ?? "veryfast",
+        "-crf",
+        process.env.MINELINK_ACCEPTANCE_COMPOSITE_CRF ?? "24",
+        "-threads",
+        process.env.MINELINK_ACCEPTANCE_COMPOSITE_THREADS ?? "2",
         "-pix_fmt",
         "yuv420p",
+        "-movflags",
+        "+faststart",
         mp4Path,
       ],
       { maxBuffer: 1024 * 1024 * 8 },

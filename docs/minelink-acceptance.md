@@ -1019,7 +1019,13 @@ Current status:
   `mcpTerminalLogPanel=true` in `acceptance-video-origin.json`. These markers
   mean the final MP4 is the accepted 1280x720 composite: the left panel is the
   normal Minecraft client capture and the right third is terminal evidence from
-  the matching MCP/server/agent logs. The recorder must also wait for the
+  the matching MCP/server/agent logs. The composite is split-capture evidence:
+  during the scenario the harness records only the Minecraft client window and
+  writes MCP/server/client logs to files, then after the Java processes stop it
+  renders those logs into the right-side terminal panel and combines both tracks
+  into the final `acceptance.mp4`. This keeps terminal rendering and final MP4
+  encoding from competing with the Minecraft client while the task is running.
+  The recorder must also wait for the
   client-side `MineLink recorder client in world` marker and start ffmpeg after
   that marker, which records `clientWorldReady=true` and
   `captureStartedAfterWorldReady=true` in the origin and storage manifest. The
@@ -1077,7 +1083,9 @@ Current status:
   explicit recorder-dependency report instead of silently downgrading to a
   placeholder MP4. The recorder client resolves
   `MINELINK_RECORDER_CLIENT_GAME_DIR` to a task-local absolute path under the
-  client-capture directory and records it in `logs/client-config.log`; this
+  client-capture directory, writes a low-CPU recorder `options.txt` profile by
+  default, and records the resolved width, height, fps, and profile in
+  `logs/client-config.log`; this
   prevents NeoForge `runClient --gameDir` from depending on the Gradle working
   directory in Ona. The NeoForge run config must set ModDevGradle's
   `gameDirectory` property for that path instead of adding another
@@ -1102,6 +1110,13 @@ Current status:
   rendering fails. The injected recorder helper set includes the client
   recorder Java source and server recorder source so the in-world readiness
   marker, auto-follow marker, and stricter renderer checks are tested together.
+  Video-required `neoforge` finalization avoids duplicate Minecraft startup:
+  the `validate` stage runs fast repository checks, and the following
+  client-recorder `render-video` stage produces the real NeoForge scenario
+  report plus acceptance MP4 for that task. The recorder writes
+  `logs/resource-snapshots.log` around dependency checks, client startup,
+  ffmpeg startup, and shutdown so reviewers can diagnose CPU or process
+  contention when the Minecraft capture is choppy.
   Following the reviewed commit is required for reused canary
   branches because the remote branch head can move after Goal-mode Codex
   finishes. Client-video failures must also write

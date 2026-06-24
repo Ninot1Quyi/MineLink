@@ -47,8 +47,8 @@ const groupedStages = {
     "initial-report",
     "sync-in-progress",
     "validate",
-    "summarize",
     "render-video",
+    "summarize",
     "render-storyboard",
     "prepare-video",
   ],
@@ -105,6 +105,24 @@ scheduling overhead in manual diagnostics.`);
 
 function requiresClientGuiCapture() {
   return args.requireClientGuiCapture || String(args.validationScope || "").toLowerCase() === "neoforge";
+}
+
+function isNeoforgeScope() {
+  return String(args.validationScope || "").toLowerCase() === "neoforge";
+}
+
+function effectiveValidationScope() {
+  if (requiresClientGuiCapture() && isNeoforgeScope()) {
+    return "fast";
+  }
+  return args.validationScope || "docs";
+}
+
+function effectiveValidationScenarios() {
+  if (requiresClientGuiCapture() && isNeoforgeScope()) {
+    return "none";
+  }
+  return args.scenarios || "none";
 }
 
 async function fileExists(filePath) {
@@ -400,9 +418,9 @@ switch (args.stage) {
       [
         "scripts/dev/verify-agent-task.sh",
         "--scope",
-        args.validationScope || "docs",
+        effectiveValidationScope(),
         "--scenarios",
-        args.scenarios || "none",
+        effectiveValidationScenarios(),
         "--base",
         verifyBaseRef(),
       ],
@@ -425,9 +443,16 @@ switch (args.stage) {
         const command = [
           "MINELINK_RUNTIME=neoforge",
           "MINELINK_ACCEPT_EULA=1",
+          "MINELINK_SKIP_BUILD=1",
           "MINELINK_RECORD_CLIENT=1",
           "MINELINK_RECORDER_FORCE_XVFB=1",
           "MINELINK_RECORDER_AUTO_INSTALL_DEPS=1",
+          "MINELINK_RECORDER_VIDEO_SIZE=960x540",
+          "MINELINK_RECORDER_FPS=15",
+          "MINELINK_RECORDER_CRF=28",
+          "MINELINK_RECORDER_FFMPEG_THREADS=1",
+          "MINELINK_RECORDER_X264_PRESET=ultrafast",
+          "MINELINK_RECORDER_CLIENT_OPTIONS_PROFILE=ci_low_cpu",
           "MINELINK_RECORDER_PRE_SCENARIO_READY_TIMEOUT=60",
           "MINELINK_RECORDER_POST_SCENARIO_SECONDS=12",
           "MINELINK_RECORDER_MIN_WORK_VISIBLE_SECONDS=10",

@@ -258,6 +258,46 @@ wait_for_any_log_text() {
   return 1
 }
 
+record_resource_snapshot() {
+  label="$1"
+  {
+    echo "=== $label $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+    echo "nproc=$(command -v nproc >/dev/null 2>&1 && nproc || printf unknown)"
+    uptime || true
+    free -h 2>/dev/null || true
+    ps -eo pid,ppid,stat,pcpu,pmem,etime,cmd --sort=-pcpu 2>/dev/null | head -20 || true
+    echo
+  } >> "$work_dir/logs/resource-snapshots.log" 2>/dev/null || true
+}
+
+write_recorder_client_options() {
+  options_file="$1"
+  profile="${MINELINK_RECORDER_CLIENT_OPTIONS_PROFILE:-ci_low_cpu}"
+  if [ "$profile" = "off" ] || [ "$profile" = "none" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$options_file")"
+  cat > "$options_file" <<'EOF'
+version:3465
+autoJump:false
+biomeBlendRadius:0
+bobView:false
+clouds:false
+entityShadows:false
+enableVsync:false
+fancyGraphics:false
+graphicsMode:fast
+maxFps:30
+mipmapLevels:0
+particles:0
+prioritizeChunkUpdates:0
+renderDistance:4
+simulationDistance:4
+smoothLighting:false
+syncChunkWrites:false
+EOF
+}
+
 start_recorder_client() {
   if ! truthy_value "$record_client"; then
     return 0
@@ -269,11 +309,21 @@ start_recorder_client() {
   recorder_display="${MINELINK_RECORDER_DISPLAY:-${DISPLAY:-:99}}"
   recorder_video_size="${MINELINK_RECORDER_VIDEO_SIZE:-960x720}"
   recorder_fps="${MINELINK_RECORDER_FPS:-15}"
+  recorder_width="${recorder_video_size%x*}"
+  recorder_height="${recorder_video_size#*x}"
+  case "$recorder_width:$recorder_height" in
+    *[!0-9:]*|:|*:) recorder_width="960"; recorder_height="720" ;;
+  esac
+  if [ "$recorder_width" = "$recorder_video_size" ] || [ "$recorder_height" = "$recorder_video_size" ]; then
+    recorder_width="960"
+    recorder_height="720"
+  fi
   recorder_needs_xvfb=0
   if [ -z "${DISPLAY:-}" ] || [ "${MINELINK_RECORDER_FORCE_XVFB:-0}" = "1" ]; then
     recorder_needs_xvfb=1
   fi
 
+  record_resource_snapshot "recorder-before-deps"
   if truthy_value "${MINELINK_RECORDER_AUTO_INSTALL_DEPS:-1}"; then
     if ! command -v ffmpeg >/dev/null 2>&1 || { [ "$recorder_needs_xvfb" = "1" ] && ! command -v Xvfb >/dev/null 2>&1; }; then
       ensure_args=(--require-ffmpeg)
@@ -310,8 +360,8 @@ start_recorder_client() {
   export MINELINK_RECORDER_CLIENT_ENABLED="${MINELINK_RECORDER_CLIENT_ENABLED:-1}"
   export MINELINK_RECORDER_CLIENT_USERNAME="${MINELINK_RECORDER_CLIENT_USERNAME:-MineLinkRecorder}"
   export MINELINK_RECORDER_CLIENT_ADDRESS="${MINELINK_RECORDER_CLIENT_ADDRESS:-127.0.0.1:$minecraft_port}"
-  export MINELINK_RECORDER_CLIENT_WIDTH="${MINELINK_RECORDER_CLIENT_WIDTH:-960}"
-  export MINELINK_RECORDER_CLIENT_HEIGHT="${MINELINK_RECORDER_CLIENT_HEIGHT:-720}"
+  export MINELINK_RECORDER_CLIENT_WIDTH="${MINELINK_RECORDER_CLIENT_WIDTH:-$recorder_width}"
+  export MINELINK_RECORDER_CLIENT_HEIGHT="${MINELINK_RECORDER_CLIENT_HEIGHT:-$recorder_height}"
   export MINELINK_RECORDER_CLIENT_CONNECT_DELAY_TICKS="${MINELINK_RECORDER_CLIENT_CONNECT_DELAY_TICKS:-40}"
   recorder_client_game_dir="${MINELINK_RECORDER_CLIENT_GAME_DIR:-$work_dir/recorder-game-dir}"
   case "$recorder_client_game_dir" in
@@ -319,14 +369,21 @@ start_recorder_client() {
     *) recorder_client_game_dir="$repo_root/$recorder_client_game_dir" ;;
   esac
   mkdir -p "$recorder_client_game_dir"
+  write_recorder_client_options "$recorder_client_game_dir/options.txt"
   export MINELINK_RECORDER_CLIENT_GAME_DIR="$recorder_client_game_dir"
   {
     echo "MINELINK_RECORDER_CLIENT_GAME_DIR=$MINELINK_RECORDER_CLIENT_GAME_DIR"
     echo "MINELINK_RECORDER_CLIENT_ADDRESS=$MINELINK_RECORDER_CLIENT_ADDRESS"
     echo "MINELINK_RECORDER_CLIENT_USERNAME=$MINELINK_RECORDER_CLIENT_USERNAME"
+    echo "MINELINK_RECORDER_CLIENT_WIDTH=$MINELINK_RECORDER_CLIENT_WIDTH"
+    echo "MINELINK_RECORDER_CLIENT_HEIGHT=$MINELINK_RECORDER_CLIENT_HEIGHT"
+    echo "MINELINK_RECORDER_VIDEO_SIZE=$recorder_video_size"
+    echo "MINELINK_RECORDER_FPS=$recorder_fps"
+    echo "MINELINK_RECORDER_CLIENT_OPTIONS_PROFILE=${MINELINK_RECORDER_CLIENT_OPTIONS_PROFILE:-ci_low_cpu}"
     echo "DISPLAY=$DISPLAY"
   } > "$work_dir/logs/client-config.log"
 
+  record_resource_snapshot "recorder-before-client"
   (
     cd mod/neoforge
     if truthy_value "${MINELINK_ENABLE_CREATE:-0}"; then
@@ -357,16 +414,24 @@ start_recorder_client() {
   } > "$client_capture_ready"
 
   ffmpeg -y -hide_banner -loglevel warning \
+    -thread_queue_size 64 \
     -f x11grab \
     -video_size "$recorder_video_size" \
     -framerate "$recorder_fps" \
     -i "$DISPLAY" \
     -an \
+    -c:v "${MINELINK_RECORDER_VIDEO_CODEC:-libx264}" \
+    -preset "${MINELINK_RECORDER_X264_PRESET:-ultrafast}" \
+    -tune zerolatency \
+    -crf "${MINELINK_RECORDER_CRF:-28}" \
+    -threads "${MINELINK_RECORDER_FFMPEG_THREADS:-1}" \
     -pix_fmt yuv420p \
+    -r "$recorder_fps" \
     "$client_capture" \
     > "$work_dir/logs/recorder-ffmpeg.log" \
     2>&1 &
   ffmpeg_pid="$!"
+  record_resource_snapshot "recorder-after-ffmpeg-start"
 
   {
     echo "captureStartedAfterWorldReady=true"
@@ -382,6 +447,7 @@ stop_recorder_client() {
   if ! truthy_value "$record_client"; then
     return 0
   fi
+  record_resource_snapshot "recorder-before-stop"
   if [ -n "$ffmpeg_pid" ] && kill -0 "$ffmpeg_pid" >/dev/null 2>&1; then
     kill -INT "$ffmpeg_pid" >/dev/null 2>&1 || true
     wait "$ffmpeg_pid" >/dev/null 2>&1 || true
@@ -392,6 +458,7 @@ stop_recorder_client() {
     wait "$client_pid" >/dev/null 2>&1 || true
     client_pid=""
   fi
+  record_resource_snapshot "recorder-after-stop"
 }
 
 if [ "$runtime" = "neoforge" ]; then
