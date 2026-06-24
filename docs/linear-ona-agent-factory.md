@@ -608,6 +608,15 @@ the same final or blocked status through `scripts/dev/sync-linear-status.mjs`.
 The chain report treats absent sources as not-required: GitHub-only tasks need
 GitHub writeback, Linear-only tasks need Linear sync evidence, and linked
 GitHub+Linear tasks need both.
+
+For task-bound implementation and full-chain canaries, GitHub Actions prepares
+the target branch before launching Platform Codex, then
+`scripts/dev/start-ona-platform-codex.mjs` aligns the fresh Ona environment to
+that branch before `StartAgent`. This is a branch anchor only. It lets Codex,
+the fetcher, and guarded canary salvage operate on the same branch, but it does
+not count as implementation evidence and must not satisfy the Platform Codex
+readback gate by itself.
+
 Before validation or PR finalization, the CLI automation also requires an
 implementation-session readback at:
 

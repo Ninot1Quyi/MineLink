@@ -353,6 +353,17 @@ readback with the remote branch head commit and canary markers into the normal
 `.minelink-dev/reports/ona-codex-implementation-session.md` file. The canary
 file alone is not accepted readback, because the final `Commit:` marker comes
 from the GitHub branch head fetched by the workflow.
+Before `implementation-canary` or `full-chain-canary` starts the Platform Codex
+session, the workflow prepares the target branch from the workflow source
+commit. That branch is only a handoff anchor: it is not implementation evidence,
+does not satisfy the Platform Codex readback, and does not replace the
+Codex-authored canary or product commit. After the fresh Ona environment
+reaches running state, `scripts/dev/start-ona-platform-codex.mjs` fetches and
+checks out that target branch inside `/workspaces/MineLink` before calling
+`StartAgent`; the API session report records `AlignEnvironmentBranch` and the
+branch readback. This keeps `implementation_codex -> branch/commit readback`
+and guarded salvage on the same branch instead of leaving new task environments
+on the project default branch.
 If Goal-mode Codex writes the exact task-bound canary file inside the Ona
 environment but fails to push it, the fetcher may perform a guarded salvage: it
 enters the recorded Ona environment, refuses any branch other than the expected

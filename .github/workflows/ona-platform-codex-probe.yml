@@ -178,6 +178,25 @@ jobs:
             --output .minelink-dev/reports/ona-preflight-resource-cleanup.md \
             --json-output .minelink-dev/reports/ona-preflight-resource-cleanup.json
 
+      - name: Prepare Platform Codex task branch
+        if: ${{ (inputs.mode || 'identity-canary') == 'implementation-canary' || (inputs.mode || 'identity-canary') == 'full-chain-canary' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          task_id="${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}"
+          target_branch="${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}"
+          {
+            echo "MINELINK_PLATFORM_CODEX_TASK_ID=$task_id"
+            echo "MINELINK_PLATFORM_CODEX_TARGET_BRANCH=$target_branch"
+          } >> "$GITHUB_ENV"
+          if git ls-remote --exit-code --heads origin "$target_branch" >/dev/null 2>&1; then
+            echo "Target branch already exists: $target_branch"
+          else
+            git push origin "HEAD:refs/heads/$target_branch"
+          fi
+
       - name: Probe Ona Platform Codex API
         env:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
@@ -215,8 +234,8 @@ jobs:
                 args+=(--environment-class-id "$INPUT_ENVIRONMENT_CLASS_ID")
               fi
             else
-              task_id="${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}"
-              target_branch="${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}"
+              task_id="${MINELINK_PLATFORM_CODEX_TASK_ID:-${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}}"
+              target_branch="${MINELINK_PLATFORM_CODEX_TARGET_BRANCH:-${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}}"
               {
                 echo "MINELINK_PLATFORM_CODEX_TASK_ID=$task_id"
                 echo "MINELINK_PLATFORM_CODEX_TARGET_BRANCH=$target_branch"

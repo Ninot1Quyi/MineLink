@@ -843,6 +843,13 @@ Current status:
   video review, PR release, or `product-accepted` gate. The canary file alone
   must not be used as the final readback because the canonical `Commit:` value
   is the fetched branch head.
+  GitHub Actions run `28068769134` exposed a delivery-chain blocker in this
+  slice: the Platform Codex environment started from the project default branch
+  instead of the task target branch, so the branch readback timed out and the
+  guarded salvage correctly refused to push from the wrong branch. The workflow
+  now prepares the target branch from the source commit before launch, and the
+  launcher aligns new Ona task environments to that branch before `StartAgent`.
+  This branch preparation is only a handoff anchor, not implementation evidence.
   If Goal-mode Codex writes the exact canary file but does not commit/push, the
   fetcher can recover only that file from the recorded Ona environment after
   checking the expected branch, task, session, Goal-mode, pass, validation, and

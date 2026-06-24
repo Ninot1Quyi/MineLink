@@ -381,6 +381,10 @@ function sanitize(value) {
     .trim();
 }
 
+function shellQuote(value) {
+  return `'${String(value ?? "").replace(/'/g, `'\\''`)}'`;
+}
+
 function hasValue(value) {
   const normalized = String(value ?? "").trim();
   return normalized.length > 0 && !["none", "null", "undefined", "-"].includes(normalized.toLowerCase());
@@ -491,6 +495,50 @@ function getEnvironment(environmentId) {
   return firstRecord(JSON.parse(result.stdout));
 }
 
+function taskBranchNeedsAlignment() {
+  return (
+    createEnvironment &&
+    (promptMode === "implementation-canary" || promptMode === "video-verifier-canary") &&
+    hasValue(args.branch) &&
+    !["manual", "unknown"].includes(String(args.branch).trim().toLowerCase())
+  );
+}
+
+function alignEnvironmentBranch(environmentId, report) {
+  const script = [
+    "set -euo pipefail",
+    `expected_branch=${shellQuote(args.branch)}`,
+    'git fetch origin "+refs/heads/${expected_branch}:refs/remotes/origin/${expected_branch}"',
+    'git checkout -B "${expected_branch}" "origin/${expected_branch}"',
+    'git reset --hard "origin/${expected_branch}"',
+    'printf "branch=%s\\n" "$(git branch --show-current)"',
+    'printf "commit=%s\\n" "$(git rev-parse --short HEAD)"',
+  ].join("\n");
+  const result = run("ona", [
+    "environment",
+    "exec",
+    environmentId,
+    "--working-dir",
+    "/workspaces/MineLink",
+    "--timeout",
+    "180",
+    "--",
+    `bash -lc ${shellQuote(script)}`,
+  ]);
+  const output = sanitize([result.stdout, result.stderr].filter(Boolean).join("\n"));
+  report.environmentBootstrap.branchAlignment = {
+    attempted: true,
+    branch: args.branch,
+    status: result.status ?? 1,
+    output,
+  };
+  if (result.status !== 0) {
+    throw new Error(`Created environment ${environmentId} could not checkout task branch ${args.branch}: ${output}`);
+  }
+  report.steps.push("AlignEnvironmentBranch");
+  report.evidence.push(`environmentCheckoutBranch=${args.branch}`);
+}
+
 async function waitForRunningEnvironment(environmentId) {
   const attempts = [];
   const deadline = Date.now() + args.environmentWaitSeconds * 1000;
@@ -559,6 +607,13 @@ async function createTaskEnvironment(report) {
     throw new Error(
       `Created environment ${environmentId} did not reach running state before --environment-wait-seconds=${args.environmentWaitSeconds}: ${phase || "missing"}/${machinePhase || "missing"}.`,
     );
+  }
+  if (taskBranchNeedsAlignment()) {
+    alignEnvironmentBranch(environmentId, report);
+    const aligned = getEnvironment(environmentId);
+    report.environmentBootstrap.readbackAfterBranchAlignment = aligned;
+    const alignedBranch = aligned?.status?.content?.git?.branch ?? "";
+    if (hasValue(alignedBranch)) report.evidence.push(`environmentReadbackBranch=${alignedBranch}`);
   }
 }
 
