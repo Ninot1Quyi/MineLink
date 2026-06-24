@@ -25,6 +25,9 @@ on:
         description: Cancel the refresh if snapshotting remains stale for this many minutes
         required: false
         default: "15"
+      environment_class_id:
+        description: Optional Ona environment class id for the prebuild
+        required: false
 
 permissions:
   contents: read
@@ -53,6 +56,7 @@ jobs:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
           MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
           MINELINK_ONA_PREBUILD_TIMEOUT: ${{ github.event.inputs.prebuild_timeout || '45m' }}
+          MINELINK_ONA_ENVIRONMENT_CLASS_ID: ${{ github.event.inputs.environment_class_id || vars.MINELINK_ONA_ENVIRONMENT_CLASS_ID }}
           MINELINK_ONA_SNAPSHOT_STALE_MINUTES: ${{ github.event.inputs.snapshot_stale_minutes || vars.MINELINK_ONA_SNAPSHOT_STALE_MINUTES || '15' }}
           MINELINK_ONA_CLI_TIMEOUT_SECONDS: ${{ vars.MINELINK_ONA_CLI_TIMEOUT_SECONDS || '60' }}
         run: |
@@ -180,7 +184,11 @@ jobs:
             done <<< "$active_ids"
           fi
 
-          run_ona prebuild trigger "$MINELINK_ONA_PROJECT_ID" \
+          trigger_args=(prebuild trigger "$MINELINK_ONA_PROJECT_ID")
+          if [ -n "${MINELINK_ONA_ENVIRONMENT_CLASS_ID:-}" ]; then
+            trigger_args+=(--environment-class-id "$MINELINK_ONA_ENVIRONMENT_CLASS_ID")
+          fi
+          run_ona "${trigger_args[@]}" \
             --prebuild-timeout "$MINELINK_ONA_PREBUILD_TIMEOUT" \
             --format json | tee .minelink-dev/reports/ona-prebuild-trigger.json
 
