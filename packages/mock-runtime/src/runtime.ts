@@ -692,6 +692,9 @@ export class MockRuntimeServer {
     }
     record.lifecycleStatus = "completed";
     record.result = (result.result as RuntimeResponse | undefined) ?? result;
+    if (record.toolName === "action.mine_visible_block") {
+      record.result.submitted_action = true;
+    }
     record.updatedAt = Date.now();
     this.releaseActionQueue(agent, record);
     this.trace({ event: "agent.action_event", action_id: actionId, status: "completed" });
@@ -908,7 +911,17 @@ export class MockRuntimeServer {
     return {
       ok: true,
       status: "completed",
-      result: { changed_block: true, drops_spawned: 1, inventory_delta: [{ item: drop, count: 1 }] }
+      mined: block.id,
+      submitted_action: false,
+      visible_mining_ms: 0,
+      result: {
+        changed_block: true,
+        drops_spawned: 1,
+        inventory_delta: [{ item: drop, count: 1 }],
+        mined: block.id,
+        submitted_action: false,
+        visible_mining_ms: 0
+      }
     };
   }
 
@@ -2361,6 +2374,16 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
   }
 
   return [
+    {
+      id: "minecraft:chest",
+      pos: [0, 64, 3],
+      tags: ["minecraft:chest", "minelink:container"],
+      visibleFaces: ["north", "up"],
+      container: {
+        kind: "chest",
+        slots: [{ item: "minecraft:wooden_axe", count: 1 }]
+      }
+    },
     {
       id: "minecraft:oak_log",
       pos: [6, 64, 0],

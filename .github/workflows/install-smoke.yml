@@ -58,11 +58,6 @@ jobs:
       - name: Summarize MineLink evidence
         if: always()
         run: node scripts/dev/summarize-evidence.mjs --output .minelink-dev/install-smoke/ci-evidence-summary.md --append-step-summary
-      - name: Render MineLink acceptance artifacts
-        if: always()
-        run: node scripts/dev/render-acceptance-video.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --pr-url "$MINELINK_PR_URL"
-        env:
-          MINELINK_PR_URL: ${{ github.event.pull_request.html_url || github.server_url }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
