@@ -490,6 +490,13 @@ boundary markers, commits only `docs/agent-factory-canaries/<task>.md`, pushes
 the branch, and then repeats the normal GitHub readback. This is only a bridge
 recovery for the implementation canary edge; it cannot release product code or
 skip video verification.
+The launcher also exposes a non-canary `--task-implementation` prompt surface
+for real issue tasks. That mode requires explicit task requirements, writes
+`docs/agent-factory-task-reports/<task>.md`, and asks Codex to implement within
+the issue contract instead of editing only the canary file. It is a prompt
+surface only until the workflow has a matching task-report fetch/check gate; do
+not treat it as accepted implementation evidence while the canary fetcher is the
+active release edge.
 `full-chain-canary` extends that pilot to the next edge. The workflow runs
 `scripts/dev/run-ona-finalizer-artifacts.mjs` inside the implementation task's
 Ona environment to render the trace-driven acceptance summary/MP4 and write the
@@ -612,7 +619,10 @@ GitHub writeback, Linear-only tasks need Linear sync evidence, and linked
 GitHub+Linear tasks need both.
 
 For task-bound implementation and full-chain canaries, GitHub Actions prepares
-the target branch before launching Platform Codex, then
+the target branch before launching Platform Codex. It uses
+`git push --force-with-lease` from the current workflow source commit so reused
+canary/task branches cannot carry stale report files from an older AgentService
+execution, then
 `scripts/dev/start-ona-platform-codex.mjs` aligns the fresh Ona environment to
 that branch before `StartAgent`. This is a branch anchor only. It lets Codex,
 the fetcher, and guarded canary salvage operate on the same branch, but it does

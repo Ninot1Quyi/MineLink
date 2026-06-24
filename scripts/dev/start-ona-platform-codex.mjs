@@ -22,6 +22,11 @@ const defaults = {
   commit: process.env.MINELINK_COMMIT ?? "",
   githubIssue: process.env.MINELINK_GITHUB_ISSUE ?? "",
   linearIssue: process.env.MINELINK_LINEAR_ISSUE ?? "",
+  taskRequirements: process.env.MINELINK_TASK_REQUIREMENTS ?? "",
+  taskRequirementsFile: process.env.MINELINK_TASK_REQUIREMENTS_FILE ?? "",
+  validationScope: process.env.MINELINK_VALIDATION_SCOPE ?? "docs",
+  scenarios: process.env.MINELINK_SCENARIOS ?? "none",
+  prTitle: process.env.MINELINK_PR_TITLE ?? "",
   videoReviewRequest: process.env.MINELINK_VIDEO_REVIEW_REQUEST ?? ".minelink-dev/reports/artifacts/video-review-request.md",
   model: process.env.MINELINK_ONA_CODEX_MODEL ?? "CODEX_OPEN_AI_MODEL_GPT_5_5",
   reasoningEffort: process.env.MINELINK_ONA_CODEX_REASONING_EFFORT ?? "CODEX_REASONING_EFFORT_EXTRA_HIGH",
@@ -54,6 +59,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--no-send") sendPrompt = false;
   else if (arg === "--identity-canary") promptMode = "identity-canary";
   else if (arg === "--implementation-canary") promptMode = "implementation-canary";
+  else if (arg === "--task-implementation") promptMode = "task-implementation";
   else if (arg === "--video-verifier-canary") promptMode = "video-verifier-canary";
   else if (arg === "--api-base") args.apiBase = readValue();
   else if (arg === "--organization-id") args.organizationId = readValue();
@@ -71,6 +77,11 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--commit") args.commit = readValue();
   else if (arg === "--github-issue") args.githubIssue = readValue();
   else if (arg === "--linear-issue") args.linearIssue = readValue();
+  else if (arg === "--task-requirements") args.taskRequirements = readValue();
+  else if (arg === "--task-requirements-file") args.taskRequirementsFile = readValue();
+  else if (arg === "--validation-scope") args.validationScope = readValue();
+  else if (arg === "--scenarios") args.scenarios = readValue();
+  else if (arg === "--pr-title") args.prTitle = readValue();
   else if (arg === "--video-review-request") args.videoReviewRequest = readValue();
   else if (arg === "--model") args.model = readValue();
   else if (arg === "--reasoning-effort") args.reasoningEffort = readValue();
@@ -96,6 +107,7 @@ Options:
   --start                      Call StartAgent with --codex-agent-id and codexSettings.
   --identity-canary            Send a read-only identity canary prompt after StartAgent.
   --implementation-canary      Send a bounded docs-only task canary prompt.
+  --task-implementation        Send a real task implementation prompt.
   --video-verifier-canary      Send a bounded video-verifier canary prompt.
   --prompt <text>              Prompt to send via SendToAgentExecution.
   --prompt-file <path>         Prompt file to send via SendToAgentExecution.
@@ -157,6 +169,10 @@ function implementationCanaryPath() {
   return `docs/agent-factory-canaries/${pathSegment(args.taskId)}.md`;
 }
 
+function taskImplementationReportPath() {
+  return `docs/agent-factory-task-reports/${pathSegment(args.taskId)}.md`;
+}
+
 function videoVerifierCanaryPath() {
   return `docs/agent-factory-canaries/${pathSegment(args.taskId)}-video-verifier.md`;
 }
@@ -173,6 +189,15 @@ function requestValue(text, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = String(text ?? "").match(new RegExp(`^-?\\s*${escaped}:\\s*` + "`?(.+?)`?\\s*$", "im"));
   return match?.[1]?.trim() ?? "";
+}
+
+function verificationCommand() {
+  const scope = args.validationScope || "docs";
+  const scenarios = String(args.scenarios || "").trim();
+  if (scenarios && scenarios !== "none") {
+    return `bash scripts/dev/verify-agent-task.sh --scope ${scope} --scenarios ${scenarios}`;
+  }
+  return `bash scripts/dev/verify-agent-task.sh --scope ${scope}`;
 }
 
 function implementationCanaryPrompt(context = {}) {
@@ -225,6 +250,76 @@ function implementationCanaryPrompt(context = {}) {
     "- Push the target branch to origin.",
     "- After pushing a canary with Result: passed, stop the task. Do not keep validating, do not rewrite the canary, and do not downgrade it to Result: blocked in a later commit.",
     "- Do not create a PR for this canary unless the user explicitly asks.",
+  ].join("\n");
+}
+
+async function taskImplementationPrompt(context = {}) {
+  const sessionId = context.agentExecutionId || "<agentExecutionId>";
+  const reportPath = taskImplementationReportPath();
+  const fileRequirements = hasValue(args.taskRequirementsFile) ? await readTextIfPresent(args.taskRequirementsFile) : "";
+  const taskRequirements = [args.taskRequirements, fileRequirements]
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+  const verifyCommand = verificationCommand();
+  return [
+    "This is a MineLink Platform Codex real task implementation request.",
+    "You must use Ona Platform Codex Goal mode, not the default Ona Agent.",
+    "First reply in the session with exactly this line:",
+    "Identity: I am Codex running in Ona Platform Codex",
+    "",
+    "Task context:",
+    `- Task id: ${args.taskId}`,
+    `- Target branch: ${args.branch}`,
+    `- Source commit: ${args.commit}`,
+    `- GitHub issue: ${args.githubIssue || "none"}`,
+    `- Linear issue: ${args.linearIssue || "none"}`,
+    `- PR title: ${args.prTitle || "none"}`,
+    `- Ona AgentService execution id: ${sessionId}`,
+    `- Requested agent execution mode: ${args.agentMode}`,
+    `- Required validation: ${verifyCommand}`,
+    `- Implementation report: ${reportPath}`,
+    "",
+    "Repository rules:",
+    "- Read and follow AGENTS.md before editing.",
+    "- Read ARCHITECTURE.md, docs/minelink-acceptance.md, docs/minelink-plan.md, and docs/minelink-mod-mcp-architecture.md for non-trivial MineLink work.",
+    "- Keep MineLink anti-mock boundaries: do not replace real Minecraft behavior with synthetic output, do not weaken assertions, and do not add backdoor oracle/give/setBlock/NBT shortcuts.",
+    "- If the task changes public tools, protocol shape, runtime authority, package/workflow structure, verification entry points, or parallel-agent workflow, update ARCHITECTURE.md in the same branch.",
+    "- Commit messages must be English Lore commit messages that explain why the change was made.",
+    "- Do not create a PR yourself; the workflow owns PR creation after verifier/release gates.",
+    "",
+    "Task requirements:",
+    taskRequirements || "- No structured task requirements were supplied. Stop and write Result: blocked in the implementation report with this blocker.",
+    "",
+    "Execution:",
+    `- Create or switch to branch ${args.branch}.`,
+    "- Implement the requested task with the smallest safe product slice.",
+    "- Update docs/minelink-acceptance.md if gate evidence or status changes.",
+    `- Run: ${verifyCommand}`,
+    "- If validation fails, iterate only within the requested scope. If the task is blocked by missing authority or ambiguous requirements, do not fake success.",
+    "",
+    "Required implementation report:",
+    `- Add or update ${reportPath}.`,
+    "- Include a heading: MineLink Platform Codex Task Implementation Report.",
+    "- Include these exact marker lines with the current values:",
+    "  Agent mode: Ona Platform Codex",
+    `  Agent execution mode: ${args.agentMode}`,
+    "  Identity: I am Codex running in Ona Platform Codex",
+    `  Session id: ${sessionId}`,
+    "  Platform evidence: Ona AgentService StartAgent launched the configured Codex agent id with codexSettings; GitHub runner will verify the API readback separately.",
+    `  Task id: ${args.taskId}`,
+    `  Branch: ${args.branch}`,
+    "  Result: passed",
+    `  Validation: ${verifyCommand}`,
+    "  Validation result: passed",
+    "  Boundary: task-implementation evidence only; video verifier, PR release, and MineLink product acceptance remain separate gates.",
+    "- Include changed files, mock/smoke assumption reduced, evidence paths, and remaining gaps.",
+    "- If blocked, set Result: blocked, Validation result: blocked, and name the blocker. Do not claim acceptance.",
+    "",
+    "Git:",
+    "- Commit the implementation and report together.",
+    "- Push the target branch to origin.",
+    "- After pushing a passed implementation report, stop the task and wait for the workflow verifier/finalizer.",
   ].join("\n");
 }
 
@@ -502,7 +597,9 @@ function getEnvironment(environmentId) {
 function taskBranchNeedsAlignment() {
   return (
     createEnvironment &&
-    (promptMode === "implementation-canary" || promptMode === "video-verifier-canary") &&
+    (promptMode === "implementation-canary" ||
+      promptMode === "task-implementation" ||
+      promptMode === "video-verifier-canary") &&
     hasValue(args.branch) &&
     !["manual", "unknown"].includes(String(args.branch).trim().toLowerCase())
   );
@@ -637,6 +734,7 @@ async function readPrompt(context = {}) {
   if (hasValue(args.promptFile)) return fs.readFile(args.promptFile, "utf8");
   if (hasValue(args.prompt)) return args.prompt;
   if (promptMode === "implementation-canary") return implementationCanaryPrompt(context);
+  if (promptMode === "task-implementation") return taskImplementationPrompt(context);
   if (promptMode === "video-verifier-canary") return videoVerifierCanaryPrompt(context);
   return identityCanaryPrompt();
 }
@@ -753,13 +851,16 @@ function validateStartInputs(failures) {
   if (!Number.isFinite(args.environmentPollSeconds) || args.environmentPollSeconds < 1) {
     failures.push("--environment-poll-seconds must be at least 1.");
   }
-  if (promptMode === "implementation-canary" || promptMode === "video-verifier-canary") {
+  if (promptMode === "implementation-canary" || promptMode === "task-implementation" || promptMode === "video-verifier-canary") {
     if (!hasValue(args.taskId) || ["manual", "unknown"].includes(String(args.taskId).trim().toLowerCase())) {
       failures.push(`--${promptMode} requires a non-manual --task-id for task-bound evidence.`);
     }
     if (!hasValue(args.branch) || ["manual", "unknown"].includes(String(args.branch).trim().toLowerCase())) {
       failures.push(`--${promptMode} requires an explicit --branch for task-bound evidence.`);
     }
+  }
+  if (promptMode === "task-implementation" && !hasValue(args.taskRequirements) && !hasValue(args.taskRequirementsFile)) {
+    failures.push("--task-implementation requires --task-requirements or --task-requirements-file.");
   }
   if (promptMode === "video-verifier-canary" && !hasValue(args.commit)) {
     failures.push("--video-verifier-canary requires --commit for task-bound video review evidence.");

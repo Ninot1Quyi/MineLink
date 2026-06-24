@@ -165,6 +165,7 @@ require_text ".github/workflows/ona-platform-codex-probe.yml" "run-ona-finalizer
 require_text ".github/workflows/ona-platform-codex-probe.yml" "environment_class_id"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "MINELINK_ONA_ENVIRONMENT_CLASS_ID"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "--environment-class-id"
+require_text ".github/workflows/ona-platform-codex-probe.yml" "git push --force-with-lease"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "Report GitHub inline video publication readiness"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "github_attachment_preflight"
 require_text ".github/workflows/ona-platform-codex-probe.yml" '--commit "$reviewed_commit"'
@@ -173,6 +174,9 @@ require_text "scripts/dev/check-agent-factory-secrets.mjs" "githubUserAttachment
 require_text "scripts/dev/check-agent-factory-secrets.mjs" "--require-github-attachment-cookie"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "shouldSendPromptToExistingExecution"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "native Codex subagent/verifier"
+require_text "scripts/dev/start-ona-platform-codex.mjs" "--task-implementation"
+require_text "scripts/dev/start-ona-platform-codex.mjs" "docs/agent-factory-task-reports"
+require_text "scripts/dev/start-ona-platform-codex.mjs" "--task-requirements-file"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "MINELINK_ONA_ENVIRONMENT_CLASS_ID"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "--environment-class-id"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "--class-id"

@@ -996,6 +996,14 @@ Current status:
   canary chain. It must pass the issue-derived `validationScope` and
   `scenarios` into the full-chain workflow so NeoForge-required tasks produce
   NeoForge-backed video evidence instead of a docs-only finalizer run.
+- The full-chain workflow now re-anchors reused task branches with
+  `git push --force-with-lease` before launching Platform Codex, so stale canary
+  evidence from an older AgentService execution cannot satisfy a new run. The
+  launcher also has a guarded `--task-implementation` prompt surface that
+  requires explicit task requirements and writes
+  `docs/agent-factory-task-reports/<task>.md`, but that is not accepted as
+  product implementation evidence until a matching task-report fetch/check gate
+  replaces the current canary-only implementation fetcher.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.

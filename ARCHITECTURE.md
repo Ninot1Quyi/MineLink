@@ -355,15 +355,25 @@ file alone is not accepted readback, because the final `Commit:` marker comes
 from the GitHub branch head fetched by the workflow.
 Before `implementation-canary` or `full-chain-canary` starts the Platform Codex
 session, the workflow prepares the target branch from the workflow source
-commit. That branch is only a handoff anchor: it is not implementation evidence,
-does not satisfy the Platform Codex readback, and does not replace the
-Codex-authored canary or product commit. After the fresh Ona environment
+commit with `git push --force-with-lease`. This intentionally re-anchors reused
+task branches to the current source commit so stale canary/report files from an
+older AgentService execution cannot satisfy a new run. That branch is only a
+handoff anchor: it is not implementation evidence, does not satisfy the
+Platform Codex readback, and does not replace the Codex-authored canary or
+product commit. After the fresh Ona environment
 reaches running state, `scripts/dev/start-ona-platform-codex.mjs` fetches and
 checks out that target branch inside `/workspaces/MineLink` before calling
 `StartAgent`; the API session report records `AlignEnvironmentBranch` and the
 branch readback. This keeps `implementation_codex -> branch/commit readback`
 and guarded salvage on the same branch instead of leaving new task environments
 on the project default branch.
+`scripts/dev/start-ona-platform-codex.mjs --task-implementation` is the
+non-canary prompt surface for real issue tasks. It requires explicit task
+requirements, writes `docs/agent-factory-task-reports/<task>.md`, and tells
+Codex to implement within the issue contract instead of editing only the canary
+file. This prompt surface is not accepted as a release edge until the workflow
+has a matching task-report fetch/check gate; canary fetchers remain the current
+accepted implementation-edge proof.
 If Goal-mode Codex writes the exact task-bound canary file inside the Ona
 environment but fails to push it, the fetcher may perform a guarded salvage: it
 enters the recorded Ona environment, refuses any branch other than the expected

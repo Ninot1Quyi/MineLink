@@ -204,8 +204,9 @@ jobs:
             echo "MINELINK_PLATFORM_CODEX_TASK_ID=$task_id"
             echo "MINELINK_PLATFORM_CODEX_TARGET_BRANCH=$target_branch"
           } >> "$GITHUB_ENV"
-          if git ls-remote --exit-code --heads origin "$target_branch" >/dev/null 2>&1; then
-            echo "Target branch already exists: $target_branch"
+          remote_sha="$(git ls-remote --heads origin "$target_branch" | awk '{print $1}')"
+          if [ -n "$remote_sha" ]; then
+            git push --force-with-lease="refs/heads/$target_branch:$remote_sha" origin "HEAD:refs/heads/$target_branch"
           else
             git push origin "HEAD:refs/heads/$target_branch"
           fi
