@@ -55,6 +55,10 @@ Recorder client target centered: yes
 Recorder client target visible: yes
 Recorder ready before scenario: yes
 Recorder work coverage adequate: yes
+Recorder visible mining: yes
+Recorder visible mining duration adequate: yes
+Requires visible mining: yes
+Recorder scenario action visible: yes
 Submitted actions terminal confirmed: yes
 Recorder work visible: yes
 Server agent task action visible: yes
@@ -144,6 +148,11 @@ const recorderMinWorkVisibleSeconds = Number.isFinite(origin?.recorderMinWorkVis
   ? origin.recorderMinWorkVisibleSeconds
   : 0;
 const recorderVisibleMining = origin?.recorderVisibleMining === true;
+const recorderVisibleMiningMs = Number.isFinite(origin?.recorderVisibleMiningMs) ? origin.recorderVisibleMiningMs : 0;
+const recorderMinVisibleMiningMs = Number.isFinite(origin?.recorderMinVisibleMiningMs)
+  ? origin.recorderMinVisibleMiningMs
+  : 0;
+const recorderVisibleMiningDurationAdequate = origin?.recorderVisibleMiningDurationAdequate === true;
 const requiresVisibleMining = origin?.requiresVisibleMining === true;
 const recorderScenarioActionVisible = origin?.recorderScenarioActionVisible === true;
 const submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
@@ -225,6 +234,11 @@ if (requireClientGuiCapture) {
     if (requiresVisibleMining && !recorderVisibleMining) {
       failures.push("Acceptance video origin requires visible mining evidence but recorderVisibleMining is false");
     }
+    if (requiresVisibleMining && !recorderVisibleMiningDurationAdequate) {
+      failures.push(
+        `Acceptance video origin visible mining duration is too short: ${recorderVisibleMiningMs}ms < ${recorderMinVisibleMiningMs}ms`,
+      );
+    }
     if (!recorderScenarioActionVisible) {
       failures.push("Acceptance video origin does not confirm scenario-specific visible task action");
     }
@@ -301,6 +315,13 @@ if (storageManifest) {
   if (requireClientGuiCapture && storageManifest.requiresVisibleMining === true && storageManifest.recorderVisibleMining !== true) {
     failures.push("Video storage manifest requires visible mining evidence but recorderVisibleMining is not true");
   }
+  if (
+    requireClientGuiCapture &&
+    storageManifest.requiresVisibleMining === true &&
+    storageManifest.recorderVisibleMiningDurationAdequate !== true
+  ) {
+    failures.push("Video storage manifest requires visible mining evidence but duration is not adequate");
+  }
   if (requireClientGuiCapture && storageManifest.recorderScenarioActionVisible !== true) {
     failures.push("Video storage manifest does not confirm recorderScenarioActionVisible=true");
   }
@@ -335,6 +356,7 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const reviewedRecorderReadyBeforeScenario = marker(review, "Recorder ready before scenario");
   const reviewedRecorderWorkCoverageAdequate = marker(review, "Recorder work coverage adequate");
   const reviewedRecorderVisibleMining = marker(review, "Recorder visible mining");
+  const reviewedRecorderVisibleMiningDurationAdequate = marker(review, "Recorder visible mining duration adequate");
   const reviewedRequiresVisibleMining = marker(review, "Requires visible mining");
   const reviewedRecorderScenarioActionVisible = marker(review, "Recorder scenario action visible");
   const reviewedSubmittedActionsTerminalConfirmed = marker(review, "Submitted actions terminal confirmed");
@@ -426,6 +448,15 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
       `Video verifier did not confirm visible mining evidence: ${reviewedRecorderVisibleMining || "missing"}`,
     );
   }
+  if (
+    requireClientGuiCapture &&
+    reviewedRequiresVisibleMining === "yes" &&
+    reviewedRecorderVisibleMiningDurationAdequate !== "yes"
+  ) {
+    failures.push(
+      `Video verifier did not confirm adequate visible mining duration: ${reviewedRecorderVisibleMiningDurationAdequate || "missing"}`,
+    );
+  }
   if (requireClientGuiCapture && reviewedRecorderScenarioActionVisible !== "yes") {
     failures.push(
       `Video verifier did not confirm scenario-specific visible task action: ${reviewedRecorderScenarioActionVisible || "missing"}`,
@@ -498,6 +529,9 @@ const lines = [
   `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
   `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
   `- Recorder visible mining: \`${recorderVisibleMining ? "yes" : "no"}\``,
+  `- Recorder visible mining ms: \`${recorderVisibleMiningMs}\``,
+  `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
+  `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
   `- Requires visible mining: \`${requiresVisibleMining ? "yes" : "no"}\``,
   `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,

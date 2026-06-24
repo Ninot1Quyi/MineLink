@@ -838,16 +838,20 @@ must succeed, at least one final assertion must pass, and the recorder must
 confirm target movement, follow, centered framing, and visible target framing.
 For scenarios that complete `action.mine_visible_block`, the
 renderer additionally requires the server-side recorder marker
-`MineLink recorder visible mining server_agent` before it sets
-`recorderScenarioActionVisible=true`; this prevents a video that only shows the
-agent standing near a finished result from passing as mining evidence. The real
-NeoForge mining path must produce that marker while driving
-`ServerPlayerGameMode.handleBlockBreakAction` and `gameMode.tick()` for the
-visible `MineLink-*` FakePlayer body, so video-required mining evidence comes
-from vanilla block-break progress rather than a recorder-only hold followed by
-an instant `destroyBlock` call. The sync mining budget is intentionally below
-the protocol request timeout, and `mine_tree` retrieves a wooden axe from the
-shared fixture chest through public container tools before mining. Agent
+`MineLink recorder visible mining server_agent` and a
+`recorderVisibleMiningMs >= recorderMinVisibleMiningMs` duration check before it
+sets `recorderScenarioActionVisible=true`; this prevents a video that only shows
+the agent standing near a finished result, or a sub-second mining flash, from
+passing as mining evidence. The real NeoForge mining path must produce that
+marker while driving `ServerPlayerGameMode.handleBlockBreakAction` and
+`gameMode.tick()` for the visible `MineLink-*` FakePlayer body, so
+video-required mining evidence comes from vanilla block-break progress rather
+than a recorder-only hold followed by an instant `destroyBlock` call. The sync
+mining budget is intentionally below the protocol request timeout, and the
+video-oriented `mine_tree` replay still retrieves a wooden axe from the shared
+fixture chest through public container tools but mines the visible log with
+`tool_policy=empty_hand` so the final MP4 contains a human-readable vanilla
+mining window. Agent
 scenario reports also fail closed on unexpected `ok:false` tool results; a final
 inventory assertion cannot mask a failed MCP action. The
 finalizer also runs
@@ -1046,7 +1050,8 @@ evidence, even if a verifier report says `Release decision: pass`. A ready
 `video-review-request.md` never releases a task by itself. For client GUI
 captures, the same verifier canary and release gate must also carry
 `Recorder ready before scenario: yes`, `Recorder work coverage adequate: yes`,
-`Recorder visible mining: yes` when mining is required,
+`Recorder visible mining: yes` and
+`Recorder visible mining duration adequate: yes` when mining is required,
 `Recorder scenario action visible: yes`,
 `Submitted actions terminal confirmed: yes`, and
 `Recorder work visible: yes`, proving that the video shows successful task work

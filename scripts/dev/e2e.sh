@@ -540,11 +540,13 @@ PY
 if truthy_value "$record_client"; then
   recorder_post_seconds="${MINELINK_RECORDER_POST_SCENARIO_SECONDS:-12}"
   recorder_min_work_seconds="${MINELINK_RECORDER_MIN_WORK_VISIBLE_SECONDS:-10}"
+  recorder_min_visible_mining_ms="${MINELINK_RECORDER_MINING_VISIBLE_MS:-2500}"
   recorder_visual_timeout="${MINELINK_RECORDER_POST_SCENARIO_READY_TIMEOUT:-30}"
   {
     echo "scenarioCompletedAtEpoch=$(date +%s)"
     echo "recorderPostScenarioSeconds=$recorder_post_seconds"
     echo "recorderMinWorkVisibleSeconds=$recorder_min_work_seconds"
+    echo "recorderMinVisibleMiningMs=$recorder_min_visible_mining_ms"
     echo "recorderPostScenarioReadyTimeoutSeconds=$recorder_visual_timeout"
   } >> "$client_capture_ready"
   wait_for_any_log_text \

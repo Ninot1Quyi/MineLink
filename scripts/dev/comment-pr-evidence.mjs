@@ -162,6 +162,14 @@ function body(manifest) {
     ? manifest.recorderWorkHoldSeconds
     : "unknown";
   const recorderVisibleMining = manifest?.recorderVisibleMining === true ? "yes" : "no";
+  const recorderVisibleMiningMs = Number.isFinite(manifest?.recorderVisibleMiningMs)
+    ? manifest.recorderVisibleMiningMs
+    : "unknown";
+  const recorderMinVisibleMiningMs = Number.isFinite(manifest?.recorderMinVisibleMiningMs)
+    ? manifest.recorderMinVisibleMiningMs
+    : "unknown";
+  const recorderVisibleMiningDurationAdequate =
+    manifest?.recorderVisibleMiningDurationAdequate === true ? "yes" : "no";
   const requiresVisibleMining = manifest?.requiresVisibleMining === true ? "yes" : "no";
   const recorderScenarioActionVisible = manifest?.recorderScenarioActionVisible === true ? "yes" : "no";
   const submittedActionsTerminalConfirmed = manifest?.submittedActionsTerminalConfirmed === true ? "yes" : "no";
@@ -201,6 +209,9 @@ function body(manifest) {
     `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate}\``,
     `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
     `- Recorder visible mining: \`${recorderVisibleMining}\``,
+    `- Recorder visible mining ms: \`${recorderVisibleMiningMs}\``,
+    `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
+    `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate}\``,
     `- Requires visible mining: \`${requiresVisibleMining}\``,
     `- Recorder scenario action visible: \`${recorderScenarioActionVisible}\``,
     `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed}\``,

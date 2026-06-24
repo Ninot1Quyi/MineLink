@@ -242,9 +242,12 @@ terminal lifecycle confirmation for submit-mode actions, the recorder
 movement/follow/centered/visible markers, pre-scenario readiness, and adequate
 work coverage. For scenarios that complete `action.mine_visible_block`, the
 renderer also requires the server-side `MineLink recorder visible mining
-server_agent` marker and records it as `recorderScenarioActionVisible=true`; a
-video that only shows the agent beside the finished tree result is not accepted
-as mining evidence. The NeoForge runtime emits that marker while driving
+server_agent` marker plus a `visible_mining_ms` duration that meets
+`MINELINK_RECORDER_MINING_VISIBLE_MS`; it records this as
+`recorderVisibleMiningDurationAdequate=true` and
+`recorderScenarioActionVisible=true`. A video that only shows the agent beside
+the finished tree result, or a mining action too brief to inspect, is not
+accepted as mining evidence. The NeoForge runtime emits that marker while driving
 `ServerPlayerGameMode.handleBlockBreakAction` and `gameMode.tick()` for the
 visible `MineLink-*` FakePlayer body, so the capture should show vanilla
 block-break progress instead of a recorder-only hold plus an instant destroy.

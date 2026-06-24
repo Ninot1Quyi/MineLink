@@ -936,6 +936,7 @@ Recorder client target visible: yes
 Recorder ready before scenario: yes
 Recorder work coverage adequate: yes
 Recorder visible mining: yes
+Recorder visible mining duration adequate: yes
 Requires visible mining: yes|no
 Recorder scenario action visible: yes
 Submitted actions terminal confirmed: yes

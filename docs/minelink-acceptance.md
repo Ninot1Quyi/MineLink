@@ -1065,9 +1065,14 @@ Current status:
   an idle `server_agent`, seeing the target only near the end, or submitting
   work without waiting for execution completion is not enough. For scenarios
   that complete `action.mine_visible_block`, the renderer also requires the
-  server-side `MineLink recorder visible mining server_agent` marker before it
-  can set `recorderScenarioActionVisible=true`, so a clip that only shows the
-  agent beside the final result cannot pass as mining evidence. The release gate
+  server-side `MineLink recorder visible mining server_agent` marker and
+  `recorderVisibleMiningMs >= recorderMinVisibleMiningMs` before it can set
+  `recorderScenarioActionVisible=true`, so a clip that only shows the agent
+  beside the final result, or only a sub-second mining flash, cannot pass as
+  mining evidence. The video-oriented `mine_tree` replay still exercises
+  container movement by taking the wooden axe from the shared chest, but mines
+  the log with `tool_policy=empty_hand` to keep the vanilla mining action
+  visible in the final MP4. The release gate
   must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,

@@ -250,6 +250,9 @@ const report = {
   recorderCaptureDurationSeconds: 0,
   recorderWorkCoverageAdequate: false,
   recorderVisibleMining: false,
+  recorderVisibleMiningMs: 0,
+  recorderMinVisibleMiningMs: 0,
+  recorderVisibleMiningDurationAdequate: false,
   requiresVisibleMining: false,
   recorderScenarioActionVisible: false,
   submittedActionsTerminalConfirmed: false,
@@ -318,6 +321,13 @@ if (report.failures.length === 0) {
     : 0;
   report.recorderWorkCoverageAdequate = origin?.recorderWorkCoverageAdequate === true;
   report.recorderVisibleMining = origin?.recorderVisibleMining === true;
+  report.recorderVisibleMiningMs = Number.isFinite(origin?.recorderVisibleMiningMs)
+    ? origin.recorderVisibleMiningMs
+    : 0;
+  report.recorderMinVisibleMiningMs = Number.isFinite(origin?.recorderMinVisibleMiningMs)
+    ? origin.recorderMinVisibleMiningMs
+    : 0;
+  report.recorderVisibleMiningDurationAdequate = origin?.recorderVisibleMiningDurationAdequate === true;
   report.requiresVisibleMining = origin?.requiresVisibleMining === true;
   report.recorderScenarioActionVisible = origin?.recorderScenarioActionVisible === true;
   report.submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
@@ -388,6 +398,9 @@ const manifest = {
   recorderCaptureDurationSeconds: report.recorderCaptureDurationSeconds,
   recorderWorkCoverageAdequate: report.recorderWorkCoverageAdequate,
   recorderVisibleMining: report.recorderVisibleMining,
+  recorderVisibleMiningMs: report.recorderVisibleMiningMs,
+  recorderMinVisibleMiningMs: report.recorderMinVisibleMiningMs,
+  recorderVisibleMiningDurationAdequate: report.recorderVisibleMiningDurationAdequate,
   requiresVisibleMining: report.requiresVisibleMining,
   recorderScenarioActionVisible: report.recorderScenarioActionVisible,
   submittedActionsTerminalConfirmed: report.submittedActionsTerminalConfirmed,
@@ -435,6 +448,9 @@ const lines = [
   `- Recorder capture duration seconds: \`${report.recorderCaptureDurationSeconds}\``,
   `- Recorder work coverage adequate: \`${report.recorderWorkCoverageAdequate ? "yes" : "no"}\``,
   `- Recorder visible mining: \`${report.recorderVisibleMining ? "yes" : "no"}\``,
+  `- Recorder visible mining ms: \`${report.recorderVisibleMiningMs}\``,
+  `- Recorder min visible mining ms: \`${report.recorderMinVisibleMiningMs}\``,
+  `- Recorder visible mining duration adequate: \`${report.recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
   `- Requires visible mining: \`${report.requiresVisibleMining ? "yes" : "no"}\``,
   `- Recorder scenario action visible: \`${report.recorderScenarioActionVisible ? "yes" : "no"}\``,
   `- Submitted actions terminal confirmed: \`${report.submittedActionsTerminalConfirmed ? "yes" : "no"}\``,

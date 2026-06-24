@@ -248,6 +248,8 @@ async function videoVerifierCanaryPrompt(context = {}) {
   const recorderReadyBeforeScenario = requestValue(request, "Recorder ready before scenario") || "unknown";
   const recorderWorkCoverageAdequate = requestValue(request, "Recorder work coverage adequate") || "unknown";
   const recorderVisibleMining = requestValue(request, "Recorder visible mining") || "unknown";
+  const recorderVisibleMiningDurationAdequate =
+    requestValue(request, "Recorder visible mining duration adequate") || "unknown";
   const requiresVisibleMining = requestValue(request, "Requires visible mining") || "unknown";
   const recorderScenarioActionVisible = requestValue(request, "Recorder scenario action visible") || "unknown";
   const submittedActionsTerminalConfirmed = requestValue(request, "Submitted actions terminal confirmed") || "unknown";
@@ -282,6 +284,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `Recorder ready before scenario: ${recorderReadyBeforeScenario}`,
     `Recorder work coverage adequate: ${recorderWorkCoverageAdequate}`,
     `Recorder visible mining: ${recorderVisibleMining}`,
+    `Recorder visible mining duration adequate: ${recorderVisibleMiningDurationAdequate}`,
     `Requires visible mining: ${requiresVisibleMining}`,
     `Recorder scenario action visible: ${recorderScenarioActionVisible}`,
     `Submitted actions terminal confirmed: ${submittedActionsTerminalConfirmed}`,
@@ -331,6 +334,7 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- Recorder ready before scenario: ${recorderReadyBeforeScenario}`,
     `- Recorder work coverage adequate: ${recorderWorkCoverageAdequate}`,
     `- Recorder visible mining: ${recorderVisibleMining}`,
+    `- Recorder visible mining duration adequate: ${recorderVisibleMiningDurationAdequate}`,
     `- Requires visible mining: ${requiresVisibleMining}`,
     `- Recorder scenario action visible: ${recorderScenarioActionVisible}`,
     `- Submitted actions terminal confirmed: ${submittedActionsTerminalConfirmed}`,

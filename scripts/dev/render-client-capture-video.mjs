@@ -144,6 +144,14 @@ function metadataNumber(text, key, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function toolResultNumber(item, key) {
+  const result = item?.result ?? {};
+  const direct = Number.parseFloat(result?.[key]);
+  if (Number.isFinite(direct)) return direct;
+  const nested = Number.parseFloat(result?.result?.[key]);
+  return Number.isFinite(nested) ? nested : 0;
+}
+
 const report = await readJson(args.report);
 const clientVideoStat = await stat(args.clientVideo);
 const failures = [];
@@ -229,7 +237,23 @@ const recorderWorkCoverageAdequate =
   captureDurationSeconds >= recorderMinWorkVisibleSeconds;
 const recorderVisibleMining = serverLogText.includes("MineLink recorder visible mining server_agent");
 const requiresVisibleMining = successfulWorkToolNames.includes("action.mine_visible_block");
-const recorderScenarioActionVisible = !requiresVisibleMining || recorderVisibleMining;
+const recorderVisibleMiningMs = Math.max(
+  0,
+  ...successfulWorkTools
+    .filter((item) => item?.name === "action.mine_visible_block")
+    .map((item) => toolResultNumber(item, "visible_mining_ms")),
+);
+const recorderMinVisibleMiningMs = Math.max(
+  0,
+  metadataNumber(
+    clientReadyLog,
+    "recorderMinVisibleMiningMs",
+    Number.parseFloat(process.env.MINELINK_RECORDER_MINING_VISIBLE_MS ?? "1000"),
+  ),
+);
+const recorderVisibleMiningDurationAdequate =
+  !requiresVisibleMining || (recorderVisibleMining && recorderVisibleMiningMs >= recorderMinVisibleMiningMs);
+const recorderScenarioActionVisible = !requiresVisibleMining || recorderVisibleMiningDurationAdequate;
 const recorderWorkVisible =
   passed &&
   successfulWorkTools.length > 0 &&
@@ -282,6 +306,11 @@ if (!submittedActionsTerminalConfirmed) {
 if (requiresVisibleMining && !recorderVisibleMining) {
   failures.push("Recorder did not capture a visible mining marker for action.mine_visible_block");
 }
+if (requiresVisibleMining && !recorderVisibleMiningDurationAdequate) {
+  failures.push(
+    `Recorder visible mining duration is too short: ${recorderVisibleMiningMs}ms < ${recorderMinVisibleMiningMs}ms`,
+  );
+}
 if (!recorderWorkVisible) {
   failures.push(
     "Recorder did not confirm active visible server_agent work for this task; final evidence requires successful work tools, passing assertions, and visible centered follow footage",
@@ -307,6 +336,7 @@ const terminalLines = [
   `ready before work: ${recorderReadyBeforeScenario ? "YES" : "NO"}`,
   `work hold sec: ${recorderWorkHoldSeconds}`,
   `visible mining: ${recorderVisibleMining ? "YES" : "NO"}`,
+  `mining ms: ${recorderVisibleMiningMs}/${recorderMinVisibleMiningMs}`,
   `actions terminal: ${submittedActionsTerminalConfirmed ? "YES" : "NO"}`,
   `work visible: ${recorderWorkVisible ? "YES" : "NO"}`,
   `report sha256: ${reportHash.slice(0, 12)}`,
@@ -481,6 +511,9 @@ const summaryLines = [
   `- Recorder capture duration seconds: \`${captureDurationSeconds.toFixed(3)}\``,
   `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
   `- Recorder visible mining: \`${recorderVisibleMining ? "yes" : "no"}\``,
+  `- Recorder visible mining ms: \`${recorderVisibleMiningMs}\``,
+  `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
+  `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
   `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
   `- Submitted action pending count: \`${submittedActionPendingCount}\``,
@@ -537,6 +570,9 @@ const origin = {
   recorderCaptureDurationSeconds: Number(captureDurationSeconds.toFixed(3)),
   recorderWorkCoverageAdequate,
   recorderVisibleMining,
+  recorderVisibleMiningMs,
+  recorderMinVisibleMiningMs,
+  recorderVisibleMiningDurationAdequate,
   requiresVisibleMining,
   recorderScenarioActionVisible,
   submittedActionsTerminalConfirmed,
@@ -584,6 +620,9 @@ await fs.writeFile(
     `- Recorder capture duration seconds: \`${captureDurationSeconds.toFixed(3)}\``,
     `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
     `- Recorder visible mining: \`${recorderVisibleMining ? "yes" : "no"}\``,
+    `- Recorder visible mining ms: \`${recorderVisibleMiningMs}\``,
+    `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
+    `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
     `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
     `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
     `- Submitted action pending count: \`${submittedActionPendingCount}\``,
