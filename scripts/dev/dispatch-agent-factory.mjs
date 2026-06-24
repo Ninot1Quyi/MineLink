@@ -20,6 +20,7 @@ const defaults = {
   onaAutomation: process.env.MINELINK_ONA_AUTOMATION_ID ?? "019ee9f6-9adb-7c93-aaa6-c26337d2278b",
   onaProject: process.env.MINELINK_ONA_PROJECT_ID ?? "019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb",
   output: ".minelink-dev/reports/agent-factory-dispatch.md",
+  jsonOutput: ".minelink-dev/reports/agent-factory-dispatch.json",
   chainOutput: ".minelink-dev/reports/agent-factory-chain.md",
   chainJsonOutput: ".minelink-dev/reports/agent-factory-chain.json",
   onaExecutionOutput: ".minelink-dev/reports/ona-automation-execution.md",
@@ -55,6 +56,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-automation") args.onaAutomation = readValue();
   else if (arg === "--ona-project") args.onaProject = readValue();
   else if (arg === "--output") args.output = readValue();
+  else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--chain-output") args.chainOutput = readValue();
   else if (arg === "--chain-json-output") args.chainJsonOutput = readValue();
   else if (arg === "--ona-execution-output") args.onaExecutionOutput = readValue();
@@ -221,6 +223,23 @@ const acceptanceGate = parseAcceptanceGate(issue.body);
 const linearIssue = parseLinearIssue(issue.body);
 const validationScope = inferValidationScope(issue.body, labels);
 const scenarios = inferScenarios(issue.body, validationScope);
+const taskRequirements = [
+  "# MineLink Agent Task Contract",
+  "",
+  `- Source: ${args.source}`,
+  `- GitHub issue: ${issue.url || "none"}`,
+  `- GitHub issue number: ${issue.number || "none"}`,
+  `- GitHub issue title: ${issue.title}`,
+  `- Linear issue: ${linearIssue}`,
+  `- Acceptance gate: ${acceptanceGate}`,
+  `- Validation scope: ${validationScope}`,
+  `- Scenarios: ${scenarios}`,
+  `- Labels: ${labels.join(", ") || "none"}`,
+  "",
+  "## Issue body",
+  "",
+  issue.body || "No issue body was captured.",
+].join("\n");
 
 const requiredSections = [
   ["Task"],
@@ -620,6 +639,44 @@ const lines = [
   "",
 ];
 await fs.writeFile(args.output, lines.join("\n"), "utf8");
+await fs.mkdir(path.dirname(args.jsonOutput), { recursive: true });
+await fs.writeFile(
+  args.jsonOutput,
+  `${JSON.stringify(
+    {
+      source: args.source,
+      taskId,
+      githubIssue: issue.url || "none",
+      githubIssueNumber: issue.number || "",
+      githubIssueTitle: issue.title,
+      githubIssueBody: issue.body,
+      linearIssue,
+      labels,
+      acceptanceGate,
+      branch,
+      prTitle,
+      validationScope,
+      scenarios,
+      taskRequirements,
+      onaAutomation: args.onaAutomation || "none",
+      onaProject: args.onaProject || "none",
+      onaExecution: onaExecution || "none",
+      onaExecutionResult: onaExecutionReport?.result ?? (onaExecution ? "not-waited" : "none"),
+      result: dispatchResult,
+      failures,
+      reports: {
+        markdown: args.output,
+        chain: args.chainOutput,
+        chainJson: args.chainJsonOutput,
+        onaExecution: args.onaExecutionOutput,
+        onaExecutionJson: args.onaExecutionJsonOutput,
+      },
+    },
+    null,
+    2,
+  )}\n`,
+  "utf8",
+);
 
 if (comment && issue.number) {
   const commentBody = [
