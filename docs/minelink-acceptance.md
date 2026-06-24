@@ -810,7 +810,9 @@ Current status:
   `scripts/dev/start-ona-platform-codex.mjs` now captures the documented Ona
   AgentService candidate path for programmatic Codex launch: `StartAgent` with
   an explicit Codex `agentId` and `codexSettings`, `SendToAgentExecution` for
-  the task prompt, and `GetAgentExecution` for `spec.agentId` plus
+  the task prompt through `userInput.inputs[]` plus a deprecated
+  `userInput.text` compatibility mirror, and `GetAgentExecution` for
+  `spec.agentId` plus
   Codex-settings readback. The launcher now requests `AGENT_MODE_GOAL`, the
   explicit persistent Goal selector; generated task readbacks
   must include `Agent execution mode: AGENT_MODE_GOAL`, while one-shot
@@ -818,7 +820,8 @@ Current status:
   A Goal-mode readback that remains `PHASE_PENDING` is now a blocked
   handoff, not accepted launch evidence. It proves only that AgentService has an
   execution record; it does not prove that Codex has started executing the
-  task prompt.
+  task prompt. A successful prompt-send response is also not enough; task
+  consumption requires the task-bound branch/report readback.
   This is not accepted product evidence yet. It does not replace the
   task-bound implementation and verifier readback files required by the
   finalizer. The launcher now ignores stopped historical Ona

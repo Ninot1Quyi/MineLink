@@ -356,7 +356,8 @@ Separate from the public automation YAML behavior, Ona's public AgentService API
 now documents a lower-level candidate path for programmatic Codex launch:
 `StartAgent` accepts an explicit `agentId`, `codeContext`, `codexSettings`,
 `mode`, and `sessionId`; `SendToAgentExecution` sends the user prompt to that
-execution; `GetAgentExecution` returns `spec.agentId`,
+execution using `userInput.inputs[]` with a deprecated `userInput.text`
+compatibility mirror; `GetAgentExecution` returns `spec.agentId`,
 `spec.codexSettings`, `status.codexSettings`, conversation URLs, phase, and
 failure details. MineLink captures this candidate path in:
 
@@ -389,7 +390,10 @@ Platform Codex launch/readback edge. Because Goal-mode sessions may stay
 running, launch/readback is allowed before the execution reaches a terminal
 phase, but not while the readback is still `PHASE_PENDING`. Pending means the
 platform has an execution record, not that the task prompt reached an
-executable Codex session. It does not satisfy the implementation readback,
+executable Codex session. A successful `SendToAgentExecution` response is also
+only prompt-delivery evidence; real task consumption is accepted only when the
+task-bound branch/report readback appears. It does not satisfy the
+implementation readback,
 acceptance MP4, video verifier, PR, CI, or product acceptance gates until the
 task-bound Codex session performs the work, writes the normal
 `.minelink-dev/reports/ona-codex-implementation-session.md`, and the video

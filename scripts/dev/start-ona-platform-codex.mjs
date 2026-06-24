@@ -778,12 +778,18 @@ function startBody() {
 }
 
 function sendBody(agentExecutionId, prompt) {
+  const textInput = {
+    content: prompt,
+  };
   return {
     agentExecutionId,
     userInput: {
-      text: {
-        content: prompt,
-      },
+      id: `minelink-${pathSegment(args.taskId)}-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      inputs: [{ text: textInput }],
+      // Keep the deprecated single text field until all Ona runners have
+      // converged on the inputs[] shape.
+      text: textInput,
     },
     codexSettings: codexSettings(),
   };

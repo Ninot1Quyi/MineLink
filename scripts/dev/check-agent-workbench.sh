@@ -181,6 +181,8 @@ require_text "scripts/dev/start-ona-platform-codex.mjs" "--task-requirements-fil
 require_text "scripts/dev/start-ona-platform-codex.mjs" "MINELINK_ONA_ENVIRONMENT_CLASS_ID"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "--environment-class-id"
 require_text "scripts/dev/start-ona-platform-codex.mjs" "--class-id"
+require_text "scripts/dev/start-ona-platform-codex.mjs" "inputs: [{ text: textInput }]"
+require_text "scripts/dev/start-ona-platform-codex.mjs" "deprecated single text field"
 require_text ".github/workflows/devcontainer-image.yml" "ghcr.io/ninot1quyi/minelink-devcontainer"
 require_text ".github/workflows/devcontainer-image.yml" "docker/build-push-action"
 require_text ".github/workflows/devcontainer-image.yml" "packages: write"

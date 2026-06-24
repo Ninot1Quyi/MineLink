@@ -298,7 +298,10 @@ while active agent sessions are kept for inspection. Public Ona API docs now
 expose a narrower candidate launch path: `AgentService/StartAgent` accepts an
 explicit `agentId`, `codeContext`, and `codexSettings`, and
 `AgentService/SendToAgentExecution` can send the task prompt to the resulting
-execution. MineLink tracks that experiment through
+execution. The request uses the current `userInput.inputs[]` text-block shape
+and keeps the deprecated `userInput.text` field only as a compatibility mirror;
+a successful HTTP response alone is not accepted as proof that Codex consumed
+the task prompt. MineLink tracks that experiment through
 `scripts/dev/start-ona-platform-codex.mjs`, which refuses to omit `agentId` or
 use the known default automation agent id. The launcher defaults to GPT-5.5,
 `CODEX_REASONING_EFFORT_EXTRA_HIGH`, the fast service tier, and
@@ -1071,7 +1074,10 @@ active non-terminal Goal-mode readback only after AgentService proves the
 requested Codex agent id, Codex settings, and a non-pending execution phase.
 `PHASE_PENDING` is explicitly blocked; it only proves that the platform has an
 execution record, not that the Codex session can receive and run the task
-prompt. Task completion is then proven by the separate task-bound branch/commit
+prompt. After active readback, the prompt delivery still uses `userInput.inputs[]`
+with a legacy `text` mirror; task consumption is proven only by durable
+branch/report evidence. Task completion is then proven by the separate
+task-bound branch/commit
 readback from
 `scripts/dev/fetch-platform-codex-canary.mjs` for canaries or
 `scripts/dev/fetch-platform-codex-task-report.mjs` for real task work, not by
