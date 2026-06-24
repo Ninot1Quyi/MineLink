@@ -402,10 +402,11 @@ the expected task branch, checks the current task/session/Goal-mode/pass
 markers, stages only the expected canary file or
 `docs/agent-factory-task-reports/<task>.md`, commits that evidence file, pushes
 the branch, and then restarts the normal GitHub API readback. The task-report
-salvage also refuses unexpected changed files outside the expected report path
-and agent-factory canary notes after expanding untracked directories to concrete
-file paths. This recovery path is evidence-only; it cannot publish arbitrary
-product code or bypass downstream video gates.
+salvage also refuses unexpected changed files outside the expected report path,
+agent-factory canary notes, and the acceptance evidence ledger after expanding
+untracked directories to concrete file paths. Deletions are refused. This
+recovery path is evidence-only; it cannot publish arbitrary product code or
+bypass downstream video gates.
 When the canary path already exists from an earlier rehearsal, the fetcher must
 keep polling until the file markers match the current AgentService execution,
 task, branch, and Goal-mode request. Stale branch content is a pending async
