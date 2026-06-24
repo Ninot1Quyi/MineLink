@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -11,6 +11,10 @@ const defaults = {
   contentType: process.env.MINELINK_GITHUB_ATTACHMENT_CONTENT_TYPE ?? "",
   cookie: process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE ?? process.env.GITHUB_USER_ATTACHMENTS_COOKIE ?? "",
   token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "",
+  referer: process.env.MINELINK_GITHUB_ATTACHMENT_REFERER ?? process.env.MINELINK_AGENT_FACTORY_PR_URL ?? "",
+  authenticityToken: process.env.MINELINK_GITHUB_ATTACHMENT_AUTHENTICITY_TOKEN ?? "",
+  fetchNonce: process.env.MINELINK_GITHUB_ATTACHMENT_FETCH_NONCE ?? "",
+  clientVersion: process.env.MINELINK_GITHUB_CLIENT_VERSION ?? "",
   attempts: Number(process.env.MINELINK_GITHUB_ATTACHMENT_UPLOAD_ATTEMPTS ?? 3),
   retryDelayMs: Number(process.env.MINELINK_GITHUB_ATTACHMENT_RETRY_DELAY_MS ?? 1500),
   timeoutMs: Number(process.env.MINELINK_GITHUB_ATTACHMENT_TIMEOUT_MS ?? 30000),
@@ -32,6 +36,10 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--content-type") args.contentType = readValue();
   else if (arg === "--cookie") args.cookie = readValue();
   else if (arg === "--token") args.token = readValue();
+  else if (arg === "--referer") args.referer = readValue();
+  else if (arg === "--authenticity-token") args.authenticityToken = readValue();
+  else if (arg === "--fetch-nonce") args.fetchNonce = readValue();
+  else if (arg === "--client-version") args.clientVersion = readValue();
   else if (arg === "--attempts") args.attempts = Number(readValue());
   else if (arg === "--retry-delay-ms") args.retryDelayMs = Number(readValue());
   else if (arg === "--timeout-ms") args.timeoutMs = Number(readValue());
@@ -52,6 +60,7 @@ cookie is missing and --require-upload is not set, the script writes a skipped
 report and exits successfully so the downstream release gate can fail closed.
 
 Reliability options:
+  --referer URL         GitHub PR/issue page used to discover page upload tokens.
   --attempts N          Retry count for transient web/object-store failures.
   --retry-delay-ms N    Base retry delay in milliseconds.
   --timeout-ms N        Per-request timeout in milliseconds.`);
@@ -110,6 +119,7 @@ function retryableHttpStatus(status) {
 function classifyFailure(message) {
   const text = String(message ?? "").toLowerCase();
   if (text.includes("not configured")) return "missing-github-web-cookie";
+  if (text.includes("github-attachment-page-token")) return "github-attachment-page-token-failed";
   if (text.includes("policy request failed with http 401") || text.includes("policy request failed with http 403")) {
     return "github-web-cookie-rejected";
   }
@@ -154,21 +164,116 @@ function webHeaders(extra = {}) {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     Origin: "https://github.com",
-    Referer: `https://github.com/${args.repository || ""}`,
+    Referer: args.referer || `https://github.com/${args.repository || ""}`,
     ...extra,
   };
   if (hasValue(args.cookie)) headers.Cookie = args.cookie;
+  if (hasValue(args.fetchNonce)) headers["X-Fetch-Nonce"] = args.fetchNonce;
+  if (hasValue(args.clientVersion)) headers["X-GitHub-Client-Version"] = args.clientVersion;
   return headers;
 }
 
-function toForm(values) {
-  const form = new FormData();
+function toMultipart(values, file) {
+  const boundary = `----MineLinkFormBoundary${randomBytes(12).toString("hex")}`;
+  const chunks = [];
   for (const [key, value] of Object.entries(values)) {
     if (value === undefined || value === null) continue;
-    if (value instanceof Blob) form.append(key, value, value.name || undefined);
-    else form.append(key, String(value));
+    chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${String(value)}\r\n`));
   }
-  return form;
+  if (file) {
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${file.fieldName}"; filename="${file.fileName}"\r\nContent-Type: ${file.contentType}\r\n\r\n`,
+      ),
+    );
+    chunks.push(file.buffer);
+    chunks.push(Buffer.from("\r\n"));
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  const body = Buffer.concat(chunks);
+  return {
+    body,
+    headers: {
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+      "Content-Length": String(body.byteLength),
+    },
+  };
+}
+
+function decodeHtml(value) {
+  return String(value ?? "")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function firstAttribute(tag, name) {
+  const match = String(tag ?? "").match(new RegExp(`${name}=["']([^"']+)["']`, "i"));
+  return match ? decodeHtml(match[1]) : "";
+}
+
+function extractAuthenticityToken(html) {
+  const inputTags = String(html ?? "").match(/<input\b[^>]*>/gi) ?? [];
+  for (const tag of inputTags) {
+    if (firstAttribute(tag, "name") === "authenticity_token") {
+      const value = firstAttribute(tag, "value");
+      if (hasValue(value)) return value;
+    }
+  }
+  const metaTags = String(html ?? "").match(/<meta\b[^>]*>/gi) ?? [];
+  for (const tag of metaTags) {
+    const name = firstAttribute(tag, "name") || firstAttribute(tag, "property");
+    if (["csrf-token", "github-csrf-token"].includes(name)) {
+      const content = firstAttribute(tag, "content");
+      if (hasValue(content)) return content;
+    }
+  }
+  return "";
+}
+
+function extractFetchNonce(html) {
+  const patterns = [
+    /\bdata-fetch-nonce=["']([^"']+)["']/i,
+    /\bx-fetch-nonce=["']([^"']+)["']/i,
+    /"fetchNonce"\s*:\s*"([^"]+)"/i,
+    /<meta\b[^>]*name=["']fetch-nonce["'][^>]*content=["']([^"']+)["']/i,
+  ];
+  for (const pattern of patterns) {
+    const match = String(html ?? "").match(pattern);
+    if (match?.[1]) return decodeHtml(match[1]);
+  }
+  return "";
+}
+
+function extractClientVersion(html) {
+  const patterns = [
+    /\bx-github-client-version=["']([^"']+)["']/i,
+    /"clientVersion"\s*:\s*"([^"]+)"/i,
+    /<meta\b[^>]*name=["']github-client-version["'][^>]*content=["']([^"']+)["']/i,
+  ];
+  for (const pattern of patterns) {
+    const match = String(html ?? "").match(pattern);
+    if (match?.[1]) return decodeHtml(match[1]);
+  }
+  return "";
+}
+
+async function discoverPageUploadTokens() {
+  if (!hasValue(args.cookie) || !hasValue(args.referer)) return;
+  const { response, text } = await requestText("github-attachment-page-token", args.referer, {
+    headers: webHeaders({
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }),
+  });
+  report.pageTokenSignals.pageStatus = response.status;
+  if (!hasValue(args.authenticityToken)) args.authenticityToken = extractAuthenticityToken(text);
+  if (!hasValue(args.fetchNonce)) args.fetchNonce = extractFetchNonce(text);
+  if (!hasValue(args.clientVersion)) args.clientVersion = extractClientVersion(text);
+  report.pageTokenSignals.hasAuthenticityToken = hasValue(args.authenticityToken);
+  report.pageTokenSignals.hasFetchNonce = hasValue(args.fetchNonce);
+  report.pageTokenSignals.hasClientVersion = hasValue(args.clientVersion);
 }
 
 async function readRepositoryId() {
@@ -188,18 +293,21 @@ async function readRepositoryId() {
 }
 
 async function uploadPolicy(repositoryId, fileName, size, contentType) {
+  const multipart = toMultipart({
+    repository_id: repositoryId,
+    name: fileName,
+    size,
+    content_type: contentType,
+    ...(hasValue(args.authenticityToken) ? { authenticity_token: args.authenticityToken } : {}),
+  });
   const { response, text } = await requestText("github-attachment-policy", "https://github.com/upload/policies/assets", {
     method: "POST",
     headers: webHeaders({
       "GitHub-Verified-Fetch": "true",
       "X-Requested-With": "XMLHttpRequest",
+      ...multipart.headers,
     }),
-    body: toForm({
-      repository_id: repositoryId,
-      name: fileName,
-      size,
-      content_type: contentType,
-    }),
+    body: multipart.body,
   });
   if (!response.ok) {
     throw new Error(`GitHub user-attachment policy request failed with HTTP ${response.status}: ${compact(text)}`);
@@ -207,17 +315,21 @@ async function uploadPolicy(repositoryId, fileName, size, contentType) {
   return JSON.parse(text);
 }
 
-async function uploadToObjectStore(policy, fileBlob) {
+async function uploadToObjectStore(policy, fileBuffer, fileName, contentType) {
+  const multipart = toMultipart(policy.form ?? {}, {
+    fieldName: "file",
+    fileName,
+    contentType,
+    buffer: fileBuffer,
+  });
   const { response, text } = await requestText("github-attachment-object-upload", policy.upload_url, {
     method: "POST",
     headers: webHeaders({
       ...(policy.same_origin ? { authenticity_token: policy.upload_authenticity_token } : {}),
       ...(policy.header ?? {}),
+      ...multipart.headers,
     }),
-    body: toForm({
-      ...(policy.form ?? {}),
-      file: fileBlob,
-    }),
+    body: multipart.body,
   });
   if (!response.ok) {
     throw new Error(`GitHub user-attachment object upload failed with HTTP ${response.status}: ${compact(text)}`);
@@ -225,6 +337,9 @@ async function uploadToObjectStore(policy, fileBlob) {
 }
 
 async function finalizeUpload(policy) {
+  const multipart = toMultipart({
+    authenticity_token: policy.asset_upload_authenticity_token,
+  });
   const { response, text } = await requestText(
     "github-attachment-finalization",
     new URL(policy.asset_upload_url, "https://github.com/").toString(),
@@ -233,10 +348,9 @@ async function finalizeUpload(policy) {
     headers: webHeaders({
       Accept: "application/json",
       "X-Requested-With": "XMLHttpRequest",
+      ...multipart.headers,
     }),
-    body: toForm({
-      authenticity_token: policy.asset_upload_authenticity_token,
-    }),
+    body: multipart.body,
     },
   );
   if (!response.ok) {
@@ -258,6 +372,7 @@ async function writeReports(report) {
     `SHA256: ${report.sha256 || "missing"}`,
     `Repository: ${report.repository || "missing"}`,
     `Repository id: ${report.repositoryId || "missing"}`,
+    `Referer: ${report.referer || "missing"}`,
     `Attachment URL: ${report.href || "missing"}`,
     `Failure kind: ${report.failureKind || "none"}`,
     `Attempts: ${report.attempts.length}`,
@@ -266,6 +381,10 @@ async function writeReports(report) {
     "## Cookie Signals",
     "",
     ...Object.entries(report.cookieSignals).map(([key, value]) => `- ${key}: \`${value ? "yes" : "no"}\``),
+    "",
+    "## Page Token Signals",
+    "",
+    ...Object.entries(report.pageTokenSignals).map(([key, value]) => `- ${key}: \`${value === "" ? "missing" : value}\``),
     "",
     "## Attempt Log",
     "",
@@ -346,6 +465,14 @@ const report = {
   asset: null,
   failureKind: "",
   cookieSignals: cookieSignals(args.cookie),
+  pageTokenSignals: {
+    refererConfigured: hasValue(args.referer),
+    pageStatus: "",
+    hasAuthenticityToken: hasValue(args.authenticityToken),
+    hasFetchNonce: hasValue(args.fetchNonce),
+    hasClientVersion: hasValue(args.clientVersion),
+  },
+  referer: args.referer || "",
   attempts: [],
   failures: [],
   boundary:
@@ -387,11 +514,11 @@ try {
 
   const repositoryId = await readRepositoryId();
   report.repositoryId = repositoryId;
-  const blob = new Blob([buffer], { type: report.contentType });
-  blob.name = args.name || path.basename(args.filePath);
+  const fileName = args.name || path.basename(args.filePath);
 
-  const policy = await uploadPolicy(repositoryId, blob.name, blob.size, report.contentType);
-  await uploadToObjectStore(policy, blob);
+  await discoverPageUploadTokens();
+  const policy = await uploadPolicy(repositoryId, fileName, buffer.byteLength, report.contentType);
+  await uploadToObjectStore(policy, buffer, fileName, report.contentType);
   await finalizeUpload(policy);
 
   report.asset = policy.asset ?? null;

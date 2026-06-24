@@ -1201,8 +1201,11 @@ Current status:
   tokens cannot be exchanged for a GitHub web session cookie; the bridge must
   either receive an explicit cookie secret or a pre-existing
   `github.com/user-attachments/assets/...` MP4 URL. The upload helper now
-  records retry attempts, cookie marker signals, and a failure kind such as
-  `github-web-cookie-rejected`, `github-attachment-policy-failed`, or
+  receives the task PR URL as a referer, fetches that page with the explicit
+  cookie secret to discover current GitHub upload tokens/nonce values, uses
+  reusable multipart buffers for policy/object/finalize calls, and records
+  retry attempts, cookie marker signals, page token signals, and a failure kind
+  such as `github-web-cookie-rejected`, `github-attachment-policy-failed`, or
   `github-attachment-finalization-failed` so this edge can be repaired without
   weakening the release gate. The supported refresh path is the local
   `npm run agent-factory:refresh-github-cookie -- --repository Ninot1Quyi/MineLink`

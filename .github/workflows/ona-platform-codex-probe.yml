@@ -759,6 +759,7 @@ jobs:
         run: |
           node scripts/dev/upload-github-user-attachment.mjs \
             --repository "$GITHUB_REPOSITORY" \
+            --referer "$MINELINK_AGENT_FACTORY_PR_URL" \
             --file .minelink-dev/reports/artifacts/acceptance.mp4 \
             --name acceptance.mp4 \
             --require-upload

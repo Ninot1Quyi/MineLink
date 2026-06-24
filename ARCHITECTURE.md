@@ -1023,10 +1023,15 @@ requires an explicit GitHub web attachment cookie secret
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; PATs and `GITHUB_TOKEN` can identify
 the repository but do not create comment attachments by themselves, and they
 cannot be exchanged for a GitHub web session cookie. The attachment bridge uses
-bounded retries, request timeouts, sanitized cookie-signal reporting, and
-failure-kind classification so stale cookies, rejected web sessions, transient
-policy failures, object-upload failures, and finalization failures are recorded
-as distinct blockers. `scripts/dev/refresh-github-attachment-cookie.mjs`
+the task PR URL as a referer, fetches that page with the explicit cookie secret
+to discover current GitHub upload form tokens/nonce values, and then performs
+the policy, object upload, and finalization calls with reusable multipart
+buffers so retries do not depend on runtime-specific `FormData` behavior. It
+records sanitized cookie-signal and page-token-signal reports plus
+failure-kind classification so stale cookies, rejected web sessions, missing
+page tokens, transient policy failures, object-upload failures, and
+finalization failures are recorded as distinct blockers.
+`scripts/dev/refresh-github-attachment-cookie.mjs`
 provides the supported refresh path: a local operator opens a dedicated Chrome
 profile, explicitly logs in to GitHub, and the helper writes only the resulting
 `github.com` cookie header directly to the repository secret through
@@ -1045,7 +1050,7 @@ stop before Ona/Minecraft work when the attachment authority is missing. The
 final publication step still fails closed without a GitHub user-attachments
 MP4 URL; deferred mode is not permission to publish R2-only evidence. The
 upload step also runs
-`scripts/dev/upload-github-user-attachment.mjs --require-upload` so a skipped
+`scripts/dev/upload-github-user-attachment.mjs --referer "$MINELINK_AGENT_FACTORY_PR_URL" --require-upload` so a skipped
 attachment upload cannot be treated as releasable evidence. The GitHub Actions
 artifact remains the raw evidence bundle. The older
 `scripts/dev/publish-pr-video-evidence.mjs`
