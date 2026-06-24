@@ -561,15 +561,17 @@ the current release-to-PR blocker until a safe automated attachment upload
 surface exists. GitHub Actions artifacts remain the raw evidence bundle; the
 default chain must not commit the video binary to the repository evidence
 branch when external storage is configured. For `full-chain-canary` runs that
-create PRs, the workflow now runs an early
-`scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
-preflight. That preflight accepts either
-`MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or an explicit
-`github_attachment_video_url` input. If both are missing, the preflight fails
-before Ona Platform Codex or the Minecraft finalizer starts, because the run
-cannot publish the required PR-playable final evidence. The later attachment
-upload step also uses `--require-upload`, so a skipped upload cannot be treated
-as releasable evidence. When a canary run renders
+create PRs, the workflow runs an early
+`scripts/dev/check-agent-factory-secrets.mjs` readiness report for inline video
+publication. The default `github_attachment_preflight=deferred` mode records
+whether `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or an explicit
+`github_attachment_video_url` input is available, then lets Ona Platform Codex,
+the Minecraft finalizer, PR creation, and CI proceed so the true blocker lands
+on the `pr_video_evidence` edge. Operators can choose
+`github_attachment_preflight=fail-fast` for cost-saving rehearsals that should
+stop before Ona/Minecraft work when no attachment authority exists. The later
+attachment upload step still uses `--require-upload`, so a skipped upload cannot
+be treated as releasable evidence. When a canary run renders
 the MP4 on the GitHub runner, the artifact origin must say
 `github-actions-canary`; that video is acceptable for chain testing only. Final
 task acceptance requires an Ona-produced video artifact, with
@@ -1003,13 +1005,15 @@ object-upload, or finalization failures are diagnosable. Refresh the cookie with
 from a local trusted workstation; the helper opens a dedicated Chrome profile,
 waits for an explicit GitHub login, captures only `github.com` cookies from
 that profile, and writes the value directly to the GitHub repository secret
-without printing it. PR-producing
-full-chain dispatches additionally run the
-same requirement as an early credential preflight, so missing inline-video
-publication authority is visible before Ona work starts. That preflight is a
-hard gate for `create_pr=true` canaries: if neither a cookie nor a manual
-`github_attachment_video_url` is available, the run stops before the expensive
-Ona/Minecraft path instead of discovering the blocker after release.
+without printing it. PR-producing full-chain dispatches additionally run an
+early readiness report, so missing inline-video publication authority is visible
+before Ona work starts. That report defaults to
+`github_attachment_preflight=deferred`: if neither a cookie nor a manual
+`github_attachment_video_url` is available, the run may still prove
+implementation, finalizer, verifier, PR, and CI edges, but the final
+`pr_video_evidence` edge must fail closed. Use
+`github_attachment_preflight=fail-fast` when a rehearsal should stop before the
+expensive Ona/Minecraft path instead.
 
 `MINELINK_VIDEO_STORAGE_ACCESS_KEY_ID` and
 `MINELINK_VIDEO_STORAGE_SECRET_ACCESS_KEY` must be configured only as GitHub or

@@ -100,6 +100,14 @@ on:
       github_attachment_video_url:
         description: GitHub user-attachments MP4 URL for inline PR playback; R2 URLs are candidate storage only
         required: false
+      github_attachment_preflight:
+        description: Inline video attachment preflight behavior for create_pr=true
+        required: false
+        default: deferred
+        type: choice
+        options:
+          - deferred
+          - fail-fast
 
 permissions:
   contents: write
@@ -144,7 +152,7 @@ jobs:
         run: |
           node scripts/dev/check-agent-factory-secrets.mjs --repo "$GITHUB_REPOSITORY" --require-github-secrets --require-ona-context
 
-      - name: Preflight GitHub inline video publication
+      - name: Report GitHub inline video publication readiness
         if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' && inputs.create_pr == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -153,12 +161,17 @@ jobs:
           AGENT_FACTORY_GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN }}
           MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
           INPUT_GITHUB_ATTACHMENT_VIDEO_URL: ${{ inputs.github_attachment_video_url }}
+          INPUT_GITHUB_ATTACHMENT_PREFLIGHT: ${{ inputs.github_attachment_preflight || 'deferred' }}
         run: |
+          requirement_args=()
+          if [ "${INPUT_GITHUB_ATTACHMENT_PREFLIGHT:-deferred}" = "fail-fast" ]; then
+            requirement_args+=(--require-github-attachment-cookie)
+          fi
           node scripts/dev/check-agent-factory-secrets.mjs \
             --repo "$GITHUB_REPOSITORY" \
             --require-github-secrets \
-            --require-github-attachment-cookie \
             --github-attachment-url "${INPUT_GITHUB_ATTACHMENT_VIDEO_URL:-}" \
+            "${requirement_args[@]}" \
             --output .minelink-dev/reports/github-inline-video-preflight.md \
             --json-output .minelink-dev/reports/github-inline-video-preflight.json
 

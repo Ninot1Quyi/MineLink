@@ -15,6 +15,7 @@ const defaults = {
   branchWaitSeconds: "300",
   ciWaitSeconds: "900",
   prBaseBranch: process.env.MINELINK_PR_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
+  githubAttachmentPreflight: process.env.MINELINK_GITHUB_ATTACHMENT_PREFLIGHT ?? "deferred",
   validationScope: process.env.MINELINK_VALIDATION_SCOPE ?? "",
   scenarios: process.env.MINELINK_SCENARIOS ?? "",
   output: ".minelink-dev/reports/agent-factory-full-chain-trigger.md",
@@ -39,6 +40,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--branch-wait-seconds") args.branchWaitSeconds = readValue();
   else if (arg === "--ci-wait-seconds") args.ciWaitSeconds = readValue();
   else if (arg === "--pr-base-branch") args.prBaseBranch = readValue();
+  else if (arg === "--github-attachment-preflight") args.githubAttachmentPreflight = readValue();
   else if (arg === "--validation-scope") args.validationScope = readValue();
   else if (arg === "--scenarios") args.scenarios = readValue();
   else if (arg === "--output") args.output = readValue();
@@ -152,6 +154,8 @@ const workflowArgs = [
   `pr_base_branch=${args.prBaseBranch}`,
   "-f",
   `pr_title=${title}`,
+  "-f",
+  `github_attachment_preflight=${args.githubAttachmentPreflight}`,
 ];
 
 let ghOutput = "";
@@ -217,6 +221,7 @@ const report = {
   scenarios,
   environmentClassId: args.environmentClassId,
   prTitle: title,
+  githubAttachmentPreflight: args.githubAttachmentPreflight,
   runId,
   runUrl,
   dryRun,
@@ -238,6 +243,7 @@ const lines = [
   `- Scenarios: \`${scenarios}\``,
   `- Environment class id: \`${args.environmentClassId || "default"}\``,
   `- PR title: \`${title}\``,
+  `- GitHub attachment preflight: \`${args.githubAttachmentPreflight}\``,
   `- Workflow run: ${runUrl || "best-effort-unavailable"}`,
   "",
   "## Failures",

@@ -1008,11 +1008,17 @@ profile, explicitly logs in to GitHub, and the helper writes only the resulting
 not read the operator's normal browser profile. When the cookie is absent the
 upload script writes a skipped report and the PR publication gate remains
 blocked. Full-chain PR-producing workflows run an early
-`scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
-preflight. That preflight is a hard gate for `create_pr=true` canaries: it
-accepts either `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or a manually provided
-`github_attachment_video_url`, and otherwise fails before starting the expensive
-Ona/Minecraft finalizer path. The upload step also runs
+`scripts/dev/check-agent-factory-secrets.mjs` readiness report for GitHub
+inline-video publication. The default `github_attachment_preflight=deferred`
+mode records whether `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or a manually
+provided `github_attachment_video_url` is available, but still lets the
+Platform Codex implementation, finalizer, PR, and CI edges run so the exact
+remaining blocker is captured at `pr_video_evidence`. Operators can choose
+`github_attachment_preflight=fail-fast` for cost-saving rehearsals that should
+stop before Ona/Minecraft work when the attachment authority is missing. The
+final publication step still fails closed without a GitHub user-attachments
+MP4 URL; deferred mode is not permission to publish R2-only evidence. The
+upload step also runs
 `scripts/dev/upload-github-user-attachment.mjs --require-upload` so a skipped
 attachment upload cannot be treated as releasable evidence. The GitHub Actions
 artifact remains the raw evidence bundle. The older

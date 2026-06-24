@@ -1180,10 +1180,12 @@ Current status:
   login, captures only `github.com` cookies from that profile, and writes the
   value directly to the GitHub repository secret without printing it. For
   PR-producing full-chain runs, the workflow also runs
-  `scripts/dev/check-agent-factory-secrets.mjs --require-github-attachment-cookie`
-  as a non-blocking preflight so missing inline-video publication authority is
-  visible before Ona starts, while finalizer/video-verifier evidence can still
-  be produced before the final PR publication gate fails closed.
+  `scripts/dev/check-agent-factory-secrets.mjs` as an inline-video readiness
+  report. The default `github_attachment_preflight=deferred` mode keeps this
+  report non-blocking so finalizer/video-verifier evidence can still be
+  produced before the final PR publication gate fails closed. Use
+  `github_attachment_preflight=fail-fast` only when a cost-saving rehearsal
+  should stop before Ona/Minecraft work if no attachment authority is available.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
