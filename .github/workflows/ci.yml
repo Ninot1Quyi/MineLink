@@ -23,8 +23,19 @@ jobs:
           node-version: "22"
           cache: "npm"
       - run: npm ci
+      - name: Resolve architecture guard base
+        id: arch-base
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          elif git rev-parse --verify origin/codex/minelink-mvp-engineering >/dev/null 2>&1; then
+            echo "base=origin/codex/minelink-mvp-engineering" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=origin/main" >> "$GITHUB_OUTPUT"
+          fi
       - name: Architecture guard
-        run: bash scripts/dev/check-architecture-guard.sh --base "${{ github.event.pull_request.base.sha || 'origin/main' }}"
+        run: bash scripts/dev/check-architecture-guard.sh --base "${{ steps.arch-base.outputs.base }}"
       - name: Agent workbench guard
         run: bash scripts/dev/check-agent-workbench.sh
       - run: npm run build

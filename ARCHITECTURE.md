@@ -692,6 +692,11 @@ context anchors. When protocol, host, SDK, mock runtime, NeoForge runtime,
 agent runner, replay, dev scripts, workflows, or package structure changes, it
 also requires `ARCHITECTURE.md` to change in the same branch unless a reviewed
 false-positive override is set with `MINELINK_ARCH_GUARD_ALLOW_NO_UPDATE=1`.
+The CI static job resolves the guard base explicitly: pull requests use the PR
+base SHA, while non-PR `codex/**` pushes prefer
+`origin/codex/minelink-mvp-engineering` before falling back to `origin/main`.
+This keeps canary branches aligned with the engineering baseline without
+weakening the same-branch architecture-update requirement.
 
 The guard is intentionally lightweight. It does not prove the architecture is
 correct; it prevents silent architecture drift and makes context maintenance a
