@@ -398,6 +398,11 @@ acceptance MP4, video verifier, PR, CI, or product acceptance gates until the
 task-bound Codex session performs the work, writes the normal
 `.minelink-dev/reports/ona-codex-implementation-session.md`, and the video
 release gate passes.
+If this edge stalls after an active Goal-mode readback, the workflow runs
+`scripts/dev/fetch-ona-agent-execution-readback.mjs` with the configured Ona
+token and uploads sanitized transcript/history diagnostics. That artifact helps
+separate prompt-delivery, health-check, and session-entry failures from normal
+task execution failures; it is not accepted implementation or release evidence.
 When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
 ignore stopped historical task environments. It may pass an auto-discovered
 environment only when that environment is currently running; otherwise it passes

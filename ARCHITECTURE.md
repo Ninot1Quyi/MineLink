@@ -1090,6 +1090,13 @@ finalizer must produce
 `acceptance.mp4`, the same implementation session must run the bounded Codex
 verifier subagent, and `scripts/dev/check-video-review.mjs` must pass before PR
 publication or status writeback can claim release evidence.
+When a Goal session reaches active readback but does not produce the expected
+branch report, `.github/workflows/ona-platform-codex-probe.yml` runs
+`scripts/dev/fetch-ona-agent-execution-readback.mjs` with the repository Ona
+token and uploads sanitized conversation/transcript diagnostics. These
+diagnostics are used only to localize prompt delivery, health-check, or
+session-entry failures; they are not accepted task, video, verifier, or product
+evidence.
 
 The release gate writes
 `.minelink-dev/reports/artifacts/video-release-gate.md` and fails if the MP4 is

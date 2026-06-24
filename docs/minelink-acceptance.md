@@ -822,6 +822,10 @@ Current status:
   execution record; it does not prove that Codex has started executing the
   task prompt. A successful prompt-send response is also not enough; task
   consumption requires the task-bound branch/report readback.
+  When a Goal-mode session reaches active readback but no task report appears,
+  the workflow now uploads sanitized Ona conversation/transcript diagnostics via
+  `scripts/dev/fetch-ona-agent-execution-readback.mjs`. Those diagnostics are
+  blocker-localization evidence only, not accepted implementation evidence.
   This is not accepted product evidence yet. It does not replace the
   task-bound implementation and verifier readback files required by the
   finalizer. The launcher now ignores stopped historical Ona

@@ -10,6 +10,7 @@ on:
       - scripts/dev/fetch-platform-codex-canary.mjs
       - scripts/dev/fetch-platform-codex-task-report.mjs
       - scripts/dev/fetch-platform-codex-video-verifier.mjs
+      - scripts/dev/fetch-ona-agent-execution-readback.mjs
       - scripts/dev/run-ona-finalizer-artifacts.mjs
       - scripts/dev/run-agent-factory-stage.mjs
       - scripts/dev/prepare-video-review-request.mjs
@@ -545,6 +546,13 @@ jobs:
             --implementation-readback .minelink-dev/reports/ona-codex-implementation-session-after-verifier.md \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH"
+
+      - name: Fetch Ona Platform Codex readback diagnostics
+        if: always()
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+        run: |
+          node scripts/dev/fetch-ona-agent-execution-readback.mjs
 
       - name: Run Ona finalizer video release gate
         id: ona-video-release
