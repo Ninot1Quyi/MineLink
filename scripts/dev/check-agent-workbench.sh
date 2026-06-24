@@ -357,6 +357,8 @@ require_text "scripts/dev/fetch-platform-codex-canary.mjs" "Agent execution mode
 require_text "scripts/dev/fetch-platform-codex-task-report.mjs" "MineLink Platform Codex Task Implementation Report"
 require_text "scripts/dev/fetch-platform-codex-task-report.mjs" "task-implementation evidence only"
 require_text "scripts/dev/fetch-platform-codex-task-report.mjs" "spec.agentId matched configured Codex agent id"
+require_text "scripts/dev/fetch-platform-codex-task-report.mjs" "salvageOnaTaskReport"
+require_text "scripts/dev/fetch-platform-codex-task-report.mjs" "unexpected changed file"
 require_text "scripts/dev/fetch-platform-codex-video-verifier.mjs" "Agent execution mode"
 require_text "scripts/dev/fetch-platform-codex-video-verifier.mjs" "Client GUI capture"
 require_text "scripts/dev/fetch-platform-codex-video-verifier.mjs" "Minecraft client panel"

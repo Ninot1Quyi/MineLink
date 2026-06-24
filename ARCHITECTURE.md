@@ -395,14 +395,16 @@ reading MineLink context and running real Minecraft validation before it can
 push the task report; a still-running implementation session is not accepted as
 release evidence, but it also should not be interrupted by the shorter docs
 timeout.
-If Goal-mode Codex writes the exact task-bound canary file inside the Ona
-environment but fails to push it, the fetcher may perform a guarded salvage: it
-enters the recorded Ona environment, refuses any branch other than the expected
-task branch, stages only `docs/agent-factory-canaries/<task>.md`, checks the
-current task/session/Goal-mode/pass markers, commits that one file, pushes the
-branch, and then restarts the normal GitHub API readback. This recovery path is
-canary-only; it cannot publish arbitrary product code or bypass downstream
-video gates.
+If Goal-mode Codex writes the exact task-bound canary or task report inside the
+Ona environment but fails to push it, the fetcher may perform a guarded
+salvage: it enters the recorded Ona environment, refuses any branch other than
+the expected task branch, checks the current task/session/Goal-mode/pass
+markers, stages only the expected canary file or
+`docs/agent-factory-task-reports/<task>.md`, commits that evidence file, pushes
+the branch, and then restarts the normal GitHub API readback. The task-report
+salvage also refuses unexpected changed files outside the expected report path
+and agent-factory canary notes. This recovery path is evidence-only; it cannot
+publish arbitrary product code or bypass downstream video gates.
 When the canary path already exists from an earlier rehearsal, the fetcher must
 keep polling until the file markers match the current AgentService execution,
 task, branch, and Goal-mode request. Stale branch content is a pending async
@@ -1110,12 +1112,11 @@ task-bound branch/commit
 readback from
 `scripts/dev/fetch-platform-codex-canary.mjs` for canaries or
 `scripts/dev/fetch-platform-codex-task-report.mjs` for real task work, not by
-waiting for the Goal session to become terminal. A guarded canary-only salvage
-can recover a missing
-commit/push from the recorded Ona environment, but the accepted completion
-evidence is still the post-salvage GitHub branch readback. For video-required
-work, the Goal-mode task release gate is stricter than launch/readback: the Ona
-finalizer must produce
+waiting for the Goal session to become terminal. Guarded evidence-only salvage
+can recover a missing commit/push for the exact canary or task-report file from
+the recorded Ona environment, but the accepted completion evidence is still the
+post-salvage GitHub branch readback. For video-required work, the Goal-mode task
+release gate is stricter than launch/readback: the Ona finalizer must produce
 `acceptance.mp4`, the same implementation session must run the bounded Codex
 verifier subagent, and `scripts/dev/check-video-review.mjs` must pass before PR
 publication or status writeback can claim release evidence.

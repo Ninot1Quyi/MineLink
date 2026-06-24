@@ -507,13 +507,15 @@ file markers to match task, branch, session id, and docs validation, and writes
 `.minelink-dev/reports/ona-codex-implementation-session.md` with the fetched
 branch head as `Commit:`. The canary markdown file by itself is not accepted
 implementation readback and this mode does not count as product acceptance.
-If Goal-mode Codex leaves that exact canary file uncommitted in the recorded
-Ona environment, the fetch script may run a guarded canary-only salvage: it
-checks the expected branch, task, session, Goal-mode, result, validation, and
-boundary markers, commits only `docs/agent-factory-canaries/<task>.md`, pushes
-the branch, and then repeats the normal GitHub readback. This is only a bridge
-recovery for the implementation canary edge; it cannot release product code or
-skip video verification.
+If Goal-mode Codex leaves that exact canary file or task report uncommitted in
+the recorded Ona environment, the fetch script may run a guarded evidence-only
+salvage: it checks the expected branch, task, session, Goal-mode, result,
+validation, and boundary markers, commits only the expected canary file or
+`docs/agent-factory-task-reports/<task>.md`, pushes the branch, and then
+repeats the normal GitHub readback. Task-report salvage refuses unexpected
+changed files outside the expected report path and agent-factory canary notes.
+This is only a bridge recovery for the implementation evidence edge; it cannot
+release arbitrary product code or skip video verification.
 The launcher also exposes a non-canary `--task-implementation` prompt surface
 for real issue tasks. That mode requires explicit task requirements, writes
 `docs/agent-factory-task-reports/<task>.md`, and asks Codex to implement within

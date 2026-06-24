@@ -2,6 +2,7 @@
 import { Buffer } from "node:buffer";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const defaults = {
   repository: process.env.GITHUB_REPOSITORY ?? "",
@@ -76,6 +77,23 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function sanitizeOutput(value) {
+  return String(value ?? "")
+    .replace(/(github_pat_)[A-Za-z0-9_]+/g, "$1[redacted]")
+    .replace(/(ghp_)[A-Za-z0-9_]+/g, "$1[redacted]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 1200);
+}
+
+function shellQuote(value) {
+  return `'${String(value ?? "").replace(/'/g, `'\\''`)}'`;
+}
+
+function runCommand(command, commandArgs) {
+  return spawnSync(command, commandArgs, { encoding: "utf8", stdio: "pipe" });
+}
+
 async function readJson(filePath) {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8"));
@@ -136,22 +154,170 @@ async function fetchRemoteReport() {
   };
 }
 
-async function loadReport(validateRemote) {
+function salvageScript() {
+  return [
+    "set -euo pipefail",
+    "",
+    'expected_branch="${MINELINK_EXPECTED_BRANCH:?}"',
+    'report_path="${MINELINK_REPORT_PATH:?}"',
+    'task_id="${MINELINK_TASK_ID:?}"',
+    'session_id="${MINELINK_AGENT_EXECUTION_ID:?}"',
+    'agent_mode="${MINELINK_AGENT_MODE:?}"',
+    "",
+    'current_branch="$(git branch --show-current)"',
+    'if [ "$current_branch" != "$expected_branch" ]; then',
+    '  echo "Refusing task report salvage: current branch \'$current_branch\' is not expected branch \'$expected_branch\'." >&2',
+    "  exit 20",
+    "fi",
+    "",
+    'if [ ! -f "$report_path" ]; then',
+    '  echo "Refusing task report salvage: expected report file \'$report_path\' is missing." >&2',
+    "  exit 21",
+    "fi",
+    "",
+    "require_marker() {",
+    '  local marker="$1"',
+    '  if ! grep -F -- "$marker" "$report_path" >/dev/null; then',
+    '    echo "Refusing task report salvage: marker \'$marker\' is missing from \'$report_path\'." >&2',
+    "    exit 22",
+    "  fi",
+    "}",
+    "",
+    'require_marker "MineLink Platform Codex Task Implementation Report"',
+    'require_marker "Agent execution mode: $agent_mode"',
+    'require_marker "Session id: $session_id"',
+    'require_marker "Task id: $task_id"',
+    'require_marker "Branch: $expected_branch"',
+    'require_marker "Result: passed"',
+    'require_marker "Validation result: passed"',
+    'require_marker "Boundary: task-implementation evidence only; video verifier, PR release, and MineLink product acceptance remain separate gates."',
+    "",
+    "while IFS= read -r line; do",
+    '  path="${line:3}"',
+    '  case "$path" in',
+    '    "$report_path"|docs/agent-factory-canaries/*.md) ;;',
+    "    *)",
+    '      echo "Refusing task report salvage: unexpected changed file \'$path\'." >&2',
+    "      exit 23",
+    "      ;;",
+    "  esac",
+    'done < <(git status --porcelain)',
+    "",
+    "if ! git config user.name >/dev/null; then",
+    '  git config user.name "MineLink Automation"',
+    "fi",
+    "if ! git config user.email >/dev/null; then",
+    '  git config user.email "actions@github.com"',
+    "fi",
+    "",
+    'git add -- "$report_path"',
+    'if ! git diff --cached --quiet -- "$report_path"; then',
+    "  git commit \\",
+    '    -m "Record Platform Codex task implementation evidence" \\',
+    '    -m "Constraint: Commit only the task-bound implementation report produced in the Ona environment after Goal-mode validation passed." \\',
+    '    -m "Confidence: medium" \\',
+    '    -m "Scope-risk: narrow" \\',
+    '    -m "Tested: Task report markers and validation marker checked before push." \\',
+    '    -m "Not-tested: Product acceptance video; downstream finalizer and verifier gates run separately."',
+    "fi",
+    "",
+    'git push origin "HEAD:$expected_branch"',
+    "git rev-parse HEAD",
+    "",
+  ].join("\n");
+}
+
+async function salvageOnaTaskReport(apiSession, api) {
+  const environmentId = apiSession?.environmentId ?? "";
+  if (!hasValue(environmentId)) {
+    return { attempted: false, ok: false, message: "Ona task report salvage skipped: API session did not record environmentId." };
+  }
+  if (!hasValue(api?.agentExecutionId) || !hasValue(api?.agentMode)) {
+    return { attempted: false, ok: false, message: "Ona task report salvage skipped: API session did not record execution id and mode." };
+  }
+
+  const remoteScript = [
+    `export MINELINK_EXPECTED_BRANCH=${shellQuote(args.branch)}`,
+    `export MINELINK_REPORT_PATH=${shellQuote(args.reportPath)}`,
+    `export MINELINK_TASK_ID=${shellQuote(args.taskId)}`,
+    `export MINELINK_AGENT_EXECUTION_ID=${shellQuote(api.agentExecutionId)}`,
+    `export MINELINK_AGENT_MODE=${shellQuote(api.agentMode)}`,
+    salvageScript(),
+  ].join("\n");
+
+  const result = runCommand("ona", [
+    "environment",
+    "exec",
+    environmentId,
+    "--working-dir",
+    "/workspaces/MineLink",
+    "--timeout",
+    "180",
+    "--",
+    `bash -lc ${shellQuote(remoteScript)}`,
+  ]);
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+  if (result.status === 0) {
+    return {
+      attempted: true,
+      ok: true,
+      message: `Ona task report salvage pushed ${args.reportPath} from environment ${environmentId}.`,
+      output: sanitizeOutput(output),
+    };
+  }
+  return {
+    attempted: true,
+    ok: false,
+    message: `Ona task report salvage failed in environment ${environmentId} with exit ${result.status ?? "unknown"}.`,
+    output: sanitizeOutput(output),
+  };
+}
+
+async function loadReport(validateRemote, options = {}) {
   const deadline = Date.now() + Math.max(0, args.waitSeconds) * 1000;
   let lastFailure = "";
+  let lastSalvageAttempt = null;
+  let salvageSucceeded = false;
   do {
     try {
       const candidate = await fetchRemoteReport();
       const check = validateRemote(candidate.text);
       if (check.failures.length === 0) return { ...candidate, remoteCheck: check };
       lastFailure = check.failures.join("; ");
+      if (!salvageSucceeded && options.salvageRemote) {
+        lastSalvageAttempt = await options.salvageRemote(new Error(lastFailure));
+        if (lastSalvageAttempt?.ok) {
+          salvageSucceeded = true;
+          await sleep(Math.min(5000, Math.max(1000, args.pollSeconds * 1000)));
+          continue;
+        }
+      }
     } catch (error) {
       lastFailure = error.message;
+      if (!salvageSucceeded && options.salvageRemote) {
+        lastSalvageAttempt = await options.salvageRemote(error);
+        if (lastSalvageAttempt?.ok) {
+          salvageSucceeded = true;
+          await sleep(Math.min(5000, Math.max(1000, args.pollSeconds * 1000)));
+          continue;
+        }
+      }
     }
     if (Date.now() >= deadline || args.waitSeconds === 0) break;
     await sleep(Math.max(1, args.pollSeconds) * 1000);
   } while (true);
-  return { text: "", commit: "", htmlUrl: "", remoteWaitFailure: `Task implementation report is not current yet: ${lastFailure || "missing report"}` };
+  return {
+    text: "",
+    commit: "",
+    htmlUrl: "",
+    remoteWaitFailure: [
+      `Task implementation report is not current yet: ${lastFailure || "missing report"}`,
+      lastSalvageAttempt && !lastSalvageAttempt.ok ? lastSalvageAttempt.message : "",
+      lastSalvageAttempt && !lastSalvageAttempt.ok && lastSalvageAttempt.output ? lastSalvageAttempt.output : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
 }
 
 function apiSessionEvidence(apiSession) {
@@ -237,7 +403,16 @@ evidence.push(...api.evidence);
 let report = null;
 try {
   const validateRemote = (candidate) => validateTaskReport(candidate, api.agentExecutionId, api.agentMode);
-  report = await loadReport(validateRemote);
+  report = await loadReport(validateRemote, {
+    salvageRemote:
+      api.failures.length === 0
+        ? async () => {
+            const salvage = await salvageOnaTaskReport(apiSession, api);
+            if (salvage?.ok) evidence.push(salvage.message);
+            return salvage;
+          }
+        : null,
+  });
   evidence.push(`task report ${args.reportPath}`);
   if (report.htmlUrl) evidence.push(`task report URL ${report.htmlUrl}`);
   if (report.remoteWaitFailure) failures.push(report.remoteWaitFailure);

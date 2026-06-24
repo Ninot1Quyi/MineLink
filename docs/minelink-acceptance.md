@@ -867,12 +867,14 @@ Current status:
   now prepares the target branch from the source commit before launch, and the
   launcher aligns new Ona task environments to that branch before `StartAgent`.
   This branch preparation is only a handoff anchor, not implementation evidence.
-  If Goal-mode Codex writes the exact canary file but does not commit/push, the
-  fetcher can recover only that file from the recorded Ona environment after
-  checking the expected branch, task, session, Goal-mode, pass, validation, and
-  boundary markers. The recovered state is accepted only after the GitHub branch
-  readback succeeds; this recovery does not release product code, video
-  evidence, or a product acceptance gate.
+  If Goal-mode Codex writes the exact canary file or task report but does not
+  commit/push, the fetcher can recover only that evidence file from the
+  recorded Ona environment after checking the expected branch, task, session,
+  Goal-mode, pass, validation, and boundary markers. Task-report salvage refuses
+  unexpected changed files outside the expected report path and agent-factory
+  canary notes. The recovered state is accepted only after the GitHub branch
+  readback succeeds; this recovery does not release arbitrary product code,
+  video evidence, or a product acceptance gate.
   The next canary slice adds `full-chain-canary` to the same workflow. It runs
   the implementation canary, renders trace-driven acceptance artifacts, starts
   a separate Platform Codex `video-verifier-canary` session, fetches
