@@ -107,6 +107,7 @@ public final class MineLinkEndpointBootstrap {
     private static final long SUBMITTED_ACTION_START_DELAY_MS = 250L;
     private static final long SUBMITTED_ACTION_TTL_MS = 5_000L;
     private static final int MAX_SYNC_MINING_TICKS = 170;
+    private static final int MAX_SUBMITTED_MINING_TICKS = 360;
     private static final int PLAYER_MOVEMENT_TICK_MS = 50;
     private static final double PLAYER_WALK_BLOCKS_PER_SECOND = 4.317D;
     private static final int PLAYER_INVENTORY_SLOT_LIMIT = 36;
@@ -798,7 +799,7 @@ public final class MineLinkEndpointBootstrap {
         return switch (action.toolName) {
             case "action.move" -> move(request, agent, action.arguments);
             case "action.look_at" -> lookAt(request, agent, action.arguments);
-            case "action.mine_visible_block" -> mineVisibleBlock(request, agent, action.arguments);
+            case "action.mine_visible_block" -> mineVisibleBlock(request, agent, action.arguments, true);
             case "action.use" -> use(request, agent, action.arguments);
             case "action.sleep" -> sleep(request, agent, action.arguments);
             case "chat.say_local" -> sayLocal(request, agent, action.arguments);
@@ -1194,11 +1195,11 @@ public final class MineLinkEndpointBootstrap {
         ));
     }
 
-    private MiningProgress mineBlockThroughGameModeTicks(AgentBody agent, BlockPos pos, int estimatedTicks) {
+    private MiningProgress mineBlockThroughGameModeTicks(AgentBody agent, BlockPos pos, int estimatedTicks, int maxMiningTicks) {
         Direction face = miningFace(agent, pos);
         int maxBuildHeight = server.overworld().getMaxBuildHeight();
         int sequence = agent.nextProtocolSequence();
-        int maxTicks = Math.max(1, Math.min(MAX_SYNC_MINING_TICKS, estimatedTicks + 8));
+        int maxTicks = Math.max(1, Math.min(maxMiningTicks, estimatedTicks + 8));
         int completedTicks = 0;
         boolean recorderLogged = false;
         MineLinkMod.LOGGER.info(
@@ -1296,6 +1297,10 @@ public final class MineLinkEndpointBootstrap {
     }
 
     private JsonObject mineVisibleBlock(JsonObject request, AgentBody agent, JsonObject arguments) {
+        return mineVisibleBlock(request, agent, arguments, false);
+    }
+
+    private JsonObject mineVisibleBlock(JsonObject request, AgentBody agent, JsonObject arguments, boolean submittedAction) {
         String ref = stringValue(arguments, "block_ref", "");
         String toolPolicy = stringValue(arguments, "tool_policy", "best_available");
         BlockRef blockRef = agent.ref(ref);
@@ -1337,15 +1342,20 @@ public final class MineLinkEndpointBootstrap {
             return failure(request, "blocked", "The observed block cannot be broken by the active server_agent.");
         }
         int estimatedTicks = Math.max(1, (int)Math.ceil(1.0F / progressPerTick));
-        if (estimatedTicks > MAX_SYNC_MINING_TICKS) {
+        int maxMiningTicks = submittedAction ? MAX_SUBMITTED_MINING_TICKS : MAX_SYNC_MINING_TICKS;
+        if (estimatedTicks > maxMiningTicks) {
             JsonObject response = failure(
                 request,
                 "wrong_tool",
-                "No available tool can mine this block within the synchronous action budget."
+                submittedAction
+                    ? "No available tool can mine this block within the submitted action budget."
+                    : "No available tool can mine this block within the synchronous action budget."
             );
             response.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
             response.addProperty("estimated_mining_ticks", estimatedTicks);
+            response.addProperty("max_mining_ticks", maxMiningTicks);
             response.addProperty("max_sync_mining_ticks", MAX_SYNC_MINING_TICKS);
+            response.addProperty("max_submitted_mining_ticks", MAX_SUBMITTED_MINING_TICKS);
             response.addProperty("progress_per_tick", progressPerTick);
             response.addProperty("tool_destroy_speed", miningStack.getDestroySpeed(state));
             response.addProperty("tool_correct_for_drops", miningStack.isCorrectToolForDrops(state));
@@ -1355,7 +1365,7 @@ public final class MineLinkEndpointBootstrap {
         Map<String, Integer> beforeInventory = inventoryCounts(agent);
         AABB pickupArea = new AABB(blockRef.pos).inflate(1.5D);
         Set<Integer> existingDropIds = itemEntityIds(level, pickupArea);
-        MiningProgress miningProgress = mineBlockThroughGameModeTicks(agent, blockRef.pos, estimatedTicks);
+        MiningProgress miningProgress = mineBlockThroughGameModeTicks(agent, blockRef.pos, estimatedTicks, maxMiningTicks);
         collectNewNearbyDrops(level, agent, pickupArea, existingDropIds);
         syncInventoryMirrorFromPlayer(agent);
 
@@ -1370,6 +1380,8 @@ public final class MineLinkEndpointBootstrap {
         response.addProperty("mined", blockRef.blockId);
         response.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
         response.addProperty("estimated_mining_ticks", estimatedTicks);
+        response.addProperty("max_mining_ticks", maxMiningTicks);
+        response.addProperty("submitted_action", submittedAction);
         response.addProperty("mining_ticks", miningProgress.ticks());
         response.addProperty("visible_mining_ms", miningProgress.durationMs());
         response.addProperty("vanilla_break_action", miningProgress.completed());
@@ -1380,6 +1392,8 @@ public final class MineLinkEndpointBootstrap {
         result.addProperty("mined", blockRef.blockId);
         result.addProperty("selected_item", selectedItemId.isBlank() ? "minecraft:air" : selectedItemId);
         result.addProperty("estimated_mining_ticks", estimatedTicks);
+        result.addProperty("max_mining_ticks", maxMiningTicks);
+        result.addProperty("submitted_action", submittedAction);
         result.addProperty("mining_ticks", miningProgress.ticks());
         result.addProperty("visible_mining_ms", miningProgress.durationMs());
         result.addProperty("vanilla_break_action", miningProgress.completed());

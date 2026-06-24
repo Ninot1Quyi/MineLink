@@ -847,11 +847,16 @@ marker while driving `ServerPlayerGameMode.handleBlockBreakAction` and
 `gameMode.tick()` for the visible `MineLink-*` FakePlayer body, so
 video-required mining evidence comes from vanilla block-break progress rather
 than a recorder-only hold followed by an instant `destroyBlock` call. The sync
-mining budget is intentionally below the protocol request timeout, and the
+mining budget is intentionally below the protocol request timeout, while
+submit-mode `action.mine_visible_block` has a longer bounded mining budget and
+must be proven through `action.status` before the scenario can pass. The
 video-oriented `mine_tree` replay still retrieves a wooden axe from the shared
-fixture chest through public container tools but mines the visible log with
-`tool_policy=empty_hand` so the final MP4 contains a human-readable vanilla
-mining window. Agent
+fixture chest through public container tools but submits the visible-log mining
+action with `tool_policy=empty_hand`; the final assertions require the submitted
+action to be accepted, terminal `completed`, and to report the mined oak log.
+That keeps a human-readable vanilla mining window in the final MP4 without
+turning the synchronous MCP request into a long-running background shortcut.
+Agent
 scenario reports also fail closed on unexpected `ok:false` tool results; a final
 inventory assertion cannot mask a failed MCP action. The
 finalizer also runs
@@ -959,7 +964,11 @@ must record `recorderWorkCoverageAdequate=true` only when the hold is at least
 the configured minimum. The scenario report must also confirm submit-mode
 actions reached terminal lifecycle states; `submittedActionsTerminalConfirmed`
 prevents a video from ending at action submission time when work is still
-queued or running. Release gates require all recorder markers
+queued or running. For video-oriented mining, the accepted status payload must
+also include the submitted action result (`action_result.mined`,
+`action_result.submitted_action`, and `action_result.visible_mining_ms`) so the
+summary, verifier request, and terminal panel can tie the visible client footage
+to the completed server action. Release gates require all recorder markers
 so loading screens, Mojang bootstrap footage, server-only camera intent,
 static/idle targets, late-only target appearances, no-op tasks, occluded
 targets, off-screen target following, or normal clients that are not visibly

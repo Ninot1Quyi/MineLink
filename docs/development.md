@@ -252,10 +252,13 @@ accepted as mining evidence. The NeoForge runtime emits that marker while drivin
 visible `MineLink-*` FakePlayer body, so the capture should show vanilla
 block-break progress instead of a recorder-only hold plus an instant destroy.
 The `mine_tree` fixture gets its wooden axe through public chest/container tools,
-and synchronous mining is capped below the protocol request timeout so a failed
-tool action cannot continue in the background and later satisfy an inventory
-assertion. The runner records `unexpected_tool_failures` and fails closed when a
-failure was not explicitly asserted as a negative case. The renderer also writes
+then submits the visible-log mining action with `tool_policy=empty_hand` and
+requires `action.status` to report terminal `completed` plus
+`action_result.mined`. Synchronous mining remains capped below the protocol
+request timeout so a failed tool action cannot continue in the background and
+later satisfy an inventory assertion. The runner records
+`unexpected_tool_failures` and fails closed when a failure was not explicitly
+asserted as a negative case. The renderer also writes
 `serverAgentTaskActionVisible=true`
 from that same condition. This blocks videos where the agent is merely standing
 in view, appears only at the end, or has only submitted work without execution

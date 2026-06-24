@@ -1070,9 +1070,12 @@ Current status:
   `recorderScenarioActionVisible=true`, so a clip that only shows the agent
   beside the final result, or only a sub-second mining flash, cannot pass as
   mining evidence. The video-oriented `mine_tree` replay still exercises
-  container movement by taking the wooden axe from the shared chest, but mines
-  the log with `tool_policy=empty_hand` to keep the vanilla mining action
-  visible in the final MP4. The release gate
+  container movement by taking the wooden axe from the shared chest, but submits
+  the visible-log mining action with `tool_policy=empty_hand` and then verifies
+  `action.status` reports terminal `completed`, `action_result.mined`, and
+  `action_result.submitted_action=true`. This keeps the vanilla mining action
+  visible in the final MP4 without extending the synchronous MCP request past
+  its timeout-safe budget. The release gate
   must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,

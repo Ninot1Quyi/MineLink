@@ -1515,6 +1515,7 @@ def compact_result(result: Any) -> Any:
         "status",
         "lifecycle_status",
         "action_id",
+        "action_result",
         "reason",
         "message",
         "id",

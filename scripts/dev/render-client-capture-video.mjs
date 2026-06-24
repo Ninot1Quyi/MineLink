@@ -152,6 +152,12 @@ function toolResultNumber(item, key) {
   return Number.isFinite(nested) ? nested : 0;
 }
 
+function toolActionResultNumber(item, key) {
+  const result = item?.result ?? {};
+  const actionResult = Number.parseFloat(result?.result?.action_result?.[key]);
+  return Number.isFinite(actionResult) ? actionResult : 0;
+}
+
 const report = await readJson(args.report);
 const clientVideoStat = await stat(args.clientVideo);
 const failures = [];
@@ -240,8 +246,18 @@ const requiresVisibleMining = successfulWorkToolNames.includes("action.mine_visi
 const recorderVisibleMiningMs = Math.max(
   0,
   ...successfulWorkTools
-    .filter((item) => item?.name === "action.mine_visible_block")
-    .map((item) => toolResultNumber(item, "visible_mining_ms")),
+    .filter(
+      (item) =>
+        item?.name === "action.mine_visible_block" ||
+        item?.result?.result?.action_result?.mined ||
+        item?.result?.result?.action_result?.visible_mining_ms,
+    )
+    .map((item) =>
+      Math.max(
+        toolResultNumber(item, "visible_mining_ms"),
+        toolActionResultNumber(item, "visible_mining_ms"),
+      ),
+    ),
 );
 const recorderMinVisibleMiningMs = Math.max(
   0,

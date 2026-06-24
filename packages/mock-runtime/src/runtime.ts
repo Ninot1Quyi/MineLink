@@ -692,6 +692,9 @@ export class MockRuntimeServer {
     }
     record.lifecycleStatus = "completed";
     record.result = (result.result as RuntimeResponse | undefined) ?? result;
+    if (record.toolName === "action.mine_visible_block") {
+      record.result.submitted_action = true;
+    }
     record.updatedAt = Date.now();
     this.releaseActionQueue(agent, record);
     this.trace({ event: "agent.action_event", action_id: actionId, status: "completed" });
@@ -908,7 +911,17 @@ export class MockRuntimeServer {
     return {
       ok: true,
       status: "completed",
-      result: { changed_block: true, drops_spawned: 1, inventory_delta: [{ item: drop, count: 1 }] }
+      mined: block.id,
+      submitted_action: false,
+      visible_mining_ms: 0,
+      result: {
+        changed_block: true,
+        drops_spawned: 1,
+        inventory_delta: [{ item: drop, count: 1 }],
+        mined: block.id,
+        submitted_action: false,
+        visible_mining_ms: 0
+      }
     };
   }
 
