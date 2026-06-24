@@ -404,10 +404,10 @@ release gate passes.
 If this edge stalls after an active Goal-mode readback, the workflow runs
 `scripts/dev/fetch-ona-agent-execution-readback.mjs` with the configured Ona
 token. The diagnostic script creates an AgentService conversation token before
-fetching sanitized transcript/history diagnostics. That artifact helps separate
-prompt-delivery, LLM-provider, health-check, and session-entry failures from
-normal task execution failures; it is not accepted implementation or release
-evidence.
+fetching sanitized transcript/history diagnostics with a bounded per-URL
+timeout. That artifact helps separate prompt-delivery, LLM-provider,
+health-check, and session-entry failures from normal task execution failures;
+it is not accepted implementation or release evidence.
 When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
 ignore stopped historical task environments. It may pass an auto-discovered
 environment only when that environment is currently running; otherwise it passes

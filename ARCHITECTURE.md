@@ -1099,9 +1099,11 @@ branch report, `.github/workflows/ona-platform-codex-probe.yml` runs
 `scripts/dev/fetch-ona-agent-execution-readback.mjs` with the repository Ona
 token. The diagnostic script first creates a temporary
 `CreateAgentExecutionConversationToken` and then uploads sanitized
-conversation/transcript diagnostics. These diagnostics are used only to
-localize prompt delivery, LLM-provider, health-check, or session-entry
-failures; they are not accepted task, video, verifier, or product evidence.
+conversation/transcript diagnostics with a bounded per-URL fetch timeout so
+streaming `live` endpoints cannot stall cleanup or artifact upload. These
+diagnostics are used only to localize prompt delivery, LLM-provider,
+health-check, or session-entry failures; they are not accepted task, video,
+verifier, or product evidence.
 If `GetAgentExecution` reports `Codex could not reach the LLM provider` or an
 unauthenticated provider warning, the launch edge is blocked until Ona Platform
 Codex can make a real model request.

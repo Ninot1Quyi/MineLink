@@ -9,6 +9,7 @@ const defaults = {
   output: ".minelink-dev/reports/ona-platform-codex-readback.md",
   jsonOutput: ".minelink-dev/reports/ona-platform-codex-readback.json",
   maxBytes: Number(process.env.MINELINK_ONA_READBACK_MAX_BYTES ?? 2_000_000),
+  fetchTimeoutMs: Number(process.env.MINELINK_ONA_READBACK_FETCH_TIMEOUT_MS ?? 5_000),
 };
 
 const args = { ...defaults };
@@ -22,6 +23,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--max-bytes") args.maxBytes = Number(readValue());
+  else if (arg === "--fetch-timeout-ms") args.fetchTimeoutMs = Number(readValue());
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/fetch-ona-agent-execution-readback.mjs
 
@@ -136,9 +138,41 @@ async function fetchUrlWithAuth(label, urlValue, authMode, bearer) {
   } else if (authMode === "access-token-query") {
     requestUrl = withQueryToken(urlValue, "access_token", bearer);
   }
-  const response = await fetch(requestUrl, options);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(1, args.fetchTimeoutMs));
+  let response;
+  try {
+    response = await fetch(requestUrl, { ...options, signal: controller.signal });
+  } catch (error) {
+    clearTimeout(timeout);
+    return {
+      label,
+      url: urlValue,
+      authMode,
+      ok: false,
+      error: sanitize(error instanceof Error ? error.message : String(error)),
+      timedOut: error instanceof Error && error.name === "AbortError",
+    };
+  }
   const contentType = response.headers.get("content-type") ?? "";
-  const buffer = Buffer.from(await response.arrayBuffer());
+  let buffer;
+  try {
+    buffer = Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    clearTimeout(timeout);
+    return {
+      label,
+      url: urlValue,
+      authMode,
+      ok: false,
+      status: response.status,
+      contentType,
+      error: sanitize(error instanceof Error ? error.message : String(error)),
+      timedOut: error instanceof Error && error.name === "AbortError",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
   const truncated = buffer.length > args.maxBytes;
   const body = sanitize(buffer.subarray(0, Math.max(0, args.maxBytes)).toString("utf8"));
   const fileName = `${label}${extFromContentType(contentType)}`;
@@ -246,7 +280,7 @@ const lines = [
   ...(report.entries.length > 0
     ? report.entries.map(
         (entry) =>
-          `- ${entry.label}: ok=\`${entry.ok ? "yes" : "no"}\`, auth=\`${entry.authMode ?? "none"}\`, status=\`${entry.status ?? "missing"}\`, bytes=\`${entry.bytes ?? "missing"}\`, path=\`${entry.path ?? "none"}\``,
+          `- ${entry.label}: ok=\`${entry.ok ? "yes" : "no"}\`, auth=\`${entry.authMode ?? "none"}\`, status=\`${entry.status ?? "missing"}\`, bytes=\`${entry.bytes ?? "missing"}\`, timedOut=\`${entry.timedOut ? "yes" : "no"}\`, path=\`${entry.path ?? "none"}\``,
       )
     : ["- none"]),
   "",
