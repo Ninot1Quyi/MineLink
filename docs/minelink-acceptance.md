@@ -1159,6 +1159,13 @@ Current status:
   `logs/resource-snapshots.log` around dependency checks, client startup,
   ffmpeg startup, and shutdown so reviewers can diagnose CPU or process
   contention when the Minecraft capture is choppy.
+  The issue #16 rehearsal is task/factory-chain evidence for this rule: its
+  implementation report requires
+  `bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios mine_tree`,
+  and the finalizer/release path must consume a nonzero real NeoForge
+  `mine_tree` scenario report before publishing the video. A zero-report
+  placeholder summary remains a release-gate failure and does not upgrade Gate
+  1, Gate 10, or full MineLink product acceptance.
   Following the reviewed commit is required for reused canary
   branches because the remote branch head can move after Goal-mode Codex
   finishes. Client-video failures must also write
