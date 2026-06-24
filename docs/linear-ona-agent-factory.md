@@ -444,6 +444,11 @@ GitHub Actions can run the same probe through
 the repository `ONA_TOKEN` can read Ona policy/API state. Use
 `mode=identity-canary` only after supplying the real Codex app agent id through
 workflow input or the `MINELINK_ONA_CODEX_AGENT_ID` repository secret. Remote
+task environments are created with `ona environment create --dont-wait`, so a
+fresh id can briefly return `not_found` from `ona environment get`. The
+launcher retries only that post-create readback race within the normal
+environment wait window; class rejection, auth failures, and other environment
+errors remain blockers. Remote
 run `27928149039` proved the identity-canary launch/readback edge from GitHub
 Actions: policy readback allowed the Codex app agent id, `StartAgent` and
 `SendToAgentExecution` succeeded, and

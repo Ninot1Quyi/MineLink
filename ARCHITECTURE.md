@@ -373,7 +373,11 @@ checks out that target branch inside `/workspaces/MineLink` before calling
 `StartAgent`; the API session report records `AlignEnvironmentBranch` and the
 branch readback. This keeps `implementation_codex -> branch/commit readback`
 and guarded salvage on the same branch instead of leaving new task environments
-on the project default branch.
+on the project default branch. Ona can return a newly created environment id
+before `ona environment get` can read it back; the launcher treats only that
+post-create `not_found: environment not found` response as a transient pending
+readback and retries inside the normal environment wait window. Other
+environment readback failures still fail closed.
 `scripts/dev/start-ona-platform-codex.mjs --task-implementation` is the
 non-canary prompt surface for real issue tasks. It requires explicit task
 requirements, writes `docs/agent-factory-task-reports/<task>.md`, and tells

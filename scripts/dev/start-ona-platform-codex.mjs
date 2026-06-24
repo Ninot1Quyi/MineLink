@@ -594,6 +594,10 @@ function getEnvironment(environmentId) {
   return firstRecord(JSON.parse(result.stdout));
 }
 
+function isTransientEnvironmentReadbackError(error) {
+  return /not_found:\s*environment not found/i.test(error?.message ?? "");
+}
+
 function taskBranchNeedsAlignment() {
   return (
     createEnvironment &&
@@ -645,16 +649,32 @@ async function waitForRunningEnvironment(environmentId) {
   const deadline = Date.now() + args.environmentWaitSeconds * 1000;
   let latest = null;
   do {
-    latest = getEnvironment(environmentId);
-    attempts.push({
-      at: new Date().toISOString(),
-      phase: environmentPhase(latest),
-      machinePhase: latest?.status?.machine?.phase ?? "",
-      devcontainerPhase: latest?.status?.devcontainer?.phase ?? "",
-      contentPhase: latest?.status?.content?.phase ?? "",
-      branch: latest?.status?.content?.git?.branch ?? "",
-      prebuildId: latest?.metadata?.prebuildId ?? "",
-    });
+    try {
+      latest = getEnvironment(environmentId);
+      attempts.push({
+        at: new Date().toISOString(),
+        phase: environmentPhase(latest),
+        machinePhase: latest?.status?.machine?.phase ?? "",
+        devcontainerPhase: latest?.status?.devcontainer?.phase ?? "",
+        contentPhase: latest?.status?.content?.phase ?? "",
+        branch: latest?.status?.content?.git?.branch ?? "",
+        prebuildId: latest?.metadata?.prebuildId ?? "",
+      });
+    } catch (error) {
+      if (!isTransientEnvironmentReadbackError(error) || Date.now() >= deadline || args.environmentWaitSeconds === 0) {
+        throw error;
+      }
+      attempts.push({
+        at: new Date().toISOString(),
+        phase: "ENVIRONMENT_PHASE_PENDING_READBACK",
+        machinePhase: "",
+        devcontainerPhase: "",
+        contentPhase: "",
+        branch: "",
+        prebuildId: "",
+        readbackError: sanitize(error.message),
+      });
+    }
     if (isRunningEnvironment(latest) || Date.now() >= deadline || args.environmentWaitSeconds === 0) break;
     await sleep(args.environmentPollSeconds * 1000);
   } while (Date.now() < deadline);
