@@ -583,7 +583,11 @@ after the verifier canary is accepted and before release upload. For
 head must still contain current task/session-bound implementation evidence with
 `Result: passed`; if the Goal-mode session later overwrote the implementation
 evidence with `Result: blocked` or stale markers, the release gate fails
-closed.
+closed. `neoforge` full-chain tasks use a longer implementation-report wait
+than docs-only tasks. The Codex session can legitimately spend the early
+minutes reading the required MineLink context and then running real Minecraft
+validation before it pushes the report, so the workflow must not stop the task
+environment on the shorter docs timeout.
 After the candidate MP4 is rendered, the Ona implementation finalizer uploads
 it with `scripts/dev/upload-acceptance-video-storage.mjs` and writes
 `video-storage-manifest.json`; that upload is candidate evidence transport, not

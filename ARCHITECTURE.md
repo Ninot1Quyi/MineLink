@@ -388,7 +388,13 @@ requires the report task id, branch, session id, `AGENT_MODE_GOAL`, `Result:
 passed`, and `Validation result: passed`, and combines that report with the
 AgentService API readback proving the configured Codex agent id and Codex
 settings. `full-chain-task` uses this task-report gate for real issue work;
-canary fetchers remain bounded diagnostic proof only.
+canary fetchers remain bounded diagnostic proof only. NeoForge-backed
+`full-chain-task` runs give this implementation-report edge a longer wait
+window than docs-only tasks, because Goal-mode Codex may spend many minutes
+reading MineLink context and running real Minecraft validation before it can
+push the task report; a still-running implementation session is not accepted as
+release evidence, but it also should not be interrupted by the shorter docs
+timeout.
 If Goal-mode Codex writes the exact task-bound canary file inside the Ona
 environment but fails to push it, the fetcher may perform a guarded salvage: it
 enters the recorded Ona environment, refuses any branch other than the expected

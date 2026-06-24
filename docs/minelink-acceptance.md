@@ -1185,6 +1185,12 @@ Current status:
   implementation evidence with `Result: passed`; a later Goal-mode overwrite to
   `Result: blocked`, stale markers, or mismatched session evidence must stop the
   release gate.
+- NeoForge-backed `full-chain-task` runs must allow a longer
+  implementation-report wait than docs-only tasks, because the Ona Platform
+  Codex Goal session may still be reading MineLink context or running real
+  Minecraft validation before it can push the report. A running session without
+  branch evidence is not accepted as release evidence, but the runner must not
+  stop it on the shorter docs timeout.
 - The GitHub workflow uploads `acceptance-storyboard.png` and
   `acceptance-storyboard.json` as a separate small artifact for quick visual QA
   and model-readable frame inspection. That artifact is not a substitute for

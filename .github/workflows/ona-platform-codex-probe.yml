@@ -354,12 +354,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_BRANCH_WAIT_SECONDS: ${{ inputs.branch_wait_seconds || '900' }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
         run: |
+          branch_wait="${INPUT_BRANCH_WAIT_SECONDS:-900}"
+          if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ] && [ "$branch_wait" -lt 3600 ]; then
+            branch_wait=3600
+          fi
           node scripts/dev/fetch-platform-codex-task-report.mjs \
             --repository "$GITHUB_REPOSITORY" \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
-            --wait-seconds "${INPUT_BRANCH_WAIT_SECONDS:-900}"
+            --wait-seconds "$branch_wait"
           branch_commit="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-codex-implementation-session.json','utf8')); console.log(report.commit || '')")"
           implementation_execution="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-platform-codex-api-session.json','utf8')); console.log(report.agentExecutionId || '')")"
           echo "MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT=$branch_commit" >> "$GITHUB_ENV"

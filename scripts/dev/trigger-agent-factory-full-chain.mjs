@@ -13,7 +13,7 @@ const defaults = {
   waitSeconds: "300",
   environmentWaitSeconds: "600",
   environmentClassId: process.env.MINELINK_ONA_ENVIRONMENT_CLASS_ID ?? "",
-  branchWaitSeconds: "900",
+  branchWaitSeconds: process.env.MINELINK_BRANCH_WAIT_SECONDS ?? "",
   ciWaitSeconds: "900",
   prBaseBranch: process.env.MINELINK_PR_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
   githubAttachmentPreflight: process.env.MINELINK_GITHUB_ATTACHMENT_PREFLIGHT ?? "deferred",
@@ -117,6 +117,8 @@ const githubIssue = dispatch.githubIssue || "none";
 const linearIssue = dispatch.linearIssue || "none";
 const validationScope = args.validationScope || dispatch.validationScope || dispatch.validation_scope || "docs";
 const scenarios = args.scenarios || dispatch.scenarios || "none";
+const branchWaitSeconds =
+  args.branchWaitSeconds || (validationScope === "neoforge" ? "3600" : "900");
 const taskRequirements = dispatch.taskRequirements || [
   `Task id: ${taskId}`,
   `PR title: ${title}`,
@@ -147,7 +149,7 @@ const workflowArgs = [
   "-f",
   `environment_class_id=${args.environmentClassId}`,
   "-f",
-  `branch_wait_seconds=${args.branchWaitSeconds}`,
+  `branch_wait_seconds=${branchWaitSeconds}`,
   "-f",
   `ci_wait_seconds=${args.ciWaitSeconds}`,
   "-f",
@@ -237,6 +239,7 @@ const report = {
   validationScope,
   scenarios,
   environmentClassId: args.environmentClassId,
+  branchWaitSeconds,
   prTitle: title,
   githubAttachmentPreflight: args.githubAttachmentPreflight,
   runId,
@@ -260,6 +263,7 @@ const lines = [
   `- Validation scope: \`${validationScope}\``,
   `- Scenarios: \`${scenarios}\``,
   `- Environment class id: \`${args.environmentClassId || "default"}\``,
+  `- Branch wait seconds: \`${branchWaitSeconds}\``,
   `- PR title: \`${title}\``,
   `- GitHub attachment preflight: \`${args.githubAttachmentPreflight}\``,
   `- Workflow run: ${runUrl || "best-effort-unavailable"}`,
