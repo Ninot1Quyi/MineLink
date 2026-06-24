@@ -1219,6 +1219,12 @@ Current status:
   produced before the final PR publication gate fails closed. Use
   `github_attachment_preflight=fail-fast` only when a cost-saving rehearsal
   should stop before Ona/Minecraft work if no attachment authority is available.
+- Minecraft client evidence must use the recorder `observer_follow` view by
+  default, with enough distance and height to show the active `server_agent`
+  performing the requested task. `target_third_person` is retained only as a
+  diagnostic camera mode and must not be used as the default final PR evidence
+  view, because it can make the video show an idle-looking body instead of the
+  task work.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
   same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video

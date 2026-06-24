@@ -1052,8 +1052,15 @@ from a local trusted workstation; the helper opens a dedicated Chrome profile,
 waits for an explicit GitHub login, captures only `github.com` cookies from
 that profile, and writes the value directly to the GitHub repository secret
 without printing it. PR-producing full-chain dispatches additionally run an
-early readiness report, so missing inline-video publication authority is visible
-before Ona work starts. That report defaults to
+early readiness report before Ona work starts, so missing inline-video
+publication authority is visible before the final comment gate. For Minecraft
+client capture, the finalizer
+defaults to the recorder `observer_follow` camera with an elevated offset. This
+keeps the `server_agent` and the surrounding task target visible. The old
+`target_third_person` camera remains available for diagnostics but is not
+accepted as the default final PR evidence view because it can obscure the task
+action by framing the agent body too tightly.
+That report defaults to
 `github_attachment_preflight=deferred`: if neither a cookie nor a manual
 `github_attachment_video_url` is available, the run may still prove
 implementation, finalizer, verifier, PR, and CI edges, but the final

@@ -346,7 +346,7 @@ public final class MineLinkClientRecorder {
         String mode = setting(
             "MINELINK_RECORDER_CLIENT_CAMERA_MODE",
             "minelink.recorder.client.cameraMode",
-            "target_third_person"
+            "observer_follow"
         );
         return mode.equalsIgnoreCase("target_third_person") || mode.equalsIgnoreCase("target-third-person");
     }

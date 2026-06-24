@@ -1061,7 +1061,11 @@ still decides whether an artifact is GitHub canary evidence or final Ona task
 evidence. Full-chain dispatches must pass the task's
 validation scope and scenarios through to the Ona finalizer; they must not
 silently downgrade a `neoforge` issue to `docs` or `none` before video
-rendering. Video-required tasks must
+rendering. Client-backed finalizer video uses the recorder client's
+`observer_follow` camera by default, with an elevated offset behind and beside
+the `server_agent`; `target_third_person` remains a diagnostic option but is
+not the default final PR evidence view because it can hide the task action by
+framing the agent body too tightly. Video-required tasks must
 then send a verifier request back to the current Ona Platform Codex
 implementation execution. That implementation
 session must launch a bounded native Codex verifier subagent rather than
