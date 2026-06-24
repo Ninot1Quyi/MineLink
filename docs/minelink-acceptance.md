@@ -872,9 +872,10 @@ Current status:
   recorded Ona environment after checking the expected branch, task, session,
   Goal-mode, pass, validation, and boundary markers. Task-report salvage refuses
   unexpected changed files outside the expected report path and agent-factory
-  canary notes. The recovered state is accepted only after the GitHub branch
-  readback succeeds; this recovery does not release arbitrary product code,
-  video evidence, or a product acceptance gate.
+  canary notes after expanding untracked directories to concrete file paths.
+  The recovered state is accepted only after the GitHub branch readback succeeds;
+  this recovery does not release arbitrary product code, video evidence, or a
+  product acceptance gate.
   The next canary slice adds `full-chain-canary` to the same workflow. It runs
   the implementation canary, renders trace-driven acceptance artifacts, starts
   a separate Platform Codex `video-verifier-canary` session, fetches

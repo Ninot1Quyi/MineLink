@@ -201,7 +201,7 @@ function salvageScript() {
     "      exit 23",
     "      ;;",
     "  esac",
-    'done < <(git status --porcelain)',
+    'done < <(git status --porcelain --untracked-files=all)',
     "",
     "if ! git config user.name >/dev/null; then",
     '  git config user.name "MineLink Automation"',

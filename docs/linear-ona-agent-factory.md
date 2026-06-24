@@ -513,9 +513,10 @@ salvage: it checks the expected branch, task, session, Goal-mode, result,
 validation, and boundary markers, commits only the expected canary file or
 `docs/agent-factory-task-reports/<task>.md`, pushes the branch, and then
 repeats the normal GitHub readback. Task-report salvage refuses unexpected
-changed files outside the expected report path and agent-factory canary notes.
-This is only a bridge recovery for the implementation evidence edge; it cannot
-release arbitrary product code or skip video verification.
+changed files outside the expected report path and agent-factory canary notes
+after expanding untracked directories to concrete file paths. This is only a
+bridge recovery for the implementation evidence edge; it cannot release
+arbitrary product code or skip video verification.
 The launcher also exposes a non-canary `--task-implementation` prompt surface
 for real issue tasks. That mode requires explicit task requirements, writes
 `docs/agent-factory-task-reports/<task>.md`, and asks Codex to implement within
