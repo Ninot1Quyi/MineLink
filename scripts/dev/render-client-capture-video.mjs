@@ -154,6 +154,8 @@ function toolResultNumber(item, key) {
 
 function toolActionResultNumber(item, key) {
   const result = item?.result ?? {};
+  const directActionResult = Number.parseFloat(result?.action_result?.[key]);
+  if (Number.isFinite(directActionResult)) return directActionResult;
   const actionResult = Number.parseFloat(result?.result?.action_result?.[key]);
   return Number.isFinite(actionResult) ? actionResult : 0;
 }
@@ -249,6 +251,8 @@ const recorderVisibleMiningMs = Math.max(
     .filter(
       (item) =>
         item?.name === "action.mine_visible_block" ||
+        item?.result?.action_result?.mined ||
+        item?.result?.action_result?.visible_mining_ms ||
         item?.result?.result?.action_result?.mined ||
         item?.result?.result?.action_result?.visible_mining_ms,
     )

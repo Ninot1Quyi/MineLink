@@ -369,6 +369,7 @@ require_text "scripts/dev/render-client-capture-video.mjs" "recorderReadyBeforeS
 require_text "scripts/dev/render-client-capture-video.mjs" "recorderWorkCoverageAdequate"
 require_text "scripts/dev/render-client-capture-video.mjs" "recorderVisibleMining"
 require_text "scripts/dev/render-client-capture-video.mjs" "toolActionResultNumber"
+require_text "scripts/dev/render-client-capture-video.mjs" "result?.action_result"
 require_text "scripts/dev/render-client-capture-video.mjs" "recorderScenarioActionVisible"
 require_text "scripts/dev/render-client-capture-video.mjs" "submittedActionsTerminalConfirmed"
 require_text "scripts/dev/render-client-capture-video.mjs" "recorderWorkVisible"
