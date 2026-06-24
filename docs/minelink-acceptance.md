@@ -815,6 +815,10 @@ Current status:
   explicit persistent Goal selector; generated task readbacks
   must include `Agent execution mode: AGENT_MODE_GOAL`, while one-shot
   `AGENT_MODE_EXECUTION` evidence remains insufficient for factory delivery.
+  A Goal-mode readback that remains `PHASE_PENDING` is now a blocked
+  handoff, not accepted launch evidence. It proves only that AgentService has an
+  execution record; it does not prove that Codex has started executing the
+  task prompt.
   This is not accepted product evidence yet. It does not replace the
   task-bound implementation and verifier readback files required by the
   finalizer. The launcher now ignores stopped historical Ona

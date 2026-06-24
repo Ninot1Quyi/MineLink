@@ -879,6 +879,14 @@ function failedAgentPhase(phase) {
   return /^PHASE_(FAILED|CANCELLED|DELETED)$/i.test(String(phase ?? ""));
 }
 
+function pendingAgentPhase(phase) {
+  return /^PHASE_PENDING$/i.test(String(phase ?? ""));
+}
+
+function activeAgentPhase(phase) {
+  return /^PHASE_RUNNING$/i.test(String(phase ?? ""));
+}
+
 function isGoalMode() {
   return String(args.agentMode ?? "").toUpperCase() === "AGENT_MODE_GOAL";
 }
@@ -888,6 +896,7 @@ function goalModeReadbackReady(execution) {
   const status = execution?.status ?? {};
   return (
     isGoalMode() &&
+    activeAgentPhase(status.phase) &&
     hasValue(execution?.id) &&
     hasValue(spec.agentId) &&
     (hasValue(spec.codexSettings) || hasValue(status.codexSettings))
@@ -955,9 +964,13 @@ function evaluateReadback(readback, expectedAgentId) {
     evidence.push(`phase=${status.phase}`);
     if (failedAgentPhase(status.phase)) {
       failures.push(`Agent execution ended in ${status.phase}.`);
+    } else if (pendingAgentPhase(status.phase) && isGoalMode()) {
+      failures.push(
+        `Goal-mode execution remained ${status.phase}; PHASE_PENDING is not accepted as executable Platform Codex handoff evidence.`,
+      );
     } else if (!terminalAgentPhase(status.phase) && isGoalMode()) {
       evidence.push(
-        `Goal-mode launch/readback accepted without terminal phase: ${status.phase}; task release still requires acceptance.mp4 and verifier approval`,
+        `Goal-mode launch/readback accepted after active readback: ${status.phase}; task release still requires acceptance.mp4 and verifier approval`,
       );
     } else if (!terminalAgentPhase(status.phase) && args.waitSeconds > 0) {
       failures.push(

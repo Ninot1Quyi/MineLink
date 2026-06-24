@@ -1066,10 +1066,13 @@ node scripts/dev/check-video-review.mjs --require-mp4
 Implementation, `full-chain-canary`, and `full-chain-task` dispatches use
 `AGENT_MODE_GOAL`.
 Because Goal-mode Codex sessions can remain in `PHASE_RUNNING` while pursuing
-a persistent objective, `scripts/dev/start-ona-platform-codex.mjs` accepts a
-non-terminal Goal-mode readback once AgentService proves the requested Codex
-agent id and Codex settings. Task completion is then proven by the separate
-task-bound branch/commit readback from
+a persistent objective, `scripts/dev/start-ona-platform-codex.mjs` accepts an
+active non-terminal Goal-mode readback only after AgentService proves the
+requested Codex agent id, Codex settings, and a non-pending execution phase.
+`PHASE_PENDING` is explicitly blocked; it only proves that the platform has an
+execution record, not that the Codex session can receive and run the task
+prompt. Task completion is then proven by the separate task-bound branch/commit
+readback from
 `scripts/dev/fetch-platform-codex-canary.mjs` for canaries or
 `scripts/dev/fetch-platform-codex-task-report.mjs` for real task work, not by
 waiting for the Goal session to become terminal. A guarded canary-only salvage

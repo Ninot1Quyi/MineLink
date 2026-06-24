@@ -387,9 +387,11 @@ readbacks must include
 mode field, it must match the requested mode. This proves only the programmatic
 Platform Codex launch/readback edge. Because Goal-mode sessions may stay
 running, launch/readback is allowed before the execution reaches a terminal
-phase. It does not satisfy the implementation readback, acceptance MP4, video
-verifier, PR, CI, or product acceptance gates until the task-bound Codex session
-performs the work, writes the normal
+phase, but not while the readback is still `PHASE_PENDING`. Pending means the
+platform has an execution record, not that the task prompt reached an
+executable Codex session. It does not satisfy the implementation readback,
+acceptance MP4, video verifier, PR, CI, or product acceptance gates until the
+task-bound Codex session performs the work, writes the normal
 `.minelink-dev/reports/ona-codex-implementation-session.md`, and the video
 release gate passes.
 When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
