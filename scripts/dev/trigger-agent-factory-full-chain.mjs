@@ -8,11 +8,12 @@ const defaults = {
   ref: process.env.GITHUB_REF_NAME ?? "",
   dispatchJson: ".minelink-dev/reports/agent-factory-dispatch.json",
   workflow: "ona-platform-codex-probe.yml",
+  mode: process.env.MINELINK_AGENT_FACTORY_WORKFLOW_MODE ?? "full-chain-task",
   taskSuffix: "",
   waitSeconds: "300",
   environmentWaitSeconds: "600",
   environmentClassId: process.env.MINELINK_ONA_ENVIRONMENT_CLASS_ID ?? "",
-  branchWaitSeconds: "300",
+  branchWaitSeconds: "900",
   ciWaitSeconds: "900",
   prBaseBranch: process.env.MINELINK_PR_BASE_BRANCH ?? "codex/minelink-mvp-engineering",
   githubAttachmentPreflight: process.env.MINELINK_GITHUB_ATTACHMENT_PREFLIGHT ?? "deferred",
@@ -33,6 +34,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ref") args.ref = readValue();
   else if (arg === "--dispatch-json") args.dispatchJson = readValue();
   else if (arg === "--workflow") args.workflow = readValue();
+  else if (arg === "--mode") args.mode = readValue();
   else if (arg === "--task-suffix") args.taskSuffix = readValue();
   else if (arg === "--wait-seconds") args.waitSeconds = readValue();
   else if (arg === "--environment-wait-seconds") args.environmentWaitSeconds = readValue();
@@ -51,8 +53,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
     console.log(`Usage: node scripts/dev/trigger-agent-factory-full-chain.mjs --repository owner/repo --ref branch
 
 Reads agent-factory-dispatch.json and starts the full-chain Platform Codex
-canary workflow for that issue task. This bridges GitHub/Linear source
-dispatch to the already guarded Codex -> video -> PR -> CI -> status path.`);
+workflow for that issue task. This bridges GitHub/Linear source dispatch to
+the guarded Codex -> video -> PR -> CI -> status path.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -115,6 +117,18 @@ const githubIssue = dispatch.githubIssue || "none";
 const linearIssue = dispatch.linearIssue || "none";
 const validationScope = args.validationScope || dispatch.validationScope || dispatch.validation_scope || "docs";
 const scenarios = args.scenarios || dispatch.scenarios || "none";
+const taskRequirements = dispatch.taskRequirements || [
+  `Task id: ${taskId}`,
+  `PR title: ${title}`,
+  `GitHub issue: ${githubIssue}`,
+  `Linear issue: ${linearIssue}`,
+  `Validation scope: ${validationScope}`,
+  `Scenarios: ${scenarios}`,
+  "",
+  "## Issue body",
+  "",
+  dispatch.githubIssueBody || "No issue body was captured by the dispatcher.",
+].join("\n");
 
 const workflowArgs = [
   "workflow",
@@ -125,7 +139,7 @@ const workflowArgs = [
   "--ref",
   args.ref,
   "-f",
-  "mode=full-chain-canary",
+  `mode=${args.mode}`,
   "-f",
   `wait_seconds=${args.waitSeconds}`,
   "-f",
@@ -144,6 +158,8 @@ const workflowArgs = [
   `github_issue=${githubIssue}`,
   "-f",
   `linear_issue=${linearIssue}`,
+  "-f",
+  `task_requirements=${taskRequirements}`,
   "-f",
   `validation_scope=${validationScope}`,
   "-f",
@@ -211,6 +227,7 @@ if (failures.length === 0) {
 const report = {
   result: failures.length === 0 ? "passed" : "failed",
   workflow: args.workflow,
+  mode: args.mode,
   repository: args.repository,
   ref: args.ref,
   taskId,
@@ -234,6 +251,7 @@ const lines = [
   "",
   `- Result: \`${report.result}\``,
   `- Workflow: \`${args.workflow}\``,
+  `- Mode: \`${args.mode}\``,
   `- Ref: \`${args.ref || "none"}\``,
   `- Task id: \`${taskId}\``,
   `- Branch: \`${branch}\``,

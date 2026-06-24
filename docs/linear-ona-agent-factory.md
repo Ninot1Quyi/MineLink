@@ -146,10 +146,12 @@ MineLink validation failure.
 After a successful GitHub dispatch, the workflow calls
 `scripts/dev/trigger-agent-factory-full-chain.mjs`, which starts
 `.github/workflows/ona-platform-codex-probe.yml` with
-`mode=full-chain-canary`, `create_pr=true`, the accepted task id, target
-branch, GitHub issue URL, and optional Linear issue. This is the current bridge
-from `GitHub issue -> dispatcher` into the Platform Codex implementation,
-video verifier, PR, CI, and status-writeback chain.
+`mode=full-chain-task`, `create_pr=true`, the accepted task id, target branch,
+GitHub issue URL, optional Linear issue, and the serialized task contract from
+the issue body. This is the current bridge from `GitHub issue -> dispatcher`
+into the Platform Codex implementation, video verifier, PR, CI, and
+status-writeback chain. `full-chain-canary` remains available for bounded
+diagnostics, but source issue dispatch defaults to the real task report path.
 
 When readback is enabled, the dispatcher also writes
 `.minelink-dev/reports/ona-automation-execution.md` and JSON with the Ona
@@ -394,13 +396,14 @@ When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
 ignore stopped historical task environments. It may pass an auto-discovered
 environment only when that environment is currently running; otherwise it passes
 the project id only for environment creation. Since `StartAgent` rejects
-project-only context for in-environment agents, GitHub canary modes pass
+project-only context for in-environment agents, GitHub task/canary modes pass
 `--create-environment`: the launcher creates a task environment from the
 project/prebuild baseline, polls until the environment and machine are running,
 and then calls `StartAgent` with that environment id. This avoids binding new
 Codex executions to stale stopped environments whose old branch can leave the
 agent execution pending. Because stopped Ona environments still count against
-the organization total-environment quota, `full-chain-canary` runs
+the organization total-environment quota, `full-chain-canary` and
+`full-chain-task` run
 `scripts/dev/cleanup-ona-resources.mjs --prune-stale-stopped --delete` before
 launching Goal-mode Codex. That preflight prune is project-scoped quota hygiene,
 not task evidence; it skips running/starting environments and records every
@@ -493,11 +496,16 @@ skip video verification.
 The launcher also exposes a non-canary `--task-implementation` prompt surface
 for real issue tasks. That mode requires explicit task requirements, writes
 `docs/agent-factory-task-reports/<task>.md`, and asks Codex to implement within
-the issue contract instead of editing only the canary file. It is a prompt
-surface only until the workflow has a matching task-report fetch/check gate; do
-not treat it as accepted implementation evidence while the canary fetcher is the
-active release edge.
-`full-chain-canary` extends that pilot to the next edge. The workflow runs
+the issue contract instead of editing only the canary file.
+`scripts/dev/fetch-platform-codex-task-report.mjs` is the matching
+task-report fetch/check gate: it requires the task report heading, task id,
+branch, current AgentService session id, `AGENT_MODE_GOAL`, `Result: passed`,
+`Validation result: passed`, and the boundary marker, then combines that report
+with API evidence that the configured Codex agent id and `codexSettings` were
+used. `task-implementation` and `full-chain-task` use this gate for real issue
+work; canary fetchers remain diagnostic only.
+`full-chain-canary` and `full-chain-task` extend that pilot to the next edge.
+The workflow runs
 `scripts/dev/run-ona-finalizer-artifacts.mjs` inside the implementation task's
 Ona environment to render the trace-driven acceptance summary/MP4 and write the
 video-review request. The finalizer checks out the task branch for task content
@@ -512,7 +520,7 @@ worktree with new orchestration scripts but an old architecture map, or fail
 client recording only because the already-created Ona environment predates
 `Xvfb`. The finalizer also receives the full reviewed commit reported by the
 Platform Codex implementation readback and resets the task branch to that
-commit before validation, summary rendering, or video release. A reused canary
+commit before validation, summary rendering, or video release. A reused task
 branch may move after implementation finishes; the finalizer must follow the
 reviewed commit, not the latest remote branch head. The finalizer receives the
 workflow PR base and passes it to `verify-agent-task.sh --base`, and its
@@ -549,10 +557,12 @@ contains the current Goal-mode execution id, reviewed commit, and artifact
 hashes; stale branch content is a timeout failure, not release evidence. This
 is still automation-chain evidence only; it does not prove product acceptance.
 For `full-chain-canary`, the workflow must re-fetch the implementation canary
-after the verifier canary is accepted and before release upload. The branch head
-must still contain current task/session-bound implementation evidence with
-`Result: passed`; if the Goal-mode session later overwrote the canary with
-`Result: blocked` or stale markers, the release gate fails closed.
+after the verifier canary is accepted and before release upload. For
+`full-chain-task`, it re-fetches the task implementation report. The branch
+head must still contain current task/session-bound implementation evidence with
+`Result: passed`; if the Goal-mode session later overwrote the implementation
+evidence with `Result: blocked` or stale markers, the release gate fails
+closed.
 After the candidate MP4 is rendered, the Ona implementation finalizer uploads
 it with `scripts/dev/upload-acceptance-video-storage.mjs` and writes
 `video-storage-manifest.json`; that upload is candidate evidence transport, not
@@ -567,8 +577,8 @@ playable GitHub PR player requires a GitHub-uploaded attachment URL, which is
 the current release-to-PR blocker until a safe automated attachment upload
 surface exists. GitHub Actions artifacts remain the raw evidence bundle; the
 default chain must not commit the video binary to the repository evidence
-branch when external storage is configured. For `full-chain-canary` runs that
-create PRs, the workflow runs an early
+branch when external storage is configured. For `full-chain-canary` and
+`full-chain-task` runs that create PRs, the workflow runs an early
 `scripts/dev/check-agent-factory-secrets.mjs` readiness report for inline video
 publication. The default `github_attachment_preflight=deferred` mode records
 whether `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or an explicit
@@ -585,10 +595,11 @@ task acceptance requires an Ona-produced video artifact, with
 `acceptance-video-origin.json` showing producer `ona-task-finalizer`, the
 release gate requiring that producer, and the verifier reviewing that exact MP4
 hash. When a manual rehearsal needs to prove
-`release_gate -> pr`, run the same workflow with
-`mode=full-chain-canary` and `create_pr=true`. That optional step calls
+`release_gate -> pr`, run the same workflow with `mode=full-chain-task` and
+`create_pr=true` for real issue work, or `mode=full-chain-canary` for bounded
+diagnostics. That optional step calls
 `scripts/dev/create-agent-factory-pr.mjs`, creates or updates a draft PR from
-the canary branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,
+the task branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,
 refreshes `agent-factory-chain.json` with the PR URL, then runs
 `scripts/dev/cleanup-ona-resources.mjs --allow-dirty` before artifact upload so
 any task environment created by the Platform Codex probe is stopped after the
@@ -607,7 +618,7 @@ groups repeated check runs by workflow/check name and keeps the latest run, so
 stale push-event duplicates for the same head commit cannot fail or block an
 otherwise current PR check set. The next downstream edge is playable PR video
 evidence, not generic status writeback. The
-`full-chain-canary` workflow runs `scripts/dev/comment-pr-evidence.mjs` after
+`full-chain-canary` and `full-chain-task` workflows run `scripts/dev/comment-pr-evidence.mjs` after
 artifact upload; that step must publish a GitHub user-attachments MP4 URL
 before `pr_video_evidence` is passed. Only then does the workflow run
 `scripts/dev/sync-github-status.mjs` with `final-video-published`. If the

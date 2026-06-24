@@ -219,9 +219,12 @@ by `scripts/dev/dispatch-agent-factory.mjs`,
 After the source dispatcher accepts a GitHub issue, it writes
 `.minelink-dev/reports/agent-factory-dispatch.json` and
 `scripts/dev/trigger-agent-factory-full-chain.mjs` starts
-`.github/workflows/ona-platform-codex-probe.yml` in `full-chain-canary` mode
-for the same task, branch, issue, and optional Linear key. That second workflow
-is the guarded Platform Codex -> video -> PR -> CI -> status path.
+`.github/workflows/ona-platform-codex-probe.yml` in `full-chain-task` mode for
+the same task, branch, issue, optional Linear key, and serialized task
+requirements. That second workflow is the guarded Platform Codex -> video -> PR
+-> CI -> status path. `full-chain-canary` remains available for bounded
+diagnostic probes, but GitHub/Linear issue dispatch uses the real task-report
+path by default.
 `scripts/dev/check-agent-factory-secrets.mjs` is the secret-safe preflight for
 this bridge: it checks GitHub secret presence, local/runner `LINEAR_API_KEY`
 presence, the `AGENT_FACTORY_GITHUB_TOKEN` PR-creation token, and Ona CLI
@@ -353,14 +356,15 @@ readback with the remote branch head commit and canary markers into the normal
 `.minelink-dev/reports/ona-codex-implementation-session.md` file. The canary
 file alone is not accepted readback, because the final `Commit:` marker comes
 from the GitHub branch head fetched by the workflow.
-Before `implementation-canary` or `full-chain-canary` starts the Platform Codex
-session, the workflow prepares the target branch from the workflow source
-commit with `git push --force-with-lease`. This intentionally re-anchors reused
-task branches to the current source commit so stale canary/report files from an
-older AgentService execution cannot satisfy a new run. That branch is only a
-handoff anchor: it is not implementation evidence, does not satisfy the
-Platform Codex readback, and does not replace the Codex-authored canary or
-product commit. After the fresh Ona environment
+Before `implementation-canary`, `task-implementation`, `full-chain-canary`, or
+`full-chain-task` starts the Platform Codex session, the workflow prepares the
+target branch from the workflow source commit with `git push --force-with-lease`.
+This intentionally re-anchors reused task branches to the current source commit
+so stale canary/report files from an older AgentService execution cannot
+satisfy a new run. That branch is only a handoff anchor: it is not
+implementation evidence, does not satisfy the Platform Codex readback, and does
+not replace the Codex-authored canary, task report, or product commit. After
+the fresh Ona environment
 reaches running state, `scripts/dev/start-ona-platform-codex.mjs` fetches and
 checks out that target branch inside `/workspaces/MineLink` before calling
 `StartAgent`; the API session report records `AlignEnvironmentBranch` and the
@@ -371,9 +375,13 @@ on the project default branch.
 non-canary prompt surface for real issue tasks. It requires explicit task
 requirements, writes `docs/agent-factory-task-reports/<task>.md`, and tells
 Codex to implement within the issue contract instead of editing only the canary
-file. This prompt surface is not accepted as a release edge until the workflow
-has a matching task-report fetch/check gate; canary fetchers remain the current
-accepted implementation-edge proof.
+file. `scripts/dev/fetch-platform-codex-task-report.mjs` is the matching
+task-report fetch/check gate: it reads the current branch report from GitHub,
+requires the report task id, branch, session id, `AGENT_MODE_GOAL`, `Result:
+passed`, and `Validation result: passed`, and combines that report with the
+AgentService API readback proving the configured Codex agent id and Codex
+settings. `full-chain-task` uses this task-report gate for real issue work;
+canary fetchers remain bounded diagnostic proof only.
 If Goal-mode Codex writes the exact task-bound canary file inside the Ona
 environment but fails to push it, the fetcher may perform a guarded salvage: it
 enters the recorded Ona environment, refuses any branch other than the expected
@@ -386,8 +394,8 @@ When the canary path already exists from an earlier rehearsal, the fetcher must
 keep polling until the file markers match the current AgentService execution,
 task, branch, and Goal-mode request. Stale branch content is a pending async
 state until timeout; it is never accepted as current evidence.
-The same workflow now has a `full-chain-canary` mode for the next edge. After
-the implementation canary branch exists, the runner runs
+The same workflow has `full-chain-canary` and `full-chain-task` modes for the
+next edge. After the implementation canary or task report exists, the runner runs
 `scripts/dev/run-ona-finalizer-artifacts.mjs` inside the same Ona task
 environment to render the trace-driven acceptance summary/MP4 and prepare
 `video-review-request.md`. That finalizer checks out the task branch for task
@@ -409,12 +417,13 @@ and video producer before passing. This proves only the bounded
 `acceptance_video -> video_verifier` chain handoff for a canary task; it does
 not prove real product implementation or human acceptance.
 For `full-chain-canary`, the workflow re-fetches the implementation canary
-after verifier evidence is fetched and before the release finalizer runs. This
-guards against a long-running Goal-mode session later overwriting the same
-branch with `Result: blocked` or otherwise changing the implementation canary
-after its first accepted readback. The release gate must fail closed unless the
-current branch head still contains task/session-bound implementation evidence
-with `Result: passed`.
+after verifier evidence is fetched and before the release finalizer runs. For
+`full-chain-task`, it re-fetches the task implementation report through
+`fetch-platform-codex-task-report.mjs`. This guards against a long-running
+Goal-mode session later overwriting the same branch with `Result: blocked` or
+otherwise changing implementation evidence after its first accepted readback.
+The release gate must fail closed unless the current branch head still contains
+task/session-bound implementation evidence with `Result: passed`.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform
@@ -498,9 +507,9 @@ and have no uncommitted workspace changes. Cleanup is resource hygiene only; it
 does not change task acceptance, and Ona CLI stop-watch messages are reported
 as cleanup output or warnings rather than validation errors when the final
 environment readback is stopped. Stopped Ona environments still count against
-the organization's total environment quota, so `full-chain-canary` also runs a
-preflight prune that deletes stopped MineLink task environments before creating
-a fresh Goal-mode task environment. This prune is quota hygiene only: it is
+the organization's total environment quota, so `full-chain-canary` and
+`full-chain-task` also run a preflight prune that deletes stopped MineLink task
+environments before creating a fresh Goal-mode task environment. This prune is quota hygiene only: it is
 project-scoped, skips running or starting environments, records dirty-workspace
 deletions in the cleanup report, and does not prove implementation,
 verification, or product acceptance. The source dispatcher starts the checked-in
@@ -509,7 +518,7 @@ continues to the Platform Codex workflow without waiting for generic Ona
 automation actions to finish. This keeps the public Ona automation node visible
 while avoiding the default automation action lifecycle as a bottleneck before
 the Codex-specific implementation and verifier sessions. The GitHub Actions
-`full-chain-canary` can also run the
+`full-chain-canary` and `full-chain-task` modes can also run the
 release-gate-to-PR edge when `create_pr=true`; it calls
 `scripts/dev/create-agent-factory-pr.mjs`, records
 `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
@@ -1054,14 +1063,17 @@ followed by:
 node scripts/dev/check-video-review.mjs --require-mp4
 ```
 
-Implementation and `full-chain-canary` dispatches use `AGENT_MODE_GOAL`.
+Implementation, `full-chain-canary`, and `full-chain-task` dispatches use
+`AGENT_MODE_GOAL`.
 Because Goal-mode Codex sessions can remain in `PHASE_RUNNING` while pursuing
 a persistent objective, `scripts/dev/start-ona-platform-codex.mjs` accepts a
 non-terminal Goal-mode readback once AgentService proves the requested Codex
 agent id and Codex settings. Task completion is then proven by the separate
 task-bound branch/commit readback from
-`scripts/dev/fetch-platform-codex-canary.mjs`, not by waiting for the Goal
-session to become terminal. A guarded canary-only salvage can recover a missing
+`scripts/dev/fetch-platform-codex-canary.mjs` for canaries or
+`scripts/dev/fetch-platform-codex-task-report.mjs` for real task work, not by
+waiting for the Goal session to become terminal. A guarded canary-only salvage
+can recover a missing
 commit/push from the recorded Ona environment, but the accepted completion
 evidence is still the post-salvage GitHub branch readback. For video-required
 work, the Goal-mode task release gate is stricter than launch/readback: the Ona

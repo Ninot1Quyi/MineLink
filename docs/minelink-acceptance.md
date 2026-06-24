@@ -990,20 +990,25 @@ Current status:
   exposing token values.
 - `scripts/dev/trigger-agent-factory-full-chain.mjs` reads
   `.minelink-dev/reports/agent-factory-dispatch.json` and starts
-  `.github/workflows/ona-platform-codex-probe.yml` in `full-chain-canary` mode
-  for the accepted issue task. This is the current bridge from a GitHub issue
-  source event into the already guarded Platform Codex/video/PR/CI/status
-  canary chain. It must pass the issue-derived `validationScope` and
+  `.github/workflows/ona-platform-codex-probe.yml` in `full-chain-task` mode
+  for the accepted issue task, preserving the issue-derived task requirements,
+  validation scope, and scenarios. This is the current bridge from a GitHub or
+  Linear issue source event into the guarded Platform Codex/video/PR/CI/status
+  task chain. `full-chain-canary` remains available only for bounded
+  diagnostics. The trigger must pass the issue-derived `validationScope` and
   `scenarios` into the full-chain workflow so NeoForge-required tasks produce
   NeoForge-backed video evidence instead of a docs-only finalizer run.
 - The full-chain workflow now re-anchors reused task branches with
-  `git push --force-with-lease` before launching Platform Codex, so stale canary
-  evidence from an older AgentService execution cannot satisfy a new run. The
-  launcher also has a guarded `--task-implementation` prompt surface that
-  requires explicit task requirements and writes
-  `docs/agent-factory-task-reports/<task>.md`, but that is not accepted as
-  product implementation evidence until a matching task-report fetch/check gate
-  replaces the current canary-only implementation fetcher.
+  `git push --force-with-lease` before launching Platform Codex, so stale
+  canary or task-report evidence from an older AgentService execution cannot
+  satisfy a new run. The launcher has a guarded `--task-implementation` prompt
+  surface that requires explicit task requirements and writes
+  `docs/agent-factory-task-reports/<task>.md`. The matching
+  `scripts/dev/fetch-platform-codex-task-report.mjs` gate accepts real issue
+  implementation evidence only when the report matches the current task,
+  branch, AgentService session id, Goal mode, `Result: passed`, `Validation
+  result: passed`, and the task-implementation boundary, with separate API
+  evidence proving the configured Codex agent id and `codexSettings`.
 - `scripts/dev/sync-linear-status.mjs` writes
   `.minelink-dev/reports/linear-sync.md` and lets Ona update Linear issues
   without exposing the key value in logs or repository files.
@@ -1225,11 +1230,12 @@ Current status:
   Ona rebuilds.
 - This is real bootstrap evidence only. It does not prove server-admin mod
   installation, agent-user MCP configuration, LAN setup, cross-platform
-  packaging, native Linear webhook enablement, Ona Platform Codex
-  implementation/verifier launch and readback for the current PR, Ona native
-  `pullRequest` success, acceptance MP4 availability in every environment,
-  same-session video verifier subagent completion, verifier access to the actual
-  MP4 for real video-required tasks, or real NeoForge install acceptance.
+  packaging, native Linear webhook enablement, a completed full-chain-task PR
+  from a real issue, Ona native `pullRequest` success, acceptance MP4
+  availability in every environment, same-session video verifier subagent
+  completion, verifier access to the actual MP4 for real video-required tasks,
+  inline GitHub user-attachment playback authority, or real NeoForge install
+  acceptance.
 - Earlier generic Ona Agent executions are process smoke only. They do not
   count as MineLink agent execution evidence because Ona work must select the
   Platform Codex agent mode.
@@ -1368,10 +1374,9 @@ Not yet accepted as full product:
 - Multi-agent social runtime.
 - Director UI/service.
 - Installer.
-- Ona Platform Codex end-to-end task execution is not yet accepted. Public Ona
-  automation `agent` steps currently launch the default Ona Agent, not Codex, so
-  a real remote canary still must prove the full issue -> documented Platform
-  Codex launch with platform evidence -> implementation -> validation -> MP4 ->
-  separate verifier -> release gate -> PR -> CI/status chain without manual
-  repair.
+- Ona Platform Codex end-to-end task execution is not yet accepted. A real
+  remote task still must prove the full issue -> dispatcher -> documented
+  Platform Codex Goal launch with platform evidence -> task implementation
+  report -> validation -> MP4 -> same-session verifier/subagent -> release gate
+  -> PR -> inline playable video -> CI/status chain without manual repair.
 - Long release-length soak/stability run on real Minecraft.

@@ -223,6 +223,23 @@ const acceptanceGate = parseAcceptanceGate(issue.body);
 const linearIssue = parseLinearIssue(issue.body);
 const validationScope = inferValidationScope(issue.body, labels);
 const scenarios = inferScenarios(issue.body, validationScope);
+const taskRequirements = [
+  "# MineLink Agent Task Contract",
+  "",
+  `- Source: ${args.source}`,
+  `- GitHub issue: ${issue.url || "none"}`,
+  `- GitHub issue number: ${issue.number || "none"}`,
+  `- GitHub issue title: ${issue.title}`,
+  `- Linear issue: ${linearIssue}`,
+  `- Acceptance gate: ${acceptanceGate}`,
+  `- Validation scope: ${validationScope}`,
+  `- Scenarios: ${scenarios}`,
+  `- Labels: ${labels.join(", ") || "none"}`,
+  "",
+  "## Issue body",
+  "",
+  issue.body || "No issue body was captured.",
+].join("\n");
 
 const requiredSections = [
   ["Task"],
@@ -631,6 +648,8 @@ await fs.writeFile(
       taskId,
       githubIssue: issue.url || "none",
       githubIssueNumber: issue.number || "",
+      githubIssueTitle: issue.title,
+      githubIssueBody: issue.body,
       linearIssue,
       labels,
       acceptanceGate,
@@ -638,6 +657,7 @@ await fs.writeFile(
       prTitle,
       validationScope,
       scenarios,
+      taskRequirements,
       onaAutomation: args.onaAutomation || "none",
       onaProject: args.onaProject || "none",
       onaExecution: onaExecution || "none",
