@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 const defaults = {
+  apiBase: process.env.MINELINK_ONA_API_BASE ?? "https://app.gitpod.io/api",
   apiSession: ".minelink-dev/reports/ona-platform-codex-api-session.json",
   outputDir: ".minelink-dev/reports/ona-platform-codex-readback",
   output: ".minelink-dev/reports/ona-platform-codex-readback.md",
@@ -15,7 +16,8 @@ const args = { ...defaults };
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
   const readValue = () => process.argv[++index] ?? "";
-  if (arg === "--api-session") args.apiSession = readValue();
+  if (arg === "--api-base") args.apiBase = readValue();
+  else if (arg === "--api-session") args.apiSession = readValue();
   else if (arg === "--output-dir") args.outputDir = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
@@ -41,6 +43,44 @@ function hasValue(value) {
 
 function token() {
   return process.env.GITPOD_API_KEY || process.env.ONA_TOKEN || "";
+}
+
+function methodUrl(method) {
+  return `${args.apiBase.replace(/\/+$/u, "")}/${method}`;
+}
+
+async function post(method, body) {
+  const bearer = token();
+  const response = await fetch(methodUrl(method), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${bearer}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    json = { raw: sanitize(text) };
+  }
+  if (!response.ok) {
+    const error = new Error(`${method} failed with HTTP ${response.status}: ${sanitize(text)}`);
+    error.status = response.status;
+    error.body = json;
+    throw error;
+  }
+  return json;
+}
+
+async function createConversationToken(agentExecutionId) {
+  if (!hasValue(agentExecutionId) || !hasValue(token())) return "";
+  const response = await post("gitpod.v1.AgentService/CreateAgentExecutionConversationToken", {
+    agentExecutionId,
+  });
+  return response.token ?? "";
 }
 
 async function readJson(filePath) {
@@ -80,11 +120,23 @@ function extFromContentType(contentType) {
   return ".txt";
 }
 
-async function fetchUrl(label, urlValue) {
-  const headers = {};
-  const bearer = token();
-  if (hasValue(bearer)) headers.Authorization = `Bearer ${bearer}`;
-  const response = await fetch(urlValue, { headers });
+function withQueryToken(urlValue, key, bearer) {
+  const url = new URL(urlValue);
+  url.searchParams.set(key, bearer);
+  return url.toString();
+}
+
+async function fetchUrlWithAuth(label, urlValue, authMode, bearer) {
+  const options = {};
+  let requestUrl = urlValue;
+  if (authMode === "conversation-bearer" || authMode === "ona-bearer") {
+    options.headers = { Authorization: `Bearer ${bearer}` };
+  } else if (authMode === "token-query") {
+    requestUrl = withQueryToken(urlValue, "token", bearer);
+  } else if (authMode === "access-token-query") {
+    requestUrl = withQueryToken(urlValue, "access_token", bearer);
+  }
+  const response = await fetch(requestUrl, options);
   const contentType = response.headers.get("content-type") ?? "";
   const buffer = Buffer.from(await response.arrayBuffer());
   const truncated = buffer.length > args.maxBytes;
@@ -95,12 +147,34 @@ async function fetchUrl(label, urlValue) {
   return {
     label,
     url: urlValue,
+    authMode,
     status: response.status,
     ok: response.ok,
     contentType,
     bytes: buffer.length,
     truncated,
     path: filePath,
+  };
+}
+
+async function fetchUrl(label, urlValue, conversationToken) {
+  const authAttempts = [];
+  if (hasValue(conversationToken)) {
+    authAttempts.push(["conversation-bearer", conversationToken]);
+    authAttempts.push(["token-query", conversationToken]);
+    authAttempts.push(["access-token-query", conversationToken]);
+  }
+  if (hasValue(token())) authAttempts.push(["ona-bearer", token()]);
+  let latest = null;
+  for (const [authMode, bearer] of authAttempts) {
+    latest = await fetchUrlWithAuth(label, urlValue, authMode, bearer);
+    if (latest.ok) return latest;
+  }
+  return latest ?? {
+    label,
+    url: urlValue,
+    ok: false,
+    error: "No usable auth mode was available for conversation readback.",
   };
 }
 
@@ -118,6 +192,7 @@ const report = {
   environmentId: apiSession?.environmentId ?? "",
   readbackPhase: apiSession?.readbackPhase ?? apiSession?.readback?.agentExecution?.status?.phase ?? "",
   tokenPresent: hasValue(token()),
+  conversationTokenPresent: false,
   entries: [],
   blockers: [],
   boundary:
@@ -131,9 +206,16 @@ if (!apiSession) {
 } else if (!hasValue(token())) {
   report.blockers.push("Missing ONA_TOKEN or GITPOD_API_KEY for authenticated readback fetch.");
 } else {
+  let conversationToken = "";
+  try {
+    conversationToken = await createConversationToken(report.agentExecutionId);
+    report.conversationTokenPresent = hasValue(conversationToken);
+  } catch (error) {
+    report.blockers.push(`CreateAgentExecutionConversationToken failed: ${sanitize(error.message)}`);
+  }
   for (const [label, urlValue] of entries) {
     try {
-      report.entries.push(await fetchUrl(label, urlValue));
+      report.entries.push(await fetchUrl(label, urlValue, conversationToken));
     } catch (error) {
       report.entries.push({
         label,
@@ -156,6 +238,7 @@ const lines = [
   `- Environment id: \`${report.environmentId || "missing"}\``,
   `- Readback phase: \`${report.readbackPhase || "missing"}\``,
   `- Token present: \`${report.tokenPresent ? "yes" : "no"}\``,
+  `- Conversation token created: \`${report.conversationTokenPresent ? "yes" : "no"}\``,
   `- Boundary: \`${report.boundary}\``,
   "",
   "## Entries",
@@ -163,7 +246,7 @@ const lines = [
   ...(report.entries.length > 0
     ? report.entries.map(
         (entry) =>
-          `- ${entry.label}: ok=\`${entry.ok ? "yes" : "no"}\`, status=\`${entry.status ?? "missing"}\`, bytes=\`${entry.bytes ?? "missing"}\`, path=\`${entry.path ?? "none"}\``,
+          `- ${entry.label}: ok=\`${entry.ok ? "yes" : "no"}\`, auth=\`${entry.authMode ?? "none"}\`, status=\`${entry.status ?? "missing"}\`, bytes=\`${entry.bytes ?? "missing"}\`, path=\`${entry.path ?? "none"}\``,
       )
     : ["- none"]),
   "",

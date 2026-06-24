@@ -897,15 +897,38 @@ function isGoalMode() {
   return String(args.agentMode ?? "").toUpperCase() === "AGENT_MODE_GOAL";
 }
 
+function promptSendExpected() {
+  return (startAgent && sendPrompt) || shouldSendPromptToExistingExecution();
+}
+
+function llmProviderWarning(status) {
+  const warning = String(status?.warningMessage ?? "");
+  return /could not reach the LLM provider|rejected as unauthenticated|authentication failed|unauthenticated/i.test(warning);
+}
+
+function hasAgentProgress(status) {
+  return (
+    hasValue(status?.inputTokensUsed) ||
+    hasValue(status?.outputTokensUsed) ||
+    hasValue(status?.iterations) ||
+    hasValue(status?.currentActivity) ||
+    hasValue(status?.currentOperation)
+  );
+}
+
 function goalModeReadbackReady(execution) {
   const spec = execution?.spec ?? {};
   const status = execution?.status ?? {};
-  return (
+  const hasLaunchReadback =
     isGoalMode() &&
     activeAgentPhase(status.phase) &&
     hasValue(execution?.id) &&
     hasValue(spec.agentId) &&
-    (hasValue(spec.codexSettings) || hasValue(status.codexSettings))
+    (hasValue(spec.codexSettings) || hasValue(status.codexSettings));
+  if (!hasLaunchReadback || llmProviderWarning(status)) return false;
+  if (promptSendExpected()) return hasAgentProgress(status);
+  return (
+    hasLaunchReadback
   );
 }
 
@@ -922,6 +945,10 @@ async function pollReadback(agentExecutionId) {
       phase,
       agentId: execution.spec?.agentId ?? "",
       supportedModel: execution.status?.supportedModel ?? "",
+      warningMessage: sanitize(execution.status?.warningMessage ?? ""),
+      inputTokensUsed: execution.status?.inputTokensUsed ?? "",
+      outputTokensUsed: execution.status?.outputTokensUsed ?? "",
+      iterations: execution.status?.iterations ?? "",
     });
     if (terminalAgentPhase(phase) || goalModeReadbackReady(execution) || Date.now() >= deadline || args.waitSeconds === 0) {
       break;
@@ -987,6 +1014,12 @@ function evaluateReadback(readback, expectedAgentId) {
     failures.push("GetAgentExecution did not expose status.phase.");
   }
   if (hasValue(status.supportedModel)) evidence.push(`supportedModel=${status.supportedModel}`);
+  if (hasValue(status.warningMessage)) {
+    evidence.push(`warningMessage=${sanitize(status.warningMessage)}`);
+    if (llmProviderWarning(status)) {
+      failures.push(`Goal-mode Codex could not reach the LLM provider: ${sanitize(status.warningMessage)}`);
+    }
+  }
   if (hasValue(status.conversationUrl)) evidence.push("conversationUrl present");
   if (hasValue(status.transcriptUrl)) evidence.push("transcriptUrl present");
   if (hasValue(status.conversationUrls?.history)) evidence.push("conversation history URL present");
@@ -995,6 +1028,11 @@ function evaluateReadback(readback, expectedAgentId) {
   if (hasValue(status.inputTokensUsed)) evidence.push(`inputTokensUsed=${status.inputTokensUsed}`);
   if (hasValue(status.outputTokensUsed)) evidence.push(`outputTokensUsed=${status.outputTokensUsed}`);
   if (hasValue(status.iterations)) evidence.push(`iterations=${status.iterations}`);
+  if (isGoalMode() && promptSendExpected() && activeAgentPhase(status.phase) && !hasAgentProgress(status)) {
+    failures.push(
+      "Goal-mode execution accepted the launch but did not expose token, iteration, activity, or operation progress for the sent prompt.",
+    );
+  }
   if (hasValue(status.failureMessage)) failures.push(`failureMessage: ${status.failureMessage}`);
   return { failures, evidence };
 }

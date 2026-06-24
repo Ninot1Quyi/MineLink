@@ -820,10 +820,16 @@ Current status:
   A Goal-mode readback that remains `PHASE_PENDING` is now a blocked
   handoff, not accepted launch evidence. It proves only that AgentService has an
   execution record; it does not prove that Codex has started executing the
-  task prompt. A successful prompt-send response is also not enough; task
-  consumption requires the task-bound branch/report readback.
+  task prompt. A successful prompt-send response is also not enough. For
+  Goal-mode prompt sends, the launch readback must show token usage,
+  iteration count, current activity, or current operation before it is treated
+  as a live Codex handoff. If `GetAgentExecution` reports an LLM provider or
+  unauthenticated-provider warning, the edge is blocked and downstream branch,
+  finalizer, verifier, and PR steps must not be used as release evidence. Task
+  consumption still ultimately requires the task-bound branch/report readback.
   When a Goal-mode session reaches active readback but no task report appears,
-  the workflow now uploads sanitized Ona conversation/transcript diagnostics via
+  the workflow now creates an AgentService conversation token and uploads
+  sanitized Ona conversation/transcript diagnostics via
   `scripts/dev/fetch-ona-agent-execution-readback.mjs`. Those diagnostics are
   blocker-localization evidence only, not accepted implementation evidence.
   This is not accepted product evidence yet. It does not replace the

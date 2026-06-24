@@ -388,11 +388,14 @@ readbacks must include
 mode field, it must match the requested mode. This proves only the programmatic
 Platform Codex launch/readback edge. Because Goal-mode sessions may stay
 running, launch/readback is allowed before the execution reaches a terminal
-phase, but not while the readback is still `PHASE_PENDING`. Pending means the
+phase, but not while the readback is still `PHASE_PENDING` or while the
+execution reports an LLM-provider/authentication warning. Pending means the
 platform has an execution record, not that the task prompt reached an
 executable Codex session. A successful `SendToAgentExecution` response is also
-only prompt-delivery evidence; real task consumption is accepted only when the
-task-bound branch/report readback appears. It does not satisfy the
+only prompt-delivery evidence. If a prompt was sent, the launcher must observe
+token usage, iteration count, current activity, or current operation before it
+treats the Goal session as a live handoff; real task consumption is accepted
+only when the task-bound branch/report readback appears. It does not satisfy the
 implementation readback,
 acceptance MP4, video verifier, PR, CI, or product acceptance gates until the
 task-bound Codex session performs the work, writes the normal
@@ -400,9 +403,11 @@ task-bound Codex session performs the work, writes the normal
 release gate passes.
 If this edge stalls after an active Goal-mode readback, the workflow runs
 `scripts/dev/fetch-ona-agent-execution-readback.mjs` with the configured Ona
-token and uploads sanitized transcript/history diagnostics. That artifact helps
-separate prompt-delivery, health-check, and session-entry failures from normal
-task execution failures; it is not accepted implementation or release evidence.
+token. The diagnostic script creates an AgentService conversation token before
+fetching sanitized transcript/history diagnostics. That artifact helps separate
+prompt-delivery, LLM-provider, health-check, and session-entry failures from
+normal task execution failures; it is not accepted implementation or release
+evidence.
 When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
 ignore stopped historical task environments. It may pass an auto-discovered
 environment only when that environment is currently running; otherwise it passes
