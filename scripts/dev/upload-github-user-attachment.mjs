@@ -13,6 +13,7 @@ const defaults = {
   token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "",
   referer: process.env.MINELINK_GITHUB_ATTACHMENT_REFERER ?? process.env.MINELINK_AGENT_FACTORY_PR_URL ?? "",
   authenticityToken: process.env.MINELINK_GITHUB_ATTACHMENT_AUTHENTICITY_TOKEN ?? "",
+  uploadToken: process.env.MINELINK_GITHUB_ATTACHMENT_UPLOAD_TOKEN ?? "",
   fetchNonce: process.env.MINELINK_GITHUB_ATTACHMENT_FETCH_NONCE ?? "",
   clientVersion: process.env.MINELINK_GITHUB_CLIENT_VERSION ?? "",
   attempts: Number(process.env.MINELINK_GITHUB_ATTACHMENT_UPLOAD_ATTEMPTS ?? 3),
@@ -38,6 +39,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--token") args.token = readValue();
   else if (arg === "--referer") args.referer = readValue();
   else if (arg === "--authenticity-token") args.authenticityToken = readValue();
+  else if (arg === "--upload-token") args.uploadToken = readValue();
   else if (arg === "--fetch-nonce") args.fetchNonce = readValue();
   else if (arg === "--client-version") args.clientVersion = readValue();
   else if (arg === "--attempts") args.attempts = Number(readValue());
@@ -60,7 +62,8 @@ cookie is missing and --require-upload is not set, the script writes a skipped
 report and exits successfully so the downstream release gate can fail closed.
 
 Reliability options:
-  --referer URL         GitHub PR/issue page used to discover page upload tokens.
+  --referer URL         GitHub PR/issue page used for evidence context.
+  --upload-token TOKEN  GitHub repository uploadToken override for policy upload.
   --attempts N          Retry count for transient web/object-store failures.
   --retry-delay-ms N    Base retry delay in milliseconds.
   --timeout-ms N        Per-request timeout in milliseconds.`);
@@ -119,6 +122,7 @@ function retryableHttpStatus(status) {
 function classifyFailure(message) {
   const text = String(message ?? "").toLowerCase();
   if (text.includes("not configured")) return "missing-github-web-cookie";
+  if (text.includes("uploadtoken missing")) return "github-attachment-upload-token-missing";
   if (text.includes("github-attachment-page-token")) return "github-attachment-page-token-failed";
   if (text.includes("policy request failed with http 401") || text.includes("policy request failed with http 403")) {
     return "github-web-cookie-rejected";
@@ -141,6 +145,70 @@ function cookieSignals(cookie) {
     hasUserSession: /(?:^|;\s*)user_session=/.test(text),
     hasHostUserSessionSameSite: /(?:^|;\s*)__Host-user_session_same_site=/.test(text),
   };
+}
+
+function parseCookiePairs(cookie) {
+  const text = String(cookie ?? "").trim();
+  if (!hasValue(text)) return [];
+  if (!text.includes("=") && !text.includes(";")) {
+    return [
+      ["user_session", text],
+      ["__Host-user_session_same_site", text],
+      ["logged_in", "yes"],
+    ];
+  }
+  return text
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const index = part.indexOf("=");
+      if (index < 1) return null;
+      return [part.slice(0, index).trim(), part.slice(index + 1).trim()];
+    })
+    .filter(Boolean);
+}
+
+const cookieJar = new Map(parseCookiePairs(args.cookie));
+if (cookieJar.has("user_session") && !cookieJar.has("__Host-user_session_same_site")) {
+  cookieJar.set("__Host-user_session_same_site", cookieJar.get("user_session"));
+}
+if (cookieJar.has("user_session") && !cookieJar.has("logged_in")) {
+  cookieJar.set("logged_in", "yes");
+}
+args.cookie = Array.from(cookieJar.entries())
+  .map(([key, value]) => `${key}=${value}`)
+  .join("; ");
+
+function updateCookieJar(response) {
+  const headers = response?.headers;
+  const setCookies =
+    typeof headers?.getSetCookie === "function"
+      ? headers.getSetCookie()
+      : [headers?.get?.("set-cookie")].filter(Boolean);
+  for (const header of setCookies) {
+    for (const cookie of String(header ?? "").split(/,(?=\s*[^;,]+=)/)) {
+      const first = cookie.split(";")[0]?.trim();
+      const index = first?.indexOf("=") ?? -1;
+      if (index > 0) {
+        cookieJar.set(first.slice(0, index), first.slice(index + 1));
+      }
+    }
+  }
+  if (cookieJar.has("user_session") && !cookieJar.has("__Host-user_session_same_site")) {
+    cookieJar.set("__Host-user_session_same_site", cookieJar.get("user_session"));
+  }
+}
+
+function cookieHeader() {
+  return Array.from(cookieJar.entries())
+    .map(([key, value]) => `${key}=${value}`)
+    .join("; ");
+}
+
+function repositoryPageUrl() {
+  if (!/^[^/\s]+\/[^/\s]+$/.test(args.repository)) return "https://github.com";
+  return `https://github.com/${args.repository}`;
 }
 
 function contentTypeFor(fileName) {
@@ -167,10 +235,18 @@ function webHeaders(extra = {}) {
     Referer: args.referer || `https://github.com/${args.repository || ""}`,
     ...extra,
   };
-  if (hasValue(args.cookie)) headers.Cookie = args.cookie;
+  const cookies = cookieHeader();
+  if (hasValue(cookies)) headers.Cookie = cookies;
   if (hasValue(args.fetchNonce)) headers["X-Fetch-Nonce"] = args.fetchNonce;
   if (hasValue(args.clientVersion)) headers["X-GitHub-Client-Version"] = args.clientVersion;
   return headers;
+}
+
+function objectStoreHeaders(extra = {}) {
+  return {
+    Origin: "https://github.com",
+    ...extra,
+  };
 }
 
 function toMultipart(values, file) {
@@ -260,17 +336,34 @@ function extractClientVersion(html) {
   return "";
 }
 
+function extractUploadToken(html) {
+  const patterns = [
+    /"uploadToken"\s*:\s*"([^"]+)"/i,
+    /\buploadToken["']?\s*[:=]\s*["']([^"']+)["']/i,
+    /&quot;uploadToken&quot;\s*:\s*&quot;([^&]+)&quot;/i,
+  ];
+  for (const pattern of patterns) {
+    const match = String(html ?? "").match(pattern);
+    if (match?.[1]) return decodeHtml(match[1]);
+  }
+  return "";
+}
+
 async function discoverPageUploadTokens() {
-  if (!hasValue(args.cookie) || !hasValue(args.referer)) return;
-  const { response, text } = await requestText("github-attachment-page-token", args.referer, {
+  if (!hasValue(args.cookie)) return;
+  const tokenPage = repositoryPageUrl();
+  const { response, text } = await requestText("github-attachment-page-token", tokenPage, {
     headers: webHeaders({
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Referer: tokenPage,
     }),
   });
   report.pageTokenSignals.pageStatus = response.status;
-  if (!hasValue(args.authenticityToken)) args.authenticityToken = extractAuthenticityToken(text);
+  if (!hasValue(args.authenticityToken)) args.authenticityToken = args.uploadToken || extractUploadToken(text);
   if (!hasValue(args.fetchNonce)) args.fetchNonce = extractFetchNonce(text);
   if (!hasValue(args.clientVersion)) args.clientVersion = extractClientVersion(text);
+  report.pageTokenSignals.tokenPage = tokenPage;
+  report.pageTokenSignals.hasUploadToken = hasValue(args.authenticityToken);
   report.pageTokenSignals.hasAuthenticityToken = hasValue(args.authenticityToken);
   report.pageTokenSignals.hasFetchNonce = hasValue(args.fetchNonce);
   report.pageTokenSignals.hasClientVersion = hasValue(args.clientVersion);
@@ -293,6 +386,9 @@ async function readRepositoryId() {
 }
 
 async function uploadPolicy(repositoryId, fileName, size, contentType) {
+  if (!hasValue(args.authenticityToken)) {
+    throw new Error("GitHub attachment uploadToken missing; fetch the repository page with a valid GitHub web session.");
+  }
   const multipart = toMultipart({
     repository_id: repositoryId,
     name: fileName,
@@ -303,7 +399,8 @@ async function uploadPolicy(repositoryId, fileName, size, contentType) {
   const { response, text } = await requestText("github-attachment-policy", "https://github.com/upload/policies/assets", {
     method: "POST",
     headers: webHeaders({
-      "GitHub-Verified-Fetch": "true",
+      Accept: "application/json",
+      Referer: repositoryPageUrl(),
       "X-Requested-With": "XMLHttpRequest",
       ...multipart.headers,
     }),
@@ -324,8 +421,7 @@ async function uploadToObjectStore(policy, fileBuffer, fileName, contentType) {
   });
   const { response, text } = await requestText("github-attachment-object-upload", policy.upload_url, {
     method: "POST",
-    headers: webHeaders({
-      ...(policy.same_origin ? { authenticity_token: policy.upload_authenticity_token } : {}),
+    headers: objectStoreHeaders({
       ...(policy.header ?? {}),
       ...multipart.headers,
     }),
@@ -347,6 +443,7 @@ async function finalizeUpload(policy) {
     method: "PUT",
     headers: webHeaders({
       Accept: "application/json",
+      Referer: repositoryPageUrl(),
       "X-Requested-With": "XMLHttpRequest",
       ...multipart.headers,
     }),
@@ -467,7 +564,9 @@ const report = {
   cookieSignals: cookieSignals(args.cookie),
   pageTokenSignals: {
     refererConfigured: hasValue(args.referer),
+    tokenPage: "",
     pageStatus: "",
+    hasUploadToken: hasValue(args.authenticityToken) || hasValue(args.uploadToken),
     hasAuthenticityToken: hasValue(args.authenticityToken),
     hasFetchNonce: hasValue(args.fetchNonce),
     hasClientVersion: hasValue(args.clientVersion),

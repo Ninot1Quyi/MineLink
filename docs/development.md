@@ -321,12 +321,14 @@ GitHub attachment URL after the Ona finalizer video has passed hash download
 verification and same-session Codex video review. The helper uses
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` because PATs and `GITHUB_TOKEN` can
 identify the repository but cannot create GitHub web comment attachments. It
-uses the task PR URL as a referer to discover the current GitHub upload page
-token and fetch nonce, has bounded retries, uses reusable multipart request
-bodies, and writes `.minelink-dev/reports/github-user-attachment-upload.md`
-with sanitized cookie/page-token signals plus a failure kind when the cookie is
-missing, stale, rejected, or when GitHub's attachment
-policy/object/finalization calls fail.
+uses the task PR URL only as evidence context, fetches the repository page with
+the explicit cookie secret to discover GitHub's current `uploadToken` and fetch
+nonce, has bounded retries, uses reusable multipart request bodies, avoids
+sending GitHub cookies to the object-store upload URL, and writes
+`.minelink-dev/reports/github-user-attachment-upload.md` with sanitized
+cookie/page-token signals plus a failure kind when the cookie is missing,
+stale, rejected, or when GitHub's attachment policy/object/finalization calls
+fail.
 
 To refresh the cookie without pasting it into chat or committing it, run the
 local helper below. It opens a dedicated Chrome profile, waits for an explicit

@@ -1044,10 +1044,11 @@ GitHub web session cookie. R2 public URLs plus HTML `<video>` markup are also
 not sufficient because GitHub PR Markdown does not render external video embeds
 as the native issue/PR player. If the cookie is missing the bridge writes a
 skipped report and the final PR evidence comment still fails closed. The bridge
-receives the task PR URL as a referer, fetches that page with the explicit
-cookie secret to discover current GitHub upload form tokens/nonce values, and
-uses reusable multipart buffers for the policy, object upload, and finalization
-calls. It also uses bounded retries, request timeouts, cookie marker reporting,
+receives the task PR URL as evidence context, fetches the repository page with
+the explicit cookie secret to discover GitHub's current `uploadToken` plus
+nonce values, and uses reusable multipart buffers for the policy, object
+upload, and finalization calls. Object-store upload requests do not carry the
+GitHub cookie header. It also uses bounded retries, request timeouts, cookie marker reporting,
 page-token marker reporting, and failure-kind classification so rejected
 cookies, missing page tokens, and transient policy, object-upload, or
 finalization failures are diagnosable. Refresh the cookie with
