@@ -632,6 +632,8 @@ require_text "scripts/dev/upload-github-user-attachment.mjs" "github-attachment-
 require_text "scripts/dev/upload-github-user-attachment.mjs" "github-attachment-page-token-failed"
 require_text "scripts/dev/upload-github-user-attachment.mjs" "pageTokenSignals"
 require_text "scripts/dev/upload-github-user-attachment.mjs" "uploadToken"
+require_text "scripts/dev/upload-github-user-attachment.mjs" "file-attachment"
+require_text "scripts/dev/upload-github-user-attachment.mjs" "uploadPolicyCsrf"
 require_text "scripts/dev/upload-github-user-attachment.mjs" "objectStoreHeaders"
 require_text "scripts/dev/upload-github-user-attachment.mjs" "GitHub user attachment upload skipped"
 require_text "scripts/dev/upload-github-user-attachment.mjs" "github-web-cookie-rejected"

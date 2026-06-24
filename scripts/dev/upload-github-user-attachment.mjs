@@ -122,6 +122,7 @@ function retryableHttpStatus(status) {
 function classifyFailure(message) {
   const text = String(message ?? "").toLowerCase();
   if (text.includes("not configured")) return "missing-github-web-cookie";
+  if (text.includes("upload policy csrf missing")) return "github-attachment-upload-policy-csrf-missing";
   if (text.includes("uploadtoken missing")) return "github-attachment-upload-token-missing";
   if (text.includes("github-attachment-page-token")) return "github-attachment-page-token-failed";
   if (text.includes("policy request failed with http 401") || text.includes("policy request failed with http 403")) {
@@ -349,21 +350,88 @@ function extractUploadToken(html) {
   return "";
 }
 
-async function discoverPageUploadTokens() {
-  if (!hasValue(args.cookie)) return;
-  const tokenPage = repositoryPageUrl();
-  const { response, text } = await requestText("github-attachment-page-token", tokenPage, {
+function extractUploadPolicyCsrf(html) {
+  const source = String(html ?? "");
+  const fileAttachmentBlocks = source.match(/<file-attachment\b[\s\S]*?<\/file-attachment>/gi) ?? [];
+  for (const block of fileAttachmentBlocks) {
+    if (!/data-upload-policy-url=["']\/upload\/policies\/assets["']/i.test(block)) continue;
+    const inputs = block.match(/<input\b[^>]*>/gi) ?? [];
+    for (const input of inputs) {
+      const className = firstAttribute(input, "class");
+      const dataCsrf = firstAttribute(input, "data-csrf");
+      const value = firstAttribute(input, "value");
+      if (
+        hasValue(value) &&
+        (dataCsrf === "true" || /\bjs-data-upload-policy-url-csrf\b/.test(className))
+      ) {
+        return value;
+      }
+    }
+  }
+
+  const patterns = [
+    /data-upload-policy-url=["']\/upload\/policies\/assets["'][\s\S]{0,4000}?<input\b(?=[^>]*\bvalue=["']([^"']+)["'])(?=[^>]*(?:\bdata-csrf=["']true["']|\bjs-data-upload-policy-url-csrf\b))[^>]*>/i,
+    /<input\b(?=[^>]*\bvalue=["']([^"']+)["'])(?=[^>]*(?:\bdata-csrf=["']true["']|\bjs-data-upload-policy-url-csrf\b))[^>]*>[\s\S]{0,4000}?data-upload-policy-url=["']\/upload\/policies\/assets["']/i,
+  ];
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match?.[1]) return decodeHtml(match[1]);
+  }
+  return "";
+}
+
+async function discoverTokensFromPage(label, url, { allowFormToken = false } = {}) {
+  const { response, text } = await requestText(label, url, {
     headers: webHeaders({
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      Referer: tokenPage,
+      Referer: url,
     }),
   });
-  report.pageTokenSignals.pageStatus = response.status;
-  if (!hasValue(args.authenticityToken)) args.authenticityToken = args.uploadToken || extractUploadToken(text);
-  if (!hasValue(args.fetchNonce)) args.fetchNonce = extractFetchNonce(text);
-  if (!hasValue(args.clientVersion)) args.clientVersion = extractClientVersion(text);
-  report.pageTokenSignals.tokenPage = tokenPage;
-  report.pageTokenSignals.hasUploadToken = hasValue(args.authenticityToken);
+  const uploadPolicyCsrf = extractUploadPolicyCsrf(text);
+  const uploadToken = extractUploadToken(text);
+  const authenticityToken = allowFormToken ? extractAuthenticityToken(text) : "";
+  const fetchNonce = extractFetchNonce(text);
+  const clientVersion = extractClientVersion(text);
+  return {
+    pageStatus: response.status,
+    uploadPolicyCsrf,
+    uploadToken,
+    authenticityToken,
+    fetchNonce,
+    clientVersion,
+  };
+}
+
+async function discoverPageUploadTokens() {
+  if (!hasValue(args.cookie)) return;
+  const tokenPages = [
+    ...(hasValue(args.referer) ? [{ label: "github-attachment-page-token", url: args.referer }] : []),
+    { label: "github-attachment-repository-token", url: repositoryPageUrl() },
+  ];
+  const pageResults = [];
+  for (const page of tokenPages) {
+    const tokens = await discoverTokensFromPage(page.label, page.url, { allowFormToken: false });
+    pageResults.push({ url: page.url, ...tokens });
+    if (!hasValue(args.authenticityToken)) {
+      args.authenticityToken = args.uploadToken || tokens.uploadPolicyCsrf || tokens.uploadToken;
+    }
+    if (!hasValue(args.fetchNonce)) args.fetchNonce = tokens.fetchNonce;
+    if (!hasValue(args.clientVersion)) args.clientVersion = tokens.clientVersion;
+    if (hasValue(args.authenticityToken)) break;
+  }
+  const selected = pageResults.find((page) => hasValue(page.uploadPolicyCsrf) || hasValue(page.uploadToken)) ?? pageResults.at(-1) ?? {};
+  report.pageTokenSignals.tokenPage = selected.url ?? "";
+  report.pageTokenSignals.checkedPages = pageResults.map((page) => ({
+    url: page.url,
+    status: page.pageStatus,
+    hasUploadPolicyCsrf: hasValue(page.uploadPolicyCsrf),
+    hasUploadToken: hasValue(page.uploadToken),
+    hasFetchNonce: hasValue(page.fetchNonce),
+    hasClientVersion: hasValue(page.clientVersion),
+  }));
+  report.pageTokenSignals.pageStatus = selected.pageStatus ?? "";
+  report.pageTokenSignals.hasUploadPolicyCsrf = pageResults.some((page) => hasValue(page.uploadPolicyCsrf));
+  report.pageTokenSignals.hasUploadToken = pageResults.some((page) => hasValue(page.uploadToken)) || hasValue(args.uploadToken);
   report.pageTokenSignals.hasAuthenticityToken = hasValue(args.authenticityToken);
   report.pageTokenSignals.hasFetchNonce = hasValue(args.fetchNonce);
   report.pageTokenSignals.hasClientVersion = hasValue(args.clientVersion);
@@ -387,7 +455,7 @@ async function readRepositoryId() {
 
 async function uploadPolicy(repositoryId, fileName, size, contentType) {
   if (!hasValue(args.authenticityToken)) {
-    throw new Error("GitHub attachment uploadToken missing; fetch the repository page with a valid GitHub web session.");
+    throw new Error("GitHub attachment upload policy CSRF missing; fetch the PR/issue page with a valid GitHub web session.");
   }
   const multipart = toMultipart({
     repository_id: repositoryId,
@@ -565,7 +633,9 @@ const report = {
   pageTokenSignals: {
     refererConfigured: hasValue(args.referer),
     tokenPage: "",
+    checkedPages: [],
     pageStatus: "",
+    hasUploadPolicyCsrf: false,
     hasUploadToken: hasValue(args.authenticityToken) || hasValue(args.uploadToken),
     hasAuthenticityToken: hasValue(args.authenticityToken),
     hasFetchNonce: hasValue(args.fetchNonce),

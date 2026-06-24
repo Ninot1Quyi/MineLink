@@ -1029,9 +1029,9 @@ requires an explicit GitHub web attachment cookie secret
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; PATs and `GITHUB_TOKEN` can identify
 the repository but do not create comment attachments by themselves, and they
 cannot be exchanged for a GitHub web session cookie. The attachment bridge uses
-the task PR URL as evidence context but fetches the repository page with the
-explicit cookie secret to discover GitHub's current `uploadToken` plus nonce
-values; ordinary PR form `authenticity_token` values are not accepted by
+the task PR URL to fetch the issue/PR editor's `<file-attachment>` upload-policy
+CSRF token, with repository-page `uploadToken` discovery only as a fallback;
+ordinary form `authenticity_token` values are not accepted by
 `/upload/policies/assets`. It then performs the policy, object upload, and
 finalization calls with reusable multipart buffers so retries do not depend on
 runtime-specific `FormData` behavior. Object-store uploads never receive the
