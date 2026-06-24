@@ -1132,6 +1132,14 @@ streaming `live` endpoints cannot stall cleanup or artifact upload. These
 diagnostics are used only to localize prompt delivery, LLM-provider,
 health-check, or session-entry failures; they are not accepted task, video,
 verifier, or product evidence.
+The task-report fetcher also probes the recorded Ona environment before
+waiting for long-running NeoForge work. If the expected report is missing, the
+worktree is clean, and no Minecraft/NeoForge/validation/recording process is
+active for the configured no-progress window, the implementation edge fails
+closed instead of waiting out the full branch timeout. Empty transcript
+readback is likewise a blocker: it means AgentService accepted the Goal-mode
+execution, but the session produced no visible conversation evidence for the
+task.
 If `GetAgentExecution` reports `Codex could not reach the LLM provider` or an
 unauthenticated provider warning, the launch edge is blocked until Ona Platform
 Codex can make a real model request.

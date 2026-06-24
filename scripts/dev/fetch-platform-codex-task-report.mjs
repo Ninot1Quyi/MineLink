@@ -14,6 +14,7 @@ const defaults = {
   jsonOutput: ".minelink-dev/reports/ona-codex-implementation-session.json",
   waitSeconds: Number(process.env.MINELINK_PLATFORM_CODEX_BRANCH_WAIT_SECONDS ?? 300),
   pollSeconds: Number(process.env.MINELINK_PLATFORM_CODEX_BRANCH_POLL_SECONDS ?? 10),
+  noProgressSeconds: Number(process.env.MINELINK_PLATFORM_CODEX_NO_PROGRESS_SECONDS ?? 900),
 };
 
 const args = { ...defaults };
@@ -30,6 +31,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "--wait-seconds") args.waitSeconds = Number(readValue());
   else if (arg === "--poll-seconds") args.pollSeconds = Number(readValue());
+  else if (arg === "--no-progress-seconds") args.noProgressSeconds = Number(readValue());
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/fetch-platform-codex-task-report.mjs --repository owner/repo --branch <branch> --task-id <id>
 
@@ -39,6 +41,13 @@ session, combines it with AgentService API readback, and writes the canonical
 
 This script validates task implementation readback only. It does not prove
 video release, PR publication, or MineLink product acceptance.`);
+    console.log(`
+Options:
+  --no-progress-seconds <seconds>
+      Fail early when the Ona environment has no expected report, no git
+      changes, and no active Minecraft/NeoForge validation process for this
+      many seconds. Defaults to MINELINK_PLATFORM_CODEX_NO_PROGRESS_SECONDS or
+      900.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -170,10 +179,30 @@ function salvageScript() {
     "  exit 20",
     "fi",
     "",
+    "progress_snapshot() {",
+    '  dirty_count="$(git status --porcelain --untracked-files=all | wc -l | tr -d \' \')"',
+    '  if [ "$dirty_count" = "0" ]; then',
+    '    echo "minelink-progress:git_dirty=no"',
+    "  else",
+    '    echo "minelink-progress:git_dirty=yes"',
+    '    git status --porcelain --untracked-files=all | sed -n "1,40p"',
+    "  fi",
+    '  active_processes="$(ps -eo comm,args | grep -Ei \'(gradle|java|runServer|neoforge|minecraft|ffmpeg|xvfb|xorg|verify-agent-task|e2e\\.sh)\' | grep -Ev \'(grep|codex-exec-agent)\' || true)"',
+    '  if [ -z "$active_processes" ]; then',
+    '    echo "minelink-progress:active_process=none"',
+    "  else",
+    '    echo "minelink-progress:active_process=present"',
+    '    printf "%s\\n" "$active_processes" | sed -n "1,30p"',
+    "  fi",
+    "}",
+    "",
     'if [ ! -f "$report_path" ]; then',
+    '  echo "minelink-progress:report=missing"',
+    "  progress_snapshot",
     '  echo "Refusing task report salvage: expected report file \'$report_path\' is missing." >&2',
     "  exit 21",
     "fi",
+    'echo "minelink-progress:report=present"',
     "",
     "require_marker() {",
     '  local marker="$1"',
@@ -288,11 +317,21 @@ async function salvageOnaTaskReport(apiSession, api) {
   };
 }
 
+function noProgressFromSalvage(salvage) {
+  const output = String(salvage?.output ?? "");
+  return (
+    /minelink-progress:report=missing/i.test(output) &&
+    /minelink-progress:git_dirty=no/i.test(output) &&
+    /minelink-progress:active_process=none/i.test(output)
+  );
+}
+
 async function loadReport(validateRemote, options = {}) {
   const deadline = Date.now() + Math.max(0, args.waitSeconds) * 1000;
   let lastFailure = "";
   let lastSalvageAttempt = null;
   let salvageSucceeded = false;
+  let noProgressSince = 0;
   do {
     try {
       const candidate = await fetchRemoteReport();
@@ -306,6 +345,7 @@ async function loadReport(validateRemote, options = {}) {
           await sleep(Math.min(5000, Math.max(1000, args.pollSeconds * 1000)));
           continue;
         }
+        noProgressSince = noProgressFromSalvage(lastSalvageAttempt) ? noProgressSince || Date.now() : 0;
       }
     } catch (error) {
       lastFailure = error.message;
@@ -316,7 +356,21 @@ async function loadReport(validateRemote, options = {}) {
           await sleep(Math.min(5000, Math.max(1000, args.pollSeconds * 1000)));
           continue;
         }
+        noProgressSince = noProgressFromSalvage(lastSalvageAttempt) ? noProgressSince || Date.now() : 0;
       }
+    }
+    if (
+      noProgressSince &&
+      Number.isFinite(args.noProgressSeconds) &&
+      args.noProgressSeconds > 0 &&
+      Date.now() - noProgressSince >= args.noProgressSeconds * 1000
+    ) {
+      lastFailure = [
+        lastFailure || "missing report",
+        `Ona environment showed no task report, no git changes, and no active validation process for ${args.noProgressSeconds}s.`,
+        "AgentService Goal execution may be running idle or not consuming the task prompt.",
+      ].join("\n");
+      break;
     }
     if (Date.now() >= deadline || args.waitSeconds === 0) break;
     await sleep(Math.max(1, args.pollSeconds) * 1000);

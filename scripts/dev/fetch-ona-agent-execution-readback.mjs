@@ -200,16 +200,38 @@ async function fetchUrl(label, urlValue, conversationToken) {
   }
   if (hasValue(token())) authAttempts.push(["ona-bearer", token()]);
   let latest = null;
+  const attempts = [];
   for (const [authMode, bearer] of authAttempts) {
     latest = await fetchUrlWithAuth(label, urlValue, authMode, bearer);
-    if (latest.ok) return latest;
+    attempts.push({
+      authMode: latest.authMode ?? authMode,
+      ok: latest.ok,
+      status: latest.status ?? "",
+      bytes: latest.bytes ?? "",
+      contentType: latest.contentType ?? "",
+      timedOut: latest.timedOut ?? false,
+      error: latest.error ?? "",
+    });
+    if (latest.ok) return { ...latest, attempts };
   }
-  return latest ?? {
-    label,
-    url: urlValue,
-    ok: false,
-    error: "No usable auth mode was available for conversation readback.",
-  };
+  return latest
+    ? { ...latest, attempts }
+    : {
+        label,
+        url: urlValue,
+        ok: false,
+        error: "No usable auth mode was available for conversation readback.",
+        attempts,
+      };
+}
+
+async function readFetchedBody(entry) {
+  if (!entry?.path) return "";
+  try {
+    return await fs.readFile(entry.path, "utf8");
+  } catch {
+    return "";
+  }
 }
 
 await fs.mkdir(args.outputDir, { recursive: true });
@@ -259,8 +281,19 @@ if (!apiSession) {
       });
     }
   }
-  if (report.entries.some((entry) => entry.ok)) report.result = "passed";
-  else report.blockers.push("No conversation readback URL fetched successfully.");
+  if (!report.entries.some((entry) => entry.ok)) {
+    report.blockers.push("No conversation readback URL fetched successfully.");
+  }
+  const transcript = report.entries.find((entry) => entry.label === "transcript" && entry.ok);
+  if (transcript) {
+    const body = (await readFetchedBody(transcript)).trim();
+    if (body === "[]" || body === "{}" || body.length === 0) {
+      report.blockers.push(
+        "Transcript readback was empty; Goal-mode execution produced no visible conversation messages.",
+      );
+    }
+  }
+  if (report.blockers.length === 0) report.result = "passed";
 }
 
 const lines = [
@@ -280,7 +313,15 @@ const lines = [
   ...(report.entries.length > 0
     ? report.entries.map(
         (entry) =>
-          `- ${entry.label}: ok=\`${entry.ok ? "yes" : "no"}\`, auth=\`${entry.authMode ?? "none"}\`, status=\`${entry.status ?? "missing"}\`, bytes=\`${entry.bytes ?? "missing"}\`, timedOut=\`${entry.timedOut ? "yes" : "no"}\`, path=\`${entry.path ?? "none"}\``,
+          [
+            `- ${entry.label}: ok=\`${entry.ok ? "yes" : "no"}\`, auth=\`${entry.authMode ?? "none"}\`, status=\`${entry.status ?? "missing"}\`, bytes=\`${entry.bytes ?? "missing"}\`, timedOut=\`${entry.timedOut ? "yes" : "no"}\`, path=\`${entry.path ?? "none"}\``,
+            ...(Array.isArray(entry.attempts) && entry.attempts.length > 0
+              ? entry.attempts.map(
+                  (attempt) =>
+                    `  - attempt auth=\`${attempt.authMode || "none"}\`, ok=\`${attempt.ok ? "yes" : "no"}\`, status=\`${attempt.status || "missing"}\`, bytes=\`${attempt.bytes || "missing"}\`, timedOut=\`${attempt.timedOut ? "yes" : "no"}\``,
+                )
+              : []),
+          ].join("\n"),
       )
     : ["- none"]),
   "",

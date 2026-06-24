@@ -832,6 +832,11 @@ Current status:
   sanitized Ona conversation/transcript diagnostics via
   `scripts/dev/fetch-ona-agent-execution-readback.mjs`. Those diagnostics are
   blocker-localization evidence only, not accepted implementation evidence.
+  Empty transcript readback is blocked evidence, not a pass. The task-report
+  fetcher now also checks the recorded Ona environment for the expected report,
+  worktree changes, and active Minecraft/NeoForge/validation/recording
+  processes; if all three remain absent for the no-progress window, the
+  workflow fails closed instead of waiting for the full branch timeout.
   This is not accepted product evidence yet. It does not replace the
   task-bound implementation and verifier readback files required by the
   finalizer. The launcher now ignores stopped historical Ona
@@ -1194,7 +1199,9 @@ Current status:
   Codex Goal session may still be reading MineLink context or running real
   Minecraft validation before it can push the report. A running session without
   branch evidence is not accepted as release evidence, but the runner must not
-  stop it on the shorter docs timeout.
+  stop it on the shorter docs timeout. A clean Ona environment with no expected
+  report and no active validation or recording process is different from a
+  slow NeoForge run; that is now treated as no-progress blocked evidence.
 - The GitHub workflow uploads `acceptance-storyboard.png` and
   `acceptance-storyboard.json` as a separate small artifact for quick visual QA
   and model-readable frame inspection. That artifact is not a substitute for

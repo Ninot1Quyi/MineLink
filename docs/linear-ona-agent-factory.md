@@ -152,6 +152,16 @@ the issue body. This is the current bridge from `GitHub issue -> dispatcher`
 into the Platform Codex implementation, video verifier, PR, CI, and
 status-writeback chain. `full-chain-canary` remains available for bounded
 diagnostics, but source issue dispatch defaults to the real task report path.
+The full-chain workflow accepts a Goal-mode launch only as handoff evidence.
+Task completion still requires a branch-bound task report fetched by
+`scripts/dev/fetch-platform-codex-task-report.mjs`. If that report is missing,
+the fetcher inspects the recorded Ona environment for dirty files and active
+Minecraft/NeoForge/validation/recording processes. A clean environment with no
+active process is treated as no-progress blocked evidence after the configured
+window; it is not allowed to wait silently for the full branch timeout. The
+readback helper also fails closed on empty transcript diagnostics because an
+empty transcript proves that the task produced no visible Platform Codex
+conversation evidence.
 
 When readback is enabled, the dispatcher also writes
 `.minelink-dev/reports/ona-automation-execution.md` and JSON with the Ona
