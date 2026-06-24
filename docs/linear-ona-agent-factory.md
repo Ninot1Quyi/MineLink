@@ -1047,11 +1047,15 @@ skipped report and the final PR evidence comment still fails closed. The bridge
 receives the task PR URL, fetches that page with the explicit cookie secret to
 discover the issue/PR editor's `<file-attachment>` upload-policy CSRF token
 plus nonce values, and uses repository-page `uploadToken` discovery only as a
-fallback. It uses reusable multipart buffers for the policy, object upload, and
-finalization calls. Object-store upload requests do not carry the GitHub cookie
-header. It also uses bounded retries, request timeouts, cookie marker reporting,
-page-token marker reporting, and failure-kind classification so rejected
-cookies, missing page tokens, and transient policy, object-upload, or
+fallback. Because GitHub has changed this markup across issue/PR page shapes,
+the bridge also scans around `/upload/policies/assets` and can try a nearby
+same-page authenticity token when no dedicated upload-policy input is present;
+the policy/finalize requests must still accept that token or the release edge
+fails closed. It uses reusable multipart buffers for the policy, object upload,
+and finalization calls. Object-store upload requests do not carry the GitHub
+cookie header. It also uses bounded retries, request timeouts, cookie marker
+reporting, page-token marker reporting, and failure-kind classification so
+rejected cookies, missing page tokens, and transient policy, object-upload, or
 finalization failures are diagnosable. Refresh the cookie with
 `npm run agent-factory:refresh-github-cookie -- --repository Ninot1Quyi/MineLink`
 from a local trusted workstation; the helper opens a dedicated Chrome profile,

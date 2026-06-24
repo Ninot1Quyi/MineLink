@@ -352,6 +352,33 @@ function extractUploadToken(html) {
 
 function extractUploadPolicyCsrf(html) {
   const source = String(html ?? "");
+  const policyWindows = [];
+  let searchFrom = 0;
+  while (searchFrom < source.length) {
+    const index = source.indexOf("/upload/policies/assets", searchFrom);
+    if (index < 0) break;
+    policyWindows.push(source.slice(Math.max(0, index - 5000), Math.min(source.length, index + 5000)));
+    searchFrom = index + "/upload/policies/assets".length;
+  }
+  for (const block of policyWindows) {
+    const inputs = block.match(/<input\b[^>]*>/gi) ?? [];
+    let localFormToken = "";
+    for (const input of inputs) {
+      const className = firstAttribute(input, "class");
+      const dataCsrf = firstAttribute(input, "data-csrf");
+      const name = firstAttribute(input, "name");
+      const value = firstAttribute(input, "value");
+      if (!hasValue(value)) continue;
+      if (dataCsrf === "true" || /\bjs-data-upload-policy-url-csrf\b/.test(className)) {
+        return value;
+      }
+      if (!hasValue(localFormToken) && name === "authenticity_token") {
+        localFormToken = value;
+      }
+    }
+    if (hasValue(localFormToken)) return localFormToken;
+  }
+
   const fileAttachmentBlocks = source.match(/<file-attachment\b[\s\S]*?<\/file-attachment>/gi) ?? [];
   for (const block of fileAttachmentBlocks) {
     if (!/data-upload-policy-url=["']\/upload\/policies\/assets["']/i.test(block)) continue;
@@ -410,10 +437,11 @@ async function discoverPageUploadTokens() {
   ];
   const pageResults = [];
   for (const page of tokenPages) {
-    const tokens = await discoverTokensFromPage(page.label, page.url, { allowFormToken: false });
+    const tokens = await discoverTokensFromPage(page.label, page.url, { allowFormToken: true });
     pageResults.push({ url: page.url, ...tokens });
     if (!hasValue(args.authenticityToken)) {
-      args.authenticityToken = args.uploadToken || tokens.uploadPolicyCsrf || tokens.uploadToken;
+      args.authenticityToken =
+        args.uploadToken || tokens.uploadPolicyCsrf || tokens.authenticityToken || tokens.uploadToken;
     }
     if (!hasValue(args.fetchNonce)) args.fetchNonce = tokens.fetchNonce;
     if (!hasValue(args.clientVersion)) args.clientVersion = tokens.clientVersion;
@@ -426,13 +454,15 @@ async function discoverPageUploadTokens() {
     status: page.pageStatus,
     hasUploadPolicyCsrf: hasValue(page.uploadPolicyCsrf),
     hasUploadToken: hasValue(page.uploadToken),
+    hasAuthenticityToken: hasValue(page.authenticityToken),
     hasFetchNonce: hasValue(page.fetchNonce),
     hasClientVersion: hasValue(page.clientVersion),
   }));
   report.pageTokenSignals.pageStatus = selected.pageStatus ?? "";
   report.pageTokenSignals.hasUploadPolicyCsrf = pageResults.some((page) => hasValue(page.uploadPolicyCsrf));
   report.pageTokenSignals.hasUploadToken = pageResults.some((page) => hasValue(page.uploadToken)) || hasValue(args.uploadToken);
-  report.pageTokenSignals.hasAuthenticityToken = hasValue(args.authenticityToken);
+  report.pageTokenSignals.hasAuthenticityToken =
+    pageResults.some((page) => hasValue(page.authenticityToken)) || hasValue(args.authenticityToken);
   report.pageTokenSignals.hasFetchNonce = hasValue(args.fetchNonce);
   report.pageTokenSignals.hasClientVersion = hasValue(args.clientVersion);
 }
@@ -468,7 +498,7 @@ async function uploadPolicy(repositoryId, fileName, size, contentType) {
     method: "POST",
     headers: webHeaders({
       Accept: "application/json",
-      Referer: repositoryPageUrl(),
+      Referer: args.referer || repositoryPageUrl(),
       "X-Requested-With": "XMLHttpRequest",
       ...multipart.headers,
     }),
@@ -511,7 +541,7 @@ async function finalizeUpload(policy) {
     method: "PUT",
     headers: webHeaders({
       Accept: "application/json",
-      Referer: repositoryPageUrl(),
+      Referer: args.referer || repositoryPageUrl(),
       "X-Requested-With": "XMLHttpRequest",
       ...multipart.headers,
     }),
