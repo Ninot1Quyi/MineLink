@@ -324,15 +324,14 @@ start_recorder_client() {
   fi
 
   record_resource_snapshot "recorder-before-deps"
-  if truthy_value "${MINELINK_RECORDER_AUTO_INSTALL_DEPS:-1}"; then
-    if ! command -v ffmpeg >/dev/null 2>&1 || { [ "$recorder_needs_xvfb" = "1" ] && ! command -v Xvfb >/dev/null 2>&1; }; then
-      ensure_args=(--require-ffmpeg)
-      if [ "$recorder_needs_xvfb" = "1" ]; then
-        ensure_args+=(--require-xvfb)
-      fi
-      bash scripts/dev/ensure-client-recorder-deps.sh "${ensure_args[@]}"
-    fi
+  ensure_args=(--require-ffmpeg)
+  if [ "$recorder_needs_xvfb" = "1" ]; then
+    ensure_args+=(--require-xvfb)
   fi
+  if truthy_value "${MINELINK_RECORDER_AUTO_INSTALL_DEPS:-0}"; then
+    ensure_args+=(--install-missing)
+  fi
+  bash scripts/dev/ensure-client-recorder-deps.sh "${ensure_args[@]}"
 
   if ! command -v ffmpeg >/dev/null 2>&1; then
     echo "ffmpeg is required for MineLink client acceptance recording." >&2

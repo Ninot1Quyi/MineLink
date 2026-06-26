@@ -5,6 +5,7 @@ cd "$(dirname "$0")/../.."
 
 require_ffmpeg=1
 require_xvfb=0
+install_missing="${MINELINK_RECORDER_DEPS_INSTALL_MISSING:-0}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -16,13 +17,18 @@ while [[ $# -gt 0 ]]; do
       require_xvfb=1
       shift
       ;;
+    --install-missing)
+      install_missing=1
+      shift
+      ;;
     -h|--help)
       cat <<'USAGE'
-Usage: bash scripts/dev/ensure-client-recorder-deps.sh [--require-xvfb]
+Usage: bash scripts/dev/ensure-client-recorder-deps.sh [--require-xvfb] [--install-missing]
 
 Ensures the MineLink Minecraft client recorder has the OS tools needed for
-headless MP4 capture. It uses apt-get only when a required tool is missing and
-root or passwordless sudo is available.
+headless MP4 capture. By default this is a fail-closed prebuild verification
+check: the devcontainer/Ona prebuild must already provide recorder tools.
+Use --install-missing only as an explicit local debugging fallback.
 USAGE
       exit 0
       ;;
@@ -61,15 +67,17 @@ write_report() {
     echo "- Detail: \`$detail\`"
     echo "- Require ffmpeg: \`$require_ffmpeg\`"
     echo "- Require Xvfb: \`$require_xvfb\`"
+    echo "- Install missing: \`$install_missing\`"
     echo "- ffmpeg: \`$(command -v ffmpeg 2>/dev/null || printf 'missing')\`"
     echo "- Xvfb: \`$(command -v Xvfb 2>/dev/null || printf 'missing')\`"
     echo "- Pillow: \`$(python3 -c 'import PIL; print("available")' 2>/dev/null || printf 'missing')\`"
   } > "$report_md"
-  printf '{\n  "result": "%s",\n  "detail": "%s",\n  "requireFfmpeg": %s,\n  "requireXvfb": %s,\n  "ffmpeg": "%s",\n  "xvfb": "%s",\n  "pillow": "%s"\n}\n' \
+  printf '{\n  "result": "%s",\n  "detail": "%s",\n  "requireFfmpeg": %s,\n  "requireXvfb": %s,\n  "installMissing": %s,\n  "ffmpeg": "%s",\n  "xvfb": "%s",\n  "pillow": "%s"\n}\n' \
     "$result" \
     "${detail//\"/\\\"}" \
     "$([[ "$require_ffmpeg" == "1" ]] && printf true || printf false)" \
     "$([[ "$require_xvfb" == "1" ]] && printf true || printf false)" \
+    "$([[ "$install_missing" == "1" ]] && printf true || printf false)" \
     "$(command -v ffmpeg 2>/dev/null || printf missing)" \
     "$(command -v Xvfb 2>/dev/null || printf missing)" \
     "$(python3 -c 'import PIL; print("available")' 2>/dev/null || printf missing)" \
@@ -79,6 +87,12 @@ write_report() {
 if [[ ${#missing[@]} -eq 0 ]]; then
   write_report "passed" "required recorder dependencies already present"
   exit 0
+fi
+
+if [[ "$install_missing" != "1" ]]; then
+  write_report "blocked" "missing ${missing[*]}; prebuild must provide recorder dependencies"
+  echo "Missing recorder dependencies (${missing[*]}). Run the Ona/devcontainer prebuild; use --install-missing only for local debugging." >&2
+  exit 2
 fi
 
 if ! command -v apt-get >/dev/null 2>&1; then

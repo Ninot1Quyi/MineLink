@@ -929,9 +929,14 @@ Outputs:
 ```
 
 If `ffmpeg` is unavailable, the script still writes the summary and records why
-MP4 rendering was skipped. For `video-required` tasks, rerun on a host or CI
-image with `ffmpeg`; `--require-mp4` must fail the task if MP4 cannot be
-created.
+MP4 rendering was skipped. For `video-required` tasks, rerun on an Ona
+prebuild/devcontainer image with `ffmpeg` and `Xvfb`; `--require-mp4` must fail
+the task if MP4 cannot be created. The client-recorder dependency checker is
+fail-closed by default and records missing dependencies in
+`.minelink-dev/reports/client-recorder-deps.{md,json}`. Runtime package
+installation requires the explicit local-debugging fallback
+`--install-missing` or `MINELINK_RECORDER_DEPS_INSTALL_MISSING=1`; normal Ona
+task delivery must rely on the prebuild baseline.
 
 After rendering, upload candidate video evidence directly from the Ona
 environment when R2 storage is configured:

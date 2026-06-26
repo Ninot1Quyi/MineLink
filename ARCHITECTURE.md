@@ -918,14 +918,15 @@ video-required finalizer does not run the same NeoForge scenario twice: its
 `render-video` stage is the real NeoForge scenario evidence for that task.
 This preserves real Minecraft proof while avoiding duplicate server/client
 startup and duplicate Java load. The
-recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` when
-headless capture dependencies are missing, so an older Ona prebuild can either
-self-install `ffmpeg`, `Xvfb`, the required X11/OpenGL libraries, and
-`python3-pil` with passwordless apt/sudo or fail early with
-`.minelink-dev/reports/client-recorder-deps.{md,json}` identifying the missing
-dependency edge. New prebuild images should still include those packages; the
-self-bootstrap path is a compatibility guard for already-created task
-environments, not a replacement for the prebuild baseline. The recorder client
+recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` before
+starting the Minecraft client. That script is fail-closed by default: the
+devcontainer/GHCR/Ona prebuild must already provide `ffmpeg`, `Xvfb`, the
+required X11/OpenGL libraries, and `python3-pil`. Missing recorder dependencies
+produce `.minelink-dev/reports/client-recorder-deps.{md,json}` and block the
+video task before Minecraft starts. Runtime apt installation is available only
+through the explicit debugging fallback
+`MINELINK_RECORDER_DEPS_INSTALL_MISSING=1` or `--install-missing`; it is not the
+normal development or acceptance path. The recorder client
 uses a task-local absolute `MINELINK_RECORDER_CLIENT_GAME_DIR` under the
 client-capture work directory and writes that resolved path to
 `logs/client-config.log`, so NeoForge `runClient --gameDir` validation is not
