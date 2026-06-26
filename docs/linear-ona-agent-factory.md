@@ -383,7 +383,8 @@ MINELINK_ONA_CODEX_AGENT_ID          Codex app agent id, never the default agent
 MINELINK_ONA_PROJECT_ID              Ona project id, defaults to the MineLink project
 MINELINK_ONA_ENVIRONMENT_ID          Optional explicit running environment id
 MINELINK_ONA_CREATE_ENVIRONMENT      Optional 1 to create a task environment
-MINELINK_ONA_CODEX_REASONING_EFFORT  Optional override; default is EXTRA_HIGH
+MINELINK_ONA_CODEX_REASONING_EFFORT  Optional override; default is HIGH
+MINELINK_ONA_CODEX_SERVICE_TIER      Optional override; default is STANDARD
 MINELINK_ONA_CODEX_AGENT_MODE        Optional override; default is AGENT_MODE_GOAL
 ```
 
@@ -449,8 +450,8 @@ video verifier, or release gates. The selected class must also be enabled for
 the MineLink Ona project, not only listed at organization scope; otherwise the
 launcher records a class-not-configured blocker and no Codex session starts.
 The launcher uses the model's available context window and defaults the
-configurable reasoning effort to `CODEX_REASONING_EFFORT_EXTRA_HIGH`; no
-separate launcher-side context-window-size field is currently part of the
+configurable reasoning effort to `CODEX_REASONING_EFFORT_HIGH` with
+`CODEX_SERVICE_TIER_STANDARD`; no separate launcher-side context-window-size field is currently part of the
 accepted `codexSettings` contract. `.codex/config.toml` pins trusted Codex
 clients to the GPT-5.5 project default, the 258400-token context window visible
 in the UI, and a high auto-compaction threshold. Treat that as a Codex client

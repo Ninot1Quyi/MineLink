@@ -310,7 +310,7 @@ a successful HTTP response alone is not accepted as proof that Codex consumed
 the task prompt. MineLink tracks that experiment through
 `scripts/dev/start-ona-platform-codex.mjs`, which refuses to omit `agentId` or
 use the known default automation agent id. The launcher defaults to GPT-5.5,
-`CODEX_REASONING_EFFORT_EXTRA_HIGH`, the fast service tier, and
+`CODEX_REASONING_EFFORT_HIGH`, the standard service tier, and
 `AGENT_MODE_GOAL`. The Ona AgentService `mode` field defaults to the one-shot
 `AGENT_MODE_EXECUTION` path if omitted, so MineLink must pass
 `AGENT_MODE_GOAL` explicitly for long-running factory tasks. The launcher
