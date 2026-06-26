@@ -1,6 +1,13 @@
 name: GitHub User Attachment Smoke
 
 on:
+  push:
+    branches:
+      - codex/gh-3-agent-factory-pilot
+    paths:
+      - .github/workflows/github-user-attachment-smoke.yml
+      - scripts/dev/upload-github-user-attachment.mjs
+      - scripts/dev/check-agent-workbench.sh
   workflow_dispatch:
     inputs:
       referer_url:
@@ -59,6 +66,9 @@ jobs:
           INPUT_REFERER_URL: ${{ inputs.referer_url }}
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
         run: |
+          if [ -z "${INPUT_PR_NUMBER:-}" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            INPUT_PR_NUMBER=30
+          fi
           referer="${INPUT_REFERER_URL:-}"
           if [ -z "$referer" ] && [ -n "${INPUT_PR_NUMBER:-}" ]; then
             referer="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/pull/$INPUT_PR_NUMBER"
@@ -85,12 +95,20 @@ jobs:
           echo "video-url=$video_url" >> "$GITHUB_OUTPUT"
 
       - name: Post diagnostic PR comment
-        if: ${{ inputs.publish_comment == 'true' && inputs.pr_number != '' }}
+        if: ${{ always() && steps.upload.outputs.video-url != '' }}
         env:
           GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          INPUT_PUBLISH_COMMENT: ${{ inputs.publish_comment || 'true' }}
           VIDEO_URL: ${{ steps.upload.outputs.video-url }}
         run: |
+          if [ -z "${INPUT_PR_NUMBER:-}" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            INPUT_PR_NUMBER=30
+          fi
+          if [ "${INPUT_PUBLISH_COMMENT:-false}" != "true" ] || [ -z "${INPUT_PR_NUMBER:-}" ]; then
+            echo "Skipping diagnostic PR comment."
+            exit 0
+          fi
           {
             echo "<!-- minelink-github-user-attachment-smoke -->"
             echo "MineLink GitHub user-attachment smoke video:"
