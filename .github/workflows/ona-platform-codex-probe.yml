@@ -156,8 +156,14 @@ jobs:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           AGENT_FACTORY_GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
         run: |
-          node scripts/dev/check-agent-factory-secrets.mjs --repo "$GITHUB_REPOSITORY" --require-github-secrets --require-ona-context
+          node scripts/dev/check-agent-factory-secrets.mjs \
+            --repo "$GITHUB_REPOSITORY" \
+            --ona-project "$MINELINK_ONA_PROJECT_ID" \
+            --require-github-secrets \
+            --require-ona-context \
+            --require-ona-project-codex-auth
 
       - name: Report GitHub inline video publication readiness
         if: ${{ ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' }}
@@ -831,6 +837,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
           MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
+          MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN: "1"
         run: |
           node scripts/dev/upload-github-user-attachment.mjs \
             --repository "$GITHUB_REPOSITORY" \

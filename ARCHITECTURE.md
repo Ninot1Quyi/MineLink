@@ -227,8 +227,14 @@ diagnostic probes, but GitHub/Linear issue dispatch uses the real task-report
 path by default.
 `scripts/dev/check-agent-factory-secrets.mjs` is the secret-safe preflight for
 this bridge: it checks GitHub secret presence, local/runner `LINEAR_API_KEY`
-presence, the `AGENT_FACTORY_GITHUB_TOKEN` PR-creation token, and Ona CLI
-active-context status without printing credential values.
+presence, the `AGENT_FACTORY_GITHUB_TOKEN` PR-creation token, Ona CLI
+active-context status, and the configured Ona project secret name for Codex
+provider authentication without printing credential values. The Ona project
+secret check uses `ona project secret list` and verifies only that the expected
+secret name, `codex_auth` by default, is present. It does not read the secret
+value and does not prove that the provider token is valid; the
+`StartAgent`/readback edge remains the authority for real Codex provider
+authentication.
 `scripts/dev/setup-linear-agent-factory.mjs` is the repeatable Linear setup
 entry point for the `MineLink` project, required labels, and agent-factory
 workflow states. It records setup evidence without printing `LINEAR_API_KEY`.
@@ -1048,12 +1054,16 @@ the task PR URL to fetch the issue/PR editor's upload-policy authority for
 upload-policy CSRF input, can fall back to a same-page authenticity token when
 GitHub's current markup exposes the upload policy through the issue editor form
 instead of a closed custom element, and uses repository-page `uploadToken`
-discovery only as the last discovery path. Any rejected policy or finalization
-request still fails closed. It then performs the policy, object upload, and
-finalization calls with reusable multipart buffers so retries do not depend on
-runtime-specific `FormData` behavior. Object-store uploads never receive the
-GitHub cookie header. The bridge records sanitized cookie-signal and
-page-token-signal reports plus
+discovery only as the last discovery path. When GitHub serves static HTML
+without the upload-policy CSRF, the bridge may launch a temporary headless
+Chrome with only the explicit attachment cookie, render the task PR page, read
+the hydrated `<file-attachment>` DOM token through CDP, and then close the
+browser before upload. Any rejected policy or finalization request still fails
+closed. It then performs the policy, object upload, and finalization calls with
+reusable multipart buffers so retries do not depend on runtime-specific
+`FormData` behavior. Object-store uploads never receive the GitHub cookie
+header. The bridge records sanitized cookie-signal and page-token-signal
+reports plus
 failure-kind classification so stale cookies, rejected web sessions, missing
 page tokens, transient policy failures, object-upload failures, and
 finalization failures are recorded as distinct blockers. The upload step also

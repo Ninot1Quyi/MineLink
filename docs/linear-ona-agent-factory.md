@@ -1078,13 +1078,17 @@ plus nonce values, and uses repository-page `uploadToken` discovery only as a
 fallback. Because GitHub has changed this markup across issue/PR page shapes,
 the bridge also scans around `/upload/policies/assets` and can try a nearby
 same-page authenticity token when no dedicated upload-policy input is present;
-the policy/finalize requests must still accept that token or the release edge
-fails closed. It uses reusable multipart buffers for the policy, object upload,
-and finalization calls. Object-store upload requests do not carry the GitHub
-cookie header. It also uses bounded retries, request timeouts, cookie marker
-reporting, page-token marker reporting, and failure-kind classification so
-rejected cookies, missing page tokens, and transient policy, object-upload, or
-finalization failures are diagnosable. It mirrors those sanitized signals to the
+if static HTML still does not expose that token, it can render the task PR page
+in a temporary headless Chrome seeded only with the explicit attachment cookie
+and read the hydrated `<file-attachment>` upload-policy token through CDP. The
+policy/finalize requests must still accept that token or the release edge fails
+closed. It uses reusable multipart buffers for the policy, object upload, and
+finalization calls. Object-store upload requests do not carry the GitHub cookie
+header. It also uses bounded retries, request timeouts, cookie marker
+reporting, page-token marker reporting, dynamic-DOM token marker reporting, and
+failure-kind classification so rejected cookies, missing page tokens, and
+transient policy, object-upload, or finalization failures are diagnosable. It
+mirrors those sanitized signals to the
 Actions log as well as the report artifact, because the publication blocker
 must stay visible even when artifact download is slow or unavailable. Refresh
 the cookie with
