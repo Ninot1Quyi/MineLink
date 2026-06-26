@@ -928,9 +928,13 @@ if validation or any guarded stage fails, later video/storyboard/review stages
 do not run, so a blocked upstream check cannot produce downstream acceptance
 evidence. Each recorder-backed NeoForge e2e run also isolates runtime
 resources by assigning a task-local `MINELINK_MINECRAFT_LEVEL_NAME` and
-pre-cleaning the MCP, Minecraft, and gateway ports before launch. That prevents
-stale Ona/Gradle/Minecraft processes from reusing `mod/neoforge/run/world` or a
-fixed TCP port and creating misleading `session.lock` or `EADDRINUSE`
+pre-cleaning stale same-repository NeoForge dev-server processes plus the MCP,
+Minecraft, and gateway ports before launch. The default level name includes a
+sanitized `MINELINK_E2E_RUN_ID` built from timestamp, `BASHPID`, and randomness,
+and the run writes `logs/server-config.log` so artifacts show the exact world
+and ports used. That prevents stale Ona/Gradle/Minecraft processes from
+reusing `mod/neoforge/run/world`, reusing a previous generated world, or holding
+a fixed TCP port and creating misleading `session.lock` or `EADDRINUSE`
 failures. Push-triggered identity canaries also use a 600 second readback
 window, matching the Standard Codex service tier instead of the old fast-tier
 30 second probe. The
@@ -939,8 +943,9 @@ starting the Minecraft client. That script is fail-closed by default: the
 devcontainer/GHCR/Ona prebuild must already provide `ffmpeg`, `Xvfb`, the
 required X11/OpenGL libraries, and `python3-pil`. Missing recorder dependencies
 produce `.minelink-dev/reports/client-recorder-deps.{md,json}` and block the
-video task before Minecraft starts. Runtime apt installation is available only
-through the explicit debugging fallback
+video task before Minecraft starts. The Ona finalizer does not request runtime
+dependency installation for acceptance video runs. Runtime apt installation is
+available only through the explicit debugging fallback
 `MINELINK_RECORDER_DEPS_INSTALL_MISSING=1` or `--install-missing`; it is not the
 normal development or acceptance path. The recorder client
 uses a task-local absolute `MINELINK_RECORDER_CLIENT_GAME_DIR` under the

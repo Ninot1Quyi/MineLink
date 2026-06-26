@@ -82,13 +82,29 @@ if [ "$runtime" = "neoforge" ]; then
     minecraft_port=$((port + 1000))
   fi
   export MINELINK_MINECRAFT_PORT="$minecraft_port"
-  level_name="${MINELINK_MINECRAFT_LEVEL_NAME:-minelink-${scenario}-${port}-$$}"
+  e2e_run_id="${MINELINK_E2E_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-${BASHPID:-$$}-$RANDOM}"
+  e2e_run_id="$(printf '%s' "$e2e_run_id" | tr -c 'A-Za-z0-9._-' '_' | cut -c 1-48)"
+  if [ -z "$e2e_run_id" ]; then
+    e2e_run_id="$(date -u +%Y%m%dT%H%M%SZ)-${BASHPID:-$$}-$RANDOM"
+  fi
+  export MINELINK_E2E_RUN_ID="$e2e_run_id"
+  level_name="${MINELINK_MINECRAFT_LEVEL_NAME:-minelink-${scenario}-${port}-${e2e_run_id}}"
   level_name="$(printf '%s' "$level_name" | tr -c 'A-Za-z0-9._-' '_' | cut -c 1-80)"
   export MINELINK_MINECRAFT_LEVEL_NAME="$level_name"
 fi
 
 rm -rf "$work_dir"
 mkdir -p "$work_dir/logs" "$work_dir/replays" "$work_dir/reports"
+{
+  echo "MINELINK_RUNTIME=$runtime"
+  echo "MINELINK_FIXTURE=$fixture"
+  echo "MINELINK_PORT=$port"
+  echo "MINELINK_MINECRAFT_PORT=${minecraft_port:-}"
+  echo "MINELINK_MINECRAFT_LEVEL_NAME=${MINELINK_MINECRAFT_LEVEL_NAME:-}"
+  echo "MINELINK_E2E_RUN_ID=${MINELINK_E2E_RUN_ID:-}"
+  echo "MINELINK_RECORD_CLIENT=$record_client"
+  echo "workDir=$work_dir"
+} > "$work_dir/logs/server-config.log"
 
 if [ "${MINELINK_SKIP_BUILD:-0}" != "1" ]; then
   scripts/dev/build.sh
@@ -134,6 +150,46 @@ kill_tree() {
     done
   fi
   kill "$pid" >/dev/null 2>&1 || true
+}
+
+kill_repo_neoforge_processes() {
+  if [ "$runtime" != "neoforge" ]; then
+    return 0
+  fi
+  if ! truthy_value "${MINELINK_E2E_PRE_CLEAN_NEOFORGE:-1}"; then
+    return 0
+  fi
+  if ! command -v ps >/dev/null 2>&1; then
+    return 0
+  fi
+  local neoforge_root="$repo_root/mod/neoforge"
+  local current_pid="${BASHPID:-$$}"
+  ps -eo pid=,ppid=,args= 2>/dev/null | while read -r pid ppid args; do
+    if [ -z "${pid:-}" ]; then
+      continue
+    fi
+    case "$pid" in
+      *[!0-9]*)
+        continue
+        ;;
+    esac
+    if [ "$pid" = "$$" ] || [ "$pid" = "$current_pid" ]; then
+      continue
+    fi
+    case "${args:-}" in
+      *"$neoforge_root"*runServer*|*"$neoforge_root"*"net.neoforged.devlaunch.Main"*|*"$neoforge_root"*"serverRunProgramArgs.txt"*)
+        {
+          echo "pre-clean repo NeoForge process pid $pid ppid ${ppid:-unknown}"
+          ps -p "$pid" -o pid,ppid,etime,cmd 2>/dev/null || true
+        } >> "$work_dir/logs/pre-clean.log" 2>/dev/null || true
+        kill_tree "$pid"
+        sleep 1
+        if kill -0 "$pid" >/dev/null 2>&1; then
+          kill -9 "$pid" >/dev/null 2>&1 || true
+        fi
+        ;;
+    esac
+  done
 }
 
 kill_port_listeners() {
@@ -215,6 +271,8 @@ PY
   {
     for log_file in \
       "$work_dir/logs/server.stdout.log" \
+      "$work_dir/logs/server-config.log" \
+      "$work_dir/logs/pre-clean.log" \
       "$work_dir/logs/server.stderr.log" \
       "$work_dir/logs/gateway.stdout.log" \
       "$work_dir/logs/gateway.stderr.log" \
@@ -512,6 +570,7 @@ fi
 agent_timeout_grace="${MINELINK_AGENT_TIMEOUT_GRACE_SECONDS:-10}"
 
 if [ "$runtime" = "neoforge" ]; then
+  kill_repo_neoforge_processes
   kill_port_listeners "$port" "$minecraft_port"
 else
   kill_port_listeners "$port"

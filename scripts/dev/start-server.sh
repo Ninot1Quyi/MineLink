@@ -101,8 +101,10 @@ if [ "$runtime" = "neoforge" ]; then
   fi
   if [ -n "$gradle_cmd" ]; then
     (cd mod/neoforge && exec "$gradle_cmd" --no-daemon runServer)
+    exit $?
   else
     (cd mod/neoforge && exec ./gradlew --no-daemon runServer)
+    exit $?
   fi
 fi
 

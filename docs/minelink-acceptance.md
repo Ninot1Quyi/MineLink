@@ -1171,9 +1171,14 @@ Current status:
   fail-fast: when validation or a guarded prerequisite fails, downstream
   video/storyboard/review stages stop instead of publishing derivative
   evidence. Recorder-backed NeoForge runs also set a per-run
-  `MINELINK_MINECRAFT_LEVEL_NAME` and pre-clean the MCP, Minecraft, and gateway
-  ports before launch so stale server/client processes cannot hold the shared
-  `world/session.lock` or fixed test ports.
+  `MINELINK_MINECRAFT_LEVEL_NAME` using sanitized `MINELINK_E2E_RUN_ID`
+  entropy, write `logs/server-config.log`, and pre-clean stale same-repository
+  NeoForge dev-server processes plus the MCP, Minecraft, and gateway ports
+  before launch so stale server/client processes cannot hold the shared
+  `world/session.lock`, a generated task world, or fixed test ports.
+  Acceptance video finalization does not set
+  `MINELINK_RECORDER_AUTO_INSTALL_DEPS=1`; recorder dependencies must come from
+  devcontainer/Ona prebuild or the run fails closed before Minecraft starts.
   Following the reviewed commit is required for reused canary
   branches because the remote branch head can move after Goal-mode Codex
   finishes. Client-video failures must also write

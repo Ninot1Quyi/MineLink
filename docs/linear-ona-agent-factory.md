@@ -850,10 +850,15 @@ leaving a failed Codex task running.
 The implementation-finalize wrapper is fail-fast for guarded stages: if
 validation fails, the video/storyboard/review request stages are not allowed to
 manufacture later evidence from a dirty environment. The recorder-backed
-NeoForge e2e path sets a per-run `MINELINK_MINECRAFT_LEVEL_NAME` and clears
-only the current MCP/Minecraft/gateway ports before launch, which prevents
-stale Ona tasks from causing shared `world/session.lock` or fixed-port
-collisions without weakening the public MCP task boundary. Push-triggered
+NeoForge e2e path sets a per-run `MINELINK_MINECRAFT_LEVEL_NAME` from a
+sanitized `MINELINK_E2E_RUN_ID`, writes `logs/server-config.log`, and clears
+stale same-repository NeoForge dev-server processes plus the current
+MCP/Minecraft/gateway ports before launch, which prevents stale Ona tasks from
+causing shared `world/session.lock`, generated-world reuse, or fixed-port
+collisions without weakening the public MCP task boundary. Video finalization
+also fails closed on missing recorder OS dependencies instead of using runtime
+apt installation; prebuild owns `ffmpeg`, `Xvfb`, X11/OpenGL libs, and
+`python3-pil`. Push-triggered
 identity canaries use a 600 second readback window because the configured
 Platform Codex service tier is Standard rather than Fast.
 The repository dispatcher now waits briefly for the Ona automation execution
