@@ -219,6 +219,7 @@ jobs:
           fi
 
       - name: Probe Ona Platform Codex API
+        id: platform_codex_api
         env:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
           MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
@@ -558,6 +559,75 @@ jobs:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
         run: |
           node scripts/dev/fetch-ona-agent-execution-readback.mjs
+
+      - name: Sync blocked Platform Codex launch status
+        if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && steps.platform_codex_api.conclusion != 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+        run: |
+          task_id="${MINELINK_PLATFORM_CODEX_TASK_ID:-${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}}"
+          target_branch="${MINELINK_PLATFORM_CODEX_TARGET_BRANCH:-${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}}"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          commit_short="$(git rev-parse --short HEAD)"
+          blocker="$(node -e "const fs=require('fs'); const files=['.minelink-dev/reports/ona-platform-codex-api-session.json','.minelink-dev/reports/ona-platform-codex-readback.json']; const messages=[]; for (const file of files) { try { const data=JSON.parse(fs.readFileSync(file,'utf8')); if (Array.isArray(data.blockers)) messages.push(...data.blockers); if (data.failureMessage) messages.push(data.failureMessage); if (Array.isArray(data.failures)) messages.push(...data.failures); } catch {} } const text=messages.filter(Boolean).join(' ').replace(/\\s+/g,' ').trim(); console.log(text || 'Ona Platform Codex launch failed before implementation could start.');")"
+          codex_auth_args=()
+          status_label="blocked-platform-codex-launch"
+          if node -e "const fs=require('fs'); const files=['.minelink-dev/reports/ona-platform-codex-api-session.json','.minelink-dev/reports/ona-platform-codex-readback.json']; const text=files.map((file)=>{try{return fs.readFileSync(file,'utf8')}catch{return ''}}).join('\\n'); process.exit(/unauthenticated|Codex authentication failed|LLM request was rejected/i.test(text) ? 0 : 1);"; then
+            codex_auth_args+=(--codex-auth-failed)
+            status_label="blocked-platform-codex-auth"
+          fi
+
+          node scripts/dev/report-agent-factory-chain.mjs \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
+            --issue-contract-status passed \
+            --github-dispatcher-status passed \
+            --github-dispatcher-url "$run_url" \
+            --ona-prebuild-status passed \
+            --ona-automation-status partial \
+            --branch "$target_branch" \
+            --commit "$commit_short" \
+            --task-id "$task_id" \
+            --blocker "$blocker" \
+            "${codex_auth_args[@]}"
+
+          github_status_args=(
+            scripts/dev/sync-github-status.mjs
+            --repository "$GITHUB_REPOSITORY"
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}"
+            --task-id "$task_id"
+            --branch "$target_branch"
+            --commit "$commit_short"
+            --ci-url "$run_url"
+            --status-label "$status_label"
+            --blocker "$blocker"
+          )
+          if [ -n "${INPUT_GITHUB_ISSUE:-}" ] && [ "${INPUT_GITHUB_ISSUE:-none}" != "none" ]; then
+            github_status_args+=(--require-update)
+          fi
+          node "${github_status_args[@]}"
+          github_status_url="$(node -e "const fs=require('fs'); try { const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '') } catch { console.log('') }")"
+          {
+            echo "MINELINK_GITHUB_STATUS_URL=$github_status_url"
+            echo "MINELINK_FINAL_VIDEO_BLOCKER=$blocker"
+          } >> "$GITHUB_ENV"
+
+          linear_args=(
+            scripts/dev/sync-linear-status.mjs
+            --issue "${INPUT_LINEAR_ISSUE:-none}"
+            --comment "MineLink agent-factory ${status_label} status for ${task_id}: run ${run_url}; blocker: ${blocker}"
+            --attachment-title "MineLink agent-factory run"
+            --attachment-url "$run_url"
+          )
+          if [ -n "${INPUT_LINEAR_ISSUE:-}" ] && [ "${INPUT_LINEAR_ISSUE:-none}" != "none" ]; then
+            linear_args+=(--require-key --require-update)
+          fi
+          node "${linear_args[@]}"
 
       - name: Run Ona finalizer video release gate
         id: ona-video-release

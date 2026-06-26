@@ -826,6 +826,10 @@ Current status:
   as a live Codex handoff. If `GetAgentExecution` reports an LLM provider or
   unauthenticated-provider warning, the edge is blocked and downstream branch,
   finalizer, verifier, and PR steps must not be used as release evidence. Task
+  modes now publish this early blocker as `blocked-platform-codex-auth` for
+  unauthenticated Codex LLM failures or `blocked-platform-codex-launch` for
+  other Platform Codex launch/readback failures, then refresh the chain report
+  and status writeback before any finalizer or video publication step can run.
   consumption still ultimately requires the task-bound branch/report readback.
   When a Goal-mode session reaches active readback but no task report appears,
   the workflow now creates an AgentService conversation token and uploads

@@ -418,6 +418,13 @@ fetching sanitized transcript/history diagnostics with a bounded per-URL
 timeout. That artifact helps separate prompt-delivery, LLM-provider,
 health-check, and session-entry failures from normal task execution failures;
 it is not accepted implementation or release evidence.
+For full-chain task modes, Platform Codex launch failure is still reported
+through the normal chain status surfaces. The workflow writes
+`blocked-platform-codex-auth` when the readback shows an unauthenticated Codex
+LLM request, otherwise `blocked-platform-codex-launch`, refreshes
+`agent-factory-chain.md`, comments on the GitHub issue when supplied, and syncs
+Linear when supplied. This is blocker localization only; finalizer, verifier,
+PR, and final-video steps remain blocked.
 When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
 ignore stopped historical task environments. It may pass an auto-discovered
 environment only when that environment is currently running; otherwise it passes
@@ -734,8 +741,10 @@ guard.
 If the Ona session shows `Codex authentication failed: the LLM request was
 rejected as unauthenticated`, stop the task as `Blocked`. This failure happens
 before the Codex agent executes repository commands, so it is not MineLink code
-evidence and not a validation failure. `LINEAR_API_KEY` only enables Linear
-status sync; it does not authenticate the Ona Platform Codex LLM provider.
+evidence and not a validation failure. Full-chain workflows should publish it
+as `blocked-platform-codex-auth` and preserve the sanitized readback artifact
+instead of attempting finalizer/video/PR release steps. `LINEAR_API_KEY` only
+enables Linear status sync; it does not authenticate the Ona Platform Codex LLM provider.
 Reconnect or repair the Ona account's Codex/OpenAI subscription binding, start
 a fresh Codex session, and attach the Ona support bundle if the platform keeps
 rejecting the LLM request.

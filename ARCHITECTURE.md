@@ -564,6 +564,15 @@ dispatcher and scheduled Linear watcher are the active automation bridge. If
 Ona Platform Codex cannot be started automatically or rejects LLM
 authentication, the chain report must stop at that edge and record the blocker
 instead of falling back to generic Ona Agent evidence.
+For `full-chain-canary` and `full-chain-task`, the Platform Codex probe workflow
+also has an early status-writeback path for that blocker. If the Platform Codex
+API launch step fails, the workflow still fetches sanitized readback
+diagnostics, refreshes `agent-factory-chain`, and writes
+`blocked-platform-codex-auth` for unauthenticated LLM failures or
+`blocked-platform-codex-launch` for other launch/readback failures to GitHub
+and Linear when those task links exist. Finalizer, verifier, PR, and video
+publication steps remain skipped until a real Codex implementation session
+starts.
 Disabling the default Ona Agent in organization policy does not currently make
 public automation `agent` steps select Codex; a read-only canary still called
 `StartAgent` for agent id `00000000-0000-0000-0000-000000007100` and failed
@@ -1145,7 +1154,10 @@ execution, but the session produced no visible conversation evidence for the
 task.
 If `GetAgentExecution` reports `Codex could not reach the LLM provider` or an
 unauthenticated provider warning, the launch edge is blocked until Ona Platform
-Codex can make a real model request.
+Codex can make a real model request. Full-chain workflows surface this failure
+as `blocked-platform-codex-auth` or `blocked-platform-codex-launch` in the
+chain report and status comments before any finalizer or release publication
+step can run.
 
 The release gate writes
 `.minelink-dev/reports/artifacts/video-release-gate.md` and fails if the MP4 is
