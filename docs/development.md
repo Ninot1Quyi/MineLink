@@ -329,7 +329,9 @@ to the object-store upload URL, and writes
 `.minelink-dev/reports/github-user-attachment-upload.md` with sanitized
 cookie/page-token signals plus a failure kind when the cookie is missing,
 stale, rejected, or when GitHub's attachment policy/object/finalization calls
-fail.
+fail. The same sanitized result, token-signal, cookie-signal, and HTTP-phase
+summary is emitted to the Actions log so a blocked PR video publication can be
+diagnosed without first downloading the artifact bundle.
 
 To refresh the cookie without pasting it into chat or committing it, run the
 local helper below. It opens a dedicated Chrome profile, waits for an explicit

@@ -1229,7 +1229,10 @@ Current status:
   `github-attachment-upload-policy-csrf-missing`,
   `github-attachment-policy-failed`, or
   `github-attachment-finalization-failed` so this edge can be repaired without
-  weakening the release gate. The supported refresh path is the local
+  weakening the release gate. The upload step also prints the sanitized
+  result, token-signal, cookie-signal, and HTTP-phase summary to the Actions log
+  so the first blocker can be diagnosed even when the evidence artifact is hard
+  to download. The supported refresh path is the local
   `npm run agent-factory:refresh-github-cookie -- --repository Ninot1Quyi/MineLink`
   helper, which opens a dedicated Chrome profile, waits for an explicit GitHub
   login, captures only `github.com` cookies from that profile, and writes the

@@ -605,6 +605,64 @@ async function writeReports(report) {
   }
 }
 
+function yesNo(value) {
+  return value ? "yes" : "no";
+}
+
+function printUploadSummary(report, write = console.log) {
+  const pageSignals = report.pageTokenSignals ?? {};
+  const cookie = report.cookieSignals ?? {};
+  write(
+    `GitHub user attachment upload summary: result=${report.result} failureKind=${report.failureKind || "none"} attempts=${report.attempts.length}`,
+  );
+  write(
+    [
+      "GitHub user attachment cookie signals:",
+      `present=${yesNo(cookie.present)}`,
+      `loggedIn=${yesNo(cookie.hasLoggedIn)}`,
+      `dotcomUser=${yesNo(cookie.hasDotcomUser)}`,
+      `ghSess=${yesNo(cookie.hasGhSess)}`,
+      `userSession=${yesNo(cookie.hasUserSession)}`,
+      `hostUserSessionSameSite=${yesNo(cookie.hasHostUserSessionSameSite)}`,
+    ].join(" "),
+  );
+  write(
+    [
+      "GitHub user attachment page-token signals:",
+      `tokenPage=${pageSignals.tokenPage || "missing"}`,
+      `pageStatus=${pageSignals.pageStatus || "missing"}`,
+      `uploadPolicyCsrf=${yesNo(pageSignals.hasUploadPolicyCsrf)}`,
+      `uploadToken=${yesNo(pageSignals.hasUploadToken)}`,
+      `authenticityToken=${yesNo(pageSignals.hasAuthenticityToken)}`,
+      `fetchNonce=${yesNo(pageSignals.hasFetchNonce)}`,
+      `clientVersion=${yesNo(pageSignals.hasClientVersion)}`,
+    ].join(" "),
+  );
+  const checkedPages = Array.isArray(pageSignals.checkedPages) ? pageSignals.checkedPages : [];
+  if (checkedPages.length > 0) {
+    for (const [index, page] of checkedPages.entries()) {
+      write(
+        [
+          `GitHub user attachment checked page ${index + 1}:`,
+          `status=${page.status || "missing"}`,
+          `uploadPolicyCsrf=${yesNo(page.hasUploadPolicyCsrf)}`,
+          `uploadToken=${yesNo(page.hasUploadToken)}`,
+          `authenticityToken=${yesNo(page.hasAuthenticityToken)}`,
+          `fetchNonce=${yesNo(page.hasFetchNonce)}`,
+          `clientVersion=${yesNo(page.hasClientVersion)}`,
+        ].join(" "),
+      );
+    }
+  }
+  if (report.attempts.length > 0) {
+    write(
+      `GitHub user attachment HTTP attempts: ${report.attempts
+        .map((attempt) => `${attempt.phase}:${attempt.status}`)
+        .join(", ")}`,
+    );
+  }
+}
+
 async function requestText(phase, url, options) {
   let lastError = null;
   for (let attempt = 1; attempt <= args.attempts; attempt += 1) {
@@ -687,6 +745,7 @@ try {
     );
     if (requireUpload) throw new Error(report.failures[0]);
     await writeReports(report);
+    printUploadSummary(report);
     console.log(`GitHub user attachment upload skipped; wrote ${args.output}`);
     process.exit(0);
   }
@@ -707,6 +766,7 @@ try {
     report.result = "dry-run";
     report.repositoryId = args.repositoryId || "dry-run";
     await writeReports(report);
+    printUploadSummary(report);
     console.log(`GitHub user attachment upload dry-run passed; wrote ${args.output}`);
     process.exit(0);
   }
@@ -726,6 +786,7 @@ try {
   if (!hasValue(report.href)) throw new Error("GitHub user-attachment upload did not return asset.href.");
   report.result = "passed";
   await writeReports(report);
+  printUploadSummary(report);
   console.log(`GitHub user attachment upload passed; wrote ${args.output}`);
 } catch (error) {
   report.result = "blocked";
@@ -733,6 +794,7 @@ try {
   report.failureKind = classifyFailure(message);
   report.failures.push(message);
   await writeReports(report);
+  printUploadSummary(report, console.error);
   console.error(`GitHub user attachment upload blocked; wrote ${args.output}`);
   process.exit(1);
 }

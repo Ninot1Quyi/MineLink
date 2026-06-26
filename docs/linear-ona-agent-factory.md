@@ -1070,7 +1070,10 @@ and finalization calls. Object-store upload requests do not carry the GitHub
 cookie header. It also uses bounded retries, request timeouts, cookie marker
 reporting, page-token marker reporting, and failure-kind classification so
 rejected cookies, missing page tokens, and transient policy, object-upload, or
-finalization failures are diagnosable. Refresh the cookie with
+finalization failures are diagnosable. It mirrors those sanitized signals to the
+Actions log as well as the report artifact, because the publication blocker
+must stay visible even when artifact download is slow or unavailable. Refresh
+the cookie with
 `npm run agent-factory:refresh-github-cookie -- --repository Ninot1Quyi/MineLink`
 from a local trusted workstation; the helper opens a dedicated Chrome profile,
 waits for an explicit GitHub login, captures only `github.com` cookies from

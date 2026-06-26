@@ -1046,7 +1046,10 @@ GitHub cookie header. The bridge records sanitized cookie-signal and
 page-token-signal reports plus
 failure-kind classification so stale cookies, rejected web sessions, missing
 page tokens, transient policy failures, object-upload failures, and
-finalization failures are recorded as distinct blockers.
+finalization failures are recorded as distinct blockers. The upload step also
+emits the same sanitized result, cookie-marker, page-token, and HTTP-phase
+summary to the Actions log so this edge is diagnosable even when downloading
+the raw evidence artifact is slow or unavailable.
 `scripts/dev/refresh-github-attachment-cookie.mjs`
 provides the supported refresh path: a local operator opens a dedicated Chrome
 profile, explicitly logs in to GitHub, and the helper writes only the resulting
