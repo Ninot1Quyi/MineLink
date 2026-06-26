@@ -47,11 +47,14 @@ install_os_packages() {
   fi
 
   local missing=()
-  for command_name in curl ffmpeg git; do
+  for command_name in curl ffmpeg git Xvfb python3; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       missing+=("$command_name")
     fi
   done
+  if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import PIL' >/dev/null 2>&1; then
+    missing+=("python3-pil")
+  fi
 
   if [[ ${#missing[@]} -eq 0 ]]; then
     log "required OS tools already present; skipping apt-get install"
@@ -70,7 +73,21 @@ install_os_packages() {
     ca-certificates \
     curl \
     ffmpeg \
-    git
+    git \
+    libasound2 \
+    libgl1 \
+    libgl1-mesa-dri \
+    libxcursor1 \
+    libxi6 \
+    libxinerama1 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
+    libxtst6 \
+    libxxf86vm1 \
+    python3 \
+    python3-pil \
+    xvfb
 }
 
 check_runtime_versions() {
@@ -80,8 +97,10 @@ check_runtime_versions() {
   run node --version
   run npm --version
   run python3 --version
+  run python3 -c 'import PIL; print("Pillow available")'
   run java -version
   run ffmpeg -version
+  run bash -lc 'command -v Xvfb'
   if command -v gh >/dev/null 2>&1; then
     run gh --version
   else
@@ -148,6 +167,7 @@ warm_neoforge_workspace() {
   pushd mod/neoforge >/dev/null
   run ./gradlew --no-daemon --version
   run ./gradlew --no-daemon build
+  run ./gradlew --no-daemon prepareClientRun downloadAssets
   popd >/dev/null
 }
 
