@@ -1248,12 +1248,14 @@ Current status:
   produced before the final PR publication gate fails closed. Use
   `github_attachment_preflight=fail-fast` only when a cost-saving rehearsal
   should stop before Ona/Minecraft work if no attachment authority is available.
-  `.github/workflows/github-user-attachment-smoke.yml` is the isolated CI
+  `.github/workflows/github-user-attachment-smoke.yml` is the manual CI
   transport smoke for this edge. It uploads a tiny diagnostic MP4 through the
   same user-attachment helper and can post the returned GitHub attachment URL to
   a PR. This smoke may prove refreshed cookie viability and GitHub player
-  rendering, but it is not MineLink task acceptance evidence and cannot replace
-  the Ona finalizer MP4 plus same-session Codex verifier gate.
+  rendering, but it is not a required push check because the GitHub web-session
+  cookie is operator state that GitHub may rotate. It is not MineLink task
+  acceptance evidence and cannot replace the Ona finalizer MP4 plus
+  same-session Codex verifier gate.
 - Minecraft client evidence must use the recorder `observer_follow` view by
   default, with enough distance and height to show the active `server_agent`
   performing the requested task. `target_third_person` is retained only as a

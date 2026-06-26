@@ -1105,13 +1105,15 @@ without printing it. PR-producing full-chain dispatches additionally run an
 early readiness report before Ona work starts, so missing inline-video
 publication authority is visible before the final comment gate.
 
-`.github/workflows/github-user-attachment-smoke.yml` is the narrow transport
+`.github/workflows/github-user-attachment-smoke.yml` is the manual transport
 diagnostic for this edge. It creates a tiny MP4, uploads it with
 `scripts/dev/upload-github-user-attachment.mjs`, uploads the sanitized reports
 as an artifact, and can optionally post the returned
 `github.com/user-attachments/assets/...` URL to a selected PR. Use this smoke to
 prove a refreshed `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` before spending a
-full Ona/NeoForge run. Its video is diagnostic transport evidence only; final
+full Ona/NeoForge run. It is not a required push check because the GitHub web
+session cookie is operator state that GitHub may rotate. Its video is
+diagnostic transport evidence only; final
 task publication still requires the Ona-produced `acceptance.mp4`, same-session
 Codex verifier, `check-video-review.mjs`, and release gate.
 

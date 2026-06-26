@@ -1082,11 +1082,13 @@ upload script writes a skipped report and the PR publication gate remains
 blocked. Full-chain PR-producing workflows run an early
 `scripts/dev/check-agent-factory-secrets.mjs` readiness report for GitHub
 inline-video publication. `.github/workflows/github-user-attachment-smoke.yml`
-is the isolated CI smoke for this edge: it generates a tiny diagnostic MP4,
+is the manual CI smoke for this edge: it generates a tiny diagnostic MP4,
 uploads it through `scripts/dev/upload-github-user-attachment.mjs`, and can post
 the returned `github.com/user-attachments/assets/...` URL to a chosen PR as a
 diagnostic playback comment. This smoke proves only attachment transport and
-GitHub player rendering. It must not be used as MineLink task acceptance
+GitHub player rendering. It is deliberately not a required push check because
+GitHub web-session cookies are operator state and can be rotated by GitHub
+between full-chain runs. It must not be used as MineLink task acceptance
 evidence and does not replace the Ona finalizer video, same-session Codex
 verifier, release gate, or real NeoForge evidence. The default
 `github_attachment_preflight=deferred`
