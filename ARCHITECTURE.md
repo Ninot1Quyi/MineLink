@@ -356,6 +356,13 @@ id, Codex settings, `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`,
 conversation URLs, and token-usage readback. `status.outputs` was still empty,
 so the next edge must be a task-bound Platform Codex implementation session
 that writes durable workspace/branch/PR evidence, not another launch canary.
+.github/workflows/github-user-attachment-smoke.yml is a bounded diagnostic for
+the final PR-video publication transport. Its push trigger on the active pilot
+branch can upload a tiny MP4 through GitHub user-attachments and optionally
+comment on a selected PR so the playback surface can be tested before default
+branch merge. That workflow does not render MineLink acceptance video, does not
+run NeoForge, and does not replace the Ona task-finalizer `acceptance.mp4`,
+same-session Codex `video-review.md`, or product acceptance gates.
 .github/workflows/ona-platform-codex-probe.yml now has an explicit
 `implementation-canary` mode for that edge. It sends a docs-only task prompt to
 the accepted AgentService Codex execution, requires the session to push only
