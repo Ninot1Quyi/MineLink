@@ -364,6 +364,8 @@ async function runStageGroup(groupName, stages) {
     operations.push(`Ran guarded stage ${stage} with exit ${stageResult.status ?? 1}.`);
     if (stageResult.status !== 0) {
       errors.push(`Stage ${stage} exited ${stageResult.status ?? 1}: ${sanitize(stageResult.stderr || stageResult.stdout)}`);
+      operations.push(`Stopped after ${stage} to avoid publishing downstream evidence from a blocked stage.`);
+      break;
     }
   }
   await writeStageReport(groupName, {
@@ -371,7 +373,7 @@ async function runStageGroup(groupName, stages) {
     operations,
     errors,
     output:
-      "This grouped stage is a scheduling wrapper only. Inspect agent-factory-stage-<stage>.md and agent-factory-chain.md for accepted or blocked gate evidence.",
+      "This grouped stage is a fail-fast scheduling wrapper only. Inspect agent-factory-stage-<stage>.md and agent-factory-chain.md for accepted or blocked gate evidence.",
   });
   console.log(`Agent factory stage ${groupName} wrote ${stageReportPath(groupName)}`);
   process.exit(errors.length === 0 ? 0 : 1);

@@ -1167,7 +1167,13 @@ Current status:
   report plus acceptance MP4 for that task. The recorder writes
   `logs/resource-snapshots.log` around dependency checks, client startup,
   ffmpeg startup, and shutdown so reviewers can diagnose CPU or process
-  contention when the Minecraft capture is choppy.
+  contention when the Minecraft capture is choppy. The finalizer stage group is
+  fail-fast: when validation or a guarded prerequisite fails, downstream
+  video/storyboard/review stages stop instead of publishing derivative
+  evidence. Recorder-backed NeoForge runs also set a per-run
+  `MINELINK_MINECRAFT_LEVEL_NAME` and pre-clean the MCP, Minecraft, and gateway
+  ports before launch so stale server/client processes cannot hold the shared
+  `world/session.lock` or fixed test ports.
   Following the reviewed commit is required for reused canary
   branches because the remote branch head can move after Goal-mode Codex
   finishes. Client-video failures must also write

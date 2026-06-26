@@ -847,6 +847,13 @@ The finalizer is split into
 `--stage release-finalize`; missing implementation or verifier evidence writes
 blocked stage reports and exits 0 so Ona can close the automation instead of
 leaving a failed Codex task running.
+The implementation-finalize wrapper is fail-fast for guarded stages: if
+validation fails, the video/storyboard/review request stages are not allowed to
+manufacture later evidence from a dirty environment. The recorder-backed
+NeoForge e2e path sets a per-run `MINELINK_MINECRAFT_LEVEL_NAME` and clears
+only the current MCP/Minecraft/gateway ports before launch, which prevents
+stale Ona tasks from causing shared `world/session.lock` or fixed-port
+collisions without weakening the public MCP task boundary.
 The repository dispatcher now waits briefly for the Ona automation execution
 readback in CI, so the artifacts can distinguish `queued`, `running`,
 `completed`, and `completed_with_failed_actions` instead of flattening every

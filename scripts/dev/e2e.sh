@@ -82,6 +82,9 @@ if [ "$runtime" = "neoforge" ]; then
     minecraft_port=$((port + 1000))
   fi
   export MINELINK_MINECRAFT_PORT="$minecraft_port"
+  level_name="${MINELINK_MINECRAFT_LEVEL_NAME:-minelink-${scenario}-${port}-$$}"
+  level_name="$(printf '%s' "$level_name" | tr -c 'A-Za-z0-9._-' '_' | cut -c 1-80)"
+  export MINELINK_MINECRAFT_LEVEL_NAME="$level_name"
 fi
 
 rm -rf "$work_dir"
@@ -131,6 +134,45 @@ kill_tree() {
     done
   fi
   kill "$pid" >/dev/null 2>&1 || true
+}
+
+kill_port_listeners() {
+  if ! truthy_value "${MINELINK_E2E_PRE_CLEAN_PORTS:-1}"; then
+    return 0
+  fi
+  for target_port in "$@"; do
+    if [ -z "$target_port" ]; then
+      continue
+    fi
+    case "$target_port" in
+      *[!0-9]*)
+        continue
+        ;;
+    esac
+    pids=""
+    if command -v lsof >/dev/null 2>&1; then
+      pids="$(lsof -tiTCP:"$target_port" -sTCP:LISTEN 2>/dev/null || true)"
+    elif command -v fuser >/dev/null 2>&1; then
+      pids="$(fuser -n tcp "$target_port" 2>/dev/null || true)"
+    fi
+    if [ -z "$pids" ]; then
+      continue
+    fi
+    for pid in $pids; do
+      if [ "$pid" = "$$" ]; then
+        continue
+      fi
+      {
+        echo "pre-clean port $target_port listener pid $pid"
+        ps -p "$pid" -o pid,ppid,etime,cmd 2>/dev/null || true
+      } >> "$work_dir/logs/pre-clean.log" 2>/dev/null || true
+      kill_tree "$pid"
+      sleep 1
+      if kill -0 "$pid" >/dev/null 2>&1; then
+        kill -9 "$pid" >/dev/null 2>&1 || true
+      fi
+    done
+  done
 }
 
 dump_failure() {
@@ -469,6 +511,12 @@ else
 fi
 agent_timeout_grace="${MINELINK_AGENT_TIMEOUT_GRACE_SECONDS:-10}"
 
+if [ "$runtime" = "neoforge" ]; then
+  kill_port_listeners "$port" "$minecraft_port"
+else
+  kill_port_listeners "$port"
+fi
+
 MINELINK_RUNTIME="$runtime" bash scripts/dev/start-server.sh > "$work_dir/logs/server.stdout.log" 2> "$work_dir/logs/server.stderr.log" &
 server_pid="$!"
 
@@ -493,6 +541,7 @@ if [ "$mcp_transport" = "http" ] || [ "$mcp_transport" = "streamable-http" ] || 
       esac
       gateway_port=$((port + 10000))
     fi
+    kill_port_listeners "$gateway_port"
     export MINELINK_MCP_URL="http://$gateway_host:$gateway_port/mcp"
     export MINELINK_MCP_HTTP_URL="$MINELINK_MCP_URL"
     node packages/host/dist/index.js http --host "$gateway_host" --port "$gateway_port" \

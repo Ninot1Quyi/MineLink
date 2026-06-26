@@ -923,7 +923,15 @@ video-required finalizer does not run the same NeoForge scenario twice: its
 `validate` stage runs fast repository checks, and the recorder-backed
 `render-video` stage is the real NeoForge scenario evidence for that task.
 This preserves real Minecraft proof while avoiding duplicate server/client
-startup and duplicate Java load. The
+startup and duplicate Java load. The grouped finalizer wrapper is fail-fast:
+if validation or any guarded stage fails, later video/storyboard/review stages
+do not run, so a blocked upstream check cannot produce downstream acceptance
+evidence. Each recorder-backed NeoForge e2e run also isolates runtime
+resources by assigning a task-local `MINELINK_MINECRAFT_LEVEL_NAME` and
+pre-cleaning the MCP, Minecraft, and gateway ports before launch. That prevents
+stale Ona/Gradle/Minecraft processes from reusing `mod/neoforge/run/world` or a
+fixed TCP port and creating misleading `session.lock` or `EADDRINUSE`
+failures. The
 recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` before
 starting the Minecraft client. That script is fail-closed by default: the
 devcontainer/GHCR/Ona prebuild must already provide `ffmpeg`, `Xvfb`, the
