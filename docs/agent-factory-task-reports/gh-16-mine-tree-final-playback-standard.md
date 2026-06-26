@@ -60,7 +60,7 @@ guarded by the existing finalizer and verifier scripts:
 ## Evidence Paths
 
 - `.minelink-dev/reports/agent-task-summary.md`
-- `.minelink-dev/neoforge-mine_tree/reports/mine_tree-result.json`
+- `.minelink-dev/mine_tree/reports/mine_tree-result.json`
 - `.minelink-dev/reports/artifacts/acceptance.mp4` after the workflow finalizer
 - `.minelink-dev/reports/artifacts/video-review.md` after the same-session
   workflow video verifier
