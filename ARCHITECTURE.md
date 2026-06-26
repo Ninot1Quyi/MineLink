@@ -460,8 +460,8 @@ keeps the Ona migration runbook, ready task queue, label taxonomy, PR template,
 issue template, devcontainer, install smoke workflow, and verification entry
 points present with required anchors. The devcontainer guard also protects the
 fast Ona bootstrap contract: MineLink GHCR cache-prewarmed image, Java 21,
-GitHub CLI, `ffmpeg`, and image or OS provided `python3` instead of a pinned
-source-built Python feature.
+GitHub CLI, `ffmpeg`, `Xvfb`, `python3-pil`, and image or OS provided
+`python3` instead of a pinned source-built Python feature.
 
 The install smoke verifier is:
 
@@ -492,9 +492,10 @@ prebuild instead of producing a misleading snapshot. The devcontainer
 creation and local devcontainer rebuilds, so a task environment does not rerun
 the full NeoForge warmup when it is not producing a prebuild snapshot.
 
-Both modes install required OS tools such as `ffmpeg` when missing, verify Node,
-npm, Python, Java 21, `gh`, and sanitized Linear secret presence, run `npm ci`
-when `node_modules` is missing, and write ignored local files under
+Both modes install required OS tools such as `ffmpeg`, `Xvfb`, and the Python
+Pillow package when missing, verify Node, npm, Python/Pillow, Java 21, `gh`,
+client recorder command availability, and sanitized Linear secret presence, run
+`npm ci` when `node_modules` is missing, and write ignored local files under
 `mod/neoforge/run/`: `eula.txt` with `eula=true` and `server.properties` with
 `online-mode=false`. The prebuild mode additionally builds and typechecks the
 TypeScript workspace, runs the NeoForge Gradle build to warm Gradle, Minecraft,
@@ -511,11 +512,12 @@ reuse.
 The reproducible prewarmed image path is `.github/workflows/devcontainer-image.yml`
 plus `.devcontainer/Dockerfile`. GitHub Actions builds the image from a clean
 checkout and pushes `ghcr.io/ninot1quyi/minelink-devcontainer` with Node 22,
-Java 21, GitHub CLI, `ffmpeg`, npm cache, and the Gradle user-home cache. Branch
-builds publish immutable `sha-*` tags plus sanitized branch tags; `main`
-additionally publishes `main` and `latest`. Immutable tags are the evidence
-anchor, while branch tags are the moving cache source for the matching work
-line. After publishing, the workflow runs
+Java 21, GitHub CLI, `ffmpeg`, `Xvfb`, `python3-pil`, the X11/OpenGL/audio
+libraries required by the Minecraft client recorder, npm cache, and the Gradle
+user-home cache. Branch builds publish immutable `sha-*` tags plus sanitized
+branch tags; `main` additionally publishes `main` and `latest`. Immutable tags
+are the evidence anchor, while branch tags are the moving cache source for the
+matching work line. After publishing, the workflow runs
 `scripts/dev/check-devcontainer-image-access.sh` against the immutable `sha-*`
 tag with authenticated GHCR access and Docker runtime smoke. The same checker
 can be run with `--require-anonymous` when an unauthenticated Ona pull path is

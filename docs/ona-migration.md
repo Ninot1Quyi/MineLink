@@ -36,8 +36,9 @@ MineLink GHCR cache-prewarmed image for the project work line:
 ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering
 ```
 
-The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, image or OS provided
-`python3`, npm cache, and Gradle user-home cache. It still runs
+The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, `Xvfb`, `python3-pil`,
+the X11/OpenGL/audio libraries used by the Minecraft client recorder, image or
+OS provided `python3`, npm cache, and Gradle user-home cache. It still runs
 `scripts/dev/bootstrap-prebuild.sh` as the final setup and verification gate.
 If Docker smoke or Ona prebuild readback fails, record the failure and fix the
 image or temporarily return to the public Node 22 base image. Do not pin the

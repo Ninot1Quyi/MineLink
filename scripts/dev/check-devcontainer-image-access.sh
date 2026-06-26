@@ -158,8 +158,10 @@ if [[ "$docker_smoke" -eq 1 ]]; then
       node --version
       npm --version
       python3 --version
+      python3 -c "import PIL"
       java -version
       ffmpeg -version >/dev/null
+      command -v Xvfb
       test -d "$HOME/.npm"
       test -d "${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2"
     ' >/dev/null; then

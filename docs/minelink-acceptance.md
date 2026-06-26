@@ -623,10 +623,12 @@ Current status:
   `minelink-install-smoke-evidence`.
 - `.github/workflows/devcontainer-image.yml` builds `.devcontainer/Dockerfile`
   and publishes `ghcr.io/ninot1quyi/minelink-devcontainer` with Node 22, Java
-  21, GitHub CLI, `ffmpeg`, npm cache, and Gradle user-home cache. Branch
-  builds publish immutable `sha-*` tags plus sanitized branch tags; `main`
-  additionally publishes `main` and `latest`. Immutable tags anchor evidence,
-  while branch tags are moving cache sources for the matching work line. This
+  21, GitHub CLI, `ffmpeg`, `Xvfb`, `python3-pil`, the X11/OpenGL/audio
+  libraries required by the Minecraft client recorder, npm cache, and Gradle
+  user-home cache. Branch builds publish immutable `sha-*` tags plus sanitized
+  branch tags; `main` additionally publishes `main` and `latest`. Immutable tags
+  anchor evidence, while branch tags are moving cache sources for the matching
+  work line. This
   is a reproducible cache-prewarm path, not a hand-uploaded local container.
   The image workflow trigger is limited to image-sensitive paths plus the image
   access checker, so ordinary agent-factory, Linear watcher, dispatch, or
@@ -639,9 +641,10 @@ Current status:
   passing.
 - `scripts/dev/check-devcontainer-image-access.sh` verifies the GHCR manifest
   path and optionally pulls/runs the published image with Docker to check Node,
-  npm, Python, Java, `ffmpeg`, npm cache, and Gradle module cache availability.
-  The devcontainer image workflow runs this checker with authenticated package
-  access and `--docker-smoke` after publishing the immutable `sha-*` tag, then
+  npm, Python/Pillow, Java, `ffmpeg`, `Xvfb`, npm cache, and Gradle module cache
+  availability. The devcontainer image workflow runs this checker with
+  authenticated package access and `--docker-smoke` after publishing the
+  immutable `sha-*` tag, then
   includes `.minelink-dev/reports/devcontainer-image-access.md` in the GitHub
   Step Summary. This proves image pull/runtime readiness for that environment;
   it does not prove Ona Platform Codex execution, Minecraft startup, or product
@@ -753,9 +756,11 @@ Current status:
 - `.devcontainer/devcontainer.json` now uses
   `ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering` as
   the default image and uses `scripts/dev/bootstrap-prebuild.sh --light` for
-  normal `postCreateCommand` startup. The full Node/TypeScript and NeoForge
-  Gradle warmup remains the Ona prebuild hard gate, not a per-task startup cost.
-  Run `27919007816` is the current fresh Ona prebuild readback for this path.
+  normal `postCreateCommand` startup. The base image now includes the Minecraft
+  client recorder OS dependencies (`Xvfb`, `python3-pil`, and X/OpenGL/audio
+  libraries), so video-required Ona finalizers do not install recorder packages
+  at task runtime. The full Node/TypeScript and NeoForge Gradle warmup remains
+  the Ona prebuild hard gate, not a per-task startup cost.
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
   fast verification, real NeoForge guard smoke, and acceptance artifact
   rendering plus video-review request preparation and a separate video-release

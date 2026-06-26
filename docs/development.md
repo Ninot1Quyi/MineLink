@@ -42,9 +42,10 @@ default devcontainer uses the MineLink GHCR cache-prewarmed image:
 ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering
 ```
 
-The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, image or OS provided
-`python3`, npm cache, and Gradle user-home cache. Do not add a pinned Python
-feature that forces source compilation during cloud rebuilds.
+The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, `Xvfb`, `python3-pil`,
+the X11/OpenGL/audio libraries used by the Minecraft client recorder, image or
+OS provided `python3`, npm cache, and Gradle user-home cache. Do not add a
+pinned Python feature that forces source compilation during cloud rebuilds.
 
 The prewarmed image is built by GitHub Actions:
 
