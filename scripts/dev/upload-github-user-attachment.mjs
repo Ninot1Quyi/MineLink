@@ -139,6 +139,7 @@ function retryableHttpStatus(status) {
 function classifyFailure(message) {
   const text = String(message ?? "").toLowerCase();
   if (text.includes("not configured")) return "missing-github-web-cookie";
+  if (text.includes("web cookie rejected") || text.includes("sign in to github")) return "github-web-cookie-rejected";
   if (text.includes("upload policy csrf missing")) return "github-attachment-upload-policy-csrf-missing";
   if (text.includes("uploadtoken missing")) return "github-attachment-upload-token-missing";
   if (text.includes("github-attachment-page-token")) return "github-attachment-page-token-failed";
@@ -282,6 +283,10 @@ function cookiePairsForCdp() {
     }));
 }
 
+function isSignedOutGithubTitle(title) {
+  return /sign in to github/i.test(String(title ?? ""));
+}
+
 async function discoverDynamicUploadTokens() {
   if (!args.dynamicPageToken || !hasValue(args.cookie) || !hasValue(args.referer)) return null;
   const chrome = await resolveChrome();
@@ -315,9 +320,30 @@ async function discoverDynamicUploadTokens() {
       flatten: true,
     });
     const sessionId = attached.sessionId;
-    await cdpCall(ws, "Network.enable", {}, sessionId);
-    await cdpCall(ws, "Network.setCookies", { cookies: cookiePairsForCdp() }, sessionId);
     await cdpCall(ws, "Page.enable", {}, sessionId);
+    await cdpCall(ws, "Network.enable", {}, sessionId);
+    const cookieSetResults = [];
+    for (const cookie of cookiePairsForCdp()) {
+      try {
+        const result = await cdpCall(ws, "Network.setCookie", cookie, sessionId);
+        cookieSetResults.push({ name: cookie.name, success: result.success !== false });
+      } catch (error) {
+        cookieSetResults.push({ name: cookie.name, success: false, error: compact(error?.message ?? error) });
+      }
+    }
+    const cookieReadback = await cdpCall(
+      ws,
+      "Network.getCookies",
+      { urls: ["https://github.com/", args.referer] },
+      sessionId,
+    ).catch(() => ({ cookies: [] }));
+    report.pageTokenSignals.dynamicPageTokenCookieSetCount = cookieSetResults.filter((cookie) => cookie.success).length;
+    report.pageTokenSignals.dynamicPageTokenCookieCount = Array.isArray(cookieReadback.cookies)
+      ? cookieReadback.cookies.length
+      : 0;
+    report.pageTokenSignals.dynamicPageTokenHasUserSessionCookie = Array.isArray(cookieReadback.cookies)
+      ? cookieReadback.cookies.some((cookie) => cookie.name === "user_session")
+      : false;
     await cdpCall(ws, "Page.navigate", { url: args.referer }, sessionId);
 
     const startedAt = Date.now();
@@ -341,6 +367,7 @@ async function discoverDynamicUploadTokens() {
               clientVersion,
               hasFileAttachment: Boolean(fileAttachment),
               readyState: document.readyState,
+              url: location.href,
               title: document.title
             };
           })()`,
@@ -641,10 +668,11 @@ async function discoverPageUploadTokens() {
   for (const page of tokenPages) {
     const tokens = await discoverTokensFromPage(page.label, page.url, { allowFormToken: true });
     pageResults.push({ url: page.url, ...tokens });
-    if (!hasValue(args.authenticityToken)) {
-      args.authenticityToken =
-        args.uploadToken || tokens.uploadPolicyCsrf || tokens.authenticityToken || tokens.uploadToken;
+    if (!hasValue(args.authenticityToken) && hasValue(tokens.uploadPolicyCsrf)) {
+      args.authenticityToken = tokens.uploadPolicyCsrf;
     }
+    if (!hasValue(args.uploadToken) && hasValue(tokens.uploadToken)) args.uploadToken = tokens.uploadToken;
+    if (!hasValue(args.authenticityToken) && hasValue(args.uploadToken)) args.authenticityToken = args.uploadToken;
     if (!hasValue(args.fetchNonce)) args.fetchNonce = tokens.fetchNonce;
     if (!hasValue(args.clientVersion)) args.clientVersion = tokens.clientVersion;
     if (hasValue(args.authenticityToken)) break;
@@ -673,6 +701,7 @@ async function discoverPageUploadTokens() {
       const dynamicTokens = await discoverDynamicUploadTokens();
       report.pageTokenSignals.dynamicPageTokenAttempted = true;
       report.pageTokenSignals.dynamicPageTokenTitle = dynamicTokens?.title ?? "";
+      report.pageTokenSignals.dynamicPageTokenUrl = dynamicTokens?.url ?? "";
       report.pageTokenSignals.dynamicPageTokenReadyState = dynamicTokens?.readyState ?? "";
       report.pageTokenSignals.dynamicPageTokenHasFileAttachment = dynamicTokens?.hasFileAttachment === true;
       report.pageTokenSignals.dynamicPageTokenHasUploadPolicyCsrf = hasValue(dynamicTokens?.policyToken);
@@ -683,12 +712,18 @@ async function discoverPageUploadTokens() {
         if (!hasValue(args.fetchNonce)) args.fetchNonce = dynamicTokens.fetchNonce;
         if (!hasValue(args.clientVersion)) args.clientVersion = dynamicTokens.clientVersion;
       }
-      report.pageTokenSignals.hasUploadPolicyCsrf = hasValue(args.authenticityToken);
+      if (!hasValue(args.authenticityToken) && isSignedOutGithubTitle(dynamicTokens?.title)) {
+        throw new Error("GitHub web cookie rejected: dynamic PR page rendered Sign in to GitHub.");
+      }
+      report.pageTokenSignals.hasUploadPolicyCsrf =
+        pageResults.some((page) => hasValue(page.uploadPolicyCsrf)) || hasValue(dynamicTokens?.policyToken);
       report.pageTokenSignals.hasFetchNonce = hasValue(args.fetchNonce);
       report.pageTokenSignals.hasClientVersion = hasValue(args.clientVersion);
     } catch (error) {
       report.pageTokenSignals.dynamicPageTokenAttempted = true;
-      report.pageTokenSignals.dynamicPageTokenError = compact(error?.message ?? error);
+      const message = compact(error?.message ?? error);
+      report.pageTokenSignals.dynamicPageTokenError = message;
+      if (classifyFailure(message) === "github-web-cookie-rejected") throw error;
     }
   }
 }
@@ -863,6 +898,9 @@ function printUploadSummary(report, write = console.log) {
       `fetchNonce=${yesNo(pageSignals.hasFetchNonce)}`,
       `clientVersion=${yesNo(pageSignals.hasClientVersion)}`,
       `dynamicPageToken=${yesNo(pageSignals.dynamicPageTokenHasUploadPolicyCsrf)}`,
+      `dynamicCookieSet=${pageSignals.dynamicPageTokenCookieSetCount ?? 0}`,
+      `dynamicCookieReadback=${pageSignals.dynamicPageTokenCookieCount ?? 0}`,
+      `dynamicUserSession=${yesNo(pageSignals.dynamicPageTokenHasUserSessionCookie)}`,
     ].join(" "),
   );
   const checkedPages = Array.isArray(pageSignals.checkedPages) ? pageSignals.checkedPages : [];
@@ -957,10 +995,14 @@ const report = {
     hasClientVersion: hasValue(args.clientVersion),
     dynamicPageTokenEnabled: args.dynamicPageToken,
     dynamicPageTokenAttempted: false,
+    dynamicPageTokenCookieSetCount: 0,
+    dynamicPageTokenCookieCount: 0,
+    dynamicPageTokenHasUserSessionCookie: false,
     dynamicPageTokenHasFileAttachment: false,
     dynamicPageTokenHasUploadPolicyCsrf: false,
     dynamicPageTokenHasFetchNonce: false,
     dynamicPageTokenHasClientVersion: false,
+    dynamicPageTokenUrl: "",
     dynamicPageTokenReadyState: "",
     dynamicPageTokenTitle: "",
     dynamicPageTokenError: "",

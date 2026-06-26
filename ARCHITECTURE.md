@@ -1051,15 +1051,17 @@ the repository but do not create comment attachments by themselves, and they
 cannot be exchanged for a GitHub web session cookie. The attachment bridge uses
 the task PR URL to fetch the issue/PR editor's upload-policy authority for
 `/upload/policies/assets`. It prefers a nearby `<file-attachment>`
-upload-policy CSRF input, can fall back to a same-page authenticity token when
-GitHub's current markup exposes the upload policy through the issue editor form
-instead of a closed custom element, and uses repository-page `uploadToken`
-discovery only as the last discovery path. When GitHub serves static HTML
-without the upload-policy CSRF, the bridge may launch a temporary headless
-Chrome with only the explicit attachment cookie, render the task PR page, read
-the hydrated `<file-attachment>` DOM token through CDP, and then close the
-browser before upload. Any rejected policy or finalization request still fails
-closed. It then performs the policy, object upload, and finalization calls with
+upload-policy CSRF input and uses repository-page `uploadToken` discovery only
+as the last discovery path. Ordinary page form authenticity tokens are recorded
+for diagnostics but are not accepted as upload-policy authority. When GitHub
+serves static HTML without the upload-policy CSRF, the bridge may launch a
+temporary headless Chrome with only the explicit attachment cookie, render the
+task PR page, read the hydrated `<file-attachment>` DOM token through CDP, and
+then close the browser before upload. That dynamic path records sanitized
+cookie-set/readback counts; if the rendered page is GitHub's sign-in page, the
+edge fails closed as `github-web-cookie-rejected` instead of trying a doomed
+policy request. Any rejected policy or finalization request still fails closed.
+It then performs the policy, object upload, and finalization calls with
 reusable multipart buffers so retries do not depend on runtime-specific
 `FormData` behavior. Object-store uploads never receive the GitHub cookie
 header. The bridge records sanitized cookie-signal and page-token-signal

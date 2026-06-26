@@ -325,7 +325,12 @@ fetches the task PR page with the explicit cookie secret to discover the
 issue/PR editor's `<file-attachment>` upload-policy CSRF token and fetch nonce,
 uses repository-page `uploadToken` discovery only as a fallback, and can render
 the PR page in a temporary headless Chrome to read the hydrated upload-policy
-DOM token when static HTML omits it. It has bounded retries, uses reusable
+DOM token when static HTML omits it. Ordinary page form authenticity tokens are
+reported for diagnostics but are not used as upload-policy authority. The
+dynamic Chrome path records sanitized cookie set/readback counts and reports
+`github-web-cookie-rejected` when GitHub renders the sign-in page, which usually
+means the configured attachment cookie secret is stale or incomplete. It has
+bounded retries, uses reusable
 multipart request bodies, avoids sending GitHub cookies to the object-store
 upload URL, and writes
 `.minelink-dev/reports/github-user-attachment-upload.md` with sanitized

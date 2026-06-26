@@ -652,6 +652,8 @@ require_text "scripts/dev/upload-github-user-attachment.mjs" "github-web-cookie-
 require_text "scripts/dev/upload-github-user-attachment.mjs" "MINELINK_GITHUB_ATTACHMENT_UPLOAD_ATTEMPTS"
 require_text "scripts/dev/upload-github-user-attachment.mjs" "MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN"
 require_text "scripts/dev/upload-github-user-attachment.mjs" "dynamicPageTokenHasUploadPolicyCsrf"
+require_text "scripts/dev/upload-github-user-attachment.mjs" "dynamicPageTokenCookieSetCount"
+require_text "scripts/dev/upload-github-user-attachment.mjs" "dynamicPageTokenHasUserSessionCookie"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN"
 require_text "scripts/dev/refresh-github-attachment-cookie.mjs" "gh secret set"
 require_text "package.json" "agent-factory:refresh-github-cookie"
