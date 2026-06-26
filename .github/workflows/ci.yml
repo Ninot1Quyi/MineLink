@@ -5,8 +5,14 @@ on:
     branches: ["main", "codex/**", "ona/**", "agent/**"]
   pull_request:
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
-  verify:
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,37 +22,84 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+      - run: npm ci
+      - name: Resolve architecture guard base
+        id: arch-base
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          elif git rev-parse --verify origin/codex/minelink-mvp-engineering >/dev/null 2>&1; then
+            echo "base=origin/codex/minelink-mvp-engineering" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=origin/main" >> "$GITHUB_OUTPUT"
+          fi
       - name: Architecture guard
-        run: bash scripts/dev/check-architecture-guard.sh --base "${{ github.event.pull_request.base.sha || 'origin/main' }}"
+        run: bash scripts/dev/check-architecture-guard.sh --base "${{ steps.arch-base.outputs.base }}"
       - name: Agent workbench guard
         run: bash scripts/dev/check-agent-workbench.sh
-      - run: npm ci
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
       - run: npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
-      - run: MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/http-mine_tree bash scripts/dev/e2e.sh mine_tree
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
-      - run: MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
       - name: Summarize MineLink evidence
         if: always()
         run: node scripts/dev/summarize-evidence.mjs --append-step-summary
-      - name: Render MineLink acceptance artifacts
-        if: always()
-        run: node scripts/dev/render-acceptance-video.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --pr-url "$MINELINK_PR_URL"
-        env:
-          MINELINK_PR_URL: ${{ github.event.pull_request.html_url || github.server_url }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: minelink-dev-evidence
+          name: minelink-ci-static-evidence
+          path: .minelink-dev/
+          include-hidden-files: true
+
+  mock-e2e:
+    name: Mock e2e (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, crafting, guards, soak]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+      - name: Run mock e2e group
+        run: |
+          case "${{ matrix.group }}" in
+            core)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh mine_tree
+              MINELINK_SKIP_BUILD=1 MINELINK_MCP_TRANSPORT=http MINELINK_WORK_DIR=.minelink-dev/http-mine_tree bash scripts/dev/e2e.sh mine_tree
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh create_smoke
+              ;;
+            crafting)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_smoke
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh furnace_smoke
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh craft_negative
+              ;;
+            guards)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
+              ;;
+            soak)
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
+              ;;
+            *)
+              echo "Unknown mock e2e group: ${{ matrix.group }}" >&2
+              exit 2
+              ;;
+          esac
+      - name: Summarize MineLink evidence
+        if: always()
+        run: node scripts/dev/summarize-evidence.mjs --append-step-summary
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minelink-ci-mock-e2e-${{ matrix.group }}
           path: .minelink-dev/
           include-hidden-files: true

@@ -1,0 +1,1002 @@
+name: Ona Platform Codex Probe
+
+on:
+  push:
+    branches:
+      - codex/gh-3-agent-factory-pilot
+    paths:
+      - .github/workflows/ona-platform-codex-probe.yml
+      - scripts/dev/start-ona-platform-codex.mjs
+      - scripts/dev/fetch-platform-codex-canary.mjs
+      - scripts/dev/fetch-platform-codex-task-report.mjs
+      - scripts/dev/fetch-platform-codex-video-verifier.mjs
+      - scripts/dev/fetch-ona-agent-execution-readback.mjs
+      - scripts/dev/run-ona-finalizer-artifacts.mjs
+      - scripts/dev/run-agent-factory-stage.mjs
+      - scripts/dev/prepare-video-review-request.mjs
+      - scripts/dev/check-agent-factory-secrets.mjs
+      - scripts/dev/check-platform-codex-evidence.mjs
+      - scripts/dev/wait-agent-factory-pr-ci.mjs
+      - scripts/dev/sync-github-status.mjs
+      - scripts/dev/upload-acceptance-video-storage.mjs
+      - scripts/dev/upload-github-user-attachment.mjs
+      - scripts/dev/publish-pr-video-evidence.mjs
+      - scripts/dev/comment-pr-evidence.mjs
+      - scripts/dev/check-agent-workbench.sh
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Probe mode
+        required: true
+        default: discover
+        type: choice
+        options:
+          - discover
+          - identity-canary
+          - implementation-canary
+          - task-implementation
+          - video-verifier-canary
+          - full-chain-canary
+          - full-chain-task
+      codex_agent_id:
+        description: Optional Codex app agent id for canary modes
+        required: false
+      wait_seconds:
+        description: AgentService readback wait seconds for canary modes
+        required: false
+        default: "600"
+      environment_wait_seconds:
+        description: Ona task environment wait seconds before StartAgent
+        required: false
+        default: "600"
+      environment_class_id:
+        description: Optional Ona environment class id for task environments
+        required: false
+      task_id:
+        description: Task id for implementation-canary mode
+        required: false
+      target_branch:
+        description: Target branch for implementation-canary mode
+        required: false
+      github_issue:
+        description: Optional GitHub issue URL for implementation or canary modes
+        required: false
+      linear_issue:
+        description: Optional Linear issue key for full-chain status writeback
+        required: false
+      task_requirements:
+        description: Real task requirements for task-implementation/full-chain-task modes
+        required: false
+      reviewed_commit:
+        description: Reviewed commit for video-verifier-canary mode
+        required: false
+      implementation_execution:
+        description: Existing implementation Codex execution id for same-session video-verifier-canary mode
+        required: false
+      create_pr:
+        description: Create or update a draft PR after full-chain release gate passes
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      pr_base_branch:
+        description: Base branch for create_pr=true
+        required: false
+        default: codex/minelink-mvp-engineering
+      pr_title:
+        description: Optional PR title for create_pr=true
+        required: false
+      branch_wait_seconds:
+        description: GitHub branch evidence wait seconds for implementation/video-verifier canary modes
+        required: false
+        default: "900"
+      ci_wait_seconds:
+        description: GitHub PR check rollup wait seconds for create_pr=true
+        required: false
+        default: "900"
+      validation_scope:
+        description: Finalizer validation scope for full-chain canaries
+        required: false
+        default: docs
+      scenarios:
+        description: Comma-separated scenarios for finalizer validation
+        required: false
+        default: none
+      github_attachment_video_url:
+        description: GitHub user-attachments MP4 URL for inline PR playback; R2 URLs are candidate storage only
+        required: false
+      github_attachment_preflight:
+        description: Inline video attachment preflight behavior for create_pr=true
+        required: false
+        default: deferred
+        type: choice
+        options:
+          - deferred
+          - fail-fast
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  probe:
+    name: Probe Ona Platform Codex API
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Ona CLI
+        run: |
+          tmp_ona="$(mktemp)"
+          curl -o "$tmp_ona" -fsSL "https://app.gitpod.io/releases/cli/stable/gitpod-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/\(arm64\|aarch64\)/arm64/')" 
+          chmod +x "$tmp_ona"
+          sudo mv "$tmp_ona" /usr/local/bin/ona
+
+      - name: Authenticate Ona CLI
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+        run: |
+          if [ -z "${ONA_TOKEN:-}" ]; then
+            echo "ONA_TOKEN is missing; cannot probe Ona Platform Codex API."
+            exit 1
+          fi
+          ona login
+
+      - name: Report credential context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          AGENT_FACTORY_GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+        run: |
+          node scripts/dev/check-agent-factory-secrets.mjs \
+            --repo "$GITHUB_REPOSITORY" \
+            --ona-project "$MINELINK_ONA_PROJECT_ID" \
+            --require-github-secrets \
+            --require-ona-context \
+            --require-ona-project-codex-auth
+
+      - name: Report GitHub inline video publication readiness
+        if: ${{ ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          AGENT_FACTORY_GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN }}
+          MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
+          INPUT_GITHUB_ATTACHMENT_VIDEO_URL: ${{ inputs.github_attachment_video_url }}
+          INPUT_GITHUB_ATTACHMENT_PREFLIGHT: ${{ inputs.github_attachment_preflight || 'deferred' }}
+        run: |
+          requirement_args=()
+          if [ "${INPUT_GITHUB_ATTACHMENT_PREFLIGHT:-deferred}" = "fail-fast" ]; then
+            requirement_args+=(--require-github-attachment-cookie)
+          fi
+          node scripts/dev/check-agent-factory-secrets.mjs \
+            --repo "$GITHUB_REPOSITORY" \
+            --require-github-secrets \
+            --github-attachment-url "${INPUT_GITHUB_ATTACHMENT_VIDEO_URL:-}" \
+            "${requirement_args[@]}" \
+            --output .minelink-dev/reports/github-inline-video-preflight.md \
+            --json-output .minelink-dev/reports/github-inline-video-preflight.json
+
+      - name: Pre-clean stopped Ona task environments
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+        run: |
+          node scripts/dev/cleanup-ona-resources.mjs \
+            --project-id "$MINELINK_ONA_PROJECT_ID" \
+            --prune-stale-stopped \
+            --max-prune 10 \
+            --ona-timeout 30s \
+            --allow-dirty \
+            --delete \
+            --dont-wait \
+            --output .minelink-dev/reports/ona-preflight-resource-cleanup.md \
+            --json-output .minelink-dev/reports/ona-preflight-resource-cleanup.json
+
+      - name: Prepare Platform Codex task branch
+        if: ${{ (inputs.mode || 'identity-canary') == 'implementation-canary' || (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'task-implementation' || (inputs.mode || 'identity-canary') == 'full-chain-task' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          task_id="${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}"
+          target_branch="${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}"
+          {
+            echo "MINELINK_PLATFORM_CODEX_TASK_ID=$task_id"
+            echo "MINELINK_PLATFORM_CODEX_TARGET_BRANCH=$target_branch"
+          } >> "$GITHUB_ENV"
+          remote_sha="$(git ls-remote --heads origin "$target_branch" | awk '{print $1}')"
+          if [ -n "$remote_sha" ]; then
+            git push --force-with-lease="refs/heads/$target_branch:$remote_sha" origin "HEAD:refs/heads/$target_branch"
+          else
+            git push origin "HEAD:refs/heads/$target_branch"
+          fi
+
+      - name: Probe Ona Platform Codex API
+        id: platform_codex_api
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+          MINELINK_ONA_ORGANIZATION_ID: ${{ vars.MINELINK_ONA_ORGANIZATION_ID }}
+          MINELINK_ONA_CODEX_AGENT_ID: ${{ secrets.MINELINK_ONA_CODEX_AGENT_ID }}
+          INPUT_CODEX_AGENT_ID: ${{ inputs.codex_agent_id }}
+          INPUT_MODE: ${{ inputs.mode || 'identity-canary' }}
+          INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '30' }}
+          INPUT_ENVIRONMENT_WAIT_SECONDS: ${{ inputs.environment_wait_seconds || '600' }}
+          INPUT_ENVIRONMENT_CLASS_ID: ${{ inputs.environment_class_id || vars.MINELINK_ONA_ENVIRONMENT_CLASS_ID }}
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+          INPUT_TASK_REQUIREMENTS: ${{ inputs.task_requirements }}
+          INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
+          INPUT_SCENARIOS: ${{ inputs.scenarios || 'none' }}
+        run: |
+          args=(scripts/dev/start-ona-platform-codex.mjs --discover-policies)
+          if [ "$INPUT_MODE" = "identity-canary" ] || [ "$INPUT_MODE" = "implementation-canary" ] || [ "$INPUT_MODE" = "full-chain-canary" ] || [ "$INPUT_MODE" = "task-implementation" ] || [ "$INPUT_MODE" = "full-chain-task" ]; then
+            codex_agent_id="${INPUT_CODEX_AGENT_ID:-${MINELINK_ONA_CODEX_AGENT_ID:-}}"
+            if [ -z "$codex_agent_id" ]; then
+              echo "$INPUT_MODE mode requires inputs.codex_agent_id or secret MINELINK_ONA_CODEX_AGENT_ID."
+              exit 1
+            fi
+            if [ "$INPUT_MODE" = "identity-canary" ]; then
+              args+=(
+                --start
+                --identity-canary
+                --codex-agent-id "$codex_agent_id"
+                --agent-mode AGENT_MODE_GOAL
+                --create-environment
+                --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
+                --wait-seconds "${INPUT_WAIT_SECONDS:-30}"
+              )
+              if [ -n "${INPUT_ENVIRONMENT_CLASS_ID:-}" ]; then
+                args+=(--environment-class-id "$INPUT_ENVIRONMENT_CLASS_ID")
+              fi
+            else
+              task_id="${MINELINK_PLATFORM_CODEX_TASK_ID:-${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}}"
+              target_branch="${MINELINK_PLATFORM_CODEX_TARGET_BRANCH:-${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}}"
+              {
+                echo "MINELINK_PLATFORM_CODEX_TASK_ID=$task_id"
+                echo "MINELINK_PLATFORM_CODEX_TARGET_BRANCH=$target_branch"
+              } >> "$GITHUB_ENV"
+              if [ "$INPUT_MODE" = "task-implementation" ] || [ "$INPUT_MODE" = "full-chain-task" ]; then
+                mkdir -p .minelink-dev/reports
+                task_requirements_file=.minelink-dev/reports/platform-codex-task-requirements.md
+                {
+                  echo "# MineLink Platform Codex Task Requirements"
+                  echo
+                  echo "- Task id: $task_id"
+                  echo "- Target branch: $target_branch"
+                  echo "- GitHub issue: ${INPUT_GITHUB_ISSUE:-none}"
+                  echo "- Linear issue: ${INPUT_LINEAR_ISSUE:-none}"
+                  echo "- PR title: ${INPUT_PR_TITLE:-Advance ${task_id}}"
+                  echo "- Validation scope: ${INPUT_VALIDATION_SCOPE:-docs}"
+                  echo "- Scenarios: ${INPUT_SCENARIOS:-none}"
+                  echo
+                  echo "## Requirements"
+                  echo
+                  if [ -n "${INPUT_TASK_REQUIREMENTS:-}" ]; then
+                    printf '%s\n' "$INPUT_TASK_REQUIREMENTS"
+                  else
+                    echo "No structured task requirements were supplied. The implementation session must stop blocked instead of inventing scope."
+                  fi
+                } > "$task_requirements_file"
+                args+=(
+                  --start
+                  --task-implementation
+                  --codex-agent-id "$codex_agent_id"
+                  --agent-mode AGENT_MODE_GOAL
+                  --task-id "$task_id"
+                  --branch "$target_branch"
+                  --github-issue "${INPUT_GITHUB_ISSUE:-}"
+                  --linear-issue "${INPUT_LINEAR_ISSUE:-none}"
+                  --task-requirements-file "$task_requirements_file"
+                  --validation-scope "${INPUT_VALIDATION_SCOPE:-docs}"
+                  --scenarios "${INPUT_SCENARIOS:-none}"
+                  --pr-title "${INPUT_PR_TITLE:-Advance ${task_id}}"
+                  --create-environment
+                  --environment-name "${task_id:0:80}"
+                  --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
+                  --wait-seconds "${INPUT_WAIT_SECONDS:-600}"
+                )
+              else
+                args+=(
+                  --start
+                  --implementation-canary
+                  --codex-agent-id "$codex_agent_id"
+                  --agent-mode AGENT_MODE_GOAL
+                  --task-id "$task_id"
+                  --branch "$target_branch"
+                  --github-issue "${INPUT_GITHUB_ISSUE:-}"
+                  --linear-issue "${INPUT_LINEAR_ISSUE:-none}"
+                  --create-environment
+                  --environment-name "${task_id:0:80}"
+                  --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
+                  --wait-seconds "${INPUT_WAIT_SECONDS:-600}"
+                )
+              fi
+              if [ -n "${INPUT_ENVIRONMENT_CLASS_ID:-}" ]; then
+                args+=(--environment-class-id "$INPUT_ENVIRONMENT_CLASS_ID")
+              fi
+            fi
+          fi
+          node "${args[@]}"
+
+      - name: Fetch implementation canary branch evidence
+        if: ${{ (inputs.mode || 'identity-canary') == 'implementation-canary' || (inputs.mode || 'identity-canary') == 'full-chain-canary' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_BRANCH_WAIT_SECONDS: ${{ inputs.branch_wait_seconds || '300' }}
+        run: |
+          node scripts/dev/fetch-platform-codex-canary.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --wait-seconds "${INPUT_BRANCH_WAIT_SECONDS:-300}"
+          branch_commit="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-codex-implementation-session.json','utf8')); console.log(report.commit || '')")"
+          implementation_execution="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-platform-codex-api-session.json','utf8')); console.log(report.agentExecutionId || '')")"
+          echo "MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT=$branch_commit" >> "$GITHUB_ENV"
+          echo "MINELINK_PLATFORM_CODEX_IMPLEMENTATION_EXECUTION=$implementation_execution" >> "$GITHUB_ENV"
+          node scripts/dev/check-platform-codex-evidence.mjs \
+            --implementation \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$branch_commit"
+
+      - name: Fetch task implementation branch evidence
+        if: ${{ (inputs.mode || 'identity-canary') == 'task-implementation' || (inputs.mode || 'identity-canary') == 'full-chain-task' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_BRANCH_WAIT_SECONDS: ${{ inputs.branch_wait_seconds || '900' }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
+        run: |
+          branch_wait="${INPUT_BRANCH_WAIT_SECONDS:-900}"
+          if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ] && [ "$branch_wait" -lt 3600 ]; then
+            branch_wait=3600
+          fi
+          node scripts/dev/fetch-platform-codex-task-report.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --wait-seconds "$branch_wait"
+          branch_commit="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-codex-implementation-session.json','utf8')); console.log(report.commit || '')")"
+          implementation_execution="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-platform-codex-api-session.json','utf8')); console.log(report.agentExecutionId || '')")"
+          echo "MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT=$branch_commit" >> "$GITHUB_ENV"
+          echo "MINELINK_PLATFORM_CODEX_IMPLEMENTATION_EXECUTION=$implementation_execution" >> "$GITHUB_ENV"
+          node scripts/dev/check-platform-codex-evidence.mjs \
+            --implementation \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$branch_commit"
+
+      - name: Run Ona finalizer acceptance video request
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
+        env:
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+          INPUT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+          INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_PR_BASE_BRANCH: ${{ inputs.pr_base_branch || 'codex/minelink-mvp-engineering' }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
+          INPUT_SCENARIOS: ${{ inputs.scenarios || 'none' }}
+          MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
+          MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
+          MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
+          MINELINK_VIDEO_STORAGE_BUCKET: ${{ vars.MINELINK_VIDEO_STORAGE_BUCKET }}
+          MINELINK_VIDEO_PUBLIC_BASE_URL: ${{ vars.MINELINK_VIDEO_PUBLIC_BASE_URL }}
+          MINELINK_VIDEO_STORAGE_PREFIX: ${{ vars.MINELINK_VIDEO_STORAGE_PREFIX }}
+        run: |
+          task_id="${MINELINK_PLATFORM_CODEX_TASK_ID:-${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}}"
+          target_branch="${MINELINK_PLATFORM_CODEX_TARGET_BRANCH:-${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}}"
+          reviewed_commit="${MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT:-${INPUT_REVIEWED_COMMIT:-$(git rev-parse --short HEAD)}}"
+          environment_id="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-platform-codex-api-session.json','utf8')); console.log(report.environmentId || '')")"
+          if [ -z "$environment_id" ]; then
+            echo "Ona Platform Codex API session did not report an environment id for finalizer artifacts."
+            exit 1
+          fi
+          {
+            echo "MINELINK_PLATFORM_CODEX_TASK_ID=$task_id"
+            echo "MINELINK_PLATFORM_CODEX_TARGET_BRANCH=$target_branch"
+            echo "MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT=$reviewed_commit"
+            echo "MINELINK_ONA_FINALIZER_ENVIRONMENT_ID=$environment_id"
+          } >> "$GITHUB_ENV"
+          client_gui_args=()
+          if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ]; then
+            client_gui_args+=(--require-client-gui-capture)
+          fi
+          node scripts/dev/run-ona-finalizer-artifacts.mjs \
+            --environment-id "$environment_id" \
+            --task-id "$task_id" \
+            --branch "$target_branch" \
+            --commit "$reviewed_commit" \
+            --base "${INPUT_PR_BASE_BRANCH:-codex/minelink-mvp-engineering}" \
+            --source-ref "$GITHUB_REF_NAME" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
+            --pr-title "${INPUT_PR_TITLE:-Advance ${task_id}}" \
+            --validation-scope "${INPUT_VALIDATION_SCOPE:-docs}" \
+            --scenarios "${INPUT_SCENARIOS:-none}" \
+            --run-id "$GITHUB_RUN_ID" \
+            --video-producer ona-task-finalizer \
+            --required-video-producer ona-task-finalizer \
+            --video-storage-provider "${MINELINK_VIDEO_STORAGE_PROVIDER:-}" \
+            --video-storage-endpoint "${MINELINK_VIDEO_STORAGE_ENDPOINT:-}" \
+            --video-storage-region "${MINELINK_VIDEO_STORAGE_REGION:-auto}" \
+            --video-storage-bucket "${MINELINK_VIDEO_STORAGE_BUCKET:-}" \
+            --video-storage-public-base-url "${MINELINK_VIDEO_PUBLIC_BASE_URL:-}" \
+            --video-storage-prefix "${MINELINK_VIDEO_STORAGE_PREFIX:-minelink/acceptance-videos}" \
+            "${client_gui_args[@]}"
+
+      - name: Request implementation Codex verifier subagent
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+          MINELINK_ONA_ORGANIZATION_ID: ${{ vars.MINELINK_ONA_ORGANIZATION_ID }}
+          MINELINK_ONA_CODEX_AGENT_ID: ${{ secrets.MINELINK_ONA_CODEX_AGENT_ID }}
+          INPUT_CODEX_AGENT_ID: ${{ inputs.codex_agent_id }}
+          INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '900' }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+          INPUT_IMPLEMENTATION_EXECUTION: ${{ inputs.implementation_execution }}
+        run: |
+          codex_agent_id="${INPUT_CODEX_AGENT_ID:-${MINELINK_ONA_CODEX_AGENT_ID:-}}"
+          if [ -z "$codex_agent_id" ]; then
+            echo "video verifier canary mode requires inputs.codex_agent_id or secret MINELINK_ONA_CODEX_AGENT_ID."
+            exit 1
+          fi
+          implementation_execution="${MINELINK_PLATFORM_CODEX_IMPLEMENTATION_EXECUTION:-${INPUT_IMPLEMENTATION_EXECUTION:-}}"
+          if [ -z "$implementation_execution" ]; then
+            echo "Missing implementation Codex execution id; cannot request same-session verifier subagent."
+            exit 1
+          fi
+          node scripts/dev/start-ona-platform-codex.mjs \
+            --discover-policies \
+            --readback-execution "$implementation_execution" \
+            --video-verifier-canary \
+            --codex-agent-id "$codex_agent_id" \
+            --agent-mode AGENT_MODE_GOAL \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
+            --video-review-request .minelink-dev/reports/artifacts/video-review-request.md \
+            --wait-seconds "${INPUT_WAIT_SECONDS:-900}" \
+            --output .minelink-dev/reports/ona-platform-codex-video-verifier-api-session.md \
+            --json-output .minelink-dev/reports/ona-platform-codex-video-verifier-api-session.json
+
+      - name: Fetch video verifier canary branch evidence
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_MODE: ${{ inputs.mode || 'identity-canary' }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
+          INPUT_BRANCH_WAIT_SECONDS: ${{ inputs.branch_wait_seconds || '300' }}
+        run: |
+          node scripts/dev/fetch-platform-codex-video-verifier.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --wait-seconds "${INPUT_BRANCH_WAIT_SECONDS:-300}"
+          client_gui_args=()
+          if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ]; then
+            client_gui_args+=(--require-client-gui-capture)
+          fi
+          node scripts/dev/check-video-review.mjs --require-mp4 --require-producer ona-task-finalizer "${client_gui_args[@]}"
+          evidence_args=(--verifier)
+          chain_args=(--require-platform-codex-verifier)
+          if [ "$INPUT_MODE" = "full-chain-canary" ] || [ "$INPUT_MODE" = "full-chain-task" ]; then
+            evidence_args+=(--implementation)
+            chain_args+=(--require-platform-codex-implementation)
+          fi
+          node scripts/dev/check-platform-codex-evidence.mjs \
+            "${evidence_args[@]}" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT"
+          node scripts/dev/report-agent-factory-chain.mjs \
+            --github-issue "${{ inputs.github_issue }}" \
+            --linear-issue "${{ inputs.linear_issue || 'none' }}" \
+            --github-dispatcher-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --ona-prebuild-status passed \
+            --ona-automation-status partial \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --require-video-producer ona-task-finalizer \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            "${chain_args[@]}"
+
+      - name: Revalidate implementation canary after verifier
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/dev/fetch-platform-codex-canary.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --wait-seconds 0 \
+            --output .minelink-dev/reports/ona-codex-implementation-session-after-verifier.md \
+            --json-output .minelink-dev/reports/ona-codex-implementation-session-after-verifier.json
+          node scripts/dev/check-platform-codex-evidence.mjs \
+            --implementation \
+            --implementation-readback .minelink-dev/reports/ona-codex-implementation-session-after-verifier.md \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH"
+
+      - name: Revalidate task implementation after verifier
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-task' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/dev/fetch-platform-codex-task-report.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --wait-seconds 0 \
+            --output .minelink-dev/reports/ona-codex-implementation-session-after-verifier.md \
+            --json-output .minelink-dev/reports/ona-codex-implementation-session-after-verifier.json
+          node scripts/dev/check-platform-codex-evidence.mjs \
+            --implementation \
+            --implementation-readback .minelink-dev/reports/ona-codex-implementation-session-after-verifier.md \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH"
+
+      - name: Fetch Ona Platform Codex readback diagnostics
+        if: always()
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+        run: |
+          node scripts/dev/fetch-ona-agent-execution-readback.mjs
+
+      - name: Sync blocked Platform Codex launch status
+        if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && steps.platform_codex_api.conclusion != 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+        run: |
+          task_id="${MINELINK_PLATFORM_CODEX_TASK_ID:-${INPUT_TASK_ID:-platform-codex-canary-${GITHUB_RUN_ID}}}"
+          target_branch="${MINELINK_PLATFORM_CODEX_TARGET_BRANCH:-${INPUT_TARGET_BRANCH:-codex/platform-codex-canary-${GITHUB_RUN_ID}}}"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          commit_short="$(git rev-parse --short HEAD)"
+          blocker="$(node -e "const fs=require('fs'); const files=['.minelink-dev/reports/ona-platform-codex-api-session.json','.minelink-dev/reports/ona-platform-codex-readback.json']; const messages=[]; for (const file of files) { try { const data=JSON.parse(fs.readFileSync(file,'utf8')); if (Array.isArray(data.blockers)) messages.push(...data.blockers); if (data.failureMessage) messages.push(data.failureMessage); if (Array.isArray(data.failures)) messages.push(...data.failures); } catch {} } const text=messages.filter(Boolean).join(' ').replace(/\\s+/g,' ').trim(); console.log(text || 'Ona Platform Codex launch failed before implementation could start.');")"
+          codex_auth_args=()
+          status_label="blocked-platform-codex-launch"
+          if node -e "const fs=require('fs'); const files=['.minelink-dev/reports/ona-platform-codex-api-session.json','.minelink-dev/reports/ona-platform-codex-readback.json']; const text=files.map((file)=>{try{return fs.readFileSync(file,'utf8')}catch{return ''}}).join('\\n'); process.exit(/unauthenticated|Codex authentication failed|LLM request was rejected/i.test(text) ? 0 : 1);"; then
+            codex_auth_args+=(--codex-auth-failed)
+            status_label="blocked-platform-codex-auth"
+          fi
+
+          node scripts/dev/report-agent-factory-chain.mjs \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
+            --issue-contract-status passed \
+            --github-dispatcher-status passed \
+            --github-dispatcher-url "$run_url" \
+            --ona-prebuild-status passed \
+            --ona-automation-status partial \
+            --branch "$target_branch" \
+            --commit "$commit_short" \
+            --task-id "$task_id" \
+            --blocker "$blocker" \
+            "${codex_auth_args[@]}"
+
+          github_status_args=(
+            scripts/dev/sync-github-status.mjs
+            --repository "$GITHUB_REPOSITORY"
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}"
+            --task-id "$task_id"
+            --branch "$target_branch"
+            --commit "$commit_short"
+            --ci-url "$run_url"
+            --status-label "$status_label"
+            --blocker "$blocker"
+          )
+          if [ -n "${INPUT_GITHUB_ISSUE:-}" ] && [ "${INPUT_GITHUB_ISSUE:-none}" != "none" ]; then
+            github_status_args+=(--require-update)
+          fi
+          node "${github_status_args[@]}"
+          github_status_url="$(node -e "const fs=require('fs'); try { const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '') } catch { console.log('') }")"
+          {
+            echo "MINELINK_GITHUB_STATUS_URL=$github_status_url"
+            echo "MINELINK_FINAL_VIDEO_BLOCKER=$blocker"
+          } >> "$GITHUB_ENV"
+
+          linear_args=(
+            scripts/dev/sync-linear-status.mjs
+            --issue "${INPUT_LINEAR_ISSUE:-none}"
+            --comment "MineLink agent-factory ${status_label} status for ${task_id}: run ${run_url}; blocker: ${blocker}"
+            --attachment-title "MineLink agent-factory run"
+            --attachment-url "$run_url"
+          )
+          if [ -n "${INPUT_LINEAR_ISSUE:-}" ] && [ "${INPUT_LINEAR_ISSUE:-none}" != "none" ]; then
+            linear_args+=(--require-key --require-update)
+          fi
+          node "${linear_args[@]}"
+
+      - name: Run Ona finalizer video release gate
+        id: ona-video-release
+        if: ${{ (inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task' || (inputs.mode || 'identity-canary') == 'video-verifier-canary' }}
+        env:
+          INPUT_TASK_ID: ${{ inputs.task_id }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+          INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_PR_BASE_BRANCH: ${{ inputs.pr_base_branch || 'codex/minelink-mvp-engineering' }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
+          INPUT_SCENARIOS: ${{ inputs.scenarios || 'none' }}
+          MINELINK_VIDEO_STORAGE_PROVIDER: ${{ vars.MINELINK_VIDEO_STORAGE_PROVIDER }}
+          MINELINK_VIDEO_STORAGE_ENDPOINT: ${{ vars.MINELINK_VIDEO_STORAGE_ENDPOINT }}
+          MINELINK_VIDEO_STORAGE_REGION: ${{ vars.MINELINK_VIDEO_STORAGE_REGION }}
+          MINELINK_VIDEO_STORAGE_BUCKET: ${{ vars.MINELINK_VIDEO_STORAGE_BUCKET }}
+          MINELINK_VIDEO_PUBLIC_BASE_URL: ${{ vars.MINELINK_VIDEO_PUBLIC_BASE_URL }}
+          MINELINK_VIDEO_STORAGE_PREFIX: ${{ vars.MINELINK_VIDEO_STORAGE_PREFIX }}
+        run: |
+          environment_id="${MINELINK_ONA_FINALIZER_ENVIRONMENT_ID:-}"
+          if [ -z "$environment_id" ]; then
+            echo "Missing Ona finalizer environment id for video release gate."
+            exit 1
+          fi
+          reviewed_commit="${MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT:-}"
+          if [ -z "$reviewed_commit" ]; then
+            echo "Missing reviewed commit for video release gate."
+            exit 1
+          fi
+          client_gui_args=()
+          if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ]; then
+            client_gui_args+=(--require-client-gui-capture)
+          fi
+          node scripts/dev/run-ona-finalizer-artifacts.mjs \
+            --environment-id "$environment_id" \
+            --stage-group release-upload \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$reviewed_commit" \
+            --base "${INPUT_PR_BASE_BRANCH:-codex/minelink-mvp-engineering}" \
+            --source-ref "$GITHUB_REF_NAME" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
+            --pr-title "${INPUT_PR_TITLE:-Advance ${MINELINK_PLATFORM_CODEX_TASK_ID}}" \
+            --validation-scope "${INPUT_VALIDATION_SCOPE:-docs}" \
+            --scenarios "${INPUT_SCENARIOS:-none}" \
+            --run-id "$GITHUB_RUN_ID" \
+            --video-producer ona-task-finalizer \
+            --required-video-producer ona-task-finalizer \
+            --video-storage-provider "${MINELINK_VIDEO_STORAGE_PROVIDER:-}" \
+            --video-storage-endpoint "${MINELINK_VIDEO_STORAGE_ENDPOINT:-}" \
+            --video-storage-region "${MINELINK_VIDEO_STORAGE_REGION:-auto}" \
+            --video-storage-bucket "${MINELINK_VIDEO_STORAGE_BUCKET:-}" \
+            --video-storage-public-base-url "${MINELINK_VIDEO_PUBLIC_BASE_URL:-}" \
+            --video-storage-prefix "${MINELINK_VIDEO_STORAGE_PREFIX:-minelink/acceptance-videos}" \
+            "${client_gui_args[@]}"
+          video_url="$(node -e "const fs=require('fs'); const manifest=JSON.parse(fs.readFileSync('.minelink-dev/reports/artifacts/video-storage-manifest.json','utf8')); console.log(manifest.videoUrl || '')")"
+          video_sha="$(node -e "const fs=require('fs'); const manifest=JSON.parse(fs.readFileSync('.minelink-dev/reports/artifacts/video-storage-manifest.json','utf8')); console.log(manifest.mp4Sha256 || '')")"
+          download_result="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/ona-finalizer-artifacts.json','utf8')); console.log(report.videoDownload?.result || '')")"
+          if [ -z "$video_url" ]; then
+            echo "Ona finalizer video storage manifest did not report a playable video URL."
+            exit 1
+          fi
+          if [ "$download_result" != "passed" ]; then
+            echo "GitHub runner did not verify the R2 MP4 download/hash. result=$download_result"
+            exit 1
+          fi
+          {
+            echo "video-url=$video_url"
+            echo "raw-video-url=$video_url"
+            echo "video-sha256=$video_sha"
+            echo "video-manifest=.minelink-dev/reports/artifacts/video-storage-manifest.json"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "MINELINK_PLAYABLE_VIDEO_URL=$video_url"
+            echo "MINELINK_RAW_VIDEO_URL=$video_url"
+          } >> "$GITHUB_ENV"
+
+      - name: Create or update task PR after release gate
+        if: ${{ ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          INPUT_PR_BASE_BRANCH: ${{ inputs.pr_base_branch || 'codex/minelink-mvp-engineering' }}
+          INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+          INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
+        run: |
+          pr_title="${INPUT_PR_TITLE:-Advance ${MINELINK_PLATFORM_CODEX_TASK_ID}}"
+          node scripts/dev/create-agent-factory-pr.mjs \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --base "${INPUT_PR_BASE_BRANCH:-codex/minelink-mvp-engineering}" \
+            --title "$pr_title" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --linear-issue "${INPUT_LINEAR_ISSUE:-none}" \
+            --acceptance-gate unspecified \
+            --validation-scope "${INPUT_VALIDATION_SCOPE:-docs}"
+          pr_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/agent-factory-pr.json','utf8')); console.log(report.prUrl || '')")"
+          if [ -z "$pr_url" ]; then
+            echo "create-agent-factory-pr did not report a PR URL."
+            exit 1
+          fi
+          echo "MINELINK_AGENT_FACTORY_PR_URL=$pr_url" >> "$GITHUB_ENV"
+
+      - name: Wait for task PR CI
+        if: ${{ ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          INPUT_CI_WAIT_SECONDS: ${{ inputs.ci_wait_seconds || '900' }}
+        run: |
+          node scripts/dev/wait-agent-factory-pr-ci.mjs \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --wait-seconds "${INPUT_CI_WAIT_SECONDS:-900}"
+          ci_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/agent-factory-pr-ci.json','utf8')); console.log(report.checksUrl || '')")"
+          if [ -z "$ci_url" ]; then
+            echo "wait-agent-factory-pr-ci did not report a checks URL."
+            exit 1
+          fi
+          echo "MINELINK_AGENT_FACTORY_CI_URL=$ci_url" >> "$GITHUB_ENV"
+
+      - name: Sync pre-video task status
+        if: ${{ ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+        run: |
+          node scripts/dev/sync-github-status.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --status-label pre-video-publication \
+            --blocker "Final PR video evidence comment has not run yet." \
+            --require-update
+          github_status_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '')")"
+          if [ -z "$github_status_url" ]; then
+            echo "sync-github-status did not report a comment URL."
+            exit 1
+          fi
+          echo "MINELINK_GITHUB_STATUS_URL=$github_status_url" >> "$GITHUB_ENV"
+
+          linear_args=(
+            scripts/dev/sync-linear-status.mjs
+            --issue "${INPUT_LINEAR_ISSUE:-none}"
+            --comment "MineLink agent-factory pre-video publication status for ${MINELINK_PLATFORM_CODEX_TASK_ID}: PR ${MINELINK_AGENT_FACTORY_PR_URL}; CI ${MINELINK_AGENT_FACTORY_CI_URL}; final PR video evidence comment has not run yet."
+            --attachment-title "MineLink agent-factory PR"
+            --attachment-url "$MINELINK_AGENT_FACTORY_PR_URL"
+          )
+          if [ -n "${INPUT_LINEAR_ISSUE:-}" ] && [ "${INPUT_LINEAR_ISSUE:-none}" != "none" ]; then
+            linear_args+=(--require-key --require-update)
+          fi
+          node "${linear_args[@]}"
+
+      - name: Refresh chain report after task PR
+        if: ${{ ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' }}
+        run: |
+          node scripts/dev/report-agent-factory-chain.mjs \
+            --github-issue "${{ inputs.github_issue }}" \
+            --issue-contract-status passed \
+            --github-dispatcher-status passed \
+            --github-dispatcher-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --ona-prebuild-status passed \
+            --ona-automation-status passed \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --require-video-producer ona-task-finalizer \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --pr-report .minelink-dev/reports/agent-factory-pr.md \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --pr-video-evidence-report .minelink-dev/reports/pr-video-evidence-comment.md \
+            --github-status-url "$MINELINK_GITHUB_STATUS_URL" \
+            --linear-issue "${{ inputs.linear_issue || 'none' }}" \
+            --linear-sync-report .minelink-dev/reports/linear-sync.md \
+            --require-platform-codex-implementation \
+            --require-platform-codex-verifier
+
+      - name: Cleanup Ona task environments
+        if: always()
+        env:
+          ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
+          MINELINK_ONA_PROJECT_ID: ${{ vars.MINELINK_ONA_PROJECT_ID || '019ee8ed-9e1b-7cd8-9b1b-af0c8ee27edb' }}
+        run: |
+          node scripts/dev/cleanup-ona-resources.mjs \
+            --from-report .minelink-dev/reports/ona-platform-codex-api-session.json \
+            --project-id "$MINELINK_ONA_PROJECT_ID" \
+            --allow-dirty \
+            --stop
+
+      - name: Upload GitHub inline video attachment
+        id: upload-github-attachment-video
+        if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' && (inputs.github_attachment_video_url || '') == '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
+          MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN: "1"
+        run: |
+          node scripts/dev/upload-github-user-attachment.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --referer "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --file .minelink-dev/reports/artifacts/acceptance.mp4 \
+            --name acceptance.mp4 \
+            --require-upload
+
+      - name: Upload probe evidence
+        id: upload-probe-evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-ona-platform-codex-probe
+          path: .minelink-dev/reports/
+          include-hidden-files: true
+
+      - name: Upload acceptance storyboard evidence
+        id: upload-acceptance-storyboard
+        if: ${{ always() && hashFiles('.minelink-dev/reports/artifacts/acceptance-storyboard.png') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-acceptance-storyboard
+          path: |
+            .minelink-dev/reports/artifacts/acceptance-storyboard.png
+            .minelink-dev/reports/artifacts/acceptance-storyboard.json
+            .minelink-dev/reports/artifacts/video-review.md
+            .minelink-dev/reports/artifacts/video-release-gate.md
+          include-hidden-files: true
+
+      - name: Comment task PR video evidence
+        id: comment-pr-video-evidence
+        if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          INPUT_GITHUB_ATTACHMENT_VIDEO_URL: ${{ inputs.github_attachment_video_url || steps.upload-github-attachment-video.outputs['video-url'] }}
+          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: ona-task-finalizer
+          MINELINK_ACCEPTANCE_VIDEO_BOUNDARY: Full-chain task/canary video produced by the Ona task finalizer and reviewed by the same Platform Codex implementation session. Product acceptance still depends on task scope and MineLink gate evidence.
+        run: |
+          pr_number="$(node -e "const url=process.env.MINELINK_AGENT_FACTORY_PR_URL||''; const m=url.match(/\\/pull\\/(\\d+)/); console.log(m?m[1]:'')")"
+          if [ -z "$pr_number" ]; then
+            echo "Could not parse PR number from $MINELINK_AGENT_FACTORY_PR_URL"
+            exit 1
+          fi
+          raw_video_url="${INPUT_GITHUB_ATTACHMENT_VIDEO_URL:-${{ steps.ona-video-release.outputs.video-url }}}"
+          if [ -z "${INPUT_GITHUB_ATTACHMENT_VIDEO_URL:-}" ]; then
+            echo "Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback."
+            echo "The Ona finalizer R2 URL remains candidate storage only: ${{ steps.ona-video-release.outputs.video-url }}"
+          fi
+          node scripts/dev/comment-pr-evidence.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --pr "$pr_number" \
+            --artifact-name minelink-ona-platform-codex-probe \
+            --artifact-id "${{ steps.upload-probe-evidence.outputs.artifact-id }}" \
+            --artifact-url "${{ steps.upload-probe-evidence.outputs.artifact-url }}" \
+            --video-url "$INPUT_GITHUB_ATTACHMENT_VIDEO_URL" \
+            --raw-video-url "$raw_video_url" \
+            --manifest .minelink-dev/reports/artifacts/video-storage-manifest.json \
+            --video-review .minelink-dev/reports/artifacts/video-review.md \
+            --release-gate .minelink-dev/reports/artifacts/video-release-gate.md \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
+            --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY" \
+            --require-github-attachment-video \
+            --require-comment
+
+      - name: Sync final task status after video evidence
+        if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' && steps.comment-pr-video-evidence.conclusion == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+        run: |
+          video_comment_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/pr-video-evidence-comment.json','utf8')); console.log(report.commentUrl || '')")"
+          node scripts/dev/sync-github-status.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --status-label final-video-published \
+            --video-evidence-url "$video_comment_url" \
+            --require-update
+          github_status_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '')")"
+          echo "MINELINK_GITHUB_STATUS_URL=$github_status_url" >> "$GITHUB_ENV"
+          echo "MINELINK_FINAL_VIDEO_BLOCKER=" >> "$GITHUB_ENV"
+
+          linear_args=(
+            scripts/dev/sync-linear-status.mjs
+            --issue "${INPUT_LINEAR_ISSUE:-none}"
+            --comment "MineLink agent-factory final-video-published status for ${MINELINK_PLATFORM_CODEX_TASK_ID}: PR ${MINELINK_AGENT_FACTORY_PR_URL}; CI ${MINELINK_AGENT_FACTORY_CI_URL}; video evidence ${video_comment_url}."
+            --attachment-title "MineLink agent-factory PR"
+            --attachment-url "$MINELINK_AGENT_FACTORY_PR_URL"
+          )
+          if [ -n "${INPUT_LINEAR_ISSUE:-}" ] && [ "${INPUT_LINEAR_ISSUE:-none}" != "none" ]; then
+            linear_args+=(--require-key --require-update)
+          fi
+          node "${linear_args[@]}"
+
+      - name: Sync blocked task status after video evidence
+        if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' && steps.comment-pr-video-evidence.conclusion != 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+          INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
+        run: |
+          blocker="Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback; configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE or pass github_attachment_video_url."
+          node scripts/dev/sync-github-status.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --status-label blocked-final-video-publication \
+            --blocker "$blocker" \
+            --require-update
+          github_status_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-status.json','utf8')); console.log(report.commentUrl || '')")"
+          echo "MINELINK_GITHUB_STATUS_URL=$github_status_url" >> "$GITHUB_ENV"
+          echo "MINELINK_FINAL_VIDEO_BLOCKER=$blocker" >> "$GITHUB_ENV"
+
+          linear_args=(
+            scripts/dev/sync-linear-status.mjs
+            --issue "${INPUT_LINEAR_ISSUE:-none}"
+            --comment "MineLink agent-factory blocked-final-video-publication status for ${MINELINK_PLATFORM_CODEX_TASK_ID}: PR ${MINELINK_AGENT_FACTORY_PR_URL}; CI ${MINELINK_AGENT_FACTORY_CI_URL}; blocker: ${blocker}"
+            --attachment-title "MineLink agent-factory PR"
+            --attachment-url "$MINELINK_AGENT_FACTORY_PR_URL"
+          )
+          if [ -n "${INPUT_LINEAR_ISSUE:-}" ] && [ "${INPUT_LINEAR_ISSUE:-none}" != "none" ]; then
+            linear_args+=(--require-key --require-update)
+          fi
+          node "${linear_args[@]}"
+
+      - name: Refresh chain report after final video evidence
+        if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' }}
+        run: |
+          node scripts/dev/report-agent-factory-chain.mjs \
+            --github-issue "${{ inputs.github_issue }}" \
+            --issue-contract-status passed \
+            --github-dispatcher-status passed \
+            --github-dispatcher-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --ona-prebuild-status passed \
+            --ona-automation-status passed \
+            --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
+            --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
+            --require-video-producer ona-task-finalizer \
+            --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --pr-url "$MINELINK_AGENT_FACTORY_PR_URL" \
+            --pr-report .minelink-dev/reports/agent-factory-pr.md \
+            --ci-url "$MINELINK_AGENT_FACTORY_CI_URL" \
+            --pr-video-evidence-report .minelink-dev/reports/pr-video-evidence-comment.md \
+            --github-status-url "$MINELINK_GITHUB_STATUS_URL" \
+            --linear-issue "${{ inputs.linear_issue || 'none' }}" \
+            --linear-sync-report .minelink-dev/reports/linear-sync.md \
+            --blocker "${MINELINK_FINAL_VIDEO_BLOCKER:-}" \
+            --require-platform-codex-implementation \
+            --require-platform-codex-verifier

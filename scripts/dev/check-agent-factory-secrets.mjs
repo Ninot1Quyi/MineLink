@@ -5,23 +5,34 @@ import { spawnSync } from "node:child_process";
 
 const args = {
   repo: process.env.GITHUB_REPOSITORY ?? "",
+  onaProjectId: process.env.MINELINK_ONA_PROJECT_ID ?? process.env.ONA_PROJECT_ID ?? "",
+  onaCodexAuthSecret:
+    process.env.MINELINK_ONA_CODEX_AUTH_SECRET_NAME ?? process.env.ONA_CODEX_AUTH_SECRET_NAME ?? "codex_auth",
   output: ".minelink-dev/reports/agent-factory-secrets.md",
   jsonOutput: ".minelink-dev/reports/agent-factory-secrets.json",
+  githubAttachmentUrl: process.env.MINELINK_GITHUB_ATTACHMENT_VIDEO_URL ?? "",
 };
 
 let requireGithubSecrets = false;
 let requireOnaContext = false;
+let requireOnaProjectCodexAuth = false;
 let requireLinearEnv = false;
+let requireGithubAttachmentCookie = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index];
   const readValue = () => process.argv[++index] ?? "";
   if (arg === "--repo") args.repo = readValue();
+  else if (arg === "--ona-project") args.onaProjectId = readValue();
+  else if (arg === "--ona-codex-auth-secret") args.onaCodexAuthSecret = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
+  else if (arg === "--github-attachment-url") args.githubAttachmentUrl = readValue();
   else if (arg === "--require-github-secrets") requireGithubSecrets = true;
   else if (arg === "--require-ona-context") requireOnaContext = true;
+  else if (arg === "--require-ona-project-codex-auth") requireOnaProjectCodexAuth = true;
   else if (arg === "--require-linear-env") requireLinearEnv = true;
+  else if (arg === "--require-github-attachment-cookie") requireGithubAttachmentCookie = true;
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/check-agent-factory-secrets.mjs [options]
 
@@ -30,9 +41,16 @@ agent factory. It never prints secret values.
 
 Options:
   --repo owner/name              GitHub repository to inspect.
-  --require-github-secrets       Fail if ONA_TOKEN or LINEAR_API_KEY is missing in GitHub secrets.
+  --ona-project project-id       Ona project id to inspect for secret names.
+  --ona-codex-auth-secret name   Expected Ona project secret name for Codex provider auth.
+  --github-attachment-url url    Existing GitHub user-attachments MP4 URL, if manually provided.
+  --require-github-secrets       Fail if ONA_TOKEN, LINEAR_API_KEY, or AGENT_FACTORY_GITHUB_TOKEN is missing.
   --require-ona-context          Fail if local/runner Ona CLI has no active context.
+  --require-ona-project-codex-auth
+                                  Fail if the expected Ona project Codex auth secret name is not listed.
   --require-linear-env           Fail if LINEAR_API_KEY is not present in the current environment.
+  --require-github-attachment-cookie
+                                  Fail if final PR video publication lacks both a GitHub web attachment cookie and a provided attachment URL.
 `);
     process.exit(0);
   } else {
@@ -76,11 +94,49 @@ function parseSecretNames(output) {
   );
 }
 
+function collectOnaSecretNames(value, names = new Set()) {
+  if (Array.isArray(value)) {
+    for (const item of value) collectOnaSecretNames(item, names);
+    return names;
+  }
+  if (!value || typeof value !== "object") return names;
+  for (const key of ["name", "key", "secretName", "variableName"]) {
+    if (typeof value[key] === "string" && value[key].trim()) names.add(value[key].trim());
+  }
+  for (const key of ["secrets", "items", "result", "results"]) {
+    if (Array.isArray(value[key])) collectOnaSecretNames(value[key], names);
+  }
+  return names;
+}
+
+function parseOnaSecretNames(output) {
+  try {
+    return collectOnaSecretNames(JSON.parse(output));
+  } catch {
+    return parseSecretNames(output);
+  }
+}
+
+function githubInlineAttachment(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "github.com" && parsed.pathname.startsWith("/user-attachments/assets/")) return true;
+    if (parsed.hostname === "user-images.githubusercontent.com") return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 const repo = inferRepo();
 const env = {
   onaTokenPresent: Boolean(process.env.ONA_TOKEN || process.env.GITPOD_TOKEN),
   linearKeyPresent: Boolean(process.env.LINEAR_API_KEY),
+  agentFactoryGithubTokenPresent: Boolean(process.env.AGENT_FACTORY_GITHUB_TOKEN),
   ghTokenPresent: Boolean(process.env.GH_TOKEN || process.env.GITHUB_TOKEN),
+  githubUserAttachmentsCookiePresent: Boolean(
+    process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE || process.env.GITHUB_USER_ATTACHMENTS_COOKIE,
+  ),
   githubActions: Boolean(process.env.GITHUB_ACTIONS),
 };
 
@@ -106,6 +162,55 @@ record(
     ? "LINEAR_API_KEY is required in the current environment for Linear watcher/status sync."
     : "",
 );
+record(
+  "current AGENT_FACTORY_GITHUB_TOKEN",
+  env.agentFactoryGithubTokenPresent ? "present" : "missing",
+  env.agentFactoryGithubTokenPresent
+    ? "environment variable is present"
+    : "environment variable is missing",
+  "",
+);
+record(
+  "current MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE",
+  env.githubUserAttachmentsCookiePresent ? "present" : "missing",
+  env.githubUserAttachmentsCookiePresent
+    ? "environment variable is present"
+    : "environment variable is missing",
+  "",
+);
+record(
+  "configured GitHub attachment video URL",
+  args.githubAttachmentUrl ? "present" : "missing",
+  args.githubAttachmentUrl
+    ? "manual github.com/user-attachments MP4 URL was provided"
+    : "manual GitHub attachment URL was not provided",
+  "",
+);
+
+if (requireGithubAttachmentCookie && args.githubAttachmentUrl && !githubInlineAttachment(args.githubAttachmentUrl)) {
+  record(
+    "final PR inline video publication",
+    "blocked",
+    "manual video URL is not a GitHub user-attachments URL",
+    "Pass a github.com/user-attachments/assets/... MP4 URL or configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE.",
+  );
+} else if (requireGithubAttachmentCookie && !env.githubUserAttachmentsCookiePresent && !args.githubAttachmentUrl) {
+  record(
+    "final PR inline video publication",
+    "blocked",
+    "no GitHub web attachment cookie and no manual GitHub attachment URL are available",
+    "Configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE or pass github_attachment_video_url before running full-chain PR video publication.",
+  );
+} else if (requireGithubAttachmentCookie) {
+  record(
+    "final PR inline video publication",
+    "passed",
+    args.githubAttachmentUrl
+      ? "manual GitHub attachment URL can be used for final PR playback"
+      : "GitHub web attachment cookie can create the PR playback attachment",
+    "",
+  );
+}
 
 const ghAuth = run("gh", ["auth", "status"]);
 record(
@@ -122,6 +227,7 @@ if (env.githubActions) {
   const missing = [
     ["ONA_TOKEN", env.onaTokenPresent],
     ["LINEAR_API_KEY", env.linearKeyPresent],
+    ["AGENT_FACTORY_GITHUB_TOKEN", env.agentFactoryGithubTokenPresent],
   ]
     .filter(([, present]) => !present)
     .map(([name]) => name);
@@ -129,7 +235,7 @@ if (env.githubActions) {
     "GitHub Actions secret env",
     missing.length === 0 ? "passed" : "blocked",
     missing.length === 0
-      ? "ONA_TOKEN and LINEAR_API_KEY are visible to this runner as environment variables"
+      ? "ONA_TOKEN, LINEAR_API_KEY, and AGENT_FACTORY_GITHUB_TOKEN are visible to this runner as environment variables"
       : `missing secret-backed environment variables: ${missing.join(", ")}`,
     requireGithubSecrets && missing.length > 0
       ? `Configure GitHub repository secrets or workflow environment: ${missing.join(", ")}.`
@@ -139,12 +245,14 @@ if (env.githubActions) {
   const secretList = run("gh", ["secret", "list", "--repo", repo]);
   if (secretList.status === 0) {
     githubSecrets = parseSecretNames(secretList.stdout);
-    const missing = ["ONA_TOKEN", "LINEAR_API_KEY"].filter((name) => !githubSecrets.has(name));
+    const missing = ["ONA_TOKEN", "LINEAR_API_KEY", "AGENT_FACTORY_GITHUB_TOKEN"].filter(
+      (name) => !githubSecrets.has(name),
+    );
     record(
       "GitHub repo secrets",
       missing.length === 0 ? "passed" : "blocked",
       missing.length === 0
-        ? "ONA_TOKEN and LINEAR_API_KEY are configured as GitHub repository secrets"
+        ? "ONA_TOKEN, LINEAR_API_KEY, and AGENT_FACTORY_GITHUB_TOKEN are configured as GitHub repository secrets"
         : `missing GitHub repository secrets: ${missing.join(", ")}`,
       requireGithubSecrets && missing.length > 0
         ? `Configure GitHub repository secrets: ${missing.join(", ")}.`
@@ -177,6 +285,55 @@ record(
     : "",
 );
 
+let onaProjectSecretNames = new Set();
+if (args.onaProjectId && onaWhoami.status === 0) {
+  const secretList = run("ona", [
+    "project",
+    "secret",
+    "list",
+    args.onaProjectId,
+    "--format",
+    "json",
+    "--limit",
+    "1000",
+  ]);
+  if (secretList.status === 0) {
+    onaProjectSecretNames = parseOnaSecretNames(secretList.stdout);
+    const expectedSecret = args.onaCodexAuthSecret || "codex_auth";
+    const expectedPresent = onaProjectSecretNames.has(expectedSecret);
+    record(
+      "Ona project Codex auth secret name",
+      expectedPresent ? "passed" : "blocked",
+      expectedPresent
+        ? `expected project secret name ${expectedSecret} is listed`
+        : `expected project secret name ${expectedSecret} is not listed among ${onaProjectSecretNames.size} project secret name(s)`,
+      requireOnaProjectCodexAuth && !expectedPresent
+        ? `Configure Ona project secret ${expectedSecret} for Platform Codex provider authentication.`
+        : "",
+    );
+  } else {
+    record(
+      "Ona project secret list",
+      "blocked",
+      sanitize(secretList.stderr || secretList.stdout),
+      requireOnaProjectCodexAuth
+        ? "Could not list Ona project secret names; cannot prove Codex provider auth preflight."
+        : "",
+    );
+  }
+} else {
+  record(
+    "Ona project Codex auth secret name",
+    "missing",
+    args.onaProjectId
+      ? "Ona CLI active context is unavailable, so project secret names were not inspected"
+      : "Ona project id is missing, so project secret names were not inspected",
+    requireOnaProjectCodexAuth
+      ? "Provide MINELINK_ONA_PROJECT_ID and an authenticated Ona CLI context before probing Platform Codex provider auth."
+      : "",
+  );
+}
+
 const observedIssues = checks.some((check) => check.status === "blocked");
 const result = blockers.length > 0 ? "blocked" : observedIssues ? "attention" : "completed";
 function unique(values) {
@@ -196,17 +353,38 @@ const nextActions = unique([
     ) {
       return ["Provide LINEAR_API_KEY to the runner before enabling Linear watch/status sync."];
     }
+    if (
+      check.name === "current AGENT_FACTORY_GITHUB_TOKEN" &&
+      check.status === "missing" &&
+      env.githubActions
+    ) {
+      return [
+        "Provide AGENT_FACTORY_GITHUB_TOKEN to the runner before creating or updating agent-factory pull requests.",
+      ];
+    }
     if (check.name === "GitHub CLI auth" && check.status === "blocked") {
       return ["Authenticate GitHub CLI or provide GH_TOKEN/GITHUB_TOKEN before inspecting repository state."];
     }
     if (check.name === "GitHub repo secrets" && check.status === "blocked") {
-      return ["Configure GitHub repository secrets: ONA_TOKEN and LINEAR_API_KEY."];
+      return [
+        "Configure GitHub repository secrets: ONA_TOKEN, LINEAR_API_KEY, and AGENT_FACTORY_GITHUB_TOKEN.",
+      ];
     }
     if (check.name === "GitHub Actions secret env" && check.status === "blocked") {
-      return ["Configure GitHub repository or environment secrets so ONA_TOKEN and LINEAR_API_KEY are visible to the workflow runner."];
+      return [
+        "Configure GitHub repository or environment secrets so ONA_TOKEN, LINEAR_API_KEY, and AGENT_FACTORY_GITHUB_TOKEN are visible to the workflow runner.",
+      ];
     }
     if (check.name === "Ona CLI active context" && check.status === "blocked") {
       return ["Verify ona login creates an active Ona context before running ona ai automation start."];
+    }
+    if (check.name === "Ona project Codex auth secret name" && check.status === "blocked") {
+      return [
+        `Configure Ona project secret ${args.onaCodexAuthSecret || "codex_auth"} before starting Platform Codex Goal sessions.`,
+      ];
+    }
+    if (check.name === "Ona project secret list" && check.status === "blocked") {
+      return ["Verify the Ona token can list project secret names for the MineLink project."];
     }
     return [];
   }),
@@ -214,6 +392,8 @@ const nextActions = unique([
 
 const report = {
   repo: repo || "unknown",
+  onaProjectId: args.onaProjectId || "unknown",
+  expectedOnaCodexAuthSecret: args.onaCodexAuthSecret || "codex_auth",
   generatedAt: new Date().toISOString(),
   result,
   checks,
@@ -234,6 +414,8 @@ const lines = [
   "# MineLink Agent Factory Secret Preflight",
   "",
   `- Repository: \`${escapeMd(report.repo)}\``,
+  `- Ona project: \`${escapeMd(report.onaProjectId)}\``,
+  `- Expected Ona Codex auth secret: \`${escapeMd(report.expectedOnaCodexAuthSecret)}\``,
   `- Generated: \`${report.generatedAt}\``,
   `- Result: \`${result}\``,
   "- Boundary: `credential presence and CLI context only; no secret values printed`",
