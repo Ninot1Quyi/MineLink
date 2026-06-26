@@ -853,7 +853,9 @@ manufacture later evidence from a dirty environment. The recorder-backed
 NeoForge e2e path sets a per-run `MINELINK_MINECRAFT_LEVEL_NAME` and clears
 only the current MCP/Minecraft/gateway ports before launch, which prevents
 stale Ona tasks from causing shared `world/session.lock` or fixed-port
-collisions without weakening the public MCP task boundary.
+collisions without weakening the public MCP task boundary. Push-triggered
+identity canaries use a 600 second readback window because the configured
+Platform Codex service tier is Standard rather than Fast.
 The repository dispatcher now waits briefly for the Ona automation execution
 readback in CI, so the artifacts can distinguish `queued`, `running`,
 `completed`, and `completed_with_failed_actions` instead of flattening every

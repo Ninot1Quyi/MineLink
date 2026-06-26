@@ -220,6 +220,8 @@ require_text ".github/workflows/ona-platform-codex-probe.yml" "secrets.ONA_TOKEN
 require_text ".github/workflows/ona-platform-codex-probe.yml" "MINELINK_ONA_CODEX_AGENT_ID"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "AGENT_FACTORY_GITHUB_TOKEN"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "identity-canary"
+require_text ".github/workflows/ona-platform-codex-probe.yml" 'INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '\''600'\'' }}'
+require_text ".github/workflows/ona-platform-codex-probe.yml" '--wait-seconds "${INPUT_WAIT_SECONDS:-600}"'
 require_text ".github/workflows/ona-platform-codex-probe.yml" "implementation-canary"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "task-implementation"
 require_text ".github/workflows/ona-platform-codex-probe.yml" "fetch-platform-codex-canary.mjs"

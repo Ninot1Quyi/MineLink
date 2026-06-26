@@ -233,7 +233,7 @@ jobs:
           MINELINK_ONA_CODEX_AGENT_ID: ${{ secrets.MINELINK_ONA_CODEX_AGENT_ID }}
           INPUT_CODEX_AGENT_ID: ${{ inputs.codex_agent_id }}
           INPUT_MODE: ${{ inputs.mode || 'identity-canary' }}
-          INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '30' }}
+          INPUT_WAIT_SECONDS: ${{ inputs.wait_seconds || '600' }}
           INPUT_ENVIRONMENT_WAIT_SECONDS: ${{ inputs.environment_wait_seconds || '600' }}
           INPUT_ENVIRONMENT_CLASS_ID: ${{ inputs.environment_class_id || vars.MINELINK_ONA_ENVIRONMENT_CLASS_ID }}
           INPUT_TASK_ID: ${{ inputs.task_id }}
@@ -260,7 +260,7 @@ jobs:
                 --agent-mode AGENT_MODE_GOAL
                 --create-environment
                 --environment-wait-seconds "${INPUT_ENVIRONMENT_WAIT_SECONDS:-600}"
-                --wait-seconds "${INPUT_WAIT_SECONDS:-30}"
+                --wait-seconds "${INPUT_WAIT_SECONDS:-600}"
               )
               if [ -n "${INPUT_ENVIRONMENT_CLASS_ID:-}" ]; then
                 args+=(--environment-class-id "$INPUT_ENVIRONMENT_CLASS_ID")

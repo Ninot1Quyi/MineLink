@@ -931,7 +931,9 @@ resources by assigning a task-local `MINELINK_MINECRAFT_LEVEL_NAME` and
 pre-cleaning the MCP, Minecraft, and gateway ports before launch. That prevents
 stale Ona/Gradle/Minecraft processes from reusing `mod/neoforge/run/world` or a
 fixed TCP port and creating misleading `session.lock` or `EADDRINUSE`
-failures. The
+failures. Push-triggered identity canaries also use a 600 second readback
+window, matching the Standard Codex service tier instead of the old fast-tier
+30 second probe. The
 recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` before
 starting the Minecraft client. That script is fail-closed by default: the
 devcontainer/GHCR/Ona prebuild must already provide `ffmpeg`, `Xvfb`, the
