@@ -1086,7 +1086,8 @@ fails closed as `github-web-cookie-rejected` when GitHub renders the sign-in
 page. The policy/finalize requests must still accept the discovered token or
 the release edge fails closed. It uses reusable multipart buffers for the
 policy, object upload, and finalization calls. Object-store upload requests do
-not carry the GitHub cookie header. It also uses bounded retries, request
+not receive the GitHub cookie header.
+It also uses bounded retries, request
 timeouts, cookie marker reporting, page-token marker reporting,
 dynamic-DOM/cookie marker reporting, and failure-kind classification so
 rejected cookies, missing page tokens, and transient policy, object-upload, or
@@ -1101,8 +1102,19 @@ waits for an explicit GitHub login, captures only `github.com` cookies from
 that profile, and writes the value directly to the GitHub repository secret
 without printing it. PR-producing full-chain dispatches additionally run an
 early readiness report before Ona work starts, so missing inline-video
-publication authority is visible before the final comment gate. For Minecraft
-client capture, the finalizer
+publication authority is visible before the final comment gate.
+
+`.github/workflows/github-user-attachment-smoke.yml` is the narrow transport
+diagnostic for this edge. It creates a tiny MP4, uploads it with
+`scripts/dev/upload-github-user-attachment.mjs`, uploads the sanitized reports
+as an artifact, and can optionally post the returned
+`github.com/user-attachments/assets/...` URL to a selected PR. Use this smoke to
+prove a refreshed `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` before spending a
+full Ona/NeoForge run. Its video is diagnostic transport evidence only; final
+task publication still requires the Ona-produced `acceptance.mp4`, same-session
+Codex verifier, `check-video-review.mjs`, and release gate.
+
+For Minecraft client capture, the finalizer
 defaults to the recorder `observer_follow` camera with an elevated offset. This
 keeps the `server_agent` and the surrounding task target visible. The old
 `target_third_person` camera remains available for diagnostics but is not
