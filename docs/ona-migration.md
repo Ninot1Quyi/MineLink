@@ -33,11 +33,13 @@ Use `.devcontainer/devcontainer.json` for bootstrap. The default file uses the
 MineLink GHCR cache-prewarmed image for the project work line:
 
 ```text
-ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering
+ghcr.io/ninot1quyi/minelink-devcontainer:codex-gh-3-agent-factory-pilot
 ```
 
-The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, image or OS provided
-`python3`, npm cache, and Gradle user-home cache. It still runs
+The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, `Xvfb`, `python3-pil`,
+image or OS provided `python3`, npm cache, and Gradle user-home cache. The
+factory-pilot tag is a temporary work-line cache until the same recorder
+dependency set is merged into the base engineering tag. It still runs
 `scripts/dev/bootstrap-prebuild.sh` as the final setup and verification gate.
 If Docker smoke or Ona prebuild readback fails, record the failure and fix the
 image or temporarily return to the public Node 22 base image. Do not pin the

@@ -833,16 +833,19 @@ contain committed EULA files, secrets, admission tokens, Microsoft credentials,
 local `mod/neoforge/run` state, or a hand-uploaded local container snapshot. It
 also cannot be treated as proof that NeoForge generated workspace outputs are
 reusable in Ona, because project-local `.gradle` and generated source/build
-directories are path- and checkout-sensitive. The default devcontainer uses the
-`codex-minelink-mvp-engineering` GHCR branch tag after registry access and
-Docker runtime smoke are proven. Ona prebuilds must still run
+directories are path- and checkout-sensitive. The factory-pilot devcontainer
+uses the `codex-gh-3-agent-factory-pilot` GHCR branch tag while the recorder
+dependency and video-gate work is ahead of the base engineering branch; after
+merge, the base `codex-minelink-mvp-engineering` tag must carry the same
+recorder dependency set. Ona prebuilds must still run
 `scripts/dev/bootstrap-prebuild.sh` with `prebuildRequiresSuccess: true` as the
 final hard gate before an agent environment is accepted. If Ona pull/start or
 the post-publish Docker smoke fails, record the failure and fix the image or
 temporarily return to the public Node 22 base image.
 
 The MineLink default devcontainer pulls the moving branch cache
-`ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering`.
+`ghcr.io/ninot1quyi/minelink-devcontainer:codex-gh-3-agent-factory-pilot` for
+the current factory-pilot work line.
 Immutable `sha-*` tags from the same workflow are the audit anchors for image
 evidence. The branch tag is used only to make Ona task environments fast to
 start; it is not an acceptance artifact by itself.

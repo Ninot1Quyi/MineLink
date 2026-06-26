@@ -771,11 +771,14 @@ Current status:
   reporting until the required Platform Codex readbacks pass. This is
   automation-chain evidence only and does not upgrade MineLink product gates.
 - `.devcontainer/devcontainer.json` now uses
-  `ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering` as
-  the default image and uses `scripts/dev/bootstrap-prebuild.sh --light` for
-  normal `postCreateCommand` startup. The full Node/TypeScript and NeoForge
-  Gradle warmup remains the Ona prebuild hard gate, not a per-task startup cost.
-  Run `27919007816` is the current fresh Ona prebuild readback for this path.
+  `ghcr.io/ninot1quyi/minelink-devcontainer:codex-gh-3-agent-factory-pilot` for
+  the current factory-pilot work line and uses
+  `scripts/dev/bootstrap-prebuild.sh --light` for normal `postCreateCommand`
+  startup. This branch tag is required while recorder dependencies are ahead of
+  `codex-minelink-mvp-engineering`; after merge, the base branch image tag must
+  carry the same `Xvfb` and `python3-pil` dependency set. The full
+  Node/TypeScript and NeoForge Gradle warmup remains the Ona prebuild hard gate,
+  not a per-task startup cost.
 - `.ona/automations.yaml` now provides Ona-native environment tasks for docs,
   fast verification, real NeoForge guard smoke, and acceptance artifact
   rendering plus video-review request preparation and a separate video-release

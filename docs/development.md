@@ -39,13 +39,16 @@ Ona worktrees should rebuild from `.devcontainer/devcontainer.json`. The
 default devcontainer uses the MineLink GHCR cache-prewarmed image:
 
 ```text
-ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering
+ghcr.io/ninot1quyi/minelink-devcontainer:codex-gh-3-agent-factory-pilot
 ```
 
 The image provides Node 22, Java 21, GitHub CLI, `ffmpeg`, `Xvfb`, the
 X11/OpenGL/audio libraries used by the Minecraft client recorder, image or OS
 provided `python3`, npm cache, and Gradle user-home cache. Do not add a pinned
 Python feature that forces source compilation during cloud rebuilds.
+The factory-pilot branch tag is used while recorder dependencies are ahead of
+`codex-minelink-mvp-engineering`; after merge, the base branch tag must be
+rebuilt with the same dependency set.
 
 The prewarmed image is built by GitHub Actions:
 
