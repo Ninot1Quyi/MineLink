@@ -1,0 +1,117 @@
+name: GitHub User Attachment Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      referer_url:
+        description: GitHub PR or issue URL used as the attachment upload referer.
+        required: false
+      pr_number:
+        description: Optional PR number to receive a diagnostic smoke comment.
+        required: false
+      publish_comment:
+        description: Post the uploaded MP4 URL to the selected PR as a diagnostic smoke comment.
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  smoke:
+    name: Upload a tiny MP4 through GitHub user-attachments
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Generate diagnostic MP4
+        run: |
+          mkdir -p .minelink-dev/reports/artifacts
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -y \
+            -f lavfi -i testsrc2=size=640x360:rate=10:duration=2 \
+            -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 \
+            -shortest \
+            -pix_fmt yuv420p \
+            -movflags +faststart \
+            .minelink-dev/reports/artifacts/github-attachment-smoke.mp4
+
+      - name: Upload MP4 to GitHub user-attachments
+        id: upload
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
+          MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN: "1"
+          INPUT_REFERER_URL: ${{ inputs.referer_url }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          referer="${INPUT_REFERER_URL:-}"
+          if [ -z "$referer" ] && [ -n "${INPUT_PR_NUMBER:-}" ]; then
+            referer="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/pull/$INPUT_PR_NUMBER"
+          fi
+          if [ -z "$referer" ]; then
+            echo "referer_url or pr_number is required for the attachment smoke."
+            exit 2
+          fi
+
+          node scripts/dev/upload-github-user-attachment.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --referer "$referer" \
+            --file .minelink-dev/reports/artifacts/github-attachment-smoke.mp4 \
+            --name github-attachment-smoke.mp4 \
+            --output .minelink-dev/reports/github-user-attachment-smoke.md \
+            --json-output .minelink-dev/reports/github-user-attachment-smoke.json \
+            --require-upload
+
+          video_url="$(node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('.minelink-dev/reports/github-user-attachment-smoke.json','utf8')); console.log(report.href || '')")"
+          if [ -z "$video_url" ]; then
+            echo "Upload succeeded without href in report."
+            exit 1
+          fi
+          echo "video-url=$video_url" >> "$GITHUB_OUTPUT"
+
+      - name: Post diagnostic PR comment
+        if: ${{ always() && steps.upload.outputs.video-url != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          INPUT_PUBLISH_COMMENT: ${{ inputs.publish_comment || 'false' }}
+          VIDEO_URL: ${{ steps.upload.outputs.video-url }}
+        run: |
+          if [ "${INPUT_PUBLISH_COMMENT:-false}" != "true" ] || [ -z "${INPUT_PR_NUMBER:-}" ]; then
+            echo "Skipping diagnostic PR comment."
+            exit 0
+          fi
+          {
+            echo "<!-- minelink-github-user-attachment-smoke -->"
+            echo "MineLink GitHub user-attachment smoke video:"
+            echo
+            echo "$VIDEO_URL"
+            echo
+            echo "Expected URL shape: \`github.com/user-attachments/assets/...\`"
+            echo
+            echo "Boundary: diagnostic upload/playback transport smoke only. This is not MineLink product acceptance evidence."
+          } > .minelink-dev/reports/github-user-attachment-smoke-comment.md
+          gh pr comment "$INPUT_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file .minelink-dev/reports/github-user-attachment-smoke-comment.md
+
+      - name: Upload smoke reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-github-user-attachment-smoke
+          path: .minelink-dev/reports/
+          include-hidden-files: true

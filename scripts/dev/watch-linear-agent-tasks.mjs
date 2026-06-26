@@ -22,6 +22,7 @@ let requireOna = false;
 let allowBlocked = false;
 let syncDispatchStatus = process.env.MINELINK_LINEAR_SYNC_DISPATCH_STATUS !== "0";
 let waitOnaExecution = process.env.MINELINK_WAIT_ONA_EXECUTION === "1";
+let cancelOnaExecutionOnTimeout = process.env.MINELINK_CANCEL_ONA_EXECUTION_ON_TIMEOUT === "1";
 let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 600);
 let onaExecutionPollSeconds = Number(process.env.MINELINK_ONA_EXECUTION_POLL_SECONDS ?? 5);
 
@@ -37,6 +38,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--dispatch-status") args.dispatchStatus = readValue();
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--wait-ona-execution") waitOnaExecution = true;
+  else if (arg === "--cancel-ona-execution-on-timeout") cancelOnaExecutionOnTimeout = true;
   else if (arg === "--ona-execution-timeout-seconds") onaExecutionTimeoutSeconds = Number(readValue());
   else if (arg === "--ona-execution-poll-seconds") onaExecutionPollSeconds = Number(readValue());
   else if (arg === "--dry-run") dryRun = true;
@@ -92,6 +94,8 @@ async function writeReport(report) {
     `- Issue filter: \`${args.issue || "none"}\``,
     `- LINEAR_API_KEY present: \`${report.keyPresent ? "yes" : "no"}\``,
     `- Dispatch status sync: \`${report.dispatchStatusSync}\``,
+    `- Wait Ona execution: \`${report.waitOnaExecution ? "yes" : "no"}\``,
+    `- Cancel Ona execution on timeout: \`${report.cancelOnaExecutionOnTimeout ? "yes" : "no"}\``,
     `- Candidate count: \`${report.candidates.length}\``,
     `- Skipped count: \`${report.skipped.length}\``,
     `- Dispatched count: \`${report.dispatched.length}\``,
@@ -148,6 +152,8 @@ const report = {
     syncDispatchStatus && args.dispatchStatus
       ? `enabled:${args.dispatchStatus}`
       : "disabled",
+  waitOnaExecution,
+  cancelOnaExecutionOnTimeout,
 };
 
 async function graphql(query, variables = {}) {
@@ -346,6 +352,7 @@ try {
     if (waitOnaExecution) {
       commandArgs.push(
         "--wait-ona-execution",
+        ...(cancelOnaExecutionOnTimeout ? ["--cancel-ona-execution-on-timeout"] : []),
         "--ona-execution-timeout-seconds",
         String(onaExecutionTimeoutSeconds),
         "--ona-execution-poll-seconds",

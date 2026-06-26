@@ -1,10 +1,10 @@
 {
   "name": "MineLink Agent Worktree",
-  "image": "ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering",
+  "image": "ghcr.io/ninot1quyi/minelink-devcontainer:codex-gh-3-agent-factory-pilot",
   "remoteUser": "node",
   "containerEnv": {
     "GRADLE_USER_HOME": "/home/node/.gradle",
-    "MINELINK_DEVCONTAINER_IMAGE": "ghcr.io/ninot1quyi/minelink-devcontainer:codex-minelink-mvp-engineering"
+    "MINELINK_DEVCONTAINER_IMAGE": "ghcr.io/ninot1quyi/minelink-devcontainer:codex-gh-3-agent-factory-pilot"
   },
   "postCreateCommand": "bash scripts/dev/bootstrap-prebuild.sh --light",
   "postAttachCommand": "git status --short --branch && bash scripts/dev/verify-agent-task.sh --scope docs",

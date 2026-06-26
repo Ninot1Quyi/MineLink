@@ -12,6 +12,7 @@ require_eula="${MINELINK_REQUIRE_EULA:-0}"
 accept_eula="${MINELINK_ACCEPT_EULA:-1}"
 online_mode="${MINELINK_ONLINE_MODE:-false}"
 minecraft_port="${MINELINK_MINECRAFT_PORT:-}"
+level_name="${MINELINK_MINECRAFT_LEVEL_NAME:-world}"
 ref_ttl_ms="${MINELINK_REF_TTL_MS:-}"
 enable_create="${MINELINK_ENABLE_CREATE:-0}"
 gradle_cmd="${MINELINK_GRADLE_CMD:-}"
@@ -63,6 +64,7 @@ if [ "$runtime" = "neoforge" ]; then
 
   server_properties="mod/neoforge/run/server.properties"
   upsert_server_property "online-mode" "$online_mode" "$server_properties"
+  upsert_server_property "level-name" "$level_name" "$server_properties"
   if [ -n "$minecraft_port" ]; then
     upsert_server_property "server-port" "$minecraft_port" "$server_properties"
   fi
@@ -99,8 +101,10 @@ if [ "$runtime" = "neoforge" ]; then
   fi
   if [ -n "$gradle_cmd" ]; then
     (cd mod/neoforge && exec "$gradle_cmd" --no-daemon runServer)
+    exit $?
   else
     (cd mod/neoforge && exec ./gradlew --no-daemon runServer)
+    exit $?
   fi
 fi
 

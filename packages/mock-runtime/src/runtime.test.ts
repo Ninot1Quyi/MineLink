@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import WebSocket from "ws";
@@ -7,13 +8,30 @@ import { MockRuntimeServer } from "./runtime.js";
 
 const servers: MockRuntimeServer[] = [];
 
+async function freePort(): Promise<number> {
+  return await new Promise<number>((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => {
+        if (address && typeof address === "object") {
+          resolve(address.port);
+        } else {
+          reject(new Error(`unexpected address: ${String(address)}`));
+        }
+      });
+    });
+  });
+}
+
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.stop()));
 });
 
 describe("MockRuntimeServer", () => {
   it("refuses online-mode=true during MVP", async () => {
-    const server = new MockRuntimeServer({ port: 25675, onlineMode: true });
+    const server = new MockRuntimeServer({ port: await freePort(), onlineMode: true });
     servers.push(server);
     await server.start();
 
@@ -29,7 +47,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("enforces the per-owner server_agent quota", async () => {
-    const server = new MockRuntimeServer({ port: 25685 });
+    const server = new MockRuntimeServer({ port: await freePort() });
     servers.push(server);
     await server.start();
 
@@ -58,7 +76,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("enforces visible ref reachability before mining", async () => {
-    const server = new MockRuntimeServer({ port: 25676 });
+    const server = new MockRuntimeServer({ port: await freePort() });
     servers.push(server);
     await server.start();
 
@@ -86,7 +104,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("rejects unknown and expired refs with structured reasons", async () => {
-    const server = new MockRuntimeServer({ port: 25677 });
+    const server = new MockRuntimeServer({ port: await freePort() });
     servers.push(server);
     await server.start();
 
@@ -118,7 +136,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("clips movement against visible guard-boundary blocks", async () => {
-    const server = new MockRuntimeServer({ port: 25684, fixture: "guard_boundaries" });
+    const server = new MockRuntimeServer({ port: await freePort(), fixture: "guard_boundaries" });
     servers.push(server);
     await server.start();
 
@@ -165,7 +183,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("tracks submitted action lifecycle and applies backpressure", async () => {
-    const server = new MockRuntimeServer({ port: 25678 });
+    const server = new MockRuntimeServer({ port: await freePort() });
     servers.push(server);
     await server.start();
 
@@ -306,7 +324,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("freezes, restores, and removes a server_agent body while releasing lifecycle state", async () => {
-    const server = new MockRuntimeServer({ port: 25686 });
+    const server = new MockRuntimeServer({ port: await freePort() });
     servers.push(server);
     await server.start();
 
@@ -413,7 +431,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("shares local chat events only with nearby server agents", async () => {
-    const server = new MockRuntimeServer({ port: 25683, fixture: "portal_coop" });
+    const server = new MockRuntimeServer({ port: await freePort(), fixture: "portal_coop" });
     servers.push(server);
     await server.start();
 
@@ -579,7 +597,7 @@ describe("MockRuntimeServer", () => {
     const temp = mkdtempSync(join(tmpdir(), "minelink-runtime-test-"));
     const tracePath = join(temp, "latest-action-trace.jsonl");
     const server = new MockRuntimeServer({
-      port: 25679,
+      port: await freePort(),
       fixture: "create_smoke",
       logDir: temp,
       tracePath
@@ -828,7 +846,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("rejects non-block Create items during mock placement", async () => {
-    const server = new MockRuntimeServer({ port: 25682, fixture: "create_smoke" });
+    const server = new MockRuntimeServer({ port: await freePort(), fixture: "create_smoke" });
     servers.push(server);
     await server.start();
 
@@ -869,7 +887,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("moves container stacks and crafts through server-side slot refs", async () => {
-    const server = new MockRuntimeServer({ port: 25680, fixture: "craft_smoke" });
+    const server = new MockRuntimeServer({ port: await freePort(), fixture: "craft_smoke" });
     servers.push(server);
     await server.start();
 
@@ -1217,7 +1235,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("returns structured crafting failures before material and station requirements are satisfied", async () => {
-    const server = new MockRuntimeServer({ port: 25681, fixture: "craft_smoke" });
+    const server = new MockRuntimeServer({ port: await freePort(), fixture: "craft_smoke" });
     servers.push(server);
     await server.start();
 
@@ -1263,7 +1281,7 @@ describe("MockRuntimeServer", () => {
   });
 
   it("rejects furnace moves that violate server slot rules", async () => {
-    const server = new MockRuntimeServer({ port: 25686, fixture: "furnace_smoke" });
+    const server = new MockRuntimeServer({ port: await freePort(), fixture: "furnace_smoke" });
     servers.push(server);
     await server.start();
 

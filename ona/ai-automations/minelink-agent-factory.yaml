@@ -51,6 +51,8 @@ action:
           --acceptance-gate "{{ .Parameters.acceptance_gate }}"
           --validation-scope "{{ .Parameters.validation_scope }}"
           --scenarios "{{ .Parameters.scenarios }}"
+          --video-producer "ona-task-finalizer"
+          --required-video-producer "ona-task-finalizer"
     - task:
         command: |
           if node scripts/dev/check-platform-codex-evidence.mjs \
@@ -74,16 +76,25 @@ action:
           Remaining gaps: Public Ona automation agent steps start the default Ona Agent, so the separate Platform Codex video-verifier session must be started through a proven Codex surface before release can continue.
           EOF
     - task:
-        command: >
-          node scripts/dev/run-agent-factory-stage.mjs
-          --stage release-finalize
-          --task-id "{{ .Parameters.task_id }}"
-          --github-issue "{{ .Parameters.github_issue }}"
-          --linear-issue "{{ .Parameters.linear_issue }}"
-          --ona-project "{{ .Parameters.ona_project }}"
-          --ona-automation "{{ .Parameters.ona_automation }}"
-          --branch "{{ .Parameters.branch }}"
-          --pr-title "{{ .Parameters.pr_title }}"
-          --acceptance-gate "{{ .Parameters.acceptance_gate }}"
-          --validation-scope "{{ .Parameters.validation_scope }}"
-          --scenarios "{{ .Parameters.scenarios }}"
+        command: |
+          set +e
+          node scripts/dev/run-agent-factory-stage.mjs \
+            --stage release-finalize \
+            --task-id "{{ .Parameters.task_id }}" \
+            --github-issue "{{ .Parameters.github_issue }}" \
+            --linear-issue "{{ .Parameters.linear_issue }}" \
+            --ona-project "{{ .Parameters.ona_project }}" \
+            --ona-automation "{{ .Parameters.ona_automation }}" \
+            --branch "{{ .Parameters.branch }}" \
+            --pr-title "{{ .Parameters.pr_title }}" \
+            --acceptance-gate "{{ .Parameters.acceptance_gate }}" \
+            --validation-scope "{{ .Parameters.validation_scope }}" \
+            --scenarios "{{ .Parameters.scenarios }}" \
+            --video-producer "ona-task-finalizer" \
+            --required-video-producer "ona-task-finalizer"
+          release_status=$?
+          node scripts/dev/cleanup-ona-resources.mjs \
+            --project-id "{{ .Parameters.ona_project }}" \
+            --stop \
+            --dont-wait || true
+          exit "$release_status"
