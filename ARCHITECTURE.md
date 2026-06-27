@@ -1101,7 +1101,23 @@ profile, explicitly logs in to GitHub, and the helper writes only the resulting
 `gh secret set` without printing cookie values. It does not run in CI and does
 not read the operator's normal browser profile. When the cookie is absent the
 upload script writes a skipped report and the PR publication gate remains
-blocked. Full-chain PR-producing workflows run an early
+blocked. GitHub controls web-session expiry, and MineLink does not try to
+calculate refreshed cookies from PATs, scrape normal browser credentials, or
+store page-local upload nonces as durable secrets. For the stable final-video
+edge, `scripts/dev/publish-github-video-local.mjs` is the trusted local
+publisher: it reuses the same dedicated Chrome profile, downloads a selected
+Actions artifact when given `--run-id`, discovers the verifier-approved
+`acceptance.mp4` and release reports, uploads the MP4 through
+`scripts/dev/upload-github-user-attachment.mjs`, and then runs
+`scripts/dev/comment-pr-evidence.mjs` with the returned
+`github.com/user-attachments/assets/...` URL. This keeps long-lived GitHub web
+state on the operator's local machine instead of GitHub Actions. If GitHub has
+expired the dedicated profile session, the publisher opens that profile and
+asks for an explicit login; it still never reads the operator's normal Chrome
+profile and never prints cookie values. Operators may pass `--update-secret`
+when they also want to refresh the GitHub Actions cookie secret, but that secret
+remains a convenience path, not the durable source of truth for final PR video
+publication. Full-chain PR-producing workflows run an early
 `scripts/dev/check-agent-factory-secrets.mjs` readiness report for GitHub
 inline-video publication. `.github/workflows/github-user-attachment-smoke.yml`
 is the manual CI smoke for this edge: it generates a tiny diagnostic MP4,

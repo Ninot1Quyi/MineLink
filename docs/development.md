@@ -357,6 +357,27 @@ This is a local operator step, not a CI login flow. It does not read your normal
 browser profile and does not print cookie values. CI still consumes only the
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` repository secret.
 
+For the final PR playback edge, prefer the local trusted publisher when the
+Actions cookie has expired or when you want to avoid putting a long-lived web
+cookie in CI. It uses the same dedicated Chrome profile, downloads the selected
+workflow artifact when `--run-id` is provided, finds the verifier-approved
+`acceptance.mp4`, uploads it to GitHub user-attachments, and then updates the PR
+comment with the returned `github.com/user-attachments/assets/...` URL.
+
+```bash
+npm run agent-factory:publish-github-video-local -- \
+  --repository Ninot1Quyi/MineLink \
+  --pr 31 \
+  --run-id 28277197099
+```
+
+This helper cannot make GitHub web cookies non-expiring and cannot mint a web
+session from a PAT. If the dedicated profile has expired, it opens that profile
+and asks for an explicit GitHub login once. It never reads your normal Chrome
+profile, never prints cookie values, and deletes the temporary cookie file after
+the upload attempt. Pass `--update-secret` only when you also want to refresh
+the GitHub Actions secret for future CI attempts.
+
 The release finalizer calls the storage uploader inside the Ona task
 environment. The storage uploader reads `MINELINK_VIDEO_STORAGE_PROVIDER`,
 `MINELINK_VIDEO_STORAGE_ENDPOINT`, `MINELINK_VIDEO_STORAGE_REGION`,

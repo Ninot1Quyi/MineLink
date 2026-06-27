@@ -35,6 +35,7 @@
     "agent-factory:trigger-full-chain": "node scripts/dev/trigger-agent-factory-full-chain.mjs",
     "agent-factory:start-codex": "node scripts/dev/start-ona-platform-codex.mjs",
     "agent-factory:refresh-github-cookie": "node scripts/dev/refresh-github-attachment-cookie.mjs",
+    "agent-factory:publish-github-video-local": "node scripts/dev/publish-github-video-local.mjs",
     "agent-factory:fetch-codex-canary": "node scripts/dev/fetch-platform-codex-canary.mjs",
     "agent-factory:fetch-codex-video-verifier": "node scripts/dev/fetch-platform-codex-video-verifier.mjs",
     "agent-factory:setup-linear": "node scripts/dev/setup-linear-agent-factory.mjs",

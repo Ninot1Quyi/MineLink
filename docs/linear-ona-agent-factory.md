@@ -1125,6 +1125,28 @@ publication authority is visible before the final comment gate. When
 a tiny diagnostic MP4 through the same user-attachment bridge before starting
 Ona work, so stale cookies fail early as `github-web-cookie-rejected`.
 
+For the durable final edge, use the local trusted publisher instead of relying
+on a static cookie in GitHub Actions:
+
+```bash
+npm run agent-factory:publish-github-video-local -- \
+  --repository Ninot1Quyi/MineLink \
+  --pr <task-pr> \
+  --run-id <full-chain-run-id>
+```
+
+The publisher downloads the named workflow artifact, discovers
+`acceptance.mp4`, `video-storage-manifest.json`, `video-review.md`, and
+`video-release-gate.md`, reads only the dedicated Chrome profile's current
+GitHub cookies, uploads the MP4 through the user-attachment bridge, and runs
+`comment-pr-evidence.mjs` with `--require-github-attachment-video`. It cannot
+calculate non-expiring cookies, cannot refresh GitHub web sessions from PATs,
+and must not scrape the operator's normal browser profile. If GitHub has
+expired the dedicated profile, it prompts for a one-time login in that profile.
+Use `--update-secret` only to refresh the GitHub Actions convenience secret;
+the final product evidence path should still be able to complete through the
+local publisher when CI's static cookie has expired.
+
 `.github/workflows/github-user-attachment-smoke.yml` is the manual transport
 diagnostic for this edge. It creates a tiny MP4, uploads it with
 `scripts/dev/upload-github-user-attachment.mjs`, uploads the sanitized reports

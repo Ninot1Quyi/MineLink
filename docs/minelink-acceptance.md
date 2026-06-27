@@ -1269,6 +1269,18 @@ Current status:
   in that mode the workflow generates and uploads a tiny diagnostic MP4 through
   the same user-attachment bridge so stale cookies fail early as
   `github-web-cookie-rejected`.
+  Because GitHub controls web-session expiry, the accepted durable fallback is
+  `npm run agent-factory:publish-github-video-local -- --repository Ninot1Quyi/MineLink --pr <task-pr> --run-id <full-chain-run-id>`.
+  This local trusted publisher downloads the full-chain artifact, discovers the
+  already verifier-approved `acceptance.mp4` and release reports, reads only the
+  dedicated Chrome profile's current GitHub cookies, uploads the MP4 through the
+  same user-attachment helper, and posts the final PR comment with
+  `--require-github-attachment-video`. It does not calculate non-expiring
+  cookies, does not convert PATs into GitHub web sessions, does not scrape the
+  operator's normal browser profile, and does not bypass the Ona finalizer,
+  same-session Codex verifier, release gate, or Minecraft evidence checks.
+  `--update-secret` is allowed only as a convenience to refresh the Actions
+  cookie secret after a successful dedicated-profile readback.
   `.github/workflows/github-user-attachment-smoke.yml` is the manual CI
   transport smoke for this edge. It uploads a tiny diagnostic MP4 through the
   same user-attachment helper and can post the returned GitHub attachment URL to
