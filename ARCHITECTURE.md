@@ -1063,15 +1063,19 @@ user-attachment MP4 URL such as `github.com/user-attachments/assets/...`; when
 that URL is missing the release-to-PR edge must fail closed instead of
 publishing an R2 link as playable evidence. MineLink can optionally create that
 attachment with `scripts/dev/upload-github-user-attachment.mjs`, but that bridge
-requires an explicit GitHub web attachment cookie secret
+requires only the explicit GitHub web attachment cookie secret
 `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; PATs and `GITHUB_TOKEN` can identify
 the repository but do not create comment attachments by themselves, and they
-cannot be exchanged for a GitHub web session cookie. The attachment bridge uses
-the task PR URL to fetch the issue/PR editor's upload-policy authority for
-`/upload/policies/assets`. It prefers a nearby `<file-attachment>`
-upload-policy CSRF input and uses repository-page `uploadToken` discovery only
-as the last discovery path. Ordinary page form authenticity tokens are recorded
-for diagnostics but are not accepted as upload-policy authority. When GitHub
+cannot be exchanged for a GitHub web session cookie. Per-page upload tokens,
+fetch nonces, client versions, and upload-policy CSRF values are intentionally
+not configured as durable secrets because they are short-lived page state. The
+attachment bridge fetches the task PR URL with the explicit cookie and discovers
+the current issue/PR editor upload-policy authority for
+`/upload/policies/assets` on each run. A discovered `<file-attachment>`
+upload-policy CSRF input always overrides any earlier fallback token; ordinary
+page form authenticity tokens may be used only as a same-page policy-request
+fallback and must not be stored as durable configuration. Repository-page
+`uploadToken` discovery is the last static discovery path. When GitHub
 serves static HTML without the upload-policy CSRF, the bridge may launch a
 temporary headless Chrome with only the explicit attachment cookie, render the
 task PR page, read the hydrated `<file-attachment>` DOM token through CDP, and

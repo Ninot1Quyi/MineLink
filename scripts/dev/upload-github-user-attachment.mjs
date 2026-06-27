@@ -12,6 +12,9 @@ const defaults = {
   name: process.env.MINELINK_GITHUB_ATTACHMENT_NAME ?? "acceptance.mp4",
   contentType: process.env.MINELINK_GITHUB_ATTACHMENT_CONTENT_TYPE ?? "",
   cookie: process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE ?? process.env.GITHUB_USER_ATTACHMENTS_COOKIE ?? "",
+  cookieFile:
+    process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE_FILE ??
+    ".minelink-dev/secrets/github-user-attachments.cookie",
   token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "",
   referer: process.env.MINELINK_GITHUB_ATTACHMENT_REFERER ?? process.env.MINELINK_AGENT_FACTORY_PR_URL ?? "",
   authenticityToken: process.env.MINELINK_GITHUB_ATTACHMENT_AUTHENTICITY_TOKEN ?? "",
@@ -44,6 +47,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--name") args.name = readValue();
   else if (arg === "--content-type") args.contentType = readValue();
   else if (arg === "--cookie") args.cookie = readValue();
+  else if (arg === "--cookie-file") args.cookieFile = readValue();
   else if (arg === "--token") args.token = readValue();
   else if (arg === "--referer") args.referer = readValue();
   else if (arg === "--authenticity-token") args.authenticityToken = readValue();
@@ -76,6 +80,8 @@ report and exits successfully so the downstream release gate can fail closed.
 
 Reliability options:
   --referer URL         GitHub PR/issue page used for evidence context.
+  --cookie-file FILE    Local ignored file containing the GitHub web attachment
+                         cookie. Used only when the cookie env var is missing.
   --upload-token TOKEN  GitHub repository uploadToken override for policy upload.
   --dynamic-page-token  Render the PR page in temporary headless Chrome when
                          static HTML does not expose the upload-policy CSRF.
@@ -399,6 +405,14 @@ async function discoverDynamicUploadTokens() {
   }
 }
 
+if (!hasValue(args.cookie) && hasValue(args.cookieFile)) {
+  try {
+    args.cookie = (await fs.readFile(args.cookieFile, "utf8")).trim();
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
 const cookieJar = new Map(parseCookiePairs(args.cookie));
 if (cookieJar.has("user_session") && !cookieJar.has("__Host-user_session_same_site")) {
   cookieJar.set("__Host-user_session_same_site", cookieJar.get("user_session"));
@@ -668,8 +682,11 @@ async function discoverPageUploadTokens() {
   for (const page of tokenPages) {
     const tokens = await discoverTokensFromPage(page.label, page.url, { allowFormToken: true });
     pageResults.push({ url: page.url, ...tokens });
-    if (!hasValue(args.authenticityToken) && hasValue(tokens.uploadPolicyCsrf)) {
+    if (hasValue(tokens.uploadPolicyCsrf)) {
       args.authenticityToken = tokens.uploadPolicyCsrf;
+    }
+    if (!hasValue(args.authenticityToken) && hasValue(tokens.authenticityToken)) {
+      args.authenticityToken = tokens.authenticityToken;
     }
     if (!hasValue(args.uploadToken) && hasValue(tokens.uploadToken)) args.uploadToken = tokens.uploadToken;
     if (!hasValue(args.authenticityToken) && hasValue(args.uploadToken)) args.authenticityToken = args.uploadToken;

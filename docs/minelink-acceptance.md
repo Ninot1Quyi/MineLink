@@ -1237,13 +1237,17 @@ Current status:
   either receive an explicit cookie secret or a pre-existing
   `github.com/user-attachments/assets/...` MP4 URL. The upload helper now
   receives the task PR URL, fetches that page with the explicit cookie secret to
-  discover the issue/PR editor's upload-policy CSRF plus nonce values, uses
-  repository-page `uploadToken` discovery only as a fallback, uses reusable
-  multipart buffers for policy/object/finalize calls, avoids sending GitHub
-  cookies to the object-store upload URL, does not treat ordinary page form
-  authenticity tokens as upload-policy authority, and records retry attempts,
-  cookie marker signals, page token signals, dynamic Chrome cookie readback
-  signals, and a failure kind such as `github-web-cookie-rejected`,
+  discover the issue/PR editor's upload-policy CSRF plus nonce values at runtime,
+  and does not require durable configuration for page tokens, fetch nonces,
+  client versions, or CSRF values. The discovered upload-policy CSRF always
+  overrides any earlier fallback token; ordinary page form authenticity tokens
+  may be used only as a same-page policy-request fallback and must not be stored
+  as durable configuration. The helper uses repository-page `uploadToken`
+  discovery only as a fallback, uses reusable multipart buffers for
+  policy/object/finalize calls, avoids sending GitHub cookies to the
+  object-store upload URL, and records retry attempts, cookie marker signals,
+  page token signals, dynamic Chrome cookie readback signals, and a failure kind
+  such as `github-web-cookie-rejected`,
   `github-attachment-upload-policy-csrf-missing`,
   `github-attachment-policy-failed`, or
   `github-attachment-finalization-failed` so this edge can be repaired without

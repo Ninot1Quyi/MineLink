@@ -1089,11 +1089,14 @@ as the native issue/PR player. If the cookie is missing the bridge writes a
 skipped report and the final PR evidence comment still fails closed. The bridge
 receives the task PR URL, fetches that page with the explicit cookie secret to
 discover the issue/PR editor's `<file-attachment>` upload-policy CSRF token
-plus nonce values, and uses repository-page `uploadToken` discovery only as a
-fallback. Because GitHub has changed this markup across issue/PR page shapes,
-the bridge also scans around `/upload/policies/assets`; ordinary page form
-authenticity tokens are only diagnostics and are not accepted as upload-policy
-authority. If static HTML still does not expose the token, it can render the
+plus nonce values on each run. These per-page tokens, fetch nonces, and client
+versions are short-lived page state and must not be configured as durable
+secrets. Because GitHub has changed this markup across issue/PR page shapes,
+the bridge also scans around `/upload/policies/assets`; a discovered
+upload-policy CSRF always overrides any earlier fallback token, ordinary page
+form authenticity tokens may be used only as a same-page policy-request
+fallback, and repository-page `uploadToken` discovery remains the last static
+fallback. If static HTML still does not expose the token, it can render the
 task PR page in a temporary headless Chrome seeded only with the explicit
 attachment cookie and read the hydrated `<file-attachment>` upload-policy token
 through CDP. The dynamic path records sanitized cookie set/readback counts and
