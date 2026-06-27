@@ -492,6 +492,14 @@ prebuild instead of producing a misleading snapshot. The devcontainer
 creation and local devcontainer rebuilds, so a task environment does not rerun
 the full NeoForge warmup when it is not producing a prebuild snapshot.
 
+Prebuild refreshes can pin the Ona environment class through the
+`MINELINK_ONA_ENVIRONMENT_CLASS_ID` repository variable or the
+`environment_class_id` workflow dispatch input. Video-required NeoForge/client
+recorder jobs should use the Regular class or a larger class instead of relying
+on the default Small baseline, because recorder smoothness is part of the
+acceptance evidence. The requested class must be available to the MineLink Ona
+project before the prebuild trigger runs.
+
 Both modes install required OS tools such as `ffmpeg`, `Xvfb`, and the Python
 Pillow package when missing, verify Node, npm, Python/Pillow, Java 21, `gh`,
 client recorder command availability, and sanitized Linear secret presence, run
