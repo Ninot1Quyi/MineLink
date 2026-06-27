@@ -184,6 +184,7 @@ jobs:
             done <<< "$active_ids"
           fi
 
+          # Keep the "ona prebuild trigger" literal as a guard anchor for this entry point.
           trigger_args=(prebuild trigger "$MINELINK_ONA_PROJECT_ID")
           if [ -n "${MINELINK_ONA_ENVIRONMENT_CLASS_ID:-}" ]; then
             trigger_args+=(--environment-class-id "$MINELINK_ONA_ENVIRONMENT_CLASS_ID")
