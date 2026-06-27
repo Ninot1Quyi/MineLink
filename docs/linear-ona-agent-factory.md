@@ -1094,9 +1094,9 @@ versions are short-lived page state and must not be configured as durable
 secrets. Because GitHub has changed this markup across issue/PR page shapes,
 the bridge also scans around `/upload/policies/assets`; a discovered
 upload-policy CSRF always overrides any earlier fallback token, ordinary page
-form authenticity tokens may be used only as a same-page policy-request
-fallback, and repository-page `uploadToken` discovery remains the last static
-fallback. If static HTML still does not expose the token, it can render the
+form authenticity tokens are diagnostic only and must not be used for the
+policy request, and repository-page `uploadToken` discovery remains the last
+static fallback. If static HTML still does not expose the token, it can render the
 task PR page in a temporary headless Chrome seeded only with the explicit
 attachment cookie and read the hydrated `<file-attachment>` upload-policy token
 through CDP. The dynamic path records sanitized cookie set/readback counts and
@@ -1120,7 +1120,10 @@ waits for an explicit GitHub login, captures only `github.com` cookies from
 that profile, and writes the value directly to the GitHub repository secret
 without printing it. PR-producing full-chain dispatches additionally run an
 early readiness report before Ona work starts, so missing inline-video
-publication authority is visible before the final comment gate.
+publication authority is visible before the final comment gate. When
+`github_attachment_preflight=fail-fast`, the workflow also generates and uploads
+a tiny diagnostic MP4 through the same user-attachment bridge before starting
+Ona work, so stale cookies fail early as `github-web-cookie-rejected`.
 
 `.github/workflows/github-user-attachment-smoke.yml` is the manual transport
 diagnostic for this edge. It creates a tiny MP4, uploads it with

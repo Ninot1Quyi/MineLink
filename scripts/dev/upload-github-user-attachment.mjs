@@ -293,6 +293,20 @@ function isSignedOutGithubTitle(title) {
   return /sign in to github/i.test(String(title ?? ""));
 }
 
+function pageTitle(html) {
+  const match = String(html ?? "").match(/<title>\s*([\s\S]*?)\s*<\/title>/i);
+  return match ? decodeHtml(match[1]).replace(/\s+/g, " ").trim() : "";
+}
+
+function isSignedOutGithubHtml(html) {
+  const source = String(html ?? "");
+  return (
+    isSignedOutGithubTitle(pageTitle(source)) ||
+    /<form\b[^>]*action=["']\/session["'][^>]*>/i.test(source) ||
+    /\/login\?return_to=/i.test(source)
+  );
+}
+
 async function discoverDynamicUploadTokens() {
   if (!args.dynamicPageToken || !hasValue(args.cookie) || !hasValue(args.referer)) return null;
   const chrome = await resolveChrome();
@@ -657,6 +671,7 @@ async function discoverTokensFromPage(label, url, { allowFormToken = false } = {
       Referer: url,
     }),
   });
+  const signedOut = isSignedOutGithubHtml(text);
   const uploadPolicyCsrf = extractUploadPolicyCsrf(text);
   const uploadToken = extractUploadToken(text);
   const authenticityToken = allowFormToken ? extractAuthenticityToken(text) : "";
@@ -664,6 +679,8 @@ async function discoverTokensFromPage(label, url, { allowFormToken = false } = {
   const clientVersion = extractClientVersion(text);
   return {
     pageStatus: response.status,
+    title: pageTitle(text),
+    signedOut,
     uploadPolicyCsrf,
     uploadToken,
     authenticityToken,
@@ -682,23 +699,23 @@ async function discoverPageUploadTokens() {
   for (const page of tokenPages) {
     const tokens = await discoverTokensFromPage(page.label, page.url, { allowFormToken: true });
     pageResults.push({ url: page.url, ...tokens });
+    if (tokens.signedOut) continue;
     if (hasValue(tokens.uploadPolicyCsrf)) {
       args.authenticityToken = tokens.uploadPolicyCsrf;
-    }
-    if (!hasValue(args.authenticityToken) && hasValue(tokens.authenticityToken)) {
-      args.authenticityToken = tokens.authenticityToken;
     }
     if (!hasValue(args.uploadToken) && hasValue(tokens.uploadToken)) args.uploadToken = tokens.uploadToken;
     if (!hasValue(args.authenticityToken) && hasValue(args.uploadToken)) args.authenticityToken = args.uploadToken;
     if (!hasValue(args.fetchNonce)) args.fetchNonce = tokens.fetchNonce;
     if (!hasValue(args.clientVersion)) args.clientVersion = tokens.clientVersion;
-    if (hasValue(args.authenticityToken)) break;
+    if (hasValue(tokens.uploadPolicyCsrf) || hasValue(tokens.uploadToken)) break;
   }
   const selected = pageResults.find((page) => hasValue(page.uploadPolicyCsrf) || hasValue(page.uploadToken)) ?? pageResults.at(-1) ?? {};
   report.pageTokenSignals.tokenPage = selected.url ?? "";
   report.pageTokenSignals.checkedPages = pageResults.map((page) => ({
     url: page.url,
     status: page.pageStatus,
+    signedOut: page.signedOut === true,
+    title: page.title ?? "",
     hasUploadPolicyCsrf: hasValue(page.uploadPolicyCsrf),
     hasUploadToken: hasValue(page.uploadToken),
     hasAuthenticityToken: hasValue(page.authenticityToken),
@@ -712,6 +729,15 @@ async function discoverPageUploadTokens() {
     pageResults.some((page) => hasValue(page.authenticityToken)) || hasValue(args.authenticityToken);
   report.pageTokenSignals.hasFetchNonce = hasValue(args.fetchNonce);
   report.pageTokenSignals.hasClientVersion = hasValue(args.clientVersion);
+
+  if (
+    pageResults.length > 0 &&
+    pageResults.every((page) => page.signedOut === true) &&
+    !hasValue(args.uploadToken) &&
+    !hasValue(args.authenticityToken)
+  ) {
+    throw new Error("GitHub web cookie rejected: GitHub rendered a signed-out page for every token discovery URL.");
+  }
 
   if (!report.pageTokenSignals.hasUploadPolicyCsrf && args.dynamicPageToken) {
     try {
@@ -927,6 +953,7 @@ function printUploadSummary(report, write = console.log) {
         [
           `GitHub user attachment checked page ${index + 1}:`,
           `status=${page.status || "missing"}`,
+          `signedOut=${yesNo(page.signedOut)}`,
           `uploadPolicyCsrf=${yesNo(page.hasUploadPolicyCsrf)}`,
           `uploadToken=${yesNo(page.hasUploadToken)}`,
           `authenticityToken=${yesNo(page.hasAuthenticityToken)}`,
@@ -1006,7 +1033,7 @@ const report = {
     checkedPages: [],
     pageStatus: "",
     hasUploadPolicyCsrf: false,
-    hasUploadToken: hasValue(args.authenticityToken) || hasValue(args.uploadToken),
+    hasUploadToken: hasValue(args.uploadToken),
     hasAuthenticityToken: hasValue(args.authenticityToken),
     hasFetchNonce: hasValue(args.fetchNonce),
     hasClientVersion: hasValue(args.clientVersion),

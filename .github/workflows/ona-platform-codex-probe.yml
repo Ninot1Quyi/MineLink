@@ -188,6 +188,41 @@ jobs:
             --output .minelink-dev/reports/github-inline-video-preflight.md \
             --json-output .minelink-dev/reports/github-inline-video-preflight.json
 
+      - name: Preflight GitHub inline video upload
+        if: ${{ ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && (inputs.github_attachment_preflight || 'deferred') == 'fail-fast' && (inputs.github_attachment_video_url || '') == '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
+          MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
+          MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN: "1"
+          INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
+        run: |
+          mkdir -p .minelink-dev/reports/artifacts
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -y \
+            -f lavfi -i testsrc2=size=320x180:rate=8:duration=1 \
+            -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 \
+            -shortest \
+            -pix_fmt yuv420p \
+            -movflags +faststart \
+            .minelink-dev/reports/artifacts/github-inline-video-preflight.mp4
+
+          referer="${INPUT_GITHUB_ISSUE:-}"
+          if [ -z "$referer" ] || [ "$referer" = "none" ]; then
+            referer="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/issues"
+          fi
+
+          node scripts/dev/upload-github-user-attachment.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --referer "$referer" \
+            --file .minelink-dev/reports/artifacts/github-inline-video-preflight.mp4 \
+            --name github-inline-video-preflight.mp4 \
+            --output .minelink-dev/reports/github-inline-video-upload-preflight.md \
+            --json-output .minelink-dev/reports/github-inline-video-upload-preflight.json \
+            --require-upload
+
       - name: Pre-clean stopped Ona task environments
         env:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}

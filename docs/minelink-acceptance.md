@@ -1241,8 +1241,8 @@ Current status:
   and does not require durable configuration for page tokens, fetch nonces,
   client versions, or CSRF values. The discovered upload-policy CSRF always
   overrides any earlier fallback token; ordinary page form authenticity tokens
-  may be used only as a same-page policy-request fallback and must not be stored
-  as durable configuration. The helper uses repository-page `uploadToken`
+  are diagnostic only and must not be used for the policy request or stored as
+  durable configuration. The helper uses repository-page `uploadToken`
   discovery only as a fallback, uses reusable multipart buffers for
   policy/object/finalize calls, avoids sending GitHub cookies to the
   object-store upload URL, and records retry attempts, cookie marker signals,
@@ -1265,7 +1265,10 @@ Current status:
   report non-blocking so finalizer/video-verifier evidence can still be
   produced before the final PR publication gate fails closed. Use
   `github_attachment_preflight=fail-fast` only when a cost-saving rehearsal
-  should stop before Ona/Minecraft work if no attachment authority is available.
+  should stop before Ona/Minecraft work if no attachment authority is available;
+  in that mode the workflow generates and uploads a tiny diagnostic MP4 through
+  the same user-attachment bridge so stale cookies fail early as
+  `github-web-cookie-rejected`.
   `.github/workflows/github-user-attachment-smoke.yml` is the manual CI
   transport smoke for this edge. It uploads a tiny diagnostic MP4 through the
   same user-attachment helper and can post the returned GitHub attachment URL to

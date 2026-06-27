@@ -207,7 +207,7 @@ if (requireGithubAttachmentCookie && args.githubAttachmentUrl && !githubInlineAt
     "passed",
     args.githubAttachmentUrl
       ? "manual GitHub attachment URL can be used for final PR playback"
-      : "GitHub web attachment cookie can create the PR playback attachment",
+      : "GitHub web attachment cookie is configured; upload is verified only by upload-github-user-attachment.mjs",
     "",
   );
 }

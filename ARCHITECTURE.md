@@ -1073,8 +1073,8 @@ attachment bridge fetches the task PR URL with the explicit cookie and discovers
 the current issue/PR editor upload-policy authority for
 `/upload/policies/assets` on each run. A discovered `<file-attachment>`
 upload-policy CSRF input always overrides any earlier fallback token; ordinary
-page form authenticity tokens may be used only as a same-page policy-request
-fallback and must not be stored as durable configuration. Repository-page
+page form authenticity tokens are diagnostic only and must not be used for the
+policy request or stored as durable configuration. Repository-page
 `uploadToken` discovery is the last static discovery path. When GitHub
 serves static HTML without the upload-policy CSRF, the bridge may launch a
 temporary headless Chrome with only the explicit attachment cookie, render the
@@ -1119,9 +1119,12 @@ provided `github_attachment_video_url` is available, but still lets the
 Platform Codex implementation, finalizer, PR, and CI edges run so the exact
 remaining blocker is captured at `pr_video_evidence`. Operators can choose
 `github_attachment_preflight=fail-fast` for cost-saving rehearsals that should
-stop before Ona/Minecraft work when the attachment authority is missing. The
-final publication step still fails closed without a GitHub user-attachments
-MP4 URL; deferred mode is not permission to publish R2-only evidence. The
+stop before Ona/Minecraft work when the attachment authority is missing; in
+that mode the workflow generates and uploads a tiny diagnostic MP4 through the
+same GitHub user-attachment bridge before starting Ona work, so stale cookies
+fail early as `github-web-cookie-rejected`. The final publication step still
+fails closed without a GitHub user-attachments MP4 URL; deferred mode is not
+permission to publish R2-only evidence. The
 upload step also runs
 `scripts/dev/upload-github-user-attachment.mjs --referer "$MINELINK_AGENT_FACTORY_PR_URL" --require-upload` so a skipped
 attachment upload cannot be treated as releasable evidence. The GitHub Actions
