@@ -108,21 +108,26 @@ rerun the full NeoForge warmup.
 
 This prebuild bootstrap skips `apt-get` when the prewarmed image already has the
 required OS tools, verifies Node/npm/Python/Java/ffmpeg, runs `npm ci`, `npm run
-build`, `npm run typecheck`, and runs `mod/neoforge/./gradlew --no-daemon build`
-to warm Gradle, Minecraft, and NeoForge caches before a Codex agent opens the
-environment. It only logs whether `LINEAR_API_KEY` is present; it never prints
-the value. Because the repository owner has authorized development EULA
+build`, `npm run typecheck`, and records
+`.minelink-dev/reports/prebuild-cache-state.md`. The expensive
+`mod/neoforge/./gradlew --no-daemon build` cache warmup belongs to the GHCR
+devcontainer image build. Ona's `bootstrap-prebuild` automation sets
+`MINELINK_PREBUILD_SKIP_GRADLE=1`, then the bootstrap verifies the prewarmed
+Gradle wrapper, module cache, and NeoForge/Minecraft cache marker before
+accepting the snapshot. It only logs whether `LINEAR_API_KEY` is present; it
+never prints the value. Because the repository owner has authorized development EULA
 acceptance for these private Ona/devcontainer environments, the bootstrap also
 writes ignored local `mod/neoforge/run/eula.txt` and `server.properties` files
 so NeoForge can start without another setup step. It does not start a Minecraft
 server. Prebuild mode prunes checkout-local `.gradle` and `mod/neoforge/build`
 outputs after the guards pass, preserving user-home npm/Gradle caches while
-keeping the Ona snapshot smaller.
+keeping the Ona snapshot smaller and avoiding a large cache rewrite immediately
+before snapshot storage.
 
 When the GHCR image is present, the same bootstrap should report warm npm and
 Gradle cache paths, then still run the final `npm ci`, TypeScript checks,
-NeoForge Gradle build, dev-only EULA/server property generation, and docs
-verification. A fast cache hit is useful only if the hard gate still passes.
+prewarmed Gradle cache readback, dev-only EULA/server property generation, and
+docs verification. A fast cache hit is useful only if the hard gate still passes.
 The Ona prebuild workflow also records phase polling history and a Markdown
 phase-duration summary so slow refreshes can be attributed to environment
 startup, bootstrap execution, stopping, or snapshotting instead of guessed from

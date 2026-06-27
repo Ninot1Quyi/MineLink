@@ -19,7 +19,7 @@ if [[ $# -gt 0 ]]; then
 Usage: bash scripts/dev/bootstrap-prebuild.sh [--prebuild|--light]
 
 Modes:
-  --prebuild  Warm Node, TypeScript, NeoForge/Gradle caches, dev runtime files, and docs guards.
+  --prebuild  Verify Node, TypeScript, prewarmed NeoForge/Gradle caches, dev runtime files, and docs guards.
   --light     Prepare a normal devcontainer quickly without running the NeoForge Gradle warmup.
 USAGE
       exit 0
@@ -114,9 +114,55 @@ check_runtime_versions() {
 }
 
 report_cache_state() {
+  local phase="${1:-initial}"
+  local report_dir=".minelink-dev/reports"
+  local report_path="$report_dir/prebuild-cache-state.md"
   local npm_cache="$HOME/.npm"
   local gradle_modules="$GRADLE_USER_HOME/caches/modules-2"
   local gradle_transforms="$GRADLE_USER_HOME/caches/transforms-4"
+  local gradle_neoform="$GRADLE_USER_HOME/caches/neoformruntime"
+  local gradle_wrapper="$GRADLE_USER_HOME/wrapper/dists"
+
+  mkdir -p "$report_dir"
+
+  path_size() {
+    local path="$1"
+    if [[ -e "$path" ]]; then
+      du -sh "$path" 2>/dev/null | awk '{print $1}'
+    else
+      printf 'missing'
+    fi
+  }
+
+  {
+    echo "# MineLink Prebuild Cache State"
+    echo
+    echo "- Phase: \`$phase\`"
+    echo "- Bootstrap mode: \`$mode\`"
+    echo "- Gradle user home: \`$GRADLE_USER_HOME\`"
+    echo
+    echo "| Path | Status | Size |"
+    echo "| --- | --- | ---: |"
+    for path in \
+      "$npm_cache" \
+      "node_modules" \
+      "$GRADLE_USER_HOME" \
+      "$gradle_wrapper" \
+      "$gradle_modules" \
+      "$gradle_transforms" \
+      "$gradle_neoform" \
+      "mod/neoforge/.gradle" \
+      "mod/neoforge/build" \
+      "mod/neoforge/run"; do
+      if [[ -e "$path" ]]; then
+        echo "| \`$path\` | present | $(path_size "$path") |"
+      else
+        echo "| \`$path\` | missing | missing |"
+      fi
+    done
+    echo
+    echo "Boundary: cache-size diagnostics only; this report does not prove Minecraft product acceptance."
+  } > "$report_path"
 
   if [[ -d "$npm_cache" ]]; then
     log "npm cache present at $npm_cache"
@@ -135,6 +181,53 @@ report_cache_state() {
   else
     log "Gradle transform cache missing at $gradle_transforms; NeoForge userdev may run cold transforms"
   fi
+
+  if [[ -d "$gradle_neoform" ]]; then
+    log "NeoForge neoform runtime cache present at $gradle_neoform"
+  else
+    log "NeoForge neoform runtime cache missing at $gradle_neoform"
+  fi
+
+  log "wrote cache state report to $report_path"
+}
+
+verify_prewarmed_gradle_cache() {
+  local missing=()
+  local neoforge_marker_found=0
+  local markers=(
+    "$GRADLE_USER_HOME/caches/neoformruntime"
+    "$GRADLE_USER_HOME/caches/modules-2/files-2.1/net.neoforged"
+    "$GRADLE_USER_HOME/caches/modules-2/files-2.1/net.minecraft"
+  )
+
+  if [[ ! -d "$GRADLE_USER_HOME/caches/modules-2" ]]; then
+    missing+=("$GRADLE_USER_HOME/caches/modules-2")
+  fi
+  if [[ ! -d "$GRADLE_USER_HOME/wrapper/dists" ]]; then
+    missing+=("$GRADLE_USER_HOME/wrapper/dists")
+  fi
+
+  for marker in "${markers[@]}"; do
+    if [[ -e "$marker" ]]; then
+      neoforge_marker_found=1
+      break
+    fi
+  done
+
+  if [[ "$neoforge_marker_found" -ne 1 ]]; then
+    missing+=("NeoForge/Minecraft Gradle cache marker under $GRADLE_USER_HOME/caches")
+  fi
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    printf '[minelink-prebuild] Missing prewarmed Gradle cache entries:\n' >&2
+    printf '  - %s\n' "${missing[@]}" >&2
+    printf '[minelink-prebuild] Refusing MINELINK_PREBUILD_SKIP_GRADLE=1 because the GHCR image cache is incomplete.\n' >&2
+    return 1
+  fi
+
+  pushd mod/neoforge >/dev/null
+  run ./gradlew --no-daemon --version
+  popd >/dev/null
 }
 
 warm_node_workspace() {
@@ -159,7 +252,8 @@ warm_neoforge_workspace() {
   fi
 
   if [[ "${MINELINK_PREBUILD_SKIP_GRADLE:-0}" == "1" ]]; then
-    log "MINELINK_PREBUILD_SKIP_GRADLE=1; skipping Gradle/NeoForge cache warmup"
+    log "MINELINK_PREBUILD_SKIP_GRADLE=1; verifying prewarmed Gradle/NeoForge cache instead of rebuilding it"
+    verify_prewarmed_gradle_cache
     return
   fi
 
@@ -223,5 +317,6 @@ warm_neoforge_workspace
 prepare_dev_minecraft_runtime
 run_repo_guards
 prune_checkout_outputs_for_snapshot
+report_cache_state "final"
 
 log "prebuild bootstrap complete"

@@ -506,14 +506,19 @@ client recorder command availability, and sanitized Linear secret presence, run
 `npm ci` when `node_modules` is missing, and write ignored local files under
 `mod/neoforge/run/`: `eula.txt` with `eula=true` and `server.properties` with
 `online-mode=false`. The prebuild mode additionally builds and typechecks the
-TypeScript workspace, runs the NeoForge Gradle build to warm Gradle, Minecraft,
-and NeoForge dependency caches, runs docs guards, then prunes checkout-local
+TypeScript workspace, runs docs guards, records
+`.minelink-dev/reports/prebuild-cache-state.md`, and prunes checkout-local
 `.gradle` and `mod/neoforge/build` outputs before Ona snapshots the environment.
-The warm user-home npm and Gradle caches remain in the image/prebuild, while
-path-sensitive generated outputs do not bloat the snapshot. The script does not
-start a long-running Minecraft server or write secret values. Set
-`MINELINK_PREBUILD_SKIP_GRADLE=1` only when debugging a broken prebuild where the
-Gradle cache warmup must be bypassed temporarily, and set
+The GHCR devcontainer image is responsible for the expensive NeoForge Gradle
+build and user-home Gradle/Minecraft cache prewarm. The Ona `bootstrap-prebuild`
+automation therefore sets `MINELINK_PREBUILD_SKIP_GRADLE=1` and requires the
+bootstrap script to verify `modules-2`, Gradle wrapper distributions, and a
+NeoForge/Minecraft cache marker before accepting the snapshot. This keeps the
+Ona snapshot hard gate fast and avoids rewriting hundreds of megabytes of
+Gradle cache immediately before snapshot storage. The warm user-home npm and
+Gradle caches remain in the image/prebuild, while path-sensitive generated
+outputs do not bloat the snapshot. The script does not start a long-running
+Minecraft server or write secret values. Set
 `MINELINK_PREBUILD_KEEP_OUTPUTS=1` only when investigating generated-output
 reuse.
 

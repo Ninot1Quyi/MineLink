@@ -2,7 +2,7 @@ tasks:
   bootstrap-prebuild:
     name: Bootstrap MineLink prebuild runtime
     command: |
-      bash scripts/dev/bootstrap-prebuild.sh
+      MINELINK_PREBUILD_SKIP_GRADLE=1 bash scripts/dev/bootstrap-prebuild.sh --prebuild
     prebuildRequiresSuccess: true
     triggeredBy:
       - prebuild

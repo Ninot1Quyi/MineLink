@@ -610,11 +610,15 @@ Current status:
   runs `npm ci` when needed, and writes ignored local
   `mod/neoforge/run/eula.txt` and `server.properties` files so the real server
   can start without another setup step. Prebuild mode additionally runs
-  TypeScript build/typecheck and the NeoForge Gradle build so Java, Gradle,
-  Minecraft, and NeoForge dependency caches are warm, then prunes
-  checkout-local `.gradle` and `mod/neoforge/build` outputs before the Ona
-  snapshot while preserving user-home npm/Gradle caches. It does not start the
-  server or print secret values.
+  TypeScript build/typecheck, validates the GHCR-image prewarmed Gradle wrapper,
+  module cache, and NeoForge/Minecraft cache marker, records
+  `.minelink-dev/reports/prebuild-cache-state.md`, then prunes checkout-local
+  `.gradle` and `mod/neoforge/build` outputs before the Ona snapshot while
+  preserving user-home npm/Gradle caches. The expensive NeoForge Gradle build
+  cache warmup is performed by `.github/workflows/devcontainer-image.yml`; the
+  Ona prebuild automation sets `MINELINK_PREBUILD_SKIP_GRADLE=1` so the
+  platform snapshot gate does not rewrite large Gradle caches immediately before
+  saving the environment. It does not start the server or print secret values.
 - The report records the sanitized remote, source ref and commit, dirty-source
   decision, Node/npm/Git/Java/OS versions, exact command exit codes, log path,
   and copied agent-task summary when available.
