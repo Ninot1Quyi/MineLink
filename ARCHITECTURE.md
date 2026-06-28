@@ -207,6 +207,16 @@ Linear or GitHub task
   -> Linear/GitHub status
 ```
 
+The Platform Codex launch edge is recovery-aware but still fail-closed. For a
+newly created Ona task environment, a Goal-mode execution that remains
+`PHASE_PENDING` with zero tokens, zero iterations, and no activity is treated
+as a stalled handoff. `scripts/dev/start-ona-platform-codex.mjs` records the
+stalled execution, captures sanitized diagnostics, stops that environment, and
+retries once in a fresh task environment by default. The retry does not prove
+implementation or acceptance; the final execution must still show prompt
+progress and the downstream branch, validation, MP4, same-session verifier, PR,
+CI, and status gates must pass.
+
 `docs/linear-ona-agent-factory.md` defines the status model, required task
 fields, Linear board setup, GitHub issue mapping, and manual pilot commands.
 The Ona CLI finalizer/validation automation spec is

@@ -428,6 +428,16 @@ acceptance MP4, video verifier, PR, CI, or product acceptance gates until the
 task-bound Codex session performs the work, writes the normal
 `.minelink-dev/reports/ona-codex-implementation-session.md`, and the video
 release gate passes.
+If a newly created Goal-mode environment remains `PHASE_PENDING` with zero
+tokens, zero iterations, and no activity after the bounded zero-progress window,
+`scripts/dev/start-ona-platform-codex.mjs` treats the execution as a stalled
+handoff rather than as slow implementation work. By default it records the
+stalled execution, captures sanitized environment diagnostics, requests a stop
+for that environment, creates one fresh task environment, and retries
+`StartAgent` once. The retry is recovery evidence only. It does not weaken the
+handoff gate: the final execution still needs non-pending readback with prompt
+progress, and downstream finalizer, verifier, PR, CI, and video evidence gates
+remain mandatory.
 If this edge stalls after an active Goal-mode readback, the workflow runs
 `scripts/dev/fetch-ona-agent-execution-readback.mjs` with the configured Ona
 token. The diagnostic script creates an AgentService conversation token before

@@ -38,6 +38,8 @@ const defaults = {
   readbackExecution: process.env.MINELINK_ONA_AGENT_EXECUTION_ID ?? "",
   waitSeconds: Number(process.env.MINELINK_ONA_CODEX_WAIT_SECONDS ?? 30),
   pollSeconds: Number(process.env.MINELINK_ONA_CODEX_POLL_SECONDS ?? 5),
+  pendingZeroTokenRetryCount: Number(process.env.MINELINK_ONA_PENDING_ZERO_TOKEN_RETRY_COUNT ?? 1),
+  pendingZeroTokenRetrySeconds: Number(process.env.MINELINK_ONA_PENDING_ZERO_TOKEN_RETRY_SECONDS ?? 180),
   output: ".minelink-dev/reports/ona-platform-codex-api-session.md",
   jsonOutput: ".minelink-dev/reports/ona-platform-codex-api-session.json",
 };
@@ -93,6 +95,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--readback-execution") args.readbackExecution = readValue();
   else if (arg === "--wait-seconds") args.waitSeconds = Number(readValue());
   else if (arg === "--poll-seconds") args.pollSeconds = Number(readValue());
+  else if (arg === "--pending-zero-token-retry-count") args.pendingZeroTokenRetryCount = Number(readValue());
+  else if (arg === "--pending-zero-token-retry-seconds") args.pendingZeroTokenRetrySeconds = Number(readValue());
   else if (arg === "--output") args.output = readValue();
   else if (arg === "--json-output") args.jsonOutput = readValue();
   else if (arg === "-h" || arg === "--help") {
@@ -114,6 +118,13 @@ Options:
   --readback-execution <id>    Call GetAgentExecution for an existing execution id.
                                 With a prompt mode or --prompt, send that
                                 prompt to the existing execution first.
+  --pending-zero-token-retry-count <n>
+                               Restart a fresh task environment when Goal mode
+                               remains PHASE_PENDING with zero progress.
+                               Defaults to 1 for created environments.
+  --pending-zero-token-retry-seconds <n>
+                               Seconds of zero-token PHASE_PENDING before the
+                               retry is triggered. Defaults to 180.
   --codex-agent-id <uuid>      Required for --start; also read from MINELINK_ONA_CODEX_AGENT_ID.
   --project-id <uuid>          Ona project id. Defaults to the MineLink project id.
   --organization-id <uuid>     Ona organization id for --discover-policies.
@@ -891,6 +902,12 @@ function validateStartInputs(failures) {
   if (!Number.isFinite(args.pollSeconds) || args.pollSeconds < 1) {
     failures.push("--poll-seconds must be at least 1.");
   }
+  if (!Number.isFinite(args.pendingZeroTokenRetryCount) || args.pendingZeroTokenRetryCount < 0) {
+    failures.push("--pending-zero-token-retry-count must be a non-negative number.");
+  }
+  if (!Number.isFinite(args.pendingZeroTokenRetrySeconds) || args.pendingZeroTokenRetrySeconds < 0) {
+    failures.push("--pending-zero-token-retry-seconds must be a non-negative number.");
+  }
   if (!Number.isFinite(args.environmentWaitSeconds) || args.environmentWaitSeconds < 0) {
     failures.push("--environment-wait-seconds must be a non-negative number.");
   }
@@ -1014,10 +1031,27 @@ function goalModeReadbackReady(execution) {
   );
 }
 
+function retryableZeroTokenPending(execution, startedAt) {
+  const status = execution?.status ?? {};
+  const elapsedSeconds = (Date.now() - startedAt) / 1000;
+  return (
+    startAgent &&
+    createEnvironment &&
+    !explicitEnvironmentId &&
+    isGoalMode() &&
+    promptSendExpected() &&
+    pendingAgentPhase(status.phase) &&
+    !hasAgentProgress(status) &&
+    elapsedSeconds >= args.pendingZeroTokenRetrySeconds
+  );
+}
+
 async function pollReadback(agentExecutionId) {
   const attempts = [];
+  const startedAt = Date.now();
   const deadline = Date.now() + args.waitSeconds * 1000;
   let latest = null;
+  let retryablePendingStall = false;
   do {
     latest = await post("gitpod.v1.AgentService/GetAgentExecution", { agentExecutionId });
     const execution = latest.agentExecution ?? {};
@@ -1025,12 +1059,16 @@ async function pollReadback(agentExecutionId) {
     const attempt = readbackAttemptFromExecution(execution);
     attempts.push(attempt);
     readbackHeartbeat(attempts, attempt);
+    if (retryableZeroTokenPending(execution, startedAt)) {
+      retryablePendingStall = true;
+      break;
+    }
     if (terminalAgentPhase(phase) || goalModeReadbackReady(execution) || Date.now() >= deadline || args.waitSeconds === 0) {
       break;
     }
     await sleep(args.pollSeconds * 1000);
   } while (Date.now() < deadline);
-  return { latest, attempts };
+  return { latest, attempts, retryablePendingStall };
 }
 
 function collectEnvironmentDiagnostics(report, reason) {
@@ -1068,6 +1106,32 @@ function collectEnvironmentDiagnostics(report, reason) {
     report.evidence.push("pendingDiagnostics collected");
   } else {
     report.blockers.push(`Could not collect pending diagnostics from environment ${args.environmentId}: ${output}`);
+  }
+}
+
+function stopEnvironmentForRetry(environmentId, report, reason) {
+  const record = {
+    environmentId,
+    reason,
+    requestedAt: new Date().toISOString(),
+    status: "skipped",
+    output: "",
+    error: "",
+  };
+  if (!hasValue(environmentId)) {
+    record.error = "missing_environment_id";
+    report.environmentBootstrap.retryStops.push(record);
+    return;
+  }
+  const result = run("ona", ["environment", "stop", environmentId, "--dont-wait"]);
+  record.status = result.status === 0 ? "requested" : "failed";
+  record.output = sanitize(result.stdout);
+  record.error = result.status === 0 ? "" : sanitize(result.stderr || result.stdout);
+  report.environmentBootstrap.retryStops.push(record);
+  if (result.status === 0) {
+    report.evidence.push(`stalledEnvironmentStopRequested=${environmentId}`);
+  } else {
+    report.evidence.push(`stalledEnvironmentStopFailed=${environmentId}`);
   }
 }
 
@@ -1177,7 +1241,9 @@ const report = {
     name: "",
     attempts: [],
     readback: null,
+    retryStops: [],
   },
+  agentLaunchAttempts: [],
   agentExecutionId: args.readbackExecution || "",
   readback: null,
   readbackAttempts: [],
@@ -1244,47 +1310,91 @@ if (failures.length === 0 && dryRun) {
     }
 
     if (startAgent) {
-      if (createEnvironment && !hasValue(args.environmentId)) {
-        await createTaskEnvironment(report);
-      }
-      const started = await post("gitpod.v1.AgentService/StartAgent", startBody());
-      report.steps.push("StartAgent");
-      report.agentExecutionId = started.agentExecutionId ?? "";
-      if (hasValue(report.agentExecutionId)) {
-        console.log(
-          `MineLink Ona Codex StartAgent accepted: execution=${report.agentExecutionId} environment=${args.environmentId || "none"} mode=${args.agentMode}`,
-        );
-      }
-      if (!hasValue(report.agentExecutionId)) failures.push("StartAgent did not return agentExecutionId.");
-      if (hasValue(report.agentExecutionId) && sendPrompt) {
-        await post(
-          "gitpod.v1.AgentService/SendToAgentExecution",
-          sendBody(report.agentExecutionId, await readPrompt({ agentExecutionId: report.agentExecutionId })),
-        );
-        report.steps.push("SendToAgentExecution");
-        console.log(`MineLink Ona Codex prompt sent: execution=${report.agentExecutionId} task=${args.taskId}`);
-      }
-    }
+      const maxLaunchAttempts = Math.max(1, Math.floor(args.pendingZeroTokenRetryCount) + 1);
+      for (let launchAttempt = 1; launchAttempt <= maxLaunchAttempts; launchAttempt += 1) {
+        if (createEnvironment && !hasValue(args.environmentId)) {
+          await createTaskEnvironment(report);
+        }
+        const started = await post("gitpod.v1.AgentService/StartAgent", startBody());
+        report.steps.push("StartAgent");
+        report.agentExecutionId = started.agentExecutionId ?? "";
+        const launchRecord = {
+          attempt: launchAttempt,
+          environmentId: args.environmentId,
+          agentExecutionId: report.agentExecutionId,
+          startedAt: new Date().toISOString(),
+          result: "pending",
+        };
+        report.agentLaunchAttempts.push(launchRecord);
+        if (hasValue(report.agentExecutionId)) {
+          console.log(
+            `MineLink Ona Codex StartAgent accepted: execution=${report.agentExecutionId} environment=${args.environmentId || "none"} mode=${args.agentMode} launchAttempt=${launchAttempt}/${maxLaunchAttempts}`,
+          );
+        }
+        if (!hasValue(report.agentExecutionId)) {
+          failures.push("StartAgent did not return agentExecutionId.");
+          launchRecord.result = "missing_execution_id";
+          break;
+        }
+        if (sendPrompt) {
+          await post(
+            "gitpod.v1.AgentService/SendToAgentExecution",
+            sendBody(report.agentExecutionId, await readPrompt({ agentExecutionId: report.agentExecutionId })),
+          );
+          report.steps.push("SendToAgentExecution");
+          console.log(`MineLink Ona Codex prompt sent: execution=${report.agentExecutionId} task=${args.taskId}`);
+        }
 
-    if (shouldSendPromptToExistingExecution()) {
+        const { latest, attempts, retryablePendingStall } = await pollReadback(report.agentExecutionId);
+        report.steps.push("GetAgentExecution");
+        report.readback = latest;
+        report.readbackAttempts = attempts;
+        launchRecord.finalPhase = latest?.agentExecution?.status?.phase ?? "";
+        launchRecord.readbackAttempts = attempts.length;
+        launchRecord.retryablePendingStall = retryablePendingStall;
+        if (retryablePendingStall && launchAttempt < maxLaunchAttempts) {
+          launchRecord.result = "retrying_zero_token_pending";
+          report.steps.push("RetryStalledPendingExecution");
+          report.evidence.push(
+            `zeroTokenPendingRetry=${launchAttempt}/${args.pendingZeroTokenRetryCount}; execution=${report.agentExecutionId}`,
+          );
+          collectEnvironmentDiagnostics(report, "goal-mode-zero-token-pending-retry");
+          stopEnvironmentForRetry(args.environmentId, report, `zero-token pending execution ${report.agentExecutionId}`);
+          args.environmentId = "";
+          report.environmentId = "";
+          report.agentExecutionId = "";
+          continue;
+        }
+
+        const evaluation = evaluateReadback(latest, args.codexAgentId || latest?.agentExecution?.spec?.agentId || "");
+        failures.push(...evaluation.failures);
+        report.evidence.push(...evaluation.evidence);
+        const finalPhase = latest?.agentExecution?.status?.phase ?? "";
+        if (isGoalMode() && pendingAgentPhase(finalPhase)) {
+          collectEnvironmentDiagnostics(report, `goal-mode-${finalPhase.toLowerCase()}`);
+        }
+        launchRecord.result = failures.length === 0 ? "accepted" : "blocked";
+        break;
+      }
+    } else if (shouldSendPromptToExistingExecution()) {
       await post(
         "gitpod.v1.AgentService/SendToAgentExecution",
         sendBody(report.agentExecutionId, await readPrompt({ agentExecutionId: report.agentExecutionId })),
       );
       report.steps.push("SendToAgentExecution");
-    }
 
-    if (hasValue(report.agentExecutionId)) {
-      const { latest, attempts } = await pollReadback(report.agentExecutionId);
-      report.steps.push("GetAgentExecution");
-      report.readback = latest;
-      report.readbackAttempts = attempts;
-      const evaluation = evaluateReadback(latest, args.codexAgentId || latest?.agentExecution?.spec?.agentId || "");
-      failures.push(...evaluation.failures);
-      report.evidence.push(...evaluation.evidence);
-      const finalPhase = latest?.agentExecution?.status?.phase ?? "";
-      if (isGoalMode() && pendingAgentPhase(finalPhase)) {
-        collectEnvironmentDiagnostics(report, `goal-mode-${finalPhase.toLowerCase()}`);
+      if (hasValue(report.agentExecutionId)) {
+        const { latest, attempts } = await pollReadback(report.agentExecutionId);
+        report.steps.push("GetAgentExecution");
+        report.readback = latest;
+        report.readbackAttempts = attempts;
+        const evaluation = evaluateReadback(latest, args.codexAgentId || latest?.agentExecution?.spec?.agentId || "");
+        failures.push(...evaluation.failures);
+        report.evidence.push(...evaluation.evidence);
+        const finalPhase = latest?.agentExecution?.status?.phase ?? "";
+        if (isGoalMode() && pendingAgentPhase(finalPhase)) {
+          collectEnvironmentDiagnostics(report, `goal-mode-${finalPhase.toLowerCase()}`);
+        }
       }
     }
   } catch (error) {
@@ -1350,6 +1460,38 @@ const lines = [
         ...report.environmentBootstrap.attempts.map(
           (attempt) =>
             `| ${escapeMd(attempt.at)} | ${escapeMd(attempt.phase)} | ${escapeMd(attempt.machinePhase)} | ${escapeMd(attempt.devcontainerPhase)} | ${escapeMd(attempt.branch)} | ${escapeMd(attempt.prebuildId)} |`,
+        ),
+      ]
+    : []),
+  ...(report.agentLaunchAttempts.length > 0
+    ? [
+        "",
+        "## Agent Launch Attempts",
+        "",
+        "| attempt | environment | execution | final phase | readbacks | retryable pending stall | result |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        ...report.agentLaunchAttempts.map(
+          (attempt) =>
+            `| ${escapeMd(attempt.attempt)} | ${escapeMd(attempt.environmentId)} | ${escapeMd(attempt.agentExecutionId)} | ${escapeMd(
+              attempt.finalPhase || "unknown",
+            )} | ${escapeMd(attempt.readbackAttempts ?? 0)} | ${escapeMd(attempt.retryablePendingStall ? "yes" : "no")} | ${escapeMd(
+              attempt.result,
+            )} |`,
+        ),
+      ]
+    : []),
+  ...(report.environmentBootstrap.retryStops.length > 0
+    ? [
+        "",
+        "## Retry Environment Stops",
+        "",
+        "| environment | status | reason | error |",
+        "| --- | --- | --- | --- |",
+        ...report.environmentBootstrap.retryStops.map(
+          (record) =>
+            `| ${escapeMd(record.environmentId)} | ${escapeMd(record.status)} | ${escapeMd(record.reason)} | ${escapeMd(
+              record.error || "none",
+            )} |`,
         ),
       ]
     : []),
