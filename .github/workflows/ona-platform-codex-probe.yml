@@ -534,12 +534,16 @@ jobs:
           INPUT_VALIDATION_SCOPE: ${{ inputs.validation_scope || 'docs' }}
           INPUT_BRANCH_WAIT_SECONDS: ${{ inputs.branch_wait_seconds || '300' }}
         run: |
+          verifier_wait_seconds="${INPUT_BRANCH_WAIT_SECONDS:-300}"
+          if [ "$verifier_wait_seconds" -gt 900 ] 2>/dev/null; then
+            verifier_wait_seconds=900
+          fi
           node scripts/dev/fetch-platform-codex-video-verifier.mjs \
             --repository "$GITHUB_REPOSITORY" \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
             --commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
-            --wait-seconds "${INPUT_BRANCH_WAIT_SECONDS:-300}"
+            --wait-seconds "$verifier_wait_seconds"
           client_gui_args=()
           if [ "${INPUT_VALIDATION_SCOPE:-docs}" = "neoforge" ]; then
             client_gui_args+=(--require-client-gui-capture)

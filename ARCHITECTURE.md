@@ -471,6 +471,11 @@ video evidence. Final task-acceptance video must be produced in the Ona
 task/finalizer environment with producer `ona-task-finalizer`, then verified by
 hash against that exact artifact with
 `check-video-review.mjs --require-producer ona-task-finalizer`.
+Implementation sessions that feed a same-session verifier must remain open
+after pushing their implementation report; they should idle for the verifier
+follow-up rather than stopping the Goal session. The verifier branch fetch is a
+short, bounded handoff wait, not the long implementation wait used for real
+NeoForge tasks.
 PR-visible video evidence must include a public playable MP4 URL, preferably
 from the configured external video store. Actions artifact zip links are useful
 for logs and reports, but they are not accepted as the visible video surface by

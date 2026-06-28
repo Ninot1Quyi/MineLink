@@ -640,7 +640,12 @@ closed. `neoforge` full-chain tasks use a longer implementation-report wait
 than docs-only tasks. The Codex session can legitimately spend the early
 minutes reading the required MineLink context and then running real Minecraft
 validation before it pushes the report, so the workflow must not stop the task
-environment on the shorter docs timeout.
+environment on the shorter docs timeout. After the implementation report is
+pushed, the same Codex Goal session must remain idle and available for the
+video verifier follow-up; stopping the task session can make
+`SendToAgentExecution` appear accepted while no verifier file is ever written.
+The verifier fetch therefore uses a short bounded wait and fails closed with a
+handoff blocker instead of inheriting the long implementation wait.
 After the candidate MP4 is rendered, the Ona implementation finalizer uploads
 it with `scripts/dev/upload-acceptance-video-storage.mjs` and writes
 `video-storage-manifest.json`; that upload is candidate evidence transport, not

@@ -260,7 +260,8 @@ function implementationCanaryPrompt(context = {}) {
     "Git:",
     "- Commit the canary file with an English Lore commit message explaining that this proves a bounded Platform Codex task handoff.",
     "- Push the target branch to origin.",
-    "- After pushing a canary with Result: passed, stop the task. Do not keep validating, do not rewrite the canary, and do not downgrade it to Result: blocked in a later commit.",
+    "- After pushing a canary with Result: passed, stay idle in this same Goal session for the workflow finalizer/verifier follow-up. Do not stop or close the task session yourself.",
+    "- While waiting, do not keep validating, do not rewrite the canary, and do not downgrade it to Result: blocked in a later commit.",
     "- Do not create a PR for this canary unless the user explicitly asks.",
   ].join("\n");
 }
@@ -332,7 +333,8 @@ async function taskImplementationPrompt(context = {}) {
     "Git:",
     "- Commit the implementation and report together.",
     "- Push the target branch to origin.",
-    "- After pushing a passed implementation report, stop the task and wait for the workflow verifier/finalizer.",
+    "- After pushing a passed implementation report, stay idle in this same Goal session for the workflow finalizer/verifier follow-up. Do not stop or close the task session yourself.",
+    "- While waiting, do not keep editing, validating, or rewriting the implementation report unless the workflow sends an explicit follow-up task.",
   ].join("\n");
 }
 

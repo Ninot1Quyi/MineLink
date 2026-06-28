@@ -1395,6 +1395,11 @@ Current status:
   proof, or no successful task work visible in the recorder-backed run; a pure text/card MP4 is never sufficient final evidence for
   video-required tasks. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
+- Same-session verifier evidence requires the implementation Goal session to
+  remain open after its branch/report push. If the implementation prompt stops
+  the Goal session, the verifier request can be accepted by the API while no
+  verifier canary is ever committed; this is a blocked
+  `acceptance_video -> video_verifier` edge, not a valid release delay.
 - `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at
   terminal factory cleanup when they belong to the MineLink project and have no
   uncommitted workspace changes. The cleanup report is resource evidence only;
