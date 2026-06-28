@@ -1,10 +1,7 @@
 #!/usr/bin/env node
-import { randomBytes } from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import readline from "node:readline/promises";
 
 const args = {
   repository: process.env.GITHUB_REPOSITORY ?? "",
@@ -19,11 +16,15 @@ const args = {
   manifestPath: process.env.MINELINK_VIDEO_STORAGE_MANIFEST ?? "",
   videoReviewPath: process.env.MINELINK_VIDEO_REVIEW_PATH ?? "",
   releaseGatePath: process.env.MINELINK_VIDEO_RELEASE_GATE_PATH ?? "",
-  profileDir: path.resolve(".minelink-dev/github-attachment-cookie-profile"),
-  chromePath: process.env.CHROME_PATH ?? "",
-  port: Number(process.env.MINELINK_GITHUB_LOCAL_PUBLISHER_PORT ?? 9237),
-  timeoutSeconds: Number(process.env.MINELINK_GITHUB_LOCAL_PUBLISHER_TIMEOUT_SECONDS ?? 900),
-  tempCookieFile: "",
+  cookieFile:
+    process.env.MINELINK_GITHUB_USER_SESSION_FILE ??
+    ".minelink-dev/secrets/github-user-session.cookie",
+  refreshCookie:
+    process.env.MINELINK_GITHUB_ATTACHMENT_REFRESH_COOKIE !== "0" &&
+    process.env.MINELINK_GITHUB_ATTACHMENT_REFRESH_COOKIE !== "false",
+  secretName: "MINELINK_GITHUB_USER_SESSION",
+  refreshOutput: ".minelink-dev/reports/github-attachment-cookie-refresh.md",
+  refreshJsonOutput: ".minelink-dev/reports/github-attachment-cookie-refresh.json",
   uploadOutput: ".minelink-dev/reports/github-user-attachment-upload.md",
   uploadJsonOutput: ".minelink-dev/reports/github-user-attachment-upload.json",
   commentOutput: ".minelink-dev/reports/pr-video-evidence-comment.md",
@@ -35,11 +36,9 @@ const args = {
   producer: process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ?? "ona-task-finalizer",
   boundary:
     process.env.MINELINK_ACCEPTANCE_VIDEO_BOUNDARY ??
-    "local trusted GitHub attachment publisher; final video still requires Ona finalizer, same-session Codex verifier, and release gate evidence",
+    "script-only GitHub attachment publisher; final video still requires Ona finalizer, same-session Codex verifier, and release gate evidence",
 };
 
-let keepBrowser = false;
-let noPrompt = false;
 let uploadOnly = false;
 let updateSecret = false;
 let dryRun = false;
@@ -59,10 +58,9 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--manifest") args.manifestPath = readValue();
   else if (arg === "--video-review") args.videoReviewPath = readValue();
   else if (arg === "--release-gate") args.releaseGatePath = readValue();
-  else if (arg === "--profile-dir") args.profileDir = path.resolve(readValue());
-  else if (arg === "--chrome") args.chromePath = readValue();
-  else if (arg === "--port") args.port = Number(readValue());
-  else if (arg === "--timeout-seconds") args.timeoutSeconds = Number(readValue());
+  else if (arg === "--cookie-file") args.cookieFile = readValue();
+  else if (arg === "--refresh-output") args.refreshOutput = readValue();
+  else if (arg === "--refresh-json-output") args.refreshJsonOutput = readValue();
   else if (arg === "--upload-output") args.uploadOutput = readValue();
   else if (arg === "--upload-json-output") args.uploadJsonOutput = readValue();
   else if (arg === "--comment-output") args.commentOutput = readValue();
@@ -73,8 +71,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--workflow-name") args.workflowName = readValue();
   else if (arg === "--producer") args.producer = readValue();
   else if (arg === "--boundary") args.boundary = readValue();
-  else if (arg === "--keep-browser") keepBrowser = true;
-  else if (arg === "--no-prompt") noPrompt = true;
+  else if (arg === "--secret-name") args.secretName = readValue();
+  else if (arg === "--no-refresh-cookie") args.refreshCookie = false;
   else if (arg === "--upload-only") uploadOnly = true;
   else if (arg === "--update-secret") updateSecret = true;
   else if (arg === "--dry-run") dryRun = true;
@@ -82,26 +80,21 @@ for (let index = 2; index < process.argv.length; index += 1) {
     console.log(`Usage: node scripts/dev/publish-github-video-local.mjs --repository owner/repo --pr N [--run-id RUN_ID]
 
 Publishes a verifier-approved MineLink acceptance MP4 to GitHub PR inline
-playback using a dedicated local Chrome profile. This is the trusted local
-fallback for the final PR video edge when GitHub Actions cannot keep a stable
-web attachment cookie.
-
-The script does not read your normal browser profile, does not print cookies,
-and cannot mint GitHub web sessions from PATs. It opens a dedicated profile,
-reuses that profile's GitHub login if still valid, prompts only when GitHub
-requires a login, uploads the MP4 through GitHub user-attachments, and comments
-on the PR with the returned github.com/user-attachments/assets/... URL.
+playback by using an ignored local GitHub web cookie file. The script never
+opens, controls, or reads a browser. It refreshes the existing cookie by HTTP
+page requests, uploads the MP4 through GitHub user-attachments, and comments on
+the PR with the returned github.com/user-attachments/assets/... URL.
 
 Options:
   --run-id RUN_ID          Download the workflow artifact with gh run download.
   --artifact-dir DIR       Existing extracted artifact directory.
   --artifact-name NAME     Artifact/comment name. Defaults to minelink-ona-platform-codex-probe.
   --file FILE              Acceptance MP4 path. Auto-discovered under artifact-dir.
-  --profile-dir DIR        Dedicated Chrome profile. Defaults under .minelink-dev.
-  --no-prompt              Fail if the dedicated profile is not already logged in.
+  --cookie-file FILE       Ignored local cookie file. Defaults under .minelink-dev/secrets.
+  --no-refresh-cookie      Skip the HTTP cookie refresh/validation step.
   --upload-only            Upload the attachment but do not comment on the PR.
-  --update-secret          Also update MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE via gh secret set.
-  --dry-run                Validate artifact paths and GitHub login, then stop before upload.`);
+  --update-secret          Also update MINELINK_GITHUB_USER_SESSION via gh secret set.
+  --dry-run                Validate artifact paths and cookie refresh, then stop before upload.`);
     process.exit(0);
   } else {
     console.error(`Unknown argument: ${arg}`);
@@ -140,105 +133,6 @@ function prUrl() {
   return `https://github.com/${report.repository}/pull/${args.pr}`;
 }
 
-function candidateChromePaths() {
-  const candidates = [];
-  if (hasValue(args.chromePath)) candidates.push(args.chromePath);
-  if (process.platform === "darwin") {
-    candidates.push(
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-      path.join(os.homedir(), "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-      "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    );
-  }
-  candidates.push("google-chrome", "google-chrome-stable", "chromium", "chromium-browser");
-  return candidates;
-}
-
-async function fileExists(filePath) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function resolveChrome() {
-  for (const candidate of candidateChromePaths()) {
-    if (candidate.includes("/") && (await fileExists(candidate))) return candidate;
-    if (!candidate.includes("/")) {
-      const result = spawnSync("command", ["-v", candidate], {
-        encoding: "utf8",
-        stdio: "pipe",
-        shell: true,
-      });
-      const resolved = result.stdout.trim();
-      if (result.status === 0 && resolved) return resolved;
-    }
-  }
-  throw new Error("Could not find Chrome or Chromium. Set CHROME_PATH or pass --chrome.");
-}
-
-async function fetchJson(url) {
-  const response = await fetch(url);
-  const text = await response.text();
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${compact(text)}`);
-  return JSON.parse(text);
-}
-
-async function waitForDebuggerUrl() {
-  const startedAt = Date.now();
-  const timeoutMs = Math.max(60, args.timeoutSeconds) * 1000;
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const body = await fetchJson(`http://127.0.0.1:${args.port}/json/version`);
-      if (body.webSocketDebuggerUrl) return body.webSocketDebuggerUrl;
-    } catch {
-      // Chrome may still be starting.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error("Timed out waiting for Chrome DevTools Protocol.");
-}
-
-async function cdpCall(ws, method, params = {}) {
-  const id = cdpCall.nextId++;
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      ws.removeEventListener("message", onMessage);
-      reject(new Error(`CDP ${method} timed out`));
-    }, 10000);
-    function onMessage(event) {
-      const payload = JSON.parse(event.data);
-      if (payload.id !== id) return;
-      clearTimeout(timeout);
-      ws.removeEventListener("message", onMessage);
-      if (payload.error) reject(new Error(`CDP ${method} failed: ${payload.error.message}`));
-      else resolve(payload.result ?? {});
-    }
-    ws.addEventListener("message", onMessage);
-    ws.send(JSON.stringify({ id, method, params }));
-  });
-}
-cdpCall.nextId = 1;
-
-async function readGithubCookies(webSocketDebuggerUrl) {
-  const ws = new WebSocket(webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => {
-    ws.addEventListener("open", resolve, { once: true });
-    ws.addEventListener("error", reject, { once: true });
-  });
-  try {
-    const result = await cdpCall(ws, "Network.getAllCookies");
-    return (result.cookies ?? []).filter((cookie) => {
-      const domain = String(cookie.domain ?? "").replace(/^\./, "");
-      return domain === "github.com" || domain.endsWith(".github.com");
-    });
-  } finally {
-    ws.close();
-  }
-}
-
 function cookieSignals(cookieHeader) {
   const text = String(cookieHeader ?? "");
   return {
@@ -249,59 +143,6 @@ function cookieSignals(cookieHeader) {
     hasUserSession: /(?:^|;\s*)user_session=/.test(text),
     hasHostUserSessionSameSite: /(?:^|;\s*)__Host-user_session_same_site=/.test(text),
   };
-}
-
-function buildCookieHeader(cookies) {
-  const priority = new Map([
-    ["logged_in", 1],
-    ["dotcom_user", 2],
-    ["user_session", 3],
-    ["__Host-user_session_same_site", 4],
-    ["_gh_sess", 5],
-  ]);
-  return cookies
-    .filter((cookie) => hasValue(cookie.name) && hasValue(cookie.value))
-    .sort((left, right) => (priority.get(left.name) ?? 100) - (priority.get(right.name) ?? 100))
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join("; ");
-}
-
-async function readCookieHeader(webSocketDebuggerUrl) {
-  const cookies = await readGithubCookies(webSocketDebuggerUrl);
-  report.cookieNames = [...new Set(cookies.map((cookie) => cookie.name))].sort();
-  const header = buildCookieHeader(cookies);
-  report.cookieSignals = cookieSignals(header);
-  return header;
-}
-
-async function ensureGithubLogin(webSocketDebuggerUrl) {
-  let cookieHeader = await readCookieHeader(webSocketDebuggerUrl);
-  if (
-    report.cookieSignals.hasLoggedIn &&
-    report.cookieSignals.hasDotcomUser &&
-    (report.cookieSignals.hasUserSession || report.cookieSignals.hasHostUserSessionSameSite)
-  ) {
-    return cookieHeader;
-  }
-  if (noPrompt) {
-    throw new Error("Dedicated GitHub attachment profile is not logged in and --no-prompt was set.");
-  }
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    await rl.question(
-      "A dedicated Chrome window is open. Log in to GitHub there, then press Enter to publish the MineLink PR video. ",
-    );
-  } finally {
-    rl.close();
-  }
-  cookieHeader = await readCookieHeader(webSocketDebuggerUrl);
-  if (!report.cookieSignals.hasUserSession && !report.cookieSignals.hasHostUserSessionSameSite) {
-    throw new Error("Dedicated browser profile does not contain a GitHub user_session cookie. Login may not be complete.");
-  }
-  if (!report.cookieSignals.hasLoggedIn || !report.cookieSignals.hasDotcomUser) {
-    throw new Error("Dedicated browser profile does not look logged in to github.com.");
-  }
-  return cookieHeader;
 }
 
 async function walkFiles(root) {
@@ -397,31 +238,54 @@ function runNodeScript(script, scriptArgs, env = {}) {
   };
 }
 
-async function writeCookieFile(cookieHeader) {
-  const secretDir = path.join(".minelink-dev", "secrets");
-  await fs.mkdir(secretDir, { recursive: true });
-  args.tempCookieFile = path.join(secretDir, `github-user-attachments-${process.pid}-${randomBytes(4).toString("hex")}.cookie`);
-  await fs.writeFile(args.tempCookieFile, cookieHeader, { encoding: "utf8", mode: 0o600 });
-  await fs.chmod(args.tempCookieFile, 0o600).catch(() => {});
-}
-
 function readJson(filePath) {
   return fs.readFile(filePath, "utf8").then((text) => JSON.parse(text));
 }
 
-async function updateCookieSecret(cookieHeader) {
-  const result = spawnSync("gh", ["secret", "set", "MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE", "--repo", report.repository], {
-    input: cookieHeader,
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  report.secretUpdateStatus = result.status ?? 1;
-  report.secretUpdateStdout = compact(result.stdout);
-  report.secretUpdateStderr = compact(result.stderr);
-  if (result.status !== 0) {
-    throw new Error(`gh secret set failed: ${compact(result.stderr || result.stdout)}`);
+async function readCookieSignalsFromFile() {
+  const cookie = await fs.readFile(args.cookieFile, "utf8").catch(() => "");
+  report.cookieSignals = cookieSignals(cookie);
+  report.cookieNames = String(cookie)
+    .split(";")
+    .map((part) => part.trim().split("=")[0])
+    .filter(Boolean)
+    .sort();
+}
+
+async function refreshCookie(env) {
+  if (!args.refreshCookie) {
+    await readCookieSignalsFromFile();
+    return;
   }
-  report.secretUpdated = true;
+  const refreshArgs = [
+    "--repository",
+    report.repository,
+    "--cookie-file",
+    args.cookieFile,
+    "--output",
+    args.refreshOutput,
+    "--json-output",
+    args.refreshJsonOutput,
+  ];
+  if (/^\d+$/.test(String(args.pr))) refreshArgs.push("--pr", String(args.pr));
+  if (hasValue(args.secretName)) refreshArgs.push("--secret-name", args.secretName);
+  if (updateSecret) refreshArgs.push("--update-secret");
+  if (dryRun) refreshArgs.push("--dry-run");
+
+  const result = runNodeScript("scripts/dev/refresh-github-attachment-cookie.mjs", refreshArgs, env);
+  report.refreshStatus = result.status;
+  report.refreshStdout = result.stdout;
+  report.refreshStderr = result.stderr;
+  const refreshReport = await readJson(args.refreshJsonOutput).catch(() => null);
+  if (refreshReport) {
+    report.cookieNames = refreshReport.cookieNames ?? [];
+    report.cookieSignals = refreshReport.cookieSignals ?? report.cookieSignals;
+    report.refreshResult = refreshReport.result ?? "";
+    report.secretUpdated = refreshReport.secretUpdated === true;
+  }
+  if (result.status !== 0) {
+    throw new Error(`GitHub attachment cookie refresh failed: ${result.stderr || result.stdout}`);
+  }
 }
 
 async function uploadAttachment(env) {
@@ -435,7 +299,7 @@ async function uploadAttachment(env) {
     "--referer",
     prUrl(),
     "--cookie-file",
-    args.tempCookieFile,
+    args.cookieFile,
     "--require-upload",
     "--output",
     args.uploadOutput,
@@ -528,6 +392,8 @@ async function writeReport() {
     `- Video manifest: \`${args.manifestPath || "none"}\``,
     `- Video review: \`${args.videoReviewPath || "none"}\``,
     `- Release gate: \`${args.releaseGatePath || "none"}\``,
+    `- Cookie file: \`${args.cookieFile || "none"}\``,
+    `- Cookie refresh: \`${args.refreshCookie ? "yes" : "no"}\``,
     `- Attachment URL: ${report.attachmentUrl || "none"}`,
     `- Comment URL: ${report.commentUrl || "none"}`,
     `- Upload only: \`${uploadOnly ? "yes" : "no"}\``,
@@ -559,6 +425,10 @@ const report = {
   downloadStatus: null,
   downloadStdout: "",
   downloadStderr: "",
+  refreshStatus: null,
+  refreshStdout: "",
+  refreshStderr: "",
+  refreshResult: "",
   uploadStatus: null,
   uploadStdout: "",
   uploadStderr: "",
@@ -571,15 +441,11 @@ const report = {
   commentUrl: "",
   commentAction: "",
   secretUpdated: false,
-  secretUpdateStatus: null,
-  secretUpdateStdout: "",
-  secretUpdateStderr: "",
   failures: [],
   boundary:
-    "local trusted GitHub user-attachment publisher; it reads only the dedicated Chrome profile and never stores or prints GitHub web cookies in repository files",
+    "script-only trusted GitHub user-attachment publisher; it reads an ignored cookie file, refreshes by HTTP, and never opens or controls a browser",
 };
 
-let browser = null;
 try {
   if (!/^[^/\s]+\/[^/\s]+$/.test(report.repository)) {
     throw new Error("--repository must be owner/repo or origin must be a GitHub remote.");
@@ -597,29 +463,12 @@ try {
     await assertFile(args.releaseGatePath, "Video release gate");
   }
 
-  const chrome = await resolveChrome();
-  await fs.mkdir(args.profileDir, { recursive: true });
-  browser = spawn(
-    chrome,
-    [
-      `--remote-debugging-port=${args.port}`,
-      `--user-data-dir=${args.profileDir}`,
-      "--no-first-run",
-      "--no-default-browser-check",
-      /^\d+$/.test(String(args.pr)) ? prUrl() : `https://github.com/${report.repository}/pulls`,
-    ],
-    { stdio: "ignore", detached: true },
-  );
+  const env = await ghTokenEnv();
+  await refreshCookie(env);
 
-  const webSocketDebuggerUrl = await waitForDebuggerUrl();
-  const cookieHeader = await ensureGithubLogin(webSocketDebuggerUrl);
-  await writeCookieFile(cookieHeader);
-
-  if (updateSecret) await updateCookieSecret(cookieHeader);
   if (dryRun) {
     report.result = "dry-run";
   } else {
-    const env = await ghTokenEnv();
     await uploadAttachment(env);
     await commentOnPr(env);
     report.result = "passed";
@@ -628,20 +477,6 @@ try {
   report.result = "blocked";
   report.failures.push(compact(error?.message ?? error));
 } finally {
-  if (browser && !keepBrowser) {
-    try {
-      process.kill(-browser.pid, "SIGTERM");
-    } catch {
-      try {
-        browser.kill("SIGTERM");
-      } catch {
-        // Best effort only.
-      }
-    }
-  }
-  if (hasValue(args.tempCookieFile)) {
-    await fs.rm(args.tempCookieFile, { force: true }).catch(() => {});
-  }
   await writeReport();
 }
 

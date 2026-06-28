@@ -54,8 +54,7 @@ jobs:
         id: upload
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
-          MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
-          MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN: "1"
+          MINELINK_GITHUB_USER_SESSION: ${{ secrets.MINELINK_GITHUB_USER_SESSION }}
           INPUT_REFERER_URL: ${{ inputs.referer_url }}
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
         run: |

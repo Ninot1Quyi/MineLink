@@ -1063,10 +1063,14 @@ user-attachment MP4 URL such as `github.com/user-attachments/assets/...`; when
 that URL is missing the release-to-PR edge must fail closed instead of
 publishing an R2 link as playable evidence. MineLink can optionally create that
 attachment with `scripts/dev/upload-github-user-attachment.mjs`, but that bridge
-requires only the explicit GitHub web attachment cookie secret
-`MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE`; PATs and `GITHUB_TOKEN` can identify
-the repository but do not create comment attachments by themselves, and they
-cannot be exchanged for a GitHub web session cookie. Per-page upload tokens,
+requires the explicit raw GitHub Web `user_session` secret
+`MINELINK_GITHUB_USER_SESSION`; it also accepts the public-tooling alias
+`GH_SESSION_TOKEN` as the same raw value and synthesizes the matching
+`user_session`, `__Host-user_session_same_site`, and `logged_in` cookie header
+for upload-policy CSRF checks.
+PATs and `GITHUB_TOKEN` can identify the repository but do not create comment
+attachments by themselves, and they cannot be exchanged for a GitHub web session
+cookie. Per-page upload tokens,
 fetch nonces, client versions, and upload-policy CSRF values are intentionally
 not configured as durable secrets because they are short-lived page state. The
 attachment bridge fetches the task PR URL with the explicit cookie and discovers
@@ -1075,14 +1079,13 @@ the current issue/PR editor upload-policy authority for
 upload-policy CSRF input always overrides any earlier fallback token; ordinary
 page form authenticity tokens are diagnostic only and must not be used for the
 policy request or stored as durable configuration. Repository-page
-`uploadToken` discovery is the last static discovery path. When GitHub
-serves static HTML without the upload-policy CSRF, the bridge may launch a
-temporary headless Chrome with only the explicit attachment cookie, render the
-task PR page, read the hydrated `<file-attachment>` DOM token through CDP, and
-then close the browser before upload. That dynamic path records sanitized
-cookie-set/readback counts; if the rendered page is GitHub's sign-in page, the
-edge fails closed as `github-web-cookie-rejected` instead of trying a doomed
-policy request. Any rejected policy or finalization request still fails closed.
+`uploadToken` discovery is the last static discovery path. The bridge is
+script-only: it does not launch a browser or use CDP. When GitHub serves HTML
+without the upload-policy CSRF, the edge fails closed as
+`github-attachment-upload-policy-csrf-missing` instead of trying a doomed
+policy request. If GitHub renders a sign-in page, the edge fails closed as
+`github-web-cookie-rejected`. Any rejected policy or finalization request still
+fails closed.
 It then performs the policy, object upload, and finalization calls with
 reusable multipart buffers so retries do not depend on runtime-specific
 `FormData` behavior. Object-store uploads never receive the GitHub cookie
@@ -1095,26 +1098,50 @@ emits the same sanitized result, cookie-marker, page-token, and HTTP-phase
 summary to the Actions log so this edge is diagnosable even when downloading
 the raw evidence artifact is slow or unavailable.
 `scripts/dev/refresh-github-attachment-cookie.mjs`
-provides the supported refresh path: a local operator opens a dedicated Chrome
-profile, explicitly logs in to GitHub, and the helper writes only the resulting
-`github.com` cookie header directly to the repository secret through
-`gh secret set` without printing cookie values. It does not run in CI and does
-not read the operator's normal browser profile. When the cookie is absent the
-upload script writes a skipped report and the PR publication gate remains
-blocked. GitHub controls web-session expiry, and MineLink does not try to
-calculate refreshed cookies from PATs, scrape normal browser credentials, or
-store page-local upload nonces as durable secrets. For the stable final-video
-edge, `scripts/dev/publish-github-video-local.mjs` is the trusted local
-publisher: it reuses the same dedicated Chrome profile, downloads a selected
-Actions artifact when given `--run-id`, discovers the verifier-approved
-`acceptance.mp4` and release reports, uploads the MP4 through
+provides the supported refresh path: it reads an ignored local GitHub web cookie
+file, performs signed-in HTTP requests to the PR/repository page, absorbs
+`Set-Cookie` updates, writes the refreshed cookie back to the ignored local
+file, and can optionally write the resulting `github.com` cookie header to the
+repository secret through `gh secret set` without printing cookie values. It
+does not run a login flow, open a browser, or read browser profiles. When the
+cookie is absent the upload script writes a skipped report and the PR
+publication gate remains blocked. GitHub controls web-session expiry, and
+MineLink does not try to calculate refreshed cookies from PATs, `GITHUB_TOKEN`,
+`saved_user_sessions`, `GH_SESSION_TOKEN`, or page-local upload nonces as
+durable secrets. GitHub documents `user_session` as a two-week cookie with
+generally rolling expiration, so an interactive browser can remain logged in
+longer than two weeks when GitHub reissues cookies during normal use; this is
+not evidence of a separate script-visible refresh token. The
+current local GitHub Web investigation records the boundary in
+`.minelink-dev/reports/github-web-cookie-refresh-investigation.md`: a full
+browser cookie set returned the signed-in PR page, but the long-lived
+`saved_user_sessions` / account / device cookie subset returned signed-out
+pages and did not emit a fresh `user_session` Set-Cookie. The related browser
+storage probe records no localStorage or IndexedDB long-lived token on the
+GitHub origin. Follow-up probes with the active `user_session` against
+authenticated GitHub settings and notification pages only rolled `_gh_sess`,
+not `user_session`. The shared websocket refresh path `POST /_alive` similarly
+returned a new `alive.github.com` socket URL and rolled `_gh_sess`, but did not
+emit a replacement `user_session`, so rolling expiration should be treated as
+server-controlled best effort, not as a script-visible permanent refresh chain.
+A source-map pass over the current frontend maps this path to
+`packages/alive/session.ts` and the SharedWorker: both post the page's
+`data-refresh-url` with `GitHub-Verified-Fetch: true` and use the response as a
+new websocket URL. The session bundle maps to mobile approval, 2FA, WebAuthn,
+and login-form UI; it does not expose a no-interaction `saved_user_sessions`
+exchange.
+For the stable
+final-video edge,
+`scripts/dev/publish-github-video-local.mjs` is the trusted local publisher: it
+refreshes the ignored cookie file through HTTP, downloads a selected Actions
+artifact when given `--run-id`, discovers the verifier-approved `acceptance.mp4`
+and release reports, uploads the MP4 through
 `scripts/dev/upload-github-user-attachment.mjs`, and then runs
 `scripts/dev/comment-pr-evidence.mjs` with the returned
 `github.com/user-attachments/assets/...` URL. This keeps long-lived GitHub web
 state on the operator's local machine instead of GitHub Actions. If GitHub has
-expired the dedicated profile session, the publisher opens that profile and
-asks for an explicit login; it still never reads the operator's normal Chrome
-profile and never prints cookie values. Operators may pass `--update-secret`
+expired or rejected the cookie file, the publisher fails closed with a
+sanitized report. Operators may pass `--update-secret`
 when they also want to refresh the GitHub Actions cookie secret, but that secret
 remains a convenience path, not the durable source of truth for final PR video
 publication. Full-chain PR-producing workflows run an early
@@ -1130,7 +1157,7 @@ between full-chain runs. It must not be used as MineLink task acceptance
 evidence and does not replace the Ona finalizer video, same-session Codex
 verifier, release gate, or real NeoForge evidence. The default
 `github_attachment_preflight=deferred`
-mode records whether `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or a manually
+mode records whether `MINELINK_GITHUB_USER_SESSION` or a manually
 provided `github_attachment_video_url` is available, but still lets the
 Platform Codex implementation, finalizer, PR, and CI edges run so the exact
 remaining blocker is captured at `pr_video_evidence`. Operators can choose

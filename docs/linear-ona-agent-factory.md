@@ -628,7 +628,7 @@ branch when external storage is configured. For `full-chain-canary` and
 `full-chain-task` runs that create PRs, the workflow runs an early
 `scripts/dev/check-agent-factory-secrets.mjs` readiness report for inline video
 publication. The default `github_attachment_preflight=deferred` mode records
-whether `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` or an explicit
+whether `MINELINK_GITHUB_USER_SESSION` or an explicit
 `github_attachment_video_url` input is available, then lets Ona Platform Codex,
 the Minecraft finalizer, PR creation, and CI proceed so the true blocker lands
 on the `pr_video_evidence` edge. Operators can choose
@@ -1081,11 +1081,15 @@ The optional attachment bridge is
 finalizer and same-session verifier pass, uses the downloaded and hash-checked
 `acceptance.mp4`, and attempts to create the GitHub inline playback URL. This
 uses GitHub's web attachment flow, so it requires
-`MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` as a secret. PATs and the Actions
-`GITHUB_TOKEN` are not sufficient for attachment upload and cannot mint a
-GitHub web session cookie. R2 public URLs plus HTML `<video>` markup are also
-not sufficient because GitHub PR Markdown does not render external video embeds
-as the native issue/PR player. If the cookie is missing the bridge writes a
+`MINELINK_GITHUB_USER_SESSION` as a secret containing the raw GitHub Web
+`user_session`. The helper also accepts `GH_SESSION_TOKEN` as the same raw
+value, matching public `gh-image` tooling, and synthesizes `user_session`,
+`__Host-user_session_same_site`, and `logged_in` from that value. PATs and the
+Actions `GITHUB_TOKEN` are not sufficient for attachment
+upload and cannot mint a GitHub web session cookie. R2 public URLs plus HTML
+`<video>` markup are also not sufficient because GitHub PR Markdown does not
+render external video embeds as the native issue/PR player. If the cookie is
+missing the bridge writes a
 skipped report and the final PR evidence comment still fails closed. The bridge
 receives the task PR URL, fetches that page with the explicit cookie secret to
 discover the issue/PR editor's `<file-attachment>` upload-policy CSRF token
@@ -1096,18 +1100,16 @@ the bridge also scans around `/upload/policies/assets`; a discovered
 upload-policy CSRF always overrides any earlier fallback token, ordinary page
 form authenticity tokens are diagnostic only and must not be used for the
 policy request, and repository-page `uploadToken` discovery remains the last
-static fallback. If static HTML still does not expose the token, it can render the
-task PR page in a temporary headless Chrome seeded only with the explicit
-attachment cookie and read the hydrated `<file-attachment>` upload-policy token
-through CDP. The dynamic path records sanitized cookie set/readback counts and
-fails closed as `github-web-cookie-rejected` when GitHub renders the sign-in
-page. The policy/finalize requests must still accept the discovered token or
-the release edge fails closed. It uses reusable multipart buffers for the
+static fallback. If static HTML still does not expose the token, the script-only
+bridge fails closed as `github-attachment-upload-policy-csrf-missing`; when
+GitHub renders the sign-in page it fails closed as `github-web-cookie-rejected`.
+The policy/finalize requests must still accept the discovered token or the
+release edge fails closed. It uses reusable multipart buffers for the
 policy, object upload, and finalization calls. Object-store upload requests do
 not receive the GitHub cookie header.
 It also uses bounded retries, request
-timeouts, cookie marker reporting, page-token marker reporting,
-dynamic-DOM/cookie marker reporting, and failure-kind classification so
+timeouts, cookie marker reporting, page-token marker reporting, and
+failure-kind classification so
 rejected cookies, missing page tokens, and transient policy, object-upload, or
 finalization failures are diagnosable. It
 mirrors those sanitized signals to the
@@ -1115,15 +1117,55 @@ Actions log as well as the report artifact, because the publication blocker
 must stay visible even when artifact download is slow or unavailable. Refresh
 the cookie with
 `npm run agent-factory:refresh-github-cookie -- --repository Ninot1Quyi/MineLink`
-from a local trusted workstation; the helper opens a dedicated Chrome profile,
-waits for an explicit GitHub login, captures only `github.com` cookies from
-that profile, and writes the value directly to the GitHub repository secret
-without printing it. PR-producing full-chain dispatches additionally run an
-early readiness report before Ona work starts, so missing inline-video
-publication authority is visible before the final comment gate. When
+from a local trusted workstation; the helper reads the ignored local cookie
+file, refreshes it by signed-in HTTP requests, absorbs `Set-Cookie` updates,
+and can write the value directly to the GitHub repository secret without
+printing it. That means the source credential is the active GitHub web cookie
+header, not a separate refresh token. GitHub documents `user_session` as a
+two-week cookie with generally rolling expiration, so an interactive browser can
+stay logged in for longer than two calendar weeks when GitHub reissues cookies
+during normal use. The current browser/server evidence is captured in the
+ignored local
+report `.minelink-dev/reports/github-web-cookie-refresh-investigation.md`: the
+full cookie set returned the signed-in PR page, but `saved_user_sessions` plus
+long-lived account/device cookies returned signed-out pages and did not emit a
+fresh `user_session` Set-Cookie. Treat `saved_user_sessions` as GitHub's
+account-picker memory, not a scriptable `user_session` refresh token. Follow-up
+script probes with the active `user_session` against authenticated GitHub
+settings and notification pages returned signed-in pages and rolled `_gh_sess`,
+but did not emit a replacement `user_session`. The shared websocket refresh path
+`POST /_alive` also returned a new `alive.github.com` socket URL and rolled
+`_gh_sess`, but did not emit a replacement `user_session`, so the helper can
+persist GitHub's returned Set-Cookie updates but cannot guarantee one captured
+`user_session` remains valid forever. A source-map pass over the current
+GitHub frontend confirms that `/_alive` is implemented by the Alive websocket
+session code and returns the next socket URL; the session bundle covers mobile
+approval polling, 2FA, WebAuthn, and login-form UI rather than a no-interaction
+`saved_user_sessions` exchange. The related browser storage probe found no
+localStorage or IndexedDB long-lived token on the GitHub origin.
+PR-producing full-chain dispatches additionally run an early readiness report
+before Ona work starts, so missing inline-video publication authority is visible
+before the final comment gate. When
 `github_attachment_preflight=fail-fast`, the workflow also generates and uploads
 a tiny diagnostic MP4 through the same user-attachment bridge before starting
 Ona work, so stale cookies fail early as `github-web-cookie-rejected`.
+
+When the ignored cookie file needs to be seeded from a browser that is already
+logged into GitHub, run:
+
+```bash
+npm run agent-factory:export-github-cookie -- \
+  --cdp-url http://127.0.0.1:9222 \
+  --repository Ninot1Quyi/MineLink \
+  --pr 8
+```
+
+The exporter connects to an already-running Chrome DevTools Protocol endpoint,
+writes the current GitHub cookie header to the ignored local file, and records
+only sanitized metadata. It does not open a browser, perform login, upload,
+comment, or print cookie values. Follow it with
+`agent-factory:refresh-github-cookie` for HTTP validation and Set-Cookie
+absorption.
 
 For the durable final edge, use the local trusted publisher instead of relying
 on a static cookie in GitHub Actions:
@@ -1137,12 +1179,13 @@ npm run agent-factory:publish-github-video-local -- \
 
 The publisher downloads the named workflow artifact, discovers
 `acceptance.mp4`, `video-storage-manifest.json`, `video-review.md`, and
-`video-release-gate.md`, reads only the dedicated Chrome profile's current
-GitHub cookies, uploads the MP4 through the user-attachment bridge, and runs
+`video-release-gate.md`, refreshes the ignored local cookie file by HTTP,
+uploads the MP4 through the user-attachment bridge, and runs
 `comment-pr-evidence.mjs` with `--require-github-attachment-video`. It cannot
 calculate non-expiring cookies, cannot refresh GitHub web sessions from PATs,
-and must not scrape the operator's normal browser profile. If GitHub has
-expired the dedicated profile, it prompts for a one-time login in that profile.
+`GITHUB_TOKEN`, `GH_SESSION_TOKEN`, or `saved_user_sessions`, and does not open
+or control a browser. If GitHub rejects the cookie file, it fails closed with a
+sanitized report.
 Use `--update-secret` only to refresh the GitHub Actions convenience secret;
 the final product evidence path should still be able to complete through the
 local publisher when CI's static cookie has expired.
@@ -1152,7 +1195,7 @@ diagnostic for this edge. It creates a tiny MP4, uploads it with
 `scripts/dev/upload-github-user-attachment.mjs`, uploads the sanitized reports
 as an artifact, and can optionally post the returned
 `github.com/user-attachments/assets/...` URL to a selected PR. Use this smoke to
-prove a refreshed `MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE` before spending a
+prove a refreshed `MINELINK_GITHUB_USER_SESSION` before spending a
 full Ona/NeoForge run. It is not a required push check because the GitHub web
 session cookie is operator state that GitHub may rotate. Its video is
 diagnostic transport evidence only; final

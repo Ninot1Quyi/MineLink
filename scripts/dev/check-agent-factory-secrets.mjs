@@ -134,9 +134,7 @@ const env = {
   linearKeyPresent: Boolean(process.env.LINEAR_API_KEY),
   agentFactoryGithubTokenPresent: Boolean(process.env.AGENT_FACTORY_GITHUB_TOKEN),
   ghTokenPresent: Boolean(process.env.GH_TOKEN || process.env.GITHUB_TOKEN),
-  githubUserAttachmentsCookiePresent: Boolean(
-    process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE || process.env.GITHUB_USER_ATTACHMENTS_COOKIE,
-  ),
+  githubUserSessionPresent: Boolean(process.env.MINELINK_GITHUB_USER_SESSION || process.env.GH_SESSION_TOKEN),
   githubActions: Boolean(process.env.GITHUB_ACTIONS),
 };
 
@@ -171,9 +169,9 @@ record(
   "",
 );
 record(
-  "current MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE",
-  env.githubUserAttachmentsCookiePresent ? "present" : "missing",
-  env.githubUserAttachmentsCookiePresent
+  "current MINELINK_GITHUB_USER_SESSION",
+  env.githubUserSessionPresent ? "present" : "missing",
+  env.githubUserSessionPresent
     ? "environment variable is present"
     : "environment variable is missing",
   "",
@@ -192,14 +190,14 @@ if (requireGithubAttachmentCookie && args.githubAttachmentUrl && !githubInlineAt
     "final PR inline video publication",
     "blocked",
     "manual video URL is not a GitHub user-attachments URL",
-    "Pass a github.com/user-attachments/assets/... MP4 URL or configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE.",
+    "Pass a github.com/user-attachments/assets/... MP4 URL or configure MINELINK_GITHUB_USER_SESSION.",
   );
-} else if (requireGithubAttachmentCookie && !env.githubUserAttachmentsCookiePresent && !args.githubAttachmentUrl) {
+} else if (requireGithubAttachmentCookie && !env.githubUserSessionPresent && !args.githubAttachmentUrl) {
   record(
     "final PR inline video publication",
     "blocked",
-    "no GitHub web attachment cookie and no manual GitHub attachment URL are available",
-    "Configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE or pass github_attachment_video_url before running full-chain PR video publication.",
+    "no GitHub Web user_session and no manual GitHub attachment URL are available",
+    "Configure MINELINK_GITHUB_USER_SESSION or pass github_attachment_video_url before running full-chain PR video publication.",
   );
 } else if (requireGithubAttachmentCookie) {
   record(
@@ -207,7 +205,7 @@ if (requireGithubAttachmentCookie && args.githubAttachmentUrl && !githubInlineAt
     "passed",
     args.githubAttachmentUrl
       ? "manual GitHub attachment URL can be used for final PR playback"
-      : "GitHub web attachment cookie is configured; upload is verified only by upload-github-user-attachment.mjs",
+      : "GitHub Web user_session is configured; upload is verified only by upload-github-user-attachment.mjs",
     "",
   );
 }

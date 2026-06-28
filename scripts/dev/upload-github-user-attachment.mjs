@@ -1,32 +1,35 @@
 #!/usr/bin/env node
 import { createHash, randomBytes } from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text.length > 0 && !["none", "null", "undefined", "-"].includes(text.toLowerCase())) return text;
+  }
+  return "";
+}
+
 const defaults = {
-  repository: process.env.GITHUB_REPOSITORY ?? "",
-  repositoryId: process.env.MINELINK_GITHUB_REPOSITORY_ID ?? "",
+  repository: firstNonEmpty(process.env.GITHUB_REPOSITORY),
+  repositoryId: firstNonEmpty(process.env.MINELINK_GITHUB_REPOSITORY_ID),
   filePath: process.env.MINELINK_ACCEPTANCE_VIDEO_PATH ?? ".minelink-dev/reports/artifacts/acceptance.mp4",
   name: process.env.MINELINK_GITHUB_ATTACHMENT_NAME ?? "acceptance.mp4",
   contentType: process.env.MINELINK_GITHUB_ATTACHMENT_CONTENT_TYPE ?? "",
-  cookie: process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE ?? process.env.GITHUB_USER_ATTACHMENTS_COOKIE ?? "",
+  cookie: firstNonEmpty(
+    process.env.MINELINK_GITHUB_USER_SESSION,
+    process.env.GH_SESSION_TOKEN,
+  ),
   cookieFile:
-    process.env.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE_FILE ??
-    ".minelink-dev/secrets/github-user-attachments.cookie",
+    process.env.MINELINK_GITHUB_USER_SESSION_FILE ??
+    ".minelink-dev/secrets/github-user-session.cookie",
   token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "",
   referer: process.env.MINELINK_GITHUB_ATTACHMENT_REFERER ?? process.env.MINELINK_AGENT_FACTORY_PR_URL ?? "",
   authenticityToken: process.env.MINELINK_GITHUB_ATTACHMENT_AUTHENTICITY_TOKEN ?? "",
   uploadToken: process.env.MINELINK_GITHUB_ATTACHMENT_UPLOAD_TOKEN ?? "",
   fetchNonce: process.env.MINELINK_GITHUB_ATTACHMENT_FETCH_NONCE ?? "",
   clientVersion: process.env.MINELINK_GITHUB_CLIENT_VERSION ?? "",
-  dynamicPageToken:
-    process.env.MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN !== "0" &&
-    process.env.MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN !== "false",
-  chromePath: process.env.CHROME_PATH ?? process.env.MINELINK_GITHUB_ATTACHMENT_CHROME_PATH ?? "",
-  chromePort: Number(process.env.MINELINK_GITHUB_ATTACHMENT_CHROME_PORT ?? 9233),
-  chromeTimeoutMs: Number(process.env.MINELINK_GITHUB_ATTACHMENT_CHROME_TIMEOUT_MS ?? 45000),
   attempts: Number(process.env.MINELINK_GITHUB_ATTACHMENT_UPLOAD_ATTEMPTS ?? 3),
   retryDelayMs: Number(process.env.MINELINK_GITHUB_ATTACHMENT_RETRY_DELAY_MS ?? 1500),
   timeoutMs: Number(process.env.MINELINK_GITHUB_ATTACHMENT_TIMEOUT_MS ?? 30000),
@@ -54,11 +57,6 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--upload-token") args.uploadToken = readValue();
   else if (arg === "--fetch-nonce") args.fetchNonce = readValue();
   else if (arg === "--client-version") args.clientVersion = readValue();
-  else if (arg === "--dynamic-page-token") args.dynamicPageToken = true;
-  else if (arg === "--no-dynamic-page-token") args.dynamicPageToken = false;
-  else if (arg === "--chrome") args.chromePath = readValue();
-  else if (arg === "--chrome-port") args.chromePort = Number(readValue());
-  else if (arg === "--chrome-timeout-ms") args.chromeTimeoutMs = Number(readValue());
   else if (arg === "--attempts") args.attempts = Number(readValue());
   else if (arg === "--retry-delay-ms") args.retryDelayMs = Number(readValue());
   else if (arg === "--timeout-ms") args.timeoutMs = Number(readValue());
@@ -73,18 +71,23 @@ Uploads a validated acceptance MP4 to GitHub's issue/PR user-attachments
 storage so PR Markdown can render the MP4 as an inline GitHub video player.
 
 This uses GitHub's web attachment flow, which currently requires a GitHub web
-session cookie in MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE. PAT/GITHUB_TOKEN can
-read the repository id, but cannot create user-attachments by itself. If the
-cookie is missing and --require-upload is not set, the script writes a skipped
-report and exits successfully so the downstream release gate can fail closed.
+raw user_session in MINELINK_GITHUB_USER_SESSION. PAT/GITHUB_TOKEN can read the
+repository id and post the PR comment, but cannot create user-attachments by
+itself. The script synthesizes the required user_session,
+__Host-user_session_same_site, and logged_in cookie header from that raw value.
+saved_user_sessions is account-picker memory, not a user_session refresh token.
+If the session is missing and
+--require-upload is not set, the script writes a skipped report and exits
+successfully so the downstream release gate can fail closed.
 
 Reliability options:
   --referer URL         GitHub PR/issue page used for evidence context.
   --cookie-file FILE    Local ignored file containing the GitHub web attachment
-                         cookie. Used only when the cookie env var is missing.
+                         cookie. Used only when cookie env vars are missing.
+  --cookie VALUE        Raw GitHub user_session override. A cookie header still
+                         works for local diagnostics, but CI should configure
+                         MINELINK_GITHUB_USER_SESSION.
   --upload-token TOKEN  GitHub repository uploadToken override for policy upload.
-  --dynamic-page-token  Render the PR page in temporary headless Chrome when
-                         static HTML does not expose the upload-policy CSRF.
   --attempts N          Retry count for transient web/object-store failures.
   --retry-delay-ms N    Base retry delay in milliseconds.
   --timeout-ms N        Per-request timeout in milliseconds.`);
@@ -131,8 +134,6 @@ function boundedNumber(value, fallback, min, max) {
 args.attempts = boundedNumber(args.attempts, 3, 1, 8);
 args.retryDelayMs = boundedNumber(args.retryDelayMs, 1500, 100, 30000);
 args.timeoutMs = boundedNumber(args.timeoutMs, 30000, 1000, 120000);
-args.chromePort = boundedNumber(args.chromePort, 9233, 1024, 65535);
-args.chromeTimeoutMs = boundedNumber(args.chromeTimeoutMs, 45000, 5000, 180000);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -194,101 +195,6 @@ function parseCookiePairs(cookie) {
     .filter(Boolean);
 }
 
-async function fileExists(filePath) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function candidateChromePaths() {
-  const candidates = [];
-  if (hasValue(args.chromePath)) candidates.push(args.chromePath);
-  if (process.platform === "darwin") {
-    candidates.push(
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-      path.join(os.homedir(), "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-      "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    );
-  }
-  candidates.push("google-chrome", "google-chrome-stable", "chromium", "chromium-browser");
-  return candidates;
-}
-
-async function resolveChrome() {
-  for (const candidate of candidateChromePaths()) {
-    if (candidate.includes("/") && (await fileExists(candidate))) return candidate;
-    if (!candidate.includes("/")) {
-      const result = spawnSync("command", ["-v", candidate], {
-        encoding: "utf8",
-        stdio: "pipe",
-        shell: true,
-      });
-      const resolved = result.stdout.trim();
-      if (result.status === 0 && resolved) return resolved;
-    }
-  }
-  throw new Error("could not find Chrome/Chromium for dynamic upload-policy token discovery");
-}
-
-async function fetchJson(url) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-  const text = await response.text();
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${compact(text)}`);
-  return JSON.parse(text);
-}
-
-async function waitForDebuggerUrl(port, timeoutMs) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const body = await fetchJson(`http://127.0.0.1:${port}/json/version`);
-      if (body.webSocketDebuggerUrl) return body.webSocketDebuggerUrl;
-    } catch {
-      // Chrome may still be starting.
-    }
-    await sleep(500);
-  }
-  throw new Error("timed out waiting for Chrome DevTools Protocol");
-}
-
-async function cdpCall(ws, method, params = {}, sessionId = "") {
-  const id = cdpCall.nextId++;
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      ws.removeEventListener("message", onMessage);
-      reject(new Error(`CDP ${method} timed out`));
-    }, Math.max(5000, Math.min(args.chromeTimeoutMs, 30000)));
-    function onMessage(event) {
-      const payload = JSON.parse(event.data);
-      if (payload.id !== id) return;
-      clearTimeout(timeout);
-      ws.removeEventListener("message", onMessage);
-      if (payload.error) reject(new Error(`CDP ${method} failed: ${payload.error.message}`));
-      else resolve(payload.result ?? {});
-    }
-    ws.addEventListener("message", onMessage);
-    ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
-  });
-}
-cdpCall.nextId = 1;
-
-function cookiePairsForCdp() {
-  return Array.from(cookieJar.entries())
-    .filter(([name, value]) => hasValue(name) && hasValue(value))
-    .map(([name, value]) => ({
-      name,
-      value,
-      url: "https://github.com/",
-      path: "/",
-      secure: true,
-      httpOnly: ["_gh_sess", "user_session", "__Host-user_session_same_site", "logged_in"].includes(name),
-      sameSite: "Lax",
-    }));
-}
-
 function isSignedOutGithubTitle(title) {
   return /sign in to github/i.test(String(title ?? ""));
 }
@@ -305,118 +211,6 @@ function isSignedOutGithubHtml(html) {
     /<form\b[^>]*action=["']\/session["'][^>]*>/i.test(source) ||
     /\/login\?return_to=/i.test(source)
   );
-}
-
-async function discoverDynamicUploadTokens() {
-  if (!args.dynamicPageToken || !hasValue(args.cookie) || !hasValue(args.referer)) return null;
-  const chrome = await resolveChrome();
-  const profileDir = await fs.mkdtemp(path.join(os.tmpdir(), "minelink-github-attachment-"));
-  let browser = null;
-  let ws = null;
-  try {
-    browser = spawn(
-      chrome,
-      [
-        `--remote-debugging-port=${args.chromePort}`,
-        `--user-data-dir=${profileDir}`,
-        "--headless=new",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--no-sandbox",
-        "about:blank",
-      ],
-      { stdio: "ignore", detached: true },
-    );
-    const webSocketDebuggerUrl = await waitForDebuggerUrl(args.chromePort, args.chromeTimeoutMs);
-    ws = new WebSocket(webSocketDebuggerUrl);
-    await new Promise((resolve, reject) => {
-      ws.addEventListener("open", resolve, { once: true });
-      ws.addEventListener("error", reject, { once: true });
-    });
-    const target = await cdpCall(ws, "Target.createTarget", { url: "about:blank" });
-    const attached = await cdpCall(ws, "Target.attachToTarget", {
-      targetId: target.targetId,
-      flatten: true,
-    });
-    const sessionId = attached.sessionId;
-    await cdpCall(ws, "Page.enable", {}, sessionId);
-    await cdpCall(ws, "Network.enable", {}, sessionId);
-    const cookieSetResults = [];
-    for (const cookie of cookiePairsForCdp()) {
-      try {
-        const result = await cdpCall(ws, "Network.setCookie", cookie, sessionId);
-        cookieSetResults.push({ name: cookie.name, success: result.success !== false });
-      } catch (error) {
-        cookieSetResults.push({ name: cookie.name, success: false, error: compact(error?.message ?? error) });
-      }
-    }
-    const cookieReadback = await cdpCall(
-      ws,
-      "Network.getCookies",
-      { urls: ["https://github.com/", args.referer] },
-      sessionId,
-    ).catch(() => ({ cookies: [] }));
-    report.pageTokenSignals.dynamicPageTokenCookieSetCount = cookieSetResults.filter((cookie) => cookie.success).length;
-    report.pageTokenSignals.dynamicPageTokenCookieCount = Array.isArray(cookieReadback.cookies)
-      ? cookieReadback.cookies.length
-      : 0;
-    report.pageTokenSignals.dynamicPageTokenHasUserSessionCookie = Array.isArray(cookieReadback.cookies)
-      ? cookieReadback.cookies.some((cookie) => cookie.name === "user_session")
-      : false;
-    await cdpCall(ws, "Page.navigate", { url: args.referer }, sessionId);
-
-    const startedAt = Date.now();
-    let lastResult = null;
-    while (Date.now() - startedAt < args.chromeTimeoutMs) {
-      await sleep(500);
-      const result = await cdpCall(
-        ws,
-        "Runtime.evaluate",
-        {
-          returnByValue: true,
-          expression: `(() => {
-            const policyToken = document.querySelector('file-attachment .js-data-upload-policy-url-csrf')?.getAttribute('value') || '';
-            const fetchNonce = document.querySelector('[data-fetch-nonce]')?.getAttribute('data-fetch-nonce')
-              || document.querySelector('meta[name="fetch-nonce"]')?.getAttribute('content') || '';
-            const clientVersion = document.querySelector('meta[name="github-client-version"]')?.getAttribute('content') || '';
-            const fileAttachment = document.querySelector('file-attachment');
-            return {
-              policyToken,
-              fetchNonce,
-              clientVersion,
-              hasFileAttachment: Boolean(fileAttachment),
-              readyState: document.readyState,
-              url: location.href,
-              title: document.title
-            };
-          })()`,
-        },
-        sessionId,
-      );
-      lastResult = result.result?.value ?? null;
-      if (hasValue(lastResult?.policyToken)) return lastResult;
-    }
-    return lastResult;
-  } finally {
-    try {
-      ws?.close();
-    } catch {
-      // Best effort.
-    }
-    if (browser) {
-      try {
-        process.kill(-browser.pid, "SIGTERM");
-      } catch {
-        try {
-          browser.kill("SIGTERM");
-        } catch {
-          // Best effort.
-        }
-      }
-    }
-    await fs.rm(profileDir, { recursive: true, force: true }).catch(() => {});
-  }
 }
 
 if (!hasValue(args.cookie) && hasValue(args.cookieFile)) {
@@ -738,37 +532,6 @@ async function discoverPageUploadTokens() {
   ) {
     throw new Error("GitHub web cookie rejected: GitHub rendered a signed-out page for every token discovery URL.");
   }
-
-  if (!report.pageTokenSignals.hasUploadPolicyCsrf && args.dynamicPageToken) {
-    try {
-      const dynamicTokens = await discoverDynamicUploadTokens();
-      report.pageTokenSignals.dynamicPageTokenAttempted = true;
-      report.pageTokenSignals.dynamicPageTokenTitle = dynamicTokens?.title ?? "";
-      report.pageTokenSignals.dynamicPageTokenUrl = dynamicTokens?.url ?? "";
-      report.pageTokenSignals.dynamicPageTokenReadyState = dynamicTokens?.readyState ?? "";
-      report.pageTokenSignals.dynamicPageTokenHasFileAttachment = dynamicTokens?.hasFileAttachment === true;
-      report.pageTokenSignals.dynamicPageTokenHasUploadPolicyCsrf = hasValue(dynamicTokens?.policyToken);
-      report.pageTokenSignals.dynamicPageTokenHasFetchNonce = hasValue(dynamicTokens?.fetchNonce);
-      report.pageTokenSignals.dynamicPageTokenHasClientVersion = hasValue(dynamicTokens?.clientVersion);
-      if (hasValue(dynamicTokens?.policyToken)) {
-        args.authenticityToken = dynamicTokens.policyToken;
-        if (!hasValue(args.fetchNonce)) args.fetchNonce = dynamicTokens.fetchNonce;
-        if (!hasValue(args.clientVersion)) args.clientVersion = dynamicTokens.clientVersion;
-      }
-      if (!hasValue(args.authenticityToken) && isSignedOutGithubTitle(dynamicTokens?.title)) {
-        throw new Error("GitHub web cookie rejected: dynamic PR page rendered Sign in to GitHub.");
-      }
-      report.pageTokenSignals.hasUploadPolicyCsrf =
-        pageResults.some((page) => hasValue(page.uploadPolicyCsrf)) || hasValue(dynamicTokens?.policyToken);
-      report.pageTokenSignals.hasFetchNonce = hasValue(args.fetchNonce);
-      report.pageTokenSignals.hasClientVersion = hasValue(args.clientVersion);
-    } catch (error) {
-      report.pageTokenSignals.dynamicPageTokenAttempted = true;
-      const message = compact(error?.message ?? error);
-      report.pageTokenSignals.dynamicPageTokenError = message;
-      if (classifyFailure(message) === "github-web-cookie-rejected") throw error;
-    }
-  }
 }
 
 async function readRepositoryId() {
@@ -940,10 +703,6 @@ function printUploadSummary(report, write = console.log) {
       `authenticityToken=${yesNo(pageSignals.hasAuthenticityToken)}`,
       `fetchNonce=${yesNo(pageSignals.hasFetchNonce)}`,
       `clientVersion=${yesNo(pageSignals.hasClientVersion)}`,
-      `dynamicPageToken=${yesNo(pageSignals.dynamicPageTokenHasUploadPolicyCsrf)}`,
-      `dynamicCookieSet=${pageSignals.dynamicPageTokenCookieSetCount ?? 0}`,
-      `dynamicCookieReadback=${pageSignals.dynamicPageTokenCookieCount ?? 0}`,
-      `dynamicUserSession=${yesNo(pageSignals.dynamicPageTokenHasUserSessionCookie)}`,
     ].join(" "),
   );
   const checkedPages = Array.isArray(pageSignals.checkedPages) ? pageSignals.checkedPages : [];
@@ -1037,19 +796,6 @@ const report = {
     hasAuthenticityToken: hasValue(args.authenticityToken),
     hasFetchNonce: hasValue(args.fetchNonce),
     hasClientVersion: hasValue(args.clientVersion),
-    dynamicPageTokenEnabled: args.dynamicPageToken,
-    dynamicPageTokenAttempted: false,
-    dynamicPageTokenCookieSetCount: 0,
-    dynamicPageTokenCookieCount: 0,
-    dynamicPageTokenHasUserSessionCookie: false,
-    dynamicPageTokenHasFileAttachment: false,
-    dynamicPageTokenHasUploadPolicyCsrf: false,
-    dynamicPageTokenHasFetchNonce: false,
-    dynamicPageTokenHasClientVersion: false,
-    dynamicPageTokenUrl: "",
-    dynamicPageTokenReadyState: "",
-    dynamicPageTokenTitle: "",
-    dynamicPageTokenError: "",
   },
   referer: args.referer || "",
   attempts: [],
@@ -1063,7 +809,7 @@ try {
     report.result = "skipped";
     report.failureKind = "missing-github-web-cookie";
     report.failures.push(
-      "MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE is not configured; cannot create a GitHub inline video attachment.",
+      "MINELINK_GITHUB_USER_SESSION is not configured; cannot create a GitHub inline video attachment.",
     );
     if (requireUpload) throw new Error(report.failures[0]);
     await writeReports(report);
@@ -1075,7 +821,7 @@ try {
   const signals = report.cookieSignals;
   if (!signals.hasUserSession && !signals.hasHostUserSessionSameSite) {
     report.failures.push(
-      "MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE is present but does not include common GitHub web session markers; upload may fail if the cookie is incomplete.",
+      "MINELINK_GITHUB_USER_SESSION is present but does not include common GitHub web session markers; upload may fail if the value is not a raw user_session.",
     );
   }
 

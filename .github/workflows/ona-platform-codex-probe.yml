@@ -172,7 +172,7 @@ jobs:
           ONA_TOKEN: ${{ secrets.ONA_TOKEN }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           AGENT_FACTORY_GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN }}
-          MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
+          MINELINK_GITHUB_USER_SESSION: ${{ secrets.MINELINK_GITHUB_USER_SESSION }}
           INPUT_GITHUB_ATTACHMENT_VIDEO_URL: ${{ inputs.github_attachment_video_url }}
           INPUT_GITHUB_ATTACHMENT_PREFLIGHT: ${{ inputs.github_attachment_preflight || 'deferred' }}
         run: |
@@ -192,8 +192,7 @@ jobs:
         if: ${{ ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && (inputs.github_attachment_preflight || 'deferred') == 'fail-fast' && (inputs.github_attachment_video_url || '') == '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
-          MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
-          MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN: "1"
+          MINELINK_GITHUB_USER_SESSION: ${{ secrets.MINELINK_GITHUB_USER_SESSION }}
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
         run: |
           mkdir -p .minelink-dev/reports/artifacts
@@ -871,8 +870,7 @@ jobs:
         if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' && (inputs.github_attachment_video_url || '') == '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_FACTORY_GITHUB_TOKEN || github.token }}
-          MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE: ${{ secrets.MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE }}
-          MINELINK_GITHUB_ATTACHMENT_DYNAMIC_PAGE_TOKEN: "1"
+          MINELINK_GITHUB_USER_SESSION: ${{ secrets.MINELINK_GITHUB_USER_SESSION }}
         run: |
           node scripts/dev/upload-github-user-attachment.mjs \
             --repository "$GITHUB_REPOSITORY" \
@@ -983,7 +981,7 @@ jobs:
           INPUT_GITHUB_ISSUE: ${{ inputs.github_issue }}
           INPUT_LINEAR_ISSUE: ${{ inputs.linear_issue }}
         run: |
-          blocker="Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback; configure MINELINK_GITHUB_USER_ATTACHMENTS_COOKIE or pass github_attachment_video_url."
+          blocker="Final PR video evidence requires a GitHub user-attachments MP4 URL for inline playback; configure MINELINK_GITHUB_USER_SESSION or pass github_attachment_video_url."
           node scripts/dev/sync-github-status.mjs \
             --repository "$GITHUB_REPOSITORY" \
             --github-issue "${INPUT_GITHUB_ISSUE:-none}" \
