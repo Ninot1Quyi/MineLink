@@ -981,7 +981,12 @@ recorder logs at the end so GitHub truncation still preserves the most useful
 failure evidence. The recorder also writes `logs/resource-snapshots.log` around
 dependency checks, client startup, ffmpeg startup, and recorder shutdown so
 slow or choppy videos can be attributed to CPU, memory, or process contention
-instead of guesswork. Stage
+instead of guesswork. Recorder-backed finalizer runs quiesce same-repository
+build, typecheck, test, and Gradle daemon processes before launching Minecraft,
+then run the client/server Gradle launches with bounded
+`MINELINK_GRADLE_JVMARGS` and quieter `MINELINK_NEOFORGE_LOG_*` settings so
+the recording path preserves CPU and memory for the actual game evidence.
+Stage
 reports preserve both the head and tail of long command output so recorder,
 Minecraft client, and MCP server failures can be diagnosed from GitHub
 artifacts. For large MP4s, the default path is R2-first: the Ona finalizer

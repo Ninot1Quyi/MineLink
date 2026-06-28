@@ -1170,7 +1170,11 @@ Current status:
   report plus acceptance MP4 for that task. The recorder writes
   `logs/resource-snapshots.log` around dependency checks, client startup,
   ffmpeg startup, and shutdown so reviewers can diagnose CPU or process
-  contention when the Minecraft capture is choppy. The finalizer stage group is
+  contention when the Minecraft capture is choppy. Recorder-backed finalizer
+  runs also quiesce same-repository build, typecheck, test, and Gradle daemon
+  processes before launching Minecraft, and pass bounded Gradle JVM plus quieter
+  NeoForge logging environment settings into the client/server runs. The
+  finalizer stage group is
   fail-fast: when validation or a guarded prerequisite fails, downstream
   video/storyboard/review stages stop instead of publishing derivative
   evidence. Recorder-backed NeoForge runs also set a per-run

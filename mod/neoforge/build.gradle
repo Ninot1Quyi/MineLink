@@ -23,6 +23,18 @@ def truthyEnv = { String name ->
     return value != null && ["1", "true", "yes", "on"].contains(value.toLowerCase(Locale.ROOT))
 }
 
+def slf4jLevelEnv = { String name, org.slf4j.event.Level fallback ->
+    def value = System.getenv(name)
+    if (value == null || value.isBlank()) {
+        return fallback
+    }
+    try {
+        return org.slf4j.event.Level.valueOf(value.toUpperCase(Locale.ROOT))
+    } catch (IllegalArgumentException ignored) {
+        return fallback
+    }
+}
+
 sourceSets.main.resources {
     srcDir('src/generated/resources')
     exclude("src/generated/**/.cache")
@@ -68,8 +80,9 @@ neoForge {
         }
 
         configureEach {
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-            logLevel = org.slf4j.event.Level.DEBUG
+            def logMarkers = System.getenv("MINELINK_NEOFORGE_LOG_MARKERS")
+            systemProperty 'forge.logging.markers', logMarkers == null ? 'REGISTRIES' : logMarkers
+            logLevel = slf4jLevelEnv("MINELINK_NEOFORGE_LOG_LEVEL", org.slf4j.event.Level.DEBUG)
         }
     }
 

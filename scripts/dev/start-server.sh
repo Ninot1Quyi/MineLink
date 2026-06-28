@@ -16,6 +16,12 @@ level_name="${MINELINK_MINECRAFT_LEVEL_NAME:-world}"
 ref_ttl_ms="${MINELINK_REF_TTL_MS:-}"
 enable_create="${MINELINK_ENABLE_CREATE:-0}"
 gradle_cmd="${MINELINK_GRADLE_CMD:-}"
+gradle_jvmargs="${MINELINK_GRADLE_JVMARGS:-}"
+
+gradle_run_args=(--no-daemon)
+if [ -n "$gradle_jvmargs" ]; then
+  gradle_run_args+=("-Dorg.gradle.jvmargs=$gradle_jvmargs")
+fi
 
 upsert_server_property() {
   key="$1"
@@ -93,17 +99,17 @@ if [ "$runtime" = "neoforge" ]; then
   fi
   if [ "$enable_create" = "1" ] || [ "$enable_create" = "true" ]; then
     if [ -n "$gradle_cmd" ]; then
-      (cd mod/neoforge && exec "$gradle_cmd" --no-daemon -PenableCreateAdapter=true runServer)
+      (cd mod/neoforge && exec "$gradle_cmd" "${gradle_run_args[@]}" -PenableCreateAdapter=true runServer)
     else
-      (cd mod/neoforge && exec ./gradlew --no-daemon -PenableCreateAdapter=true runServer)
+      (cd mod/neoforge && exec ./gradlew "${gradle_run_args[@]}" -PenableCreateAdapter=true runServer)
     fi
     exit $?
   fi
   if [ -n "$gradle_cmd" ]; then
-    (cd mod/neoforge && exec "$gradle_cmd" --no-daemon runServer)
+    (cd mod/neoforge && exec "$gradle_cmd" "${gradle_run_args[@]}" runServer)
     exit $?
   else
-    (cd mod/neoforge && exec ./gradlew --no-daemon runServer)
+    (cd mod/neoforge && exec ./gradlew "${gradle_run_args[@]}" runServer)
     exit $?
   fi
 fi

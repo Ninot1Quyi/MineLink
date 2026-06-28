@@ -9,6 +9,7 @@ port="${MINELINK_PORT:-}"
 runtime="${MINELINK_RUNTIME:-mock}"
 work_dir="${MINELINK_WORK_DIR:-.minelink-dev/$scenario}"
 record_client="${MINELINK_RECORD_CLIENT:-0}"
+gradle_jvmargs="${MINELINK_GRADLE_JVMARGS:-}"
 
 truthy_value() {
   case "${1:-}" in
@@ -190,6 +191,45 @@ kill_repo_neoforge_processes() {
         ;;
     esac
   done
+}
+
+quiesce_repo_background_tasks() {
+  if ! truthy_value "${MINELINK_E2E_QUIESCE_REPO_TASKS:-0}"; then
+    return 0
+  fi
+  if ! command -v ps >/dev/null 2>&1; then
+    return 0
+  fi
+  local current_pid="${BASHPID:-$$}"
+  ps -eo pid=,ppid=,args= 2>/dev/null | while read -r pid ppid args; do
+    if [ -z "${pid:-}" ]; then
+      continue
+    fi
+    case "$pid" in
+      *[!0-9]*)
+        continue
+        ;;
+    esac
+    if [ "$pid" = "$$" ] || [ "$pid" = "$current_pid" ]; then
+      continue
+    fi
+    case "${args:-}" in
+      *"$repo_root"*"npm run build"*|*"$repo_root"*"npm run typecheck"*|*"$repo_root"*"node_modules/.bin/tsc"*|*"$repo_root"*"node_modules/vitest"*|*"$repo_root"*"verify-agent-task.sh"*)
+        {
+          echo "quiesce repo task pid $pid ppid ${ppid:-unknown}"
+          ps -p "$pid" -o pid,ppid,etime,cmd 2>/dev/null || true
+        } >> "$work_dir/logs/pre-clean.log" 2>/dev/null || true
+        kill_tree "$pid"
+        sleep 1
+        if kill -0 "$pid" >/dev/null 2>&1; then
+          kill -9 "$pid" >/dev/null 2>&1 || true
+        fi
+        ;;
+    esac
+  done
+  if [ -x mod/neoforge/gradlew ]; then
+    (cd mod/neoforge && ./gradlew --stop) >> "$work_dir/logs/pre-clean.log" 2>&1 || true
+  fi
 }
 
 kill_port_listeners() {
@@ -483,12 +523,16 @@ start_recorder_client() {
   } > "$work_dir/logs/client-config.log"
 
   record_resource_snapshot "recorder-before-client"
+  gradle_run_args=(--no-daemon)
+  if [ -n "$gradle_jvmargs" ]; then
+    gradle_run_args+=("-Dorg.gradle.jvmargs=$gradle_jvmargs")
+  fi
   (
     cd mod/neoforge
     if truthy_value "${MINELINK_ENABLE_CREATE:-0}"; then
-      exec ./gradlew --no-daemon -PenableCreateAdapter=true runClient
+      exec ./gradlew "${gradle_run_args[@]}" -PenableCreateAdapter=true runClient
     fi
-    exec ./gradlew --no-daemon runClient
+    exec ./gradlew "${gradle_run_args[@]}" runClient
   ) > "$work_dir/logs/client.stdout.log" 2> "$work_dir/logs/client.stderr.log" &
   client_pid="$!"
 
@@ -570,6 +614,7 @@ fi
 agent_timeout_grace="${MINELINK_AGENT_TIMEOUT_GRACE_SECONDS:-10}"
 
 if [ "$runtime" = "neoforge" ]; then
+  quiesce_repo_background_tasks
   kill_repo_neoforge_processes
   kill_port_listeners "$port" "$minecraft_port"
 else
