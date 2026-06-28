@@ -699,7 +699,7 @@ print(json.dumps({"scenario": payload.get("scenario"), "passed": True, "report":
 PY
 
 if truthy_value "$record_client"; then
-  recorder_post_seconds="${MINELINK_RECORDER_POST_SCENARIO_SECONDS:-12}"
+  recorder_post_seconds="${MINELINK_RECORDER_POST_SCENARIO_SECONDS:-4}"
   recorder_min_work_seconds="${MINELINK_RECORDER_MIN_WORK_VISIBLE_SECONDS:-10}"
   recorder_min_visible_mining_ms="${MINELINK_RECORDER_MINING_VISIBLE_MS:-2500}"
   recorder_visual_timeout="${MINELINK_RECORDER_POST_SCENARIO_READY_TIMEOUT:-30}"

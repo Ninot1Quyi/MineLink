@@ -1075,12 +1075,15 @@ markers with the scenario's successful work tools and final assertions to write
 runner must wait for the recorder to report follow, visibility, and centered
 framing after `agent.birth` and before the first work tool is executed; the
 metadata records this as `recorderReadyBeforeScenario=true`. After the scenario
-passes, `e2e.sh` must hold a visible post-scenario work window and the renderer
-must record `recorderWorkCoverageAdequate=true` only when the hold is at least
-the configured minimum. The scenario report must also confirm submit-mode
-actions reached terminal lifecycle states; `submittedActionsTerminalConfirmed`
-prevents a video from ending at action submission time when work is still
-queued or running. For video-oriented mining, the accepted status payload must
+passes, `e2e.sh` must keep a short visible post-scenario confirmation window,
+but `recorderWorkCoverageAdequate=true` is based on the real task window from
+`recorderReadyBeforeScenarioAtEpoch` to `scenarioCompletedAtEpoch` plus
+scenario-specific visible action duration such as `recorderVisibleMiningMs`.
+The post-scenario hold is not allowed to substitute for missing work footage.
+The scenario report must also confirm submit-mode actions reached terminal
+lifecycle states; `submittedActionsTerminalConfirmed` prevents a video from
+ending at action submission time when work is still queued or running. For
+video-oriented mining, the accepted status payload must
 also include the submitted action result (`action_result.mined`,
 `action_result.submitted_action`, and `action_result.visible_mining_ms`) so the
 summary, verifier request, and terminal panel can tie the visible client footage
@@ -1093,8 +1096,11 @@ cannot be published as final Minecraft product evidence.
 Release gates also run `scripts/dev/analyze-acceptance-video.mjs` against the
 raw Minecraft client MP4 before final composite rendering. That lightweight
 visual QA checks for obvious camera jumps, action-motion coverage, and long
-static tails; failures set `visualQualityPassed=false` and block verifier
-handoff plus PR publication. Visual QA is only a release guardrail. It does not
+static tails over the task window, excluding recorder warmup before the active
+target is followed and centered. Normal mining/action motion must not be
+misclassified as camera jitter, but genuine camera snaps and static idle tails
+still set `visualQualityPassed=false` and block verifier handoff plus PR
+publication. Visual QA is only a release guardrail. It does not
 replace the playable MP4, scenario assertions, same-session Codex verifier, or
 MineLink product gate evidence.
 Pull request workflows use

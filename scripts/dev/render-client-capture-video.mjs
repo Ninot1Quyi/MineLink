@@ -272,17 +272,19 @@ const recorderReadyBeforeScenario = metadataBool(clientReadyLog, "recorderReadyB
 const recorderWorkHoldCompleted = metadataBool(clientReadyLog, "recorderWorkHoldCompleted");
 const recorderMinWorkVisibleSeconds = metadataNumber(clientReadyLog, "recorderMinWorkVisibleSeconds", 10);
 const recorderPostScenarioSeconds = metadataNumber(clientReadyLog, "recorderPostScenarioSeconds", 0);
+const captureStartedAtEpoch = metadataNumber(clientReadyLog, "captureStartedAtEpoch", 0);
+const recorderReadyBeforeScenarioAtEpoch = metadataNumber(clientReadyLog, "recorderReadyBeforeScenarioAtEpoch", 0);
+const scenarioCompletedAtEpoch = metadataNumber(clientReadyLog, "scenarioCompletedAtEpoch", 0);
 const recorderWorkHoldStartedAtEpoch = metadataNumber(clientReadyLog, "recorderWorkHoldStartedAtEpoch", 0);
 const recorderWorkHoldEndedAtEpoch = metadataNumber(clientReadyLog, "recorderWorkHoldEndedAtEpoch", 0);
 const recorderWorkHoldSeconds =
   recorderWorkHoldStartedAtEpoch > 0 && recorderWorkHoldEndedAtEpoch >= recorderWorkHoldStartedAtEpoch
     ? recorderWorkHoldEndedAtEpoch - recorderWorkHoldStartedAtEpoch
     : recorderPostScenarioSeconds;
-const recorderWorkCoverageAdequate =
-  recorderReadyBeforeScenario &&
-  recorderWorkHoldCompleted &&
-  recorderWorkHoldSeconds >= recorderMinWorkVisibleSeconds &&
-  captureDurationSeconds >= recorderMinWorkVisibleSeconds;
+const recorderTaskWindowSeconds =
+  recorderReadyBeforeScenarioAtEpoch > 0 && scenarioCompletedAtEpoch >= recorderReadyBeforeScenarioAtEpoch
+    ? scenarioCompletedAtEpoch - recorderReadyBeforeScenarioAtEpoch
+    : 0;
 const recorderVisibleMining = serverLogText.includes("MineLink recorder visible mining server_agent");
 const requiresVisibleMining = successfulWorkToolNames.includes("action.mine_visible_block");
 const recorderVisibleMiningMs = Math.max(
@@ -314,6 +316,12 @@ const recorderMinVisibleMiningMs = Math.max(
 const recorderVisibleMiningDurationAdequate =
   !requiresVisibleMining || (recorderVisibleMining && recorderVisibleMiningMs >= recorderMinVisibleMiningMs);
 const recorderScenarioActionVisible = !requiresVisibleMining || recorderVisibleMiningDurationAdequate;
+const recorderVisibleActionSeconds = Math.max(recorderTaskWindowSeconds, recorderVisibleMiningMs / 1000);
+const recorderWorkCoverageAdequate =
+  recorderReadyBeforeScenario &&
+  recorderWorkHoldCompleted &&
+  recorderVisibleActionSeconds >= recorderMinWorkVisibleSeconds &&
+  captureDurationSeconds >= recorderMinWorkVisibleSeconds;
 const recorderWorkVisible =
   passed &&
   successfulWorkTools.length > 0 &&
@@ -326,6 +334,17 @@ const recorderWorkVisible =
   recorderWorkCoverageAdequate &&
   submittedActionsTerminalConfirmed;
 const serverAgentTaskActionVisible = recorderWorkVisible;
+const visualAnalysisStartSeconds =
+  captureStartedAtEpoch > 0 && recorderReadyBeforeScenarioAtEpoch >= captureStartedAtEpoch
+    ? Math.max(0, recorderReadyBeforeScenarioAtEpoch - captureStartedAtEpoch)
+    : 0;
+const visualAnalysisEndSeconds =
+  captureStartedAtEpoch > 0 && scenarioCompletedAtEpoch >= captureStartedAtEpoch
+    ? Math.min(
+        captureDurationSeconds,
+        Math.max(visualAnalysisStartSeconds + 1, scenarioCompletedAtEpoch - captureStartedAtEpoch + Math.min(4, recorderPostScenarioSeconds)),
+      )
+    : 0;
 let visualAnalysis = null;
 let visualAnalysisPath = path.join(args.outputDir, "acceptance-video-visual-analysis.json");
 let visualAnalysisMdPath = path.join(args.outputDir, "acceptance-video-visual-analysis.md");
@@ -355,6 +374,9 @@ if (clientVideoStat?.isFile()) {
         env: {
           ...process.env,
           MINELINK_VIDEO_MAX_STATIC_TAIL_SECONDS: String(maxStaticTailSeconds),
+          MINELINK_VIDEO_ABRUPT_JUMP_DIFF: process.env.MINELINK_VIDEO_ABRUPT_JUMP_DIFF ?? "32",
+          MINELINK_VIDEO_ANALYSIS_START_SECONDS: String(visualAnalysisStartSeconds),
+          MINELINK_VIDEO_ANALYSIS_END_SECONDS: String(visualAnalysisEndSeconds),
         },
         maxBuffer: 1024 * 1024 * 8,
       },
@@ -473,6 +495,8 @@ const terminalLines = [
   `visual qa: ${visualQualityPassed ? "YES" : "NO"}`,
   `ready before work: ${recorderReadyBeforeScenario ? "YES" : "NO"}`,
   `work hold sec: ${recorderWorkHoldSeconds}`,
+  `task window sec: ${recorderTaskWindowSeconds}`,
+  `action visible sec: ${recorderVisibleActionSeconds.toFixed(1)}`,
   `visible mining: ${recorderVisibleMining ? "YES" : "NO"}`,
   `mining ms: ${recorderVisibleMiningMs}/${recorderMinVisibleMiningMs}`,
   `actions terminal: ${submittedActionsTerminalConfirmed ? "YES" : "NO"}`,
@@ -652,6 +676,8 @@ const summaryLines = [
   `- Recorder work hold completed: \`${recorderWorkHoldCompleted ? "yes" : "no"}\``,
   `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
   `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
+  `- Recorder task window seconds: \`${recorderTaskWindowSeconds}\``,
+  `- Recorder visible action seconds: \`${recorderVisibleActionSeconds.toFixed(3)}\``,
   `- Recorder capture duration seconds: \`${captureDurationSeconds.toFixed(3)}\``,
   `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
   `- Recorder visible mining: \`${recorderVisibleMining ? "yes" : "no"}\``,
@@ -723,6 +749,8 @@ const origin = {
   recorderWorkHoldCompleted,
   recorderWorkHoldSeconds,
   recorderMinWorkVisibleSeconds,
+  recorderTaskWindowSeconds,
+  recorderVisibleActionSeconds: Number(recorderVisibleActionSeconds.toFixed(3)),
   recorderCaptureDurationSeconds: Number(captureDurationSeconds.toFixed(3)),
   recorderWorkCoverageAdequate,
   recorderVisibleMining,
@@ -785,6 +813,8 @@ await fs.writeFile(
     `- Recorder work hold completed: \`${recorderWorkHoldCompleted ? "yes" : "no"}\``,
     `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
     `- Recorder min work visible seconds: \`${recorderMinWorkVisibleSeconds}\``,
+    `- Recorder task window seconds: \`${recorderTaskWindowSeconds}\``,
+    `- Recorder visible action seconds: \`${recorderVisibleActionSeconds.toFixed(3)}\``,
     `- Recorder capture duration seconds: \`${captureDurationSeconds.toFixed(3)}\``,
     `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
     `- Recorder visible mining: \`${recorderVisibleMining ? "yes" : "no"}\``,

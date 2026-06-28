@@ -1126,9 +1126,13 @@ Current status:
   must also set `recorderReadyBeforeScenario=true` before the first scenario
   work tool runs, so fast tasks cannot finish before the recorder has visibly
   locked onto the active `server_agent`. After the scenario passes, the harness
-  must keep recording a visible work window and the renderer must set
-  `recorderWorkCoverageAdequate=true` only when that window is at least the
-  configured minimum. For submit-mode tools, the scenario report must also set
+  must keep recording through task completion plus a short visible confirmation
+  window. The renderer sets `recorderWorkCoverageAdequate=true` only when the
+  task window from recorder-ready to scenario-complete, or a scenario-specific
+  visible action duration such as `recorderVisibleMiningMs`, satisfies the
+  configured minimum. The post-scenario hold helps reviewers see the completed
+  state, but it cannot substitute for missing work footage. For submit-mode
+  tools, the scenario report must also set
   `submittedActionsTerminalConfirmed=true`; a task submission or accepted action
   handle is not enough if the action remains queued or running. The renderer
   must also set `recorderWorkVisible=true`,
@@ -1156,7 +1160,10 @@ Current status:
   requires `visualQualityPassed=true`, `visualJitterPassed=true`,
   `visualActionMotionCoveragePassed=true`, and `visualStaticTailPassed=true`.
   This catches obvious camera jumps, insufficient work motion, and long static
-  tails before the same-session verifier can release the video. The analyzer is
+  tails before the same-session verifier can release the video. The analyzer
+  evaluates the active task window and excludes recorder warmup before the
+  target is followed, centered, and visible, so normal mining/action motion is
+  not treated as camera jitter while true camera snaps still fail closed. The analyzer is
   a guardrail only and does not replace the playable MP4, scenario assertions,
   real NeoForge evidence, or Codex video review. The release gate
   must include

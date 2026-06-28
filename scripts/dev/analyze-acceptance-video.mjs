@@ -93,6 +93,8 @@ max_abrupt_jumps = int(sys.argv[4])
 motion_threshold = float(sys.argv[5])
 min_motion_ratio = float(sys.argv[6])
 max_static_tail_seconds = float(sys.argv[7])
+analysis_start_seconds = float(sys.argv[8])
+analysis_end_seconds = float(sys.argv[9])
 
 prev = None
 diffs = []
@@ -112,14 +114,22 @@ for index, frame in enumerate(frames, 1):
         diffs.append(mean)
     prev = crop
 
-analysis_start = max(1, int(fps))
-sample = diffs[analysis_start:] if len(diffs) > analysis_start else diffs
-abrupt = [(idx + 1, value) for idx, value in enumerate(diffs) if idx >= analysis_start and value >= abrupt_threshold]
+analysis_start = max(1, int(analysis_start_seconds * fps), int(fps))
+analysis_end = len(diffs)
+if analysis_end_seconds > 0 and fps > 0:
+    analysis_end = min(analysis_end, max(analysis_start + 1, int(analysis_end_seconds * fps)))
+sample = diffs[analysis_start:analysis_end] if len(diffs) > analysis_start else diffs
+abrupt = [
+    (idx + 1, value)
+    for idx, value in enumerate(diffs)
+    if idx >= analysis_start and idx < analysis_end and value >= abrupt_threshold
+]
 motion_count = sum(1 for value in sample if value >= motion_threshold)
 motion_ratio = motion_count / len(sample) if sample else 0.0
 
+tail_sample = diffs[:analysis_end]
 static_tail = 0
-for value in reversed(diffs):
+for value in reversed(tail_sample):
     if value >= motion_threshold:
         break
     static_tail += 1
@@ -147,6 +157,9 @@ static_tail_passed = static_tail_seconds <= max_static_tail_seconds
 print(json.dumps({
     "frameCountAnalyzed": len(frames),
     "diffCount": len(diffs),
+    "analysisStartSeconds": analysis_start / fps if fps > 0 else 0,
+    "analysisEndSeconds": analysis_end / fps if fps > 0 else 0,
+    "analysisDiffCount": len(sample),
     "abruptJumpThreshold": abrupt_threshold,
     "abruptJumpCount": len(abrupt),
     "maxAbruptJumps": max_abrupt_jumps,
@@ -194,6 +207,8 @@ async function main() {
     const motionThreshold = Number.parseFloat(process.env.MINELINK_VIDEO_MOTION_DIFF ?? "2");
     const minMotionRatio = Number.parseFloat(process.env.MINELINK_VIDEO_MIN_MOTION_RATIO ?? "0.08");
     const maxStaticTailSeconds = Number.parseFloat(process.env.MINELINK_VIDEO_MAX_STATIC_TAIL_SECONDS ?? "14");
+    const analysisStartSeconds = Number.parseFloat(process.env.MINELINK_VIDEO_ANALYSIS_START_SECONDS ?? "0");
+    const analysisEndSeconds = Number.parseFloat(process.env.MINELINK_VIDEO_ANALYSIS_END_SECONDS ?? "0");
     const { stdout } = await execFileAsync(
       "python3",
       [
@@ -206,6 +221,8 @@ async function main() {
         String(motionThreshold),
         String(minMotionRatio),
         String(maxStaticTailSeconds),
+        String(Number.isFinite(analysisStartSeconds) ? analysisStartSeconds : 0),
+        String(Number.isFinite(analysisEndSeconds) ? analysisEndSeconds : 0),
       ],
       { maxBuffer: 1024 * 1024 * 8 },
     );
@@ -235,6 +252,7 @@ async function main() {
         `- Duration seconds: \`${report.durationSeconds.toFixed(3)}\``,
         `- Frame count: \`${report.frameCount}\``,
         `- Sampled FPS: \`${report.sampledFps}\``,
+        `- Analysis window: \`${report.analysisStartSeconds.toFixed(3)}s-${report.analysisEndSeconds.toFixed(3)}s\``,
         `- Abrupt jump count: \`${report.abruptJumpCount}\``,
         `- Max abrupt jumps: \`${report.maxAbruptJumps}\``,
         `- Jitter passed: \`${report.jitterPassed ? "yes" : "no"}\``,

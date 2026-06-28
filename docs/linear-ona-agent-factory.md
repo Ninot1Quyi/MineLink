@@ -1256,8 +1256,12 @@ when the current line of sight is no longer usable. If visual QA rejects the
 raw Minecraft capture for jitter, static tail, or ambiguous action motion, the
 renderer must withhold final `acceptance.mp4` and still return the diagnostic
 raw-capture storyboard in the artifact bundle. The static-tail threshold is tied
-to the configured post-scenario evidence hold window so the chain does not
-punish an otherwise correct "task completed and still visible" recording.
+to the configured post-scenario evidence hold window, but the finalizer keeps
+that hold short and proves the minimum work coverage from the recorder-ready to
+scenario-complete task window plus scenario-specific visible action duration.
+The visual analyzer excludes recorder warmup before the target is followed,
+centered, and visible, so the gate blocks true camera snaps and static idle
+tails without treating normal Minecraft mining/action motion as jitter.
 That report defaults to
 `github_attachment_preflight=deferred`: if neither a cookie nor a manual
 `github_attachment_video_url` is available, the run may still prove
