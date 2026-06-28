@@ -141,6 +141,16 @@ const recorderTargetMoved = origin?.recorderTargetMoved === true;
 const recorderClientFollow = origin?.recorderClientFollow === true;
 const recorderClientTargetCentered = origin?.recorderClientTargetCentered === true;
 const recorderClientTargetVisible = origin?.recorderClientTargetVisible === true;
+const recorderObservedServerAgentCount = Number.isFinite(origin?.recorderObservedServerAgentCount)
+  ? origin.recorderObservedServerAgentCount
+  : 0;
+const recorderExpectedVisibleServerAgents = Number.isFinite(origin?.recorderExpectedVisibleServerAgents)
+  ? origin.recorderExpectedVisibleServerAgents
+  : 0;
+const recorderVisibleAgentCountMatchesExpectation = origin?.recorderVisibleAgentCountMatchesExpectation === true;
+const recorderSelectedTargetName = origin?.recorderSelectedTargetName ?? "";
+const recorderUniqueTargetNames = Array.isArray(origin?.recorderUniqueTargetNames) ? origin.recorderUniqueTargetNames : [];
+const recorderSelectedSingleTargetStable = origin?.recorderSelectedSingleTargetStable === true;
 const recorderReadyBeforeScenario = origin?.recorderReadyBeforeScenario === true;
 const recorderWorkCoverageAdequate = origin?.recorderWorkCoverageAdequate === true;
 const recorderWorkHoldSeconds = Number.isFinite(origin?.recorderWorkHoldSeconds) ? origin.recorderWorkHoldSeconds : 0;
@@ -155,6 +165,10 @@ const recorderMinVisibleMiningMs = Number.isFinite(origin?.recorderMinVisibleMin
 const recorderVisibleMiningDurationAdequate = origin?.recorderVisibleMiningDurationAdequate === true;
 const requiresVisibleMining = origin?.requiresVisibleMining === true;
 const recorderScenarioActionVisible = origin?.recorderScenarioActionVisible === true;
+const visualQualityPassed = origin?.visualQualityPassed === true;
+const visualJitterPassed = origin?.visualJitterPassed === true;
+const visualActionMotionCoveragePassed = origin?.visualActionMotionCoveragePassed === true;
+const visualStaticTailPassed = origin?.visualStaticTailPassed === true;
 const submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
 const submittedActionPendingCount = Number.isFinite(origin?.submittedActionPendingCount)
   ? origin.submittedActionPendingCount
@@ -223,6 +237,16 @@ if (requireClientGuiCapture) {
         "Acceptance video origin does not confirm clear line-of-sight visibility of the active server_agent",
       );
     }
+    if (!recorderVisibleAgentCountMatchesExpectation) {
+      failures.push(
+        `Acceptance video origin saw ${recorderObservedServerAgentCount || "unknown"} visible server_agent candidate(s), expected ${recorderExpectedVisibleServerAgents || "unknown"}`,
+      );
+    }
+    if (!recorderSelectedSingleTargetStable) {
+      failures.push(
+        `Acceptance video origin has ambiguous or unstable target identity: selected=${recorderSelectedTargetName || "unknown"} observed=${recorderUniqueTargetNames.join(",") || "none"}`,
+      );
+    }
     if (!recorderReadyBeforeScenario) {
       failures.push("Acceptance video origin does not confirm the recorder was ready before task work began");
     }
@@ -241,6 +265,18 @@ if (requireClientGuiCapture) {
     }
     if (!recorderScenarioActionVisible) {
       failures.push("Acceptance video origin does not confirm scenario-specific visible task action");
+    }
+    if (!visualQualityPassed) {
+      failures.push("Acceptance video origin visual QA did not pass");
+    }
+    if (!visualJitterPassed) {
+      failures.push("Acceptance video origin visual jitter check did not pass");
+    }
+    if (!visualActionMotionCoveragePassed) {
+      failures.push("Acceptance video origin visual action-motion coverage check did not pass");
+    }
+    if (!visualStaticTailPassed) {
+      failures.push("Acceptance video origin visual static-tail check did not pass");
     }
     if (!submittedActionsTerminalConfirmed) {
       failures.push(
@@ -353,12 +389,20 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   const reviewedRecorderClientFollow = marker(review, "Recorder client follow");
   const reviewedRecorderClientTargetCentered = marker(review, "Recorder client target centered");
   const reviewedRecorderClientTargetVisible = marker(review, "Recorder client target visible");
+  const reviewedRecorderVisibleAgentCountMatchesExpectation = marker(
+    review,
+    "Recorder visible agent count matches expectation",
+  );
+  const reviewedRecorderSelectedTargetStable = marker(review, "Recorder selected target stable");
   const reviewedRecorderReadyBeforeScenario = marker(review, "Recorder ready before scenario");
   const reviewedRecorderWorkCoverageAdequate = marker(review, "Recorder work coverage adequate");
   const reviewedRecorderVisibleMining = marker(review, "Recorder visible mining");
   const reviewedRecorderVisibleMiningDurationAdequate = marker(review, "Recorder visible mining duration adequate");
   const reviewedRequiresVisibleMining = marker(review, "Requires visible mining");
   const reviewedRecorderScenarioActionVisible = marker(review, "Recorder scenario action visible");
+  const reviewedVisualQaPassed = marker(review, "Visual QA passed");
+  const reviewedVisualJitterPassed = marker(review, "Visual jitter passed");
+  const reviewedVisualActionMotionCoveragePassed = marker(review, "Visual action motion coverage passed");
   const reviewedSubmittedActionsTerminalConfirmed = marker(review, "Submitted actions terminal confirmed");
   const reviewedRecorderWorkVisible = marker(review, "Recorder work visible");
   const reviewedServerAgentTaskActionVisible = marker(review, "Server agent task action visible");
@@ -433,6 +477,16 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
       `Video verifier did not confirm recorder target visibility: ${reviewedRecorderClientTargetVisible || "missing"}`,
     );
   }
+  if (requireClientGuiCapture && reviewedRecorderVisibleAgentCountMatchesExpectation !== "yes") {
+    failures.push(
+      `Video verifier did not confirm expected visible server_agent count: ${reviewedRecorderVisibleAgentCountMatchesExpectation || "missing"}`,
+    );
+  }
+  if (requireClientGuiCapture && reviewedRecorderSelectedTargetStable !== "yes") {
+    failures.push(
+      `Video verifier did not confirm stable unambiguous recorder target identity: ${reviewedRecorderSelectedTargetStable || "missing"}`,
+    );
+  }
   if (requireClientGuiCapture && reviewedRecorderReadyBeforeScenario !== "yes") {
     failures.push(
       `Video verifier did not confirm recorder readiness before task work: ${reviewedRecorderReadyBeforeScenario || "missing"}`,
@@ -460,6 +514,17 @@ if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
   if (requireClientGuiCapture && reviewedRecorderScenarioActionVisible !== "yes") {
     failures.push(
       `Video verifier did not confirm scenario-specific visible task action: ${reviewedRecorderScenarioActionVisible || "missing"}`,
+    );
+  }
+  if (requireClientGuiCapture && reviewedVisualQaPassed !== "yes") {
+    failures.push(`Video verifier did not confirm visual QA passed: ${reviewedVisualQaPassed || "missing"}`);
+  }
+  if (requireClientGuiCapture && reviewedVisualJitterPassed !== "yes") {
+    failures.push(`Video verifier did not confirm jitter-free enough footage: ${reviewedVisualJitterPassed || "missing"}`);
+  }
+  if (requireClientGuiCapture && reviewedVisualActionMotionCoveragePassed !== "yes") {
+    failures.push(
+      `Video verifier did not confirm action-motion coverage: ${reviewedVisualActionMotionCoveragePassed || "missing"}`,
     );
   }
   if (requireClientGuiCapture && reviewedSubmittedActionsTerminalConfirmed !== "yes") {
@@ -524,6 +589,12 @@ const lines = [
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder observed server agent count: \`${recorderObservedServerAgentCount || "unknown"}\``,
+  `- Recorder expected visible server agents: \`${recorderExpectedVisibleServerAgents || "unknown"}\``,
+  `- Recorder visible agent count matches expectation: \`${recorderVisibleAgentCountMatchesExpectation ? "yes" : "no"}\``,
+  `- Recorder selected target name: \`${recorderSelectedTargetName || "unknown"}\``,
+  `- Recorder unique target names: \`${recorderUniqueTargetNames.join(",") || "none"}\``,
+  `- Recorder selected target stable: \`${recorderSelectedSingleTargetStable ? "yes" : "no"}\``,
   `- Recorder ready before scenario: \`${recorderReadyBeforeScenario ? "yes" : "no"}\``,
   `- Recorder work coverage adequate: \`${recorderWorkCoverageAdequate ? "yes" : "no"}\``,
   `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
@@ -534,6 +605,10 @@ const lines = [
   `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
   `- Requires visible mining: \`${requiresVisibleMining ? "yes" : "no"}\``,
   `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
+  `- Visual QA passed: \`${visualQualityPassed ? "yes" : "no"}\``,
+  `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,
+  `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
+  `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
   `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,

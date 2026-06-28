@@ -1033,7 +1033,15 @@ agent-following camera anchor; the renderer writes that as
 `recorderAutoFollow=true`. The recorder client must also log
 `MineLink recorder client following server_agent` after it sees the visible
 `MineLink-*` player body and continuously steers the recorded view toward it; the renderer
-writes that as `recorderClientFollow=true`. The server-side recorder helper
+writes that as `recorderClientFollow=true`. It also logs the visible
+`server_agent` candidate count and the expected scenario count. Single-agent
+video tasks default to exactly one visible candidate, while `portal_coop`
+defaults to three visible candidates. `render-client-capture-video.mjs`,
+`prepare-video-review-request.mjs`, and `check-video-review.mjs` fail closed
+when that count is missing or mismatched, or when the selected target identity
+is unstable. This blocks clips that frame the recorder player, a different
+MineLink body, or an ambiguous group of agents as evidence for the task agent.
+The server-side recorder helper
 must log `MineLink recorder target moved server_agent` after the active
 `server_agent` body visibly moves during the recorded scenario; the renderer
 writes that as `recorderTargetMoved=true`. It must then log
@@ -1064,6 +1072,13 @@ static/idle targets, late-only target appearances, no-op tasks, occluded
 targets, off-screen target following, or normal clients that are not visibly
 following and framing the active `server_agent` before and during task work
 cannot be published as final Minecraft product evidence.
+Release gates also run `scripts/dev/analyze-acceptance-video.mjs` against the
+raw Minecraft client MP4 before final composite rendering. That lightweight
+visual QA checks for obvious camera jumps, action-motion coverage, and long
+static tails; failures set `visualQualityPassed=false` and block verifier
+handoff plus PR publication. Visual QA is only a release guardrail. It does not
+replace the playable MP4, scenario assertions, same-session Codex verifier, or
+MineLink product gate evidence.
 Pull request workflows use
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
 finalizer to upload candidate `acceptance.mp4` to the configured

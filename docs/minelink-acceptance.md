@@ -1093,9 +1093,18 @@ Current status:
   to that same player body in third person, rather than filming a proxy marker
   or a detached first-person recorder hand; the renderer records this as
   `recorderClientFollow=true`. The server-side recorder helper must
-  log `MineLink recorder target moved server_agent` after the active
+	  log `MineLink recorder target moved server_agent` after the active
   `server_agent` visibly moves during the recorded scenario; the renderer
   records this as `recorderTargetMoved=true`. The recorder client must also log
+  the visible `server_agent` candidate count and expected scenario count. Single
+  agent video tasks expect exactly one visible `server_agent` candidate, while
+  `portal_coop` expects three visible candidates. The renderer records
+  `recorderVisibleAgentCountMatchesExpectation=true` only when that count
+  matches, and `recorderSelectedTargetStable=true` only when the selected target
+  identity is unambiguous. A video that frames the recorder player, a different
+  MineLink body, or an ambiguous group of agents is not acceptable evidence for
+  the task agent.
+  The recorder client must also log
   `MineLink recorder client target centered server_agent` after the recorder
   view has held the visible agent in frame; the renderer records
   this as `recorderClientTargetCentered=true`. The recorder client must also
@@ -1130,13 +1139,22 @@ Current status:
   `action.status` reports terminal `completed`, `action_result.mined`, and
   `action_result.submitted_action=true`. This keeps the vanilla mining action
   visible in the final MP4 without extending the synchronous MCP request past
-  its timeout-safe budget. The release gate
+  its timeout-safe budget. The renderer runs
+  `scripts/dev/analyze-acceptance-video.mjs` against the raw client MP4 and
+  requires `visualQualityPassed=true`, `visualJitterPassed=true`,
+  `visualActionMotionCoveragePassed=true`, and `visualStaticTailPassed=true`.
+  This catches obvious camera jumps, insufficient work motion, and long static
+  tails before the same-session verifier can release the video. The analyzer is
+  a guardrail only and does not replace the playable MP4, scenario assertions,
+  real NeoForge evidence, or Codex video review. The release gate
   must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,
   static/idle target, late-only target appearance, no-op task, occluded target,
-  off-screen target following, or non-following client capture cannot be final
-  acceptance evidence. The finalizer also produces `acceptance-storyboard.png` and
+  off-screen target following, ambiguous target selection, wrong visible agent
+  count, jittery capture, long static tail, or non-following client capture
+  cannot be final acceptance evidence. The finalizer also produces
+  `acceptance-storyboard.png` and
   `acceptance-storyboard.json` for model-readable visual QA, but those files
   are inspection aids only; the deliverable remains the playable
   `acceptance.mp4`.

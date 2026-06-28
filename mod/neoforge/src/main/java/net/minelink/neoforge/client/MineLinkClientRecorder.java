@@ -35,6 +35,11 @@ public final class MineLinkClientRecorder {
     private static int targetCenteredTicks;
     private static boolean targetVisibleLogged;
     private static int targetVisibleTicks;
+    private static boolean candidateCountLogged;
+    private static Vec3 smoothedCameraPosition;
+    private static float smoothedYaw;
+    private static float smoothedPitch;
+    private static String smoothedTargetName = "";
 
     private MineLinkClientRecorder() {
     }
@@ -100,6 +105,9 @@ public final class MineLinkClientRecorder {
         targetCenteredTicks = 0;
         targetVisibleLogged = false;
         targetVisibleTicks = 0;
+        candidateCountLogged = false;
+        smoothedCameraPosition = null;
+        smoothedTargetName = "";
         MineLinkMod.LOGGER.info("MineLink recorder client joined {}", address());
     }
 
@@ -114,6 +122,9 @@ public final class MineLinkClientRecorder {
         targetCenteredTicks = 0;
         targetVisibleLogged = false;
         targetVisibleTicks = 0;
+        candidateCountLogged = false;
+        smoothedCameraPosition = null;
+        smoothedTargetName = "";
         ticks = 0;
     }
 
@@ -146,12 +157,34 @@ public final class MineLinkClientRecorder {
             return;
         }
         configureRecorderView(minecraft);
-        Entity target = findServerAgent(minecraft);
-        if (target == null) {
+        TargetSelection targetSelection = findServerAgent(minecraft);
+        Entity target = targetSelection.target();
+        int expectedServerAgents = expectedVisibleServerAgents();
+        if (target == null || targetSelection.candidateCount() != expectedServerAgents) {
             followTicks = 0;
             targetCenteredTicks = 0;
             targetVisibleTicks = 0;
+            smoothedCameraPosition = null;
+            smoothedTargetName = "";
+            if (!candidateCountLogged && targetSelection.candidateCount() > 0) {
+                candidateCountLogged = true;
+                MineLinkMod.LOGGER.info(
+                    "MineLink recorder client server_agent candidates {} expected {} target {}",
+                    targetSelection.candidateCount(),
+                    expectedServerAgents,
+                    target == null ? "none" : target.getName().getString()
+                );
+            }
             return;
+        }
+        if (!candidateCountLogged) {
+            candidateCountLogged = true;
+            MineLinkMod.LOGGER.info(
+                "MineLink recorder client server_agent candidates {} expected {} target {}",
+                targetSelection.candidateCount(),
+                expectedServerAgents,
+                target.getName().getString()
+            );
         }
         if (useTargetThirdPersonCamera()) {
             followTargetThirdPerson(minecraft, target);
@@ -182,9 +215,17 @@ public final class MineLinkClientRecorder {
         ), 0.75D);
         Vec3 focusPos = targetPos.add(forward.scale(lead));
         CameraChoice cameraChoice = chooseCameraPosition(minecraft, targetPos, focusPos, forward, right, distance, height, side);
-        Vec3 cameraPos = cameraChoice.position();
+        String targetName = target.getName().getString();
+        boolean resetCameraSmoothing = smoothedCameraPosition == null || !targetName.equals(smoothedTargetName);
+        Vec3 cameraPos = smoothCameraPosition(targetName, cameraChoice.position());
         float yaw = yawToward(cameraPos, focusPos);
         float pitch = pitchToward(cameraPos, focusPos);
+        if (!resetCameraSmoothing) {
+            yaw = smoothAngle(smoothedYaw, yaw, cameraSmoothingFactor());
+            pitch = smoothAngle(smoothedPitch, pitch, cameraSmoothingFactor());
+        }
+        smoothedYaw = yaw;
+        smoothedPitch = pitch;
 
         minecraft.player.noPhysics = true;
         minecraft.player.setDeltaMovement(Vec3.ZERO);
@@ -204,8 +245,10 @@ public final class MineLinkClientRecorder {
         if (!followLogged && followTicks >= readyTicks) {
             followLogged = true;
             MineLinkMod.LOGGER.info(
-                "MineLink recorder client following server_agent {} from camera {},{},{}",
-                target.getName().getString(),
+                "MineLink recorder client following server_agent {} candidates {}/{} from camera {},{},{}",
+                targetName,
+                targetSelection.candidateCount(),
+                expectedServerAgents,
                 String.format("%.2f", cameraPos.x),
                 String.format("%.2f", cameraPos.y),
                 String.format("%.2f", cameraPos.z)
@@ -220,8 +263,10 @@ public final class MineLinkClientRecorder {
         if (!targetVisibleLogged && targetVisibleTicks >= readyTicks) {
             targetVisibleLogged = true;
             MineLinkMod.LOGGER.info(
-                "MineLink recorder client target visible server_agent {} camera {},{},{} focus {},{},{}",
-                target.getName().getString(),
+                "MineLink recorder client target visible server_agent {} candidates {}/{} camera {},{},{} focus {},{},{}",
+                targetName,
+                targetSelection.candidateCount(),
+                expectedServerAgents,
                 String.format("%.2f", cameraPos.x),
                 String.format("%.2f", cameraPos.y),
                 String.format("%.2f", cameraPos.z),
@@ -238,8 +283,10 @@ public final class MineLinkClientRecorder {
         if (!targetCenteredLogged && targetCenteredTicks >= readyTicks) {
             targetCenteredLogged = true;
             MineLinkMod.LOGGER.info(
-                "MineLink recorder client target centered server_agent {} focus {},{},{}",
-                target.getName().getString(),
+                "MineLink recorder client target centered server_agent {} candidates {}/{} focus {},{},{}",
+                targetName,
+                targetSelection.candidateCount(),
+                expectedServerAgents,
                 String.format("%.2f", focusPos.x),
                 String.format("%.2f", focusPos.y),
                 String.format("%.2f", focusPos.z)
@@ -250,6 +297,14 @@ public final class MineLinkClientRecorder {
     private static void followTargetThirdPerson(Minecraft minecraft, Entity target) {
         minecraft.options.setCameraType(CameraType.THIRD_PERSON_BACK);
         minecraft.setCameraEntity(target);
+        TargetSelection targetSelection = findServerAgent(minecraft);
+        int expectedServerAgents = expectedVisibleServerAgents();
+        if (targetSelection.candidateCount() != expectedServerAgents) {
+            followTicks = 0;
+            targetVisibleTicks = 0;
+            targetCenteredTicks = 0;
+            return;
+        }
 
         followTicks++;
         int readyTicks = positiveInt(setting(
@@ -260,8 +315,10 @@ public final class MineLinkClientRecorder {
         if (!followLogged && followTicks >= readyTicks) {
             followLogged = true;
             MineLinkMod.LOGGER.info(
-                "MineLink recorder client following server_agent {} from target third-person camera",
-                target.getName().getString()
+                "MineLink recorder client following server_agent {} candidates {}/{} from target third-person camera",
+                target.getName().getString(),
+                targetSelection.candidateCount(),
+                expectedServerAgents
             );
         }
 
@@ -270,15 +327,19 @@ public final class MineLinkClientRecorder {
         if (!targetVisibleLogged && targetVisibleTicks >= readyTicks) {
             targetVisibleLogged = true;
             MineLinkMod.LOGGER.info(
-                "MineLink recorder client target visible server_agent {} target-third-person",
-                target.getName().getString()
+                "MineLink recorder client target visible server_agent {} candidates {}/{} target-third-person",
+                target.getName().getString(),
+                targetSelection.candidateCount(),
+                expectedServerAgents
             );
         }
         if (!targetCenteredLogged && targetCenteredTicks >= readyTicks) {
             targetCenteredLogged = true;
             MineLinkMod.LOGGER.info(
-                "MineLink recorder client target centered server_agent {} target-third-person",
-                target.getName().getString()
+                "MineLink recorder client target centered server_agent {} candidates {}/{} target-third-person",
+                target.getName().getString(),
+                targetSelection.candidateCount(),
+                expectedServerAgents
             );
         }
     }
@@ -351,9 +412,10 @@ public final class MineLinkClientRecorder {
         return mode.equalsIgnoreCase("target_third_person") || mode.equalsIgnoreCase("target-third-person");
     }
 
-    private static Entity findServerAgent(Minecraft minecraft) {
+    private static TargetSelection findServerAgent(Minecraft minecraft) {
         Entity best = null;
         double bestDistance = Double.MAX_VALUE;
+        int candidateCount = 0;
         Vec3 origin = minecraft.player == null ? Vec3.ZERO : minecraft.player.position();
         for (Entity entity : minecraft.level.entitiesForRendering()) {
             if (entity == minecraft.player || entity.isRemoved()) {
@@ -366,13 +428,53 @@ public final class MineLinkClientRecorder {
             if (!name.startsWith("MineLink-") && !name.endsWith(" server_agent")) {
                 continue;
             }
+            candidateCount++;
             double distance = entity.position().distanceToSqr(origin);
             if (distance < bestDistance) {
                 best = entity;
                 bestDistance = distance;
             }
         }
-        return best;
+        return new TargetSelection(best, candidateCount);
+    }
+
+    private static int expectedVisibleServerAgents() {
+        return positiveInt(setting(
+            "MINELINK_RECORDER_EXPECTED_VISIBLE_AGENTS",
+            "minelink.recorder.expectedVisibleAgents",
+            "1"
+        ), 1);
+    }
+
+    private static double cameraSmoothingFactor() {
+        double value = positiveDouble(setting(
+            "MINELINK_RECORDER_CLIENT_CAMERA_SMOOTHING",
+            "minelink.recorder.client.cameraSmoothing",
+            "0.35"
+        ), 0.35D);
+        return Math.max(0.05D, Math.min(1.0D, value));
+    }
+
+    private static Vec3 smoothCameraPosition(String targetName, Vec3 desiredPosition) {
+        double factor = cameraSmoothingFactor();
+        if (smoothedCameraPosition == null || !targetName.equals(smoothedTargetName)) {
+            smoothedCameraPosition = desiredPosition;
+            smoothedTargetName = targetName;
+            smoothedYaw = 0.0F;
+            smoothedPitch = 0.0F;
+            return desiredPosition;
+        }
+        smoothedCameraPosition = new Vec3(
+            Mth.lerp(factor, smoothedCameraPosition.x, desiredPosition.x),
+            Mth.lerp(factor, smoothedCameraPosition.y, desiredPosition.y),
+            Mth.lerp(factor, smoothedCameraPosition.z, desiredPosition.z)
+        );
+        return smoothedCameraPosition;
+    }
+
+    private static float smoothAngle(float current, float desired, double factor) {
+        float delta = Mth.wrapDegrees(desired - current);
+        return Mth.wrapDegrees(current + (float)(delta * factor));
     }
 
     private static float yawToward(Vec3 from, Vec3 to) {
@@ -450,5 +552,8 @@ public final class MineLinkClientRecorder {
     }
 
     private record CameraChoice(Vec3 position, boolean visible) {
+    }
+
+    private record TargetSelection(Entity target, int candidateCount) {
     }
 }

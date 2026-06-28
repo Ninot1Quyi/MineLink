@@ -471,6 +471,10 @@ switch (args.stage) {
           "MINELINK_RECORDER_CLIENT_CAMERA_HEIGHT=3.2",
           "MINELINK_RECORDER_CLIENT_CAMERA_SIDE=2.0",
           "MINELINK_RECORDER_CLIENT_CAMERA_LEAD=0.9",
+          "MINELINK_RECORDER_CLIENT_CAMERA_SMOOTHING=0.25",
+          scenario === "portal_coop"
+            ? "MINELINK_RECORDER_EXPECTED_VISIBLE_AGENTS=${MINELINK_RECORDER_EXPECTED_VISIBLE_AGENTS:-3}"
+            : "MINELINK_RECORDER_EXPECTED_VISIBLE_AGENTS=${MINELINK_RECORDER_EXPECTED_VISIBLE_AGENTS:-1}",
           `MINELINK_TASK_ID=${shellQuote(args.taskId)}`,
           `MINELINK_COMMIT=${shellQuote(currentCommit())}`,
           `MINELINK_ACCEPTANCE_VIDEO_PRODUCER=${shellQuote(args.videoProducer || "ona-task-finalizer")}`,

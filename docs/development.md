@@ -273,6 +273,14 @@ playable `acceptance.mp4` in PR evidence. The devcontainer, prebuild bootstrap,
 and recorder dependency fallback install `python3-pil` because storyboard
 numbering is composed with Pillow instead of ffmpeg's optional `drawtext`
 filter.
+`scripts/dev/analyze-acceptance-video.mjs` is the lightweight release guard for
+obvious bad clips. It samples the raw Minecraft client MP4, computes frame-diff
+jitter, action-motion coverage, and static-tail duration, and writes
+`acceptance-video-visual-analysis.{json,md}`. The renderer and release gate fail
+closed when a client-GUI video has ambiguous `server_agent` count/identity,
+camera jumps, too little work motion, or a long static tail. This protects PR
+evidence quality, but it does not replace real NeoForge assertions, the
+playable MP4, or the same-session Codex video verifier.
 
 Full-chain canaries use the Platform Codex task environment as the artifact
 producer. After the implementation readback exists, GitHub Actions runs:

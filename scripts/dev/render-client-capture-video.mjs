@@ -228,6 +228,46 @@ const recorderClientTargetCentered =
 const recorderClientTargetVisible =
   /(?:^|\n)recorderClientTargetVisible=true(?:\n|$)/.test(clientReadyLog) ||
   clientLogText.includes("MineLink recorder client target visible server_agent");
+const recorderCandidateMatches = [
+  ...[...clientLogText.matchAll(/MineLink recorder client server_agent candidates\s+(\d+)\s+expected\s+(\d+)\s+target\s+([^\s]+)/g)].map(
+    (match) => ({
+      observed: Number.parseInt(match[1], 10),
+      expected: Number.parseInt(match[2], 10),
+      target: match[3],
+    }),
+  ),
+  ...[
+    ...clientLogText.matchAll(
+      /MineLink recorder client (?:following|target visible|target centered) server_agent\s+([^\s]+)\s+candidates\s+(\d+)\/(\d+)/g,
+    ),
+  ].map((match) => ({
+    observed: Number.parseInt(match[2], 10),
+    expected: Number.parseInt(match[3], 10),
+    target: match[1],
+  })),
+];
+const recorderLastCandidateMatch = recorderCandidateMatches.at(-1);
+const recorderObservedServerAgentCount = recorderLastCandidateMatch?.observed ?? 0;
+const recorderExpectedVisibleServerAgents =
+  recorderLastCandidateMatch?.expected ??
+  Number.parseInt(process.env.MINELINK_RECORDER_EXPECTED_VISIBLE_AGENTS ?? (scenario === "portal_coop" ? "3" : "1"), 10);
+const recorderSelectedTargetName = recorderLastCandidateMatch?.target ?? "";
+const recorderUniqueTargetNames = [
+  ...new Set(
+    [
+      ...clientLogText.matchAll(/MineLink recorder client (?:following|target visible|target centered) server_agent\s+([^\s]+)/g),
+    ].map((match) => match[1]),
+  ),
+];
+const recorderVisibleAgentCountMatchesExpectation =
+  Number.isFinite(recorderObservedServerAgentCount) &&
+  Number.isFinite(recorderExpectedVisibleServerAgents) &&
+  recorderObservedServerAgentCount === recorderExpectedVisibleServerAgents;
+const recorderSelectedSingleTargetStable =
+  recorderUniqueTargetNames.length <= 1 &&
+  (recorderUniqueTargetNames.length === 0 ||
+    !recorderSelectedTargetName ||
+    recorderUniqueTargetNames.includes(recorderSelectedTargetName));
 const recorderReadyBeforeScenario = metadataBool(clientReadyLog, "recorderReadyBeforeScenario");
 const recorderWorkHoldCompleted = metadataBool(clientReadyLog, "recorderWorkHoldCompleted");
 const recorderMinWorkVisibleSeconds = metadataNumber(clientReadyLog, "recorderMinWorkVisibleSeconds", 10);
@@ -286,6 +326,35 @@ const recorderWorkVisible =
   recorderWorkCoverageAdequate &&
   submittedActionsTerminalConfirmed;
 const serverAgentTaskActionVisible = recorderWorkVisible;
+let visualAnalysis = null;
+let visualAnalysisPath = path.join(args.outputDir, "acceptance-video-visual-analysis.json");
+let visualAnalysisMdPath = path.join(args.outputDir, "acceptance-video-visual-analysis.md");
+
+if (clientVideoStat?.isFile()) {
+  try {
+    await execFileAsync(
+      process.execPath,
+      [
+        "scripts/dev/analyze-acceptance-video.mjs",
+        "--mp4",
+        args.clientVideo,
+        "--output-json",
+        visualAnalysisPath,
+        "--output-md",
+        visualAnalysisMdPath,
+      ],
+      { maxBuffer: 1024 * 1024 * 8 },
+    );
+    visualAnalysis = await readJson(visualAnalysisPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    failures.push(`Acceptance video visual analysis failed to run: ${message}`);
+  }
+}
+const visualQualityPassed = visualAnalysis?.passed === true;
+const visualJitterPassed = visualAnalysis?.jitterPassed === true;
+const visualActionMotionCoveragePassed = visualAnalysis?.actionMotionCoveragePassed === true;
+const visualStaticTailPassed = visualAnalysis?.staticTailPassed === true;
 
 if (!clientWorldReady) {
   failures.push("Recorder client did not confirm an in-world Minecraft view before acceptance rendering");
@@ -307,6 +376,16 @@ if (!recorderClientTargetCentered) {
 }
 if (!recorderClientTargetVisible) {
   failures.push("Recorder client did not confirm clear line-of-sight visibility for the active server_agent target");
+}
+if (!recorderVisibleAgentCountMatchesExpectation) {
+  failures.push(
+    `Recorder observed ${recorderObservedServerAgentCount || "unknown"} visible server_agent candidate(s), expected ${recorderExpectedVisibleServerAgents || "unknown"}`,
+  );
+}
+if (!recorderSelectedSingleTargetStable) {
+  failures.push(
+    `Recorder target identity was unstable or ambiguous: selected=${recorderSelectedTargetName || "unknown"} observed=${recorderUniqueTargetNames.join(",") || "none"}`,
+  );
 }
 if (!recorderReadyBeforeScenario) {
   failures.push(
@@ -339,6 +418,9 @@ if (!recorderWorkVisible) {
 if (!mcpTerminalLogPanel) {
   failures.push("Client acceptance video cannot prove the right-side MCP/server terminal log panel because no matching runtime logs were found");
 }
+if (!visualQualityPassed) {
+  failures.push("Acceptance video visual QA did not pass; final evidence must not be jittery, static, or action-ambiguous");
+}
 
 const terminalLines = [
   "MINELINK CLIENT ACCEPTANCE",
@@ -353,6 +435,8 @@ const terminalLines = [
   `client follow: ${recorderClientFollow ? "YES" : "NO"}`,
   `target centered: ${recorderClientTargetCentered ? "YES" : "NO"}`,
   `target visible: ${recorderClientTargetVisible ? "YES" : "NO"}`,
+  `agent count: ${recorderObservedServerAgentCount}/${recorderExpectedVisibleServerAgents}`,
+  `visual qa: ${visualQualityPassed ? "YES" : "NO"}`,
   `ready before work: ${recorderReadyBeforeScenario ? "YES" : "NO"}`,
   `work hold sec: ${recorderWorkHoldSeconds}`,
   `visible mining: ${recorderVisibleMining ? "YES" : "NO"}`,
@@ -524,6 +608,12 @@ const summaryLines = [
   `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
   `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
   `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+  `- Recorder observed server agent count: \`${recorderObservedServerAgentCount || "unknown"}\``,
+  `- Recorder expected visible server agents: \`${recorderExpectedVisibleServerAgents || "unknown"}\``,
+  `- Recorder visible agent count matches expectation: \`${recorderVisibleAgentCountMatchesExpectation ? "yes" : "no"}\``,
+  `- Recorder selected target name: \`${recorderSelectedTargetName || "unknown"}\``,
+  `- Recorder unique target names: \`${recorderUniqueTargetNames.join(",") || "none"}\``,
+  `- Recorder selected target stable: \`${recorderSelectedSingleTargetStable ? "yes" : "no"}\``,
   `- Recorder ready before scenario: \`${recorderReadyBeforeScenario ? "yes" : "no"}\``,
   `- Recorder work hold completed: \`${recorderWorkHoldCompleted ? "yes" : "no"}\``,
   `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
@@ -535,6 +625,11 @@ const summaryLines = [
   `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
   `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
   `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
+  `- Visual QA passed: \`${visualQualityPassed ? "yes" : "no"}\``,
+  `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,
+  `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
+  `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
+  `- Visual analysis: \`${visualAnalysisPath}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
   `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
@@ -583,6 +678,12 @@ const origin = {
   recorderClientFollow,
   recorderClientTargetCentered,
   recorderClientTargetVisible,
+  recorderObservedServerAgentCount,
+  recorderExpectedVisibleServerAgents,
+  recorderVisibleAgentCountMatchesExpectation,
+  recorderSelectedTargetName,
+  recorderUniqueTargetNames,
+  recorderSelectedSingleTargetStable,
   recorderReadyBeforeScenario,
   recorderWorkHoldCompleted,
   recorderWorkHoldSeconds,
@@ -595,6 +696,11 @@ const origin = {
   recorderVisibleMiningDurationAdequate,
   requiresVisibleMining,
   recorderScenarioActionVisible,
+  visualAnalysis: visualAnalysisPath,
+  visualQualityPassed,
+  visualJitterPassed,
+  visualActionMotionCoveragePassed,
+  visualStaticTailPassed,
   submittedActionsTerminalConfirmed,
   submittedActionPendingCount,
   recorderWorkVisible,
@@ -633,6 +739,11 @@ await fs.writeFile(
     `- Recorder client follow: \`${recorderClientFollow ? "yes" : "no"}\``,
     `- Recorder client target centered: \`${recorderClientTargetCentered ? "yes" : "no"}\``,
     `- Recorder client target visible: \`${recorderClientTargetVisible ? "yes" : "no"}\``,
+    `- Recorder observed server agent count: \`${recorderObservedServerAgentCount || "unknown"}\``,
+    `- Recorder expected visible server agents: \`${recorderExpectedVisibleServerAgents || "unknown"}\``,
+    `- Recorder visible agent count matches expectation: \`${recorderVisibleAgentCountMatchesExpectation ? "yes" : "no"}\``,
+    `- Recorder selected target name: \`${recorderSelectedTargetName || "unknown"}\``,
+    `- Recorder selected target stable: \`${recorderSelectedSingleTargetStable ? "yes" : "no"}\``,
     `- Recorder ready before scenario: \`${recorderReadyBeforeScenario ? "yes" : "no"}\``,
     `- Recorder work hold completed: \`${recorderWorkHoldCompleted ? "yes" : "no"}\``,
     `- Recorder work hold seconds: \`${recorderWorkHoldSeconds}\``,
@@ -644,6 +755,11 @@ await fs.writeFile(
     `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
     `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
     `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
+    `- Visual QA passed: \`${visualQualityPassed ? "yes" : "no"}\``,
+    `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,
+    `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
+    `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
+    `- Visual analysis: \`${visualAnalysisPath}\``,
     `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
     `- Submitted action pending count: \`${submittedActionPendingCount}\``,
     `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,

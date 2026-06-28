@@ -1006,17 +1006,22 @@ product-video tasks the request and manifest must show
 `mcpTerminalLogPanel=yes`, `clientWorldReady=yes`,
 `captureStartedAfterWorldReady=yes`, `recorderAutoFollow=yes`,
 `recorderTargetMoved=yes`, `recorderClientFollow=yes`,
-`recorderClientTargetCentered=yes`, `recorderClientTargetVisible=yes`, and
-`recorderReadyBeforeScenario=yes`, `recorderWorkCoverageAdequate=yes`,
-`recorderVisibleMining=yes` when the scenario requires mining,
+`recorderClientTargetCentered=yes`, `recorderClientTargetVisible=yes`,
+`recorderVisibleAgentCountMatchesExpectation=yes`,
+`recorderSelectedTargetStable=yes`, and `recorderReadyBeforeScenario=yes`,
+`recorderWorkCoverageAdequate=yes`, `recorderVisibleMining=yes` when the
+scenario requires mining,
 `recorderScenarioActionVisible=yes`,
+`visualQualityPassed=yes`, `visualJitterPassed=yes`,
+`visualActionMotionCoveragePassed=yes`,
 `submittedActionsTerminalConfirmed=yes`, `recorderWorkVisible=yes`, and
 `serverAgentTaskActionVisible=yes`; loading screens, bootstrap footage,
 server-only camera intent, static/idle targets, late-only target appearances,
 submitted-but-not-executed actions, no-op tasks, missing right-side MCP/server
-logs, occluded targets, off-screen target following, or clients that are not
-visibly following and framing the active `server_agent` before and during task
-work are not releaseable evidence. It writes
+logs, occluded targets, off-screen target following, ambiguous target identity,
+wrong visible agent count for the scenario, jittery footage, long static tails,
+or clients that are not visibly following and framing the active `server_agent`
+before and during task work are not releaseable evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 The workflow also uploads `acceptance-storyboard.png` and
 `acceptance-storyboard.json` as a separate small artifact for fast visual QA.
@@ -1038,12 +1043,17 @@ Recorder target moved: yes
 Recorder client follow: yes
 Recorder client target centered: yes
 Recorder client target visible: yes
+Recorder visible agent count matches expectation: yes
+Recorder selected target stable: yes
 Recorder ready before scenario: yes
 Recorder work coverage adequate: yes
 Recorder visible mining: yes
 Recorder visible mining duration adequate: yes
 Requires visible mining: yes|no
 Recorder scenario action visible: yes
+Visual QA passed: yes
+Visual jitter passed: yes
+Visual action motion coverage passed: yes
 Submitted actions terminal confirmed: yes
 Recorder work visible: yes
 Server agent task action visible: yes
