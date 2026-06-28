@@ -169,8 +169,9 @@ The script writes `.minelink-dev/reports/artifacts/acceptance-summary.md` and
 bounded task contract. The review-request script writes
 `.minelink-dev/reports/artifacts/video-review-request.md` with the current
 summary and MP4 hashes plus the exact markers that the release gate will
-enforce. For tasks labeled `video-required`, a separate Ona Platform Codex
-verifier must compare that request with the rendered summary/MP4 and write:
+enforce. For tasks labeled `video-required`, the current Ona Platform Codex
+implementation session must launch a bounded native Codex verifier subagent to
+compare that request with the rendered summary/MP4 and write:
 
 ```text
 .minelink-dev/reports/artifacts/video-review.md

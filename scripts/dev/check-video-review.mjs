@@ -24,7 +24,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   } else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/check-video-review.mjs [--require-mp4]
 
-Checks the dedicated acceptance-video verifier report before release. The
+Checks the same-session acceptance-video verifier report before release. The
 verifier report must explicitly contain:
 
 Verifier: Ona Platform Codex
@@ -89,7 +89,7 @@ if (requireMp4 && (!mp4Stat || !mp4Stat.isFile() || mp4Stat.size === 0)) {
 }
 
 if (!reviewStat || !reviewStat.isFile() || reviewStat.size === 0) {
-  failures.push(`Missing dedicated video verifier report: ${reviewPath}`);
+  failures.push(`Missing same-session video verifier report: ${reviewPath}`);
 } else {
   const releaseDecision = marker(review, "Release decision");
   const taskMatched = marker(review, "Task matched");

@@ -50,7 +50,7 @@ Current audit:
 | Gate 7: Create Adapter | real-partial | Real Create fixture proves visible component inspection, native item/wrench use, powered press processing, and inventory pickup; complete Create semantics and broader mod compatibility remain incomplete. |
 | Gate 8: Multi-agent, A2A, and Social Runtime | real-partial | Real three-agent portal cooperation, local chat, physical notice board, redacted payloads, and owner quota evidence exists; human interaction, durable social persistence, orders, letters, telegraph, and broader A2A remain incomplete. |
 | Gate 9: Frontier Society and Director | missing | No accepted 10-agent society, Director replay, relationship/economy metrics, or emergent-role evidence yet. |
-| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has a manual/path-filtered Ona prebuild refresh fallback for `codex/minelink-mvp-engineering`, but public Ona automation `agent` steps currently launch the default Agent rather than Codex, so automatic Ona Platform Codex implementation/verifier launch is blocked until a documented Codex selector/API or externally verified Codex session evidence exists; server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
+| Gate 10: Install and Product Packaging | real-partial | Fresh committed checkout bootstrap is scriptable through `scripts/dev/install-smoke.sh`; the default devcontainer now uses a registry/Docker-smoked GHCR cache-prewarm image; GitHub issue and Linear polling dispatchers can queue the shared Ona automation and write chain reports; CI now has a manual/path-filtered Ona prebuild refresh fallback for `codex/minelink-mvp-engineering`, but public Ona automation `agent` steps currently launch the default Agent rather than Codex. Ona's documented `StartAgent(agentId, codexSettings)` API now has GitHub Actions identity-canary evidence for programmatic Ona Platform Codex launch/readback, but automatic task implementation, video verifier launch, PR finalization, server admin install, agent user install, LAN install, and cross-platform packaging evidence remain incomplete. |
 | Gate 11: Security, Stability, and Release | real-partial | Short mock/real soaks, cleanup reports, gateway admission tests, and owner quota evidence exist; long real Minecraft soak and release security evidence remain incomplete. |
 
 No gate is currently `product-accepted`. A full-product completion claim requires
@@ -796,6 +796,59 @@ Current status:
   `failed_precondition: agent is disabled by organization policy`. This is
   negative launch evidence: policy gating does not switch public automation
   agent steps to Codex.
+  `scripts/dev/start-ona-platform-codex.mjs` now captures the documented Ona
+  AgentService candidate path for programmatic Codex launch: `StartAgent` with
+  an explicit Codex `agentId` and `codexSettings`, `SendToAgentExecution` for
+  the task prompt, and `GetAgentExecution` for `spec.agentId` plus
+  Codex-settings readback. This is not accepted product evidence yet. It
+  does not replace the task-bound implementation and verifier readback files
+  required by the finalizer. The launcher now ignores stopped historical Ona
+  environments unless `MINELINK_ONA_ENVIRONMENT_ID` explicitly names one; without
+  a running environment, canary workflows create a task environment from the
+  completed project/prebuild baseline and wait for it to reach running before
+  calling `StartAgent`. GitHub Actions run
+  `27928149039` proved the
+  repository-secret `ONA_TOKEN` path, policy readback, `StartAgent`,
+  `SendToAgentExecution`, and `GetAgentExecution` for the allowed Codex app
+  agent id. The readback reported a matching `spec.agentId`, present
+  `codexSettings`, `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`,
+  conversation URLs, and token-usage counters. It did not expose structured
+  `status.outputs`, so this upgrades only the `platform_codex_launch` chain
+  edge; the downstream implementation session, validation, acceptance MP4
+  review, PR finalization, and status writeback remain unaccepted.
+  The next probe slice adds `implementation-canary` mode to
+  `.github/workflows/ona-platform-codex-probe.yml`. That mode sends a
+  docs-only task to the accepted AgentService Codex execution, expects the
+  session to push only `docs/agent-factory-canaries/<task>.md` on a
+  task-bound branch, and then runs
+  `scripts/dev/fetch-platform-codex-canary.mjs` to combine the API readback,
+  remote branch head commit, and canary markers into the canonical
+  `.minelink-dev/reports/ona-codex-implementation-session.md`. This is still
+  chain handoff evidence only; it does not prove a MineLink product feature,
+  video review, PR release, or `product-accepted` gate. The canary file alone
+  must not be used as the final readback because the canonical `Commit:` value
+  is the fetched branch head.
+  The next canary slice adds `full-chain-canary` to the same workflow. It runs
+  the implementation canary, renders trace-driven acceptance artifacts, starts
+  a separate Platform Codex `video-verifier-canary` session, fetches
+  `docs/agent-factory-canaries/<task>-video-verifier.md`, and uses
+  `scripts/dev/fetch-platform-codex-video-verifier.mjs` to write
+  `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the local
+  hash-checked `video-review.md`. This can upgrade only the
+  `acceptance_video -> video_verifier` automation-chain edge for a canary task;
+  it does not prove real product implementation, real Minecraft behavior, or
+  any `product-accepted` gate. The same workflow can now be run with
+  `create_pr=true` to prove the next automation-chain edge: after the release
+  gate passes, it calls `scripts/dev/create-agent-factory-pr.mjs`, creates or
+  updates a draft PR from the canary branch, writes
+  `.minelink-dev/reports/agent-factory-pr.{md,json}`, and refreshes the chain
+  report with `--pr-url`. That edge requires the `AGENT_FACTORY_GITHUB_TOKEN`
+  repository secret because the default Actions `GITHUB_TOKEN` can be blocked
+  from creating pull requests. The workflow then calls
+  `scripts/dev/wait-agent-factory-pr-ci.mjs` to wait for the PR check rollup,
+  writes `.minelink-dev/reports/agent-factory-pr-ci.{md,json}`, and refreshes
+  the chain report with `--ci-url`. That remains chain evidence only; status
+  writeback and human acceptance are separate downstream gates.
   After uploading the fail-closed automation spec, remote canary execution
   `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
   `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and task-only
@@ -905,7 +958,7 @@ Current status:
   summary/MP4 hashes and the exact Ona Platform Codex verifier assignment. This
   request artifact is a handoff package only and does not release the task.
 - `scripts/dev/check-video-review.mjs` blocks video publication unless a
-  separate Ona Platform Codex verifier writes
+  same-session Ona Platform Codex verifier subagent writes
   `.minelink-dev/reports/artifacts/video-review.md` with passing task/video
   match markers and current summary/MP4 hashes. The gate writes
   `.minelink-dev/reports/artifacts/video-release-gate.md`.
@@ -922,7 +975,8 @@ Current status:
   packaging, native Linear webhook enablement, Ona Platform Codex
   implementation/verifier launch and readback for the current PR, Ona native
   `pullRequest` success, acceptance MP4 availability in every environment,
-  dedicated video verifier completion, or real NeoForge install acceptance.
+  same-session video verifier subagent completion, verifier access to the actual
+  MP4 for real video-required tasks, or real NeoForge install acceptance.
 - Earlier generic Ona Agent executions are process smoke only. They do not
   count as MineLink agent execution evidence because Ona work must select the
   Platform Codex agent mode.
