@@ -826,7 +826,11 @@ Current status:
   task prompt. A successful prompt-send response is also not enough. For
   Goal-mode prompt sends, the launch readback must show token usage,
   iteration count, current activity, or current operation before it is treated
-  as a live Codex handoff. If `GetAgentExecution` reports an LLM provider or
+  as a live Codex handoff. The GitHub/Linear full-chain dispatcher uses
+  `MINELINK_CODEX_WAIT_SECONDS` with a 900 second default so Standard-tier
+  Goal-mode queue time is not misclassified as an implementation failure too
+  early; `PHASE_PENDING` still blocks until the same readback criteria are met.
+  If `GetAgentExecution` reports an LLM provider or
   unauthenticated-provider warning, the edge is blocked and downstream branch,
   finalizer, verifier, and PR steps must not be used as release evidence. Task
   modes now publish this early blocker as `blocked-platform-codex-auth` for

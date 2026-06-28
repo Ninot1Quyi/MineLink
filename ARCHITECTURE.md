@@ -940,7 +940,12 @@ reusing `mod/neoforge/run/world`, reusing a previous generated world, or holding
 a fixed TCP port and creating misleading `session.lock` or `EADDRINUSE`
 failures. Push-triggered identity canaries also use a 600 second readback
 window, matching the Standard Codex service tier instead of the old fast-tier
-30 second probe. The
+30 second probe. GitHub/Linear full-chain dispatches use
+`MINELINK_CODEX_WAIT_SECONDS` with a 900 second default because Goal-mode
+Standard-tier executions can remain `PHASE_PENDING` for several minutes before
+transcript or token usage exists. A pending execution is still not accepted as
+an implementation edge; the longer window only prevents false early blockers.
+The
 recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` before
 starting the Minecraft client. That script is fail-closed by default: the
 devcontainer/GHCR/Ona prebuild must already provide `ffmpeg`, `Xvfb`, the

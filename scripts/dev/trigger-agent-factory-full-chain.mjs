@@ -10,7 +10,7 @@ const defaults = {
   workflow: "ona-platform-codex-probe.yml",
   mode: process.env.MINELINK_AGENT_FACTORY_WORKFLOW_MODE ?? "full-chain-task",
   taskSuffix: "",
-  waitSeconds: "300",
+  waitSeconds: process.env.MINELINK_CODEX_WAIT_SECONDS ?? "900",
   environmentWaitSeconds: "600",
   environmentClassId: process.env.MINELINK_ONA_ENVIRONMENT_CLASS_ID ?? "",
   branchWaitSeconds: process.env.MINELINK_BRANCH_WAIT_SECONDS ?? "",

@@ -403,7 +403,11 @@ phase, but not while the readback is still `PHASE_PENDING` or while the
 execution reports an LLM-provider/authentication warning. Pending means the
 platform has an execution record, not that the task prompt reached an
 executable Codex session. A successful `SendToAgentExecution` response is also
-only prompt-delivery evidence. If a prompt was sent, the launcher must observe
+only prompt-delivery evidence. Full-chain issue dispatches pass a 900 second
+default handoff window through `MINELINK_CODEX_WAIT_SECONDS` because
+Standard-tier Goal sessions can remain queued for several minutes; extending
+the window does not weaken the gate because `PHASE_PENDING` with an empty
+transcript still blocks implementation. If a prompt was sent, the launcher must observe
 token usage, iteration count, current activity, or current operation before it
 treats the Goal session as a live handoff; real task consumption is accepted
 only when the task-bound branch/report readback appears. It does not satisfy the
@@ -865,7 +869,8 @@ also fails closed on missing recorder OS dependencies instead of using runtime
 apt installation; prebuild owns `ffmpeg`, `Xvfb`, X11/OpenGL libs, and
 `python3-pil`. Push-triggered
 identity canaries use a 600 second readback window because the configured
-Platform Codex service tier is Standard rather than Fast.
+Platform Codex service tier is Standard rather than Fast; full-chain issue
+dispatches use a 900 second default handoff window for the same reason.
 The repository dispatcher now waits briefly for the Ona automation execution
 readback in CI, so the artifacts can distinguish `queued`, `running`,
 `completed`, and `completed_with_failed_actions` instead of flattening every
