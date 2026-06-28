@@ -476,6 +476,12 @@ after pushing their implementation report; they should idle for the verifier
 follow-up rather than stopping the Goal session. The verifier branch fetch is a
 short, bounded handoff wait, not the long implementation wait used for real
 NeoForge tasks.
+Ona Platform Codex startup has a fail-closed zero-token pending guard: normal
+starts usually expose phase/running token progress within seconds, while
+`PHASE_PENDING` with no tokens, iterations, activity, transcript, or
+conversation content is treated as an infrastructure stall. The launcher retries
+fresh environments a small bounded number of times before recording the edge as
+blocked.
 PR-visible video evidence must include a public playable MP4 URL, preferably
 from the configured external video store. Actions artifact zip links are useful
 for logs and reports, but they are not accepted as the visible video surface by

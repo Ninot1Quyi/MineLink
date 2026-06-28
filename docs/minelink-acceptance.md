@@ -1400,6 +1400,11 @@ Current status:
   the Goal session, the verifier request can be accepted by the API while no
   verifier canary is ever committed; this is a blocked
   `acceptance_video -> video_verifier` edge, not a valid release delay.
+- Ona Codex startup is accepted only when AgentService readback shows real
+  execution progress. Repeated `PHASE_PENDING` readbacks with zero tokens,
+  zero iterations, no activity, and empty transcript are treated as a bounded
+  infrastructure stall and retried with fresh environments before the chain is
+  marked blocked.
 - `scripts/dev/cleanup-ona-resources.mjs` stops task-bound Ona environments at
   terminal factory cleanup when they belong to the MineLink project and have no
   uncommitted workspace changes. The cleanup report is resource evidence only;

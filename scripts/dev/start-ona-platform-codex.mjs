@@ -38,8 +38,8 @@ const defaults = {
   readbackExecution: process.env.MINELINK_ONA_AGENT_EXECUTION_ID ?? "",
   waitSeconds: Number(process.env.MINELINK_ONA_CODEX_WAIT_SECONDS ?? 30),
   pollSeconds: Number(process.env.MINELINK_ONA_CODEX_POLL_SECONDS ?? 5),
-  pendingZeroTokenRetryCount: Number(process.env.MINELINK_ONA_PENDING_ZERO_TOKEN_RETRY_COUNT ?? 1),
-  pendingZeroTokenRetrySeconds: Number(process.env.MINELINK_ONA_PENDING_ZERO_TOKEN_RETRY_SECONDS ?? 180),
+  pendingZeroTokenRetryCount: Number(process.env.MINELINK_ONA_PENDING_ZERO_TOKEN_RETRY_COUNT ?? 3),
+  pendingZeroTokenRetrySeconds: Number(process.env.MINELINK_ONA_PENDING_ZERO_TOKEN_RETRY_SECONDS ?? 90),
   output: ".minelink-dev/reports/ona-platform-codex-api-session.md",
   jsonOutput: ".minelink-dev/reports/ona-platform-codex-api-session.json",
 };

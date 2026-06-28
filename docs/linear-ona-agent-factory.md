@@ -645,7 +645,11 @@ pushed, the same Codex Goal session must remain idle and available for the
 video verifier follow-up; stopping the task session can make
 `SendToAgentExecution` appear accepted while no verifier file is ever written.
 The verifier fetch therefore uses a short bounded wait and fails closed with a
-handoff blocker instead of inheriting the long implementation wait.
+handoff blocker instead of inheriting the long implementation wait. The
+Platform Codex launcher also treats zero-token `PHASE_PENDING` readbacks as a
+bounded infrastructure stall: if a Goal execution never exposes tokens,
+iterations, activity, or transcript content, the launcher retries with a fresh
+environment instead of waiting the full task timeout.
 After the candidate MP4 is rendered, the Ona implementation finalizer uploads
 it with `scripts/dev/upload-acceptance-video-storage.mjs` and writes
 `video-storage-manifest.json`; that upload is candidate evidence transport, not
