@@ -206,8 +206,9 @@ function implementationCanaryPrompt(context = {}) {
   return [
     "This is a MineLink Platform Codex implementation canary.",
     "You must use Ona Platform Codex, not the default Ona Agent.",
-    "First reply in the session with exactly this line:",
+    "Begin your visible response with exactly this line, then continue the canary task in the same Goal session:",
     "Identity: I am Codex running in Ona Platform Codex",
+    "Do not stop after the identity line. The identity line is only a required readback marker; the canary is complete only after the canary file is committed and pushed.",
     "",
     "Task:",
     `- Task id: ${args.taskId}`,
@@ -265,8 +266,9 @@ async function taskImplementationPrompt(context = {}) {
   return [
     "This is a MineLink Platform Codex real task implementation request.",
     "You must use Ona Platform Codex Goal mode, not the default Ona Agent.",
-    "First reply in the session with exactly this line:",
+    "Begin your visible response with exactly this line, then continue the implementation in the same Goal session:",
     "Identity: I am Codex running in Ona Platform Codex",
+    "Do not stop after the identity line. The identity line is only a required readback marker; the task is complete only after the implementation report is committed and pushed.",
     "",
     "Task context:",
     `- Task id: ${args.taskId}`,
@@ -399,8 +401,9 @@ async function videoVerifierCanaryPrompt(context = {}) {
   return [
     "This is a MineLink Platform Codex video-verifier canary.",
     "You must use Ona Platform Codex, not the default Ona Agent.",
-    "First reply in the session with exactly this line:",
+    "Begin your visible response with exactly this line, then continue the verifier handoff in the same Goal session:",
     "Identity: I am Codex running in Ona Platform Codex",
+    "Do not stop after the identity line. The identity line is only a required readback marker; the verifier handoff is complete only after the canary review file is committed and pushed.",
     "",
     "Task:",
     `- Task id: ${args.taskId}`,

@@ -945,6 +945,11 @@ window, matching the Standard Codex service tier instead of the old fast-tier
 Standard-tier executions can remain `PHASE_PENDING` for several minutes before
 transcript or token usage exists. A pending execution is still not accepted as
 an implementation edge; the longer window only prevents false early blockers.
+For implementation and verifier prompts, the required
+`Identity: I am Codex running in Ona Platform Codex` line is a readback marker,
+not a stop condition; only the explicit identity-canary prompt tells Codex to
+stop after identity. Task prompts must continue until the branch/report is
+committed and pushed.
 The
 recorder path first runs `scripts/dev/ensure-client-recorder-deps.sh` before
 starting the Minecraft client. That script is fail-closed by default: the

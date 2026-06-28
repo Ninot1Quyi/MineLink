@@ -407,7 +407,11 @@ only prompt-delivery evidence. Full-chain issue dispatches pass a 900 second
 default handoff window through `MINELINK_CODEX_WAIT_SECONDS` because
 Standard-tier Goal sessions can remain queued for several minutes; extending
 the window does not weaken the gate because `PHASE_PENDING` with an empty
-transcript still blocks implementation. If a prompt was sent, the launcher must observe
+transcript still blocks implementation. Implementation and verifier prompts use
+the identity line as a readback marker only; they must continue after that line
+until the task report or verifier canary is committed and pushed. Only the
+identity-canary diagnostic prompt stops after the identity reply. If a prompt
+was sent, the launcher must observe
 token usage, iteration count, current activity, or current operation before it
 treats the Goal session as a live handoff; real task consumption is accepted
 only when the task-bound branch/report readback appears. It does not satisfy the
