@@ -407,7 +407,12 @@ only prompt-delivery evidence. Full-chain issue dispatches pass a 900 second
 default handoff window through `MINELINK_CODEX_WAIT_SECONDS` because
 Standard-tier Goal sessions can remain queued for several minutes; extending
 the window does not weaken the gate because `PHASE_PENDING` with an empty
-transcript still blocks implementation. Implementation and verifier prompts use
+transcript still blocks implementation. The launcher emits sanitized
+`GetAgentExecution` heartbeat lines during the wait and, when the final
+Goal-mode phase is still pending, captures bounded environment diagnostics for
+branch/commit and Codex-auth-file presence without printing secret values.
+Those diagnostics are blocker-localization artifacts only. Implementation and
+verifier prompts use
 the identity line as a readback marker only; they must continue after that line
 until the task report or verifier canary is committed and pushed. Only the
 identity-canary diagnostic prompt stops after the identity reply. If a prompt

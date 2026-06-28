@@ -1273,6 +1273,14 @@ closed instead of waiting out the full branch timeout. Empty transcript
 readback is likewise a blocker: it means AgentService accepted the Goal-mode
 execution, but the session produced no visible conversation evidence for the
 task.
+During the `GetAgentExecution` wait, the launcher prints sanitized heartbeat
+lines with attempt number, phase, requested agent id, model readback, token
+counts, iteration count, activity, operation, and warning text. If the final
+Goal-mode phase is still pending, the launcher also runs a bounded environment
+diagnostic that records the checked-out branch/commit and the presence of Codex
+auth files without printing secret values. These heartbeat and pending
+diagnostic artifacts localize launch failures only; they are not
+implementation, video, verifier, or product acceptance evidence.
 If `GetAgentExecution` reports `Codex could not reach the LLM provider` or an
 unauthenticated provider warning, the launch edge is blocked until Ona Platform
 Codex can make a real model request. Full-chain workflows surface this failure

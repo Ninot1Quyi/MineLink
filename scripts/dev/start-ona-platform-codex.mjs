@@ -939,6 +939,48 @@ function hasAgentProgress(status) {
   );
 }
 
+function readbackAttemptFromExecution(execution) {
+  return {
+    at: new Date().toISOString(),
+    phase: execution.status?.phase ?? "unknown",
+    agentId: execution.spec?.agentId ?? "",
+    supportedModel: execution.status?.supportedModel ?? "",
+    warningMessage: sanitize(execution.status?.warningMessage ?? ""),
+    inputTokensUsed: execution.status?.inputTokensUsed ?? "",
+    outputTokensUsed: execution.status?.outputTokensUsed ?? "",
+    iterations: execution.status?.iterations ?? "",
+    currentActivity: sanitize(execution.status?.currentActivity ?? ""),
+    currentOperation: sanitize(execution.status?.currentOperation ?? ""),
+  };
+}
+
+function readbackHeartbeat(attempts, attempt) {
+  const previous = attempts.length > 1 ? attempts[attempts.length - 2] : null;
+  const phaseChanged = previous && previous.phase !== attempt.phase;
+  const hasProgress =
+    hasValue(attempt.inputTokensUsed) ||
+    hasValue(attempt.outputTokensUsed) ||
+    hasValue(attempt.iterations) ||
+    hasValue(attempt.currentActivity) ||
+    hasValue(attempt.currentOperation) ||
+    hasValue(attempt.warningMessage);
+  if (attempts.length === 1 || phaseChanged || hasProgress || attempts.length % 6 === 0) {
+    const details = [
+      `attempt=${attempts.length}`,
+      `phase=${attempt.phase}`,
+      `agentId=${attempt.agentId || "missing"}`,
+      `model=${attempt.supportedModel || "pending"}`,
+      `inputTokens=${attempt.inputTokensUsed || "0"}`,
+      `outputTokens=${attempt.outputTokensUsed || "0"}`,
+      `iterations=${attempt.iterations || "0"}`,
+    ];
+    if (attempt.currentActivity) details.push(`activity=${attempt.currentActivity}`);
+    if (attempt.currentOperation) details.push(`operation=${attempt.currentOperation}`);
+    if (attempt.warningMessage) details.push(`warning=${attempt.warningMessage}`);
+    console.log(`MineLink Ona Codex readback: ${details.join(" ")}`);
+  }
+}
+
 function goalModeReadbackReady(execution) {
   const spec = execution?.spec ?? {};
   const status = execution?.status ?? {};
@@ -963,22 +1005,53 @@ async function pollReadback(agentExecutionId) {
     latest = await post("gitpod.v1.AgentService/GetAgentExecution", { agentExecutionId });
     const execution = latest.agentExecution ?? {};
     const phase = execution.status?.phase ?? "unknown";
-    attempts.push({
-      at: new Date().toISOString(),
-      phase,
-      agentId: execution.spec?.agentId ?? "",
-      supportedModel: execution.status?.supportedModel ?? "",
-      warningMessage: sanitize(execution.status?.warningMessage ?? ""),
-      inputTokensUsed: execution.status?.inputTokensUsed ?? "",
-      outputTokensUsed: execution.status?.outputTokensUsed ?? "",
-      iterations: execution.status?.iterations ?? "",
-    });
+    const attempt = readbackAttemptFromExecution(execution);
+    attempts.push(attempt);
+    readbackHeartbeat(attempts, attempt);
     if (terminalAgentPhase(phase) || goalModeReadbackReady(execution) || Date.now() >= deadline || args.waitSeconds === 0) {
       break;
     }
     await sleep(args.pollSeconds * 1000);
   } while (Date.now() < deadline);
   return { latest, attempts };
+}
+
+function collectEnvironmentDiagnostics(report, reason) {
+  if (!hasValue(args.environmentId)) return;
+  const script = [
+    "set -euo pipefail",
+    'printf "reason=%s\\n" "$MINELINK_PENDING_REASON"',
+    'printf "pwd=%s\\n" "$(pwd)"',
+    'printf "branch=%s\\n" "$(git branch --show-current 2>/dev/null || true)"',
+    'printf "commit=%s\\n" "$(git rev-parse --short HEAD 2>/dev/null || true)"',
+    'printf "codex_auth_project=%s\\n" "$(test -s /usr/local/secrets/codex_auth && echo present || echo missing)"',
+    'printf "codex_auth_user=%s\\n" "$(test -s /usr/local/secrets/Codex_auth && echo present || echo missing)"',
+    'printf "node=%s\\n" "$(node --version 2>/dev/null || true)"',
+    'printf "java=%s\\n" "$(java -version 2>&1 | head -n 1 || true)"',
+    'printf "ona_context=%s\\n" "$(ona whoami 2>&1 | head -n 1 || true)"',
+  ].join("\n");
+  const result = run("ona", [
+    "environment",
+    "exec",
+    args.environmentId,
+    "--working-dir",
+    "/workspaces/MineLink",
+    "--timeout",
+    "60",
+    "--",
+    `MINELINK_PENDING_REASON=${shellQuote(reason)} bash -lc ${shellQuote(script)}`,
+  ]);
+  const output = sanitize([result.stdout, result.stderr].filter(Boolean).join("\n"));
+  report.pendingDiagnostics = {
+    reason,
+    status: result.status ?? 1,
+    output,
+  };
+  if (result.status === 0) {
+    report.evidence.push("pendingDiagnostics collected");
+  } else {
+    report.blockers.push(`Could not collect pending diagnostics from environment ${args.environmentId}: ${output}`);
+  }
 }
 
 function evaluateReadback(readback, expectedAgentId) {
@@ -1160,6 +1233,11 @@ if (failures.length === 0 && dryRun) {
       const started = await post("gitpod.v1.AgentService/StartAgent", startBody());
       report.steps.push("StartAgent");
       report.agentExecutionId = started.agentExecutionId ?? "";
+      if (hasValue(report.agentExecutionId)) {
+        console.log(
+          `MineLink Ona Codex StartAgent accepted: execution=${report.agentExecutionId} environment=${args.environmentId || "none"} mode=${args.agentMode}`,
+        );
+      }
       if (!hasValue(report.agentExecutionId)) failures.push("StartAgent did not return agentExecutionId.");
       if (hasValue(report.agentExecutionId) && sendPrompt) {
         await post(
@@ -1167,6 +1245,7 @@ if (failures.length === 0 && dryRun) {
           sendBody(report.agentExecutionId, await readPrompt({ agentExecutionId: report.agentExecutionId })),
         );
         report.steps.push("SendToAgentExecution");
+        console.log(`MineLink Ona Codex prompt sent: execution=${report.agentExecutionId} task=${args.taskId}`);
       }
     }
 
@@ -1186,6 +1265,10 @@ if (failures.length === 0 && dryRun) {
       const evaluation = evaluateReadback(latest, args.codexAgentId || latest?.agentExecution?.spec?.agentId || "");
       failures.push(...evaluation.failures);
       report.evidence.push(...evaluation.evidence);
+      const finalPhase = latest?.agentExecution?.status?.phase ?? "";
+      if (isGoalMode() && pendingAgentPhase(finalPhase)) {
+        collectEnvironmentDiagnostics(report, `goal-mode-${finalPhase.toLowerCase()}`);
+      }
     }
   } catch (error) {
     failures.push(sanitize(error.message));

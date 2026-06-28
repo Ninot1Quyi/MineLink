@@ -830,6 +830,11 @@ Current status:
   `MINELINK_CODEX_WAIT_SECONDS` with a 900 second default so Standard-tier
   Goal-mode queue time is not misclassified as an implementation failure too
   early; `PHASE_PENDING` still blocks until the same readback criteria are met.
+  The launcher now prints sanitized readback heartbeat lines and, on final
+  pending status, records bounded environment diagnostics for branch/commit and
+  Codex-auth-file presence without exposing secrets. This improves blocker
+  localization for `platform_codex_launch`; it is not accepted implementation,
+  video, verifier, or product evidence.
   For implementation and verifier prompts, the required identity line is only a
   readback marker and must not end the Goal session; task completion still
   requires the task report or verifier canary to be committed and pushed.
