@@ -1297,10 +1297,12 @@ rejects zero-report placeholder videos: an `acceptance-summary.md` with
 evidence, even if a verifier report says `Release decision: pass`. A ready
 `video-review-request.md` never releases a task by itself. For client GUI
 captures, the same verifier canary and release gate must also carry
-`Recorder ready before scenario: yes`, `Recorder work coverage adequate: yes`,
-`Recorder visible mining: yes` and
+`Recorder visible agent count matches expectation: yes`,
+`Recorder selected target stable: yes`, `Recorder ready before scenario: yes`,
+`Recorder work coverage adequate: yes`, `Recorder visible mining: yes` and
 `Recorder visible mining duration adequate: yes` when mining is required,
-`Recorder scenario action visible: yes`,
+`Recorder scenario action visible: yes`, `Visual QA passed: yes`,
+`Visual jitter passed: yes`, `Visual action motion coverage passed: yes`,
 `Submitted actions terminal confirmed: yes`, and
 `Recorder work visible: yes`, proving that the video shows successful task work
 by the followed `server_agent` rather than an idle target, an action submission

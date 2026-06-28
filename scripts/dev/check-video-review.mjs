@@ -53,12 +53,17 @@ Recorder target moved: yes
 Recorder client follow: yes
 Recorder client target centered: yes
 Recorder client target visible: yes
+Recorder visible agent count matches expectation: yes
+Recorder selected target stable: yes
 Recorder ready before scenario: yes
 Recorder work coverage adequate: yes
 Recorder visible mining: yes
 Recorder visible mining duration adequate: yes
 Requires visible mining: yes
 Recorder scenario action visible: yes
+Visual QA passed: yes
+Visual jitter passed: yes
+Visual action motion coverage passed: yes
 Submitted actions terminal confirmed: yes
 Recorder work visible: yes
 Server agent task action visible: yes

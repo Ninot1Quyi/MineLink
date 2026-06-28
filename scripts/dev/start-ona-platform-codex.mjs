@@ -342,6 +342,9 @@ async function videoVerifierCanaryPrompt(context = {}) {
   const recorderClientFollow = requestValue(request, "Recorder client follow") || "unknown";
   const recorderClientTargetCentered = requestValue(request, "Recorder client target centered") || "unknown";
   const recorderClientTargetVisible = requestValue(request, "Recorder client target visible") || "unknown";
+  const recorderVisibleAgentCountMatchesExpectation =
+    requestValue(request, "Recorder visible agent count matches expectation") || "unknown";
+  const recorderSelectedTargetStable = requestValue(request, "Recorder selected target stable") || "unknown";
   const recorderReadyBeforeScenario = requestValue(request, "Recorder ready before scenario") || "unknown";
   const recorderWorkCoverageAdequate = requestValue(request, "Recorder work coverage adequate") || "unknown";
   const recorderVisibleMining = requestValue(request, "Recorder visible mining") || "unknown";
@@ -349,6 +352,9 @@ async function videoVerifierCanaryPrompt(context = {}) {
     requestValue(request, "Recorder visible mining duration adequate") || "unknown";
   const requiresVisibleMining = requestValue(request, "Requires visible mining") || "unknown";
   const recorderScenarioActionVisible = requestValue(request, "Recorder scenario action visible") || "unknown";
+  const visualQaPassed = requestValue(request, "Visual QA passed") || "unknown";
+  const visualJitterPassed = requestValue(request, "Visual jitter passed") || "unknown";
+  const visualActionMotionCoveragePassed = requestValue(request, "Visual action motion coverage passed") || "unknown";
   const submittedActionsTerminalConfirmed = requestValue(request, "Submitted actions terminal confirmed") || "unknown";
   const recorderWorkVisible = requestValue(request, "Recorder work visible") || "unknown";
   const serverAgentTaskActionVisible = requestValue(request, "Server agent task action visible") || "unknown";
@@ -378,12 +384,17 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `Recorder client follow: ${recorderClientFollow}`,
     `Recorder client target centered: ${recorderClientTargetCentered}`,
     `Recorder client target visible: ${recorderClientTargetVisible}`,
+    `Recorder visible agent count matches expectation: ${recorderVisibleAgentCountMatchesExpectation}`,
+    `Recorder selected target stable: ${recorderSelectedTargetStable}`,
     `Recorder ready before scenario: ${recorderReadyBeforeScenario}`,
     `Recorder work coverage adequate: ${recorderWorkCoverageAdequate}`,
     `Recorder visible mining: ${recorderVisibleMining}`,
     `Recorder visible mining duration adequate: ${recorderVisibleMiningDurationAdequate}`,
     `Requires visible mining: ${requiresVisibleMining}`,
     `Recorder scenario action visible: ${recorderScenarioActionVisible}`,
+    `Visual QA passed: ${visualQaPassed}`,
+    `Visual jitter passed: ${visualJitterPassed}`,
+    `Visual action motion coverage passed: ${visualActionMotionCoveragePassed}`,
     `Submitted actions terminal confirmed: ${submittedActionsTerminalConfirmed}`,
     `Recorder work visible: ${recorderWorkVisible}`,
     `Server agent task action visible: ${serverAgentTaskActionVisible}`,
@@ -429,12 +440,17 @@ async function videoVerifierCanaryPrompt(context = {}) {
     `- Recorder client follow: ${recorderClientFollow}`,
     `- Recorder client target centered: ${recorderClientTargetCentered}`,
     `- Recorder client target visible: ${recorderClientTargetVisible}`,
+    `- Recorder visible agent count matches expectation: ${recorderVisibleAgentCountMatchesExpectation}`,
+    `- Recorder selected target stable: ${recorderSelectedTargetStable}`,
     `- Recorder ready before scenario: ${recorderReadyBeforeScenario}`,
     `- Recorder work coverage adequate: ${recorderWorkCoverageAdequate}`,
     `- Recorder visible mining: ${recorderVisibleMining}`,
     `- Recorder visible mining duration adequate: ${recorderVisibleMiningDurationAdequate}`,
     `- Requires visible mining: ${requiresVisibleMining}`,
     `- Recorder scenario action visible: ${recorderScenarioActionVisible}`,
+    `- Visual QA passed: ${visualQaPassed}`,
+    `- Visual jitter passed: ${visualJitterPassed}`,
+    `- Visual action motion coverage passed: ${visualActionMotionCoveragePassed}`,
     `- Submitted actions terminal confirmed: ${submittedActionsTerminalConfirmed}`,
     `- Recorder work visible: ${recorderWorkVisible}`,
     `- Server agent task action visible: ${serverAgentTaskActionVisible}`,
