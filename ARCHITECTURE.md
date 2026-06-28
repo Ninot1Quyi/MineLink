@@ -1091,6 +1091,8 @@ but `recorderWorkCoverageAdequate=true` is based on the real task window from
 `recorderReadyBeforeScenarioAtEpoch` to `scenarioCompletedAtEpoch` plus
 scenario-specific visible action duration such as `recorderVisibleMiningMs`.
 The post-scenario hold is not allowed to substitute for missing work footage.
+Release gates must check `recorderWorkCoverageAdequate`, not compare the
+post-scenario hold length to the minimum work-coverage seconds.
 The scenario report must also confirm submit-mode actions reached terminal
 lifecycle states; `submittedActionsTerminalConfirmed` prevents a video from
 ending at action submission time when work is still queued or running. For

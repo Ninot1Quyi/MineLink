@@ -250,13 +250,10 @@ if (requireClientGuiCapture) {
     if (!recorderWorkHoldCompleted) {
       failures.push("Acceptance video origin does not confirm the post-scenario visible work hold completed");
     }
-    if (recorderWorkHoldSeconds < recorderMinWorkVisibleSeconds) {
-      failures.push(
-        `Acceptance video origin work hold is too short: ${recorderWorkHoldSeconds}s < ${recorderMinWorkVisibleSeconds}s`,
-      );
-    }
     if (!recorderWorkCoverageAdequate) {
-      failures.push("Acceptance video origin does not confirm adequate visible work coverage");
+      failures.push(
+        `Acceptance video origin does not confirm adequate visible work coverage: hold=${recorderWorkHoldSeconds}s min=${recorderMinWorkVisibleSeconds}s`,
+      );
     }
     if (requiresVisibleMining && !recorderVisibleMining) {
       failures.push("Acceptance video origin requires visible mining evidence but recorderVisibleMining is false");

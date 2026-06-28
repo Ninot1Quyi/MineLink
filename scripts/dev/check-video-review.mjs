@@ -257,7 +257,7 @@ if (requireClientGuiCapture) {
     }
     if (!recorderWorkCoverageAdequate) {
       failures.push(
-        `Acceptance video origin does not confirm adequate visible work coverage: hold=${recorderWorkHoldSeconds}s min=${recorderMinWorkVisibleSeconds}s`,
+        `Acceptance video origin does not confirm adequate visible work coverage: postHold=${recorderWorkHoldSeconds}s minWork=${recorderMinWorkVisibleSeconds}s`,
       );
     }
     if (requiresVisibleMining && !recorderVisibleMining) {

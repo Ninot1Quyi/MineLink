@@ -1131,7 +1131,8 @@ Current status:
   task window from recorder-ready to scenario-complete, or a scenario-specific
   visible action duration such as `recorderVisibleMiningMs`, satisfies the
   configured minimum. The post-scenario hold helps reviewers see the completed
-  state, but it cannot substitute for missing work footage. For submit-mode
+  state, but it cannot substitute for missing work footage and is not itself the
+  minimum work-coverage timer. For submit-mode
   tools, the scenario report must also set
   `submittedActionsTerminalConfirmed=true`; a task submission or accepted action
   handle is not enough if the action remains queued or running. The renderer
