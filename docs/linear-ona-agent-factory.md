@@ -1250,6 +1250,14 @@ keeps the `server_agent` and the surrounding task target visible. The old
 `target_third_person` camera remains available for diagnostics but is not
 accepted as the default final PR evidence view because it can obscure the task
 action by framing the agent body too tightly.
+The observer camera must prefer its previously accepted offset and smooth both
+the server-side recorder anchor and client-side view. It may change offset only
+when the current line of sight is no longer usable. If visual QA rejects the
+raw Minecraft capture for jitter, static tail, or ambiguous action motion, the
+renderer must withhold final `acceptance.mp4` and still return the diagnostic
+raw-capture storyboard in the artifact bundle. The static-tail threshold is tied
+to the configured post-scenario evidence hold window so the chain does not
+punish an otherwise correct "task completed and still visible" recording.
 That report defaults to
 `github_attachment_preflight=deferred`: if neither a cookie nor a manual
 `github_attachment_video_url` is available, the run may still prove

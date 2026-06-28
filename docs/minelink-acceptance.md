@@ -200,6 +200,13 @@ Current status:
   required mining also broadcasts main-hand swing and block-destroy progress
   from the same visible `server_agent` player entity so the MP4 can show task
   work, not just a final inventory result.
+- Client-video acceptance now requires the recorder to follow the visible
+  `server_agent` with a stable observer offset instead of jumping between
+  candidate camera positions. The release renderer withholds final
+  `acceptance.mp4` when visual QA detects jitter, static-only evidence, or
+  action-ambiguous footage; failed captures still produce a raw-capture
+  storyboard for diagnosis. This improves video evidence quality, but it does
+  not by itself upgrade Gate 2 to `product-accepted`.
 - The real NeoForge runtime now treats the FakePlayer inventory as the
   authoritative item store for `observe.inventory`, container inventory slots,
   `container.take_output`, `craft.quick_craft` ingredient consumption,

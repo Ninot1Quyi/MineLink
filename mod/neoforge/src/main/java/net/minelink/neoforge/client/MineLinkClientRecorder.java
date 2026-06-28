@@ -40,6 +40,10 @@ public final class MineLinkClientRecorder {
     private static float smoothedYaw;
     private static float smoothedPitch;
     private static String smoothedTargetName = "";
+    private static boolean hasStableCameraChoice;
+    private static double stableCameraDistance;
+    private static double stableCameraHeight;
+    private static double stableCameraSide;
 
     private MineLinkClientRecorder() {
     }
@@ -108,6 +112,7 @@ public final class MineLinkClientRecorder {
         candidateCountLogged = false;
         smoothedCameraPosition = null;
         smoothedTargetName = "";
+        hasStableCameraChoice = false;
         MineLinkMod.LOGGER.info("MineLink recorder client joined {}", address());
     }
 
@@ -125,6 +130,7 @@ public final class MineLinkClientRecorder {
         candidateCountLogged = false;
         smoothedCameraPosition = null;
         smoothedTargetName = "";
+        hasStableCameraChoice = false;
         ticks = 0;
     }
 
@@ -166,6 +172,7 @@ public final class MineLinkClientRecorder {
             targetVisibleTicks = 0;
             smoothedCameraPosition = null;
             smoothedTargetName = "";
+            hasStableCameraChoice = false;
             if (!candidateCountLogged && targetSelection.candidateCount() > 0) {
                 candidateCountLogged = true;
                 MineLinkMod.LOGGER.info(
@@ -214,8 +221,11 @@ public final class MineLinkClientRecorder {
             "0.75"
         ), 0.75D);
         Vec3 focusPos = targetPos.add(forward.scale(lead));
-        CameraChoice cameraChoice = chooseCameraPosition(minecraft, targetPos, focusPos, forward, right, distance, height, side);
         String targetName = target.getName().getString();
+        if (!targetName.equals(smoothedTargetName)) {
+            hasStableCameraChoice = false;
+        }
+        CameraChoice cameraChoice = chooseCameraPosition(minecraft, targetPos, focusPos, forward, right, distance, height, side);
         boolean resetCameraSmoothing = smoothedCameraPosition == null || !targetName.equals(smoothedTargetName);
         Vec3 cameraPos = smoothCameraPosition(targetName, cameraChoice.position());
         float yaw = yawToward(cameraPos, focusPos);
@@ -354,6 +364,15 @@ public final class MineLinkClientRecorder {
         double height,
         double side
     ) {
+        if (hasStableCameraChoice) {
+            Vec3 cameraPos = targetPos
+                .subtract(forward.scale(stableCameraDistance))
+                .add(right.scale(stableCameraSide))
+                .add(0.0D, stableCameraHeight, 0.0D);
+            if (clearLineOfSight(minecraft, cameraPos, focusPos)) {
+                return new CameraChoice(cameraPos, true);
+            }
+        }
         double[] distances = new double[] { distance, Math.max(3.0D, distance - 1.0D), distance + 2.0D, distance + 4.0D };
         double[] heights = new double[] { height, height + 1.0D, height + 2.0D, height + 3.0D, height + 5.0D };
         double[] sides = new double[] { side, 0.0D, -side, side * 2.0D, -side * 2.0D };
@@ -371,6 +390,10 @@ public final class MineLinkClientRecorder {
                         fallback = choice;
                     }
                     if (visible) {
+                        hasStableCameraChoice = true;
+                        stableCameraDistance = candidateDistance;
+                        stableCameraHeight = candidateHeight;
+                        stableCameraSide = candidateSide;
                         return choice;
                     }
                 }

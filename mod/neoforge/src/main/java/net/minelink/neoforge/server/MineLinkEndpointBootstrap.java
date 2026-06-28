@@ -47,6 +47,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.Mth;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -287,6 +288,15 @@ public final class MineLinkEndpointBootstrap {
         double lead = recorderCameraLead();
         Vec3 focusPos = agentPos.add(forward.scale(lead));
         Vec3 cameraPos = chooseRecorderCameraPosition(agent, agentPos, focusPos, forward, right, distance, height, side);
+        Vec3 currentPos = cameraAnchor.position();
+        if (cameraAnchor.isAddedToLevel() && currentPos.distanceToSqr(cameraPos) < 64.0D) {
+            double smoothing = recorderCameraSmoothing();
+            cameraPos = new Vec3(
+                Mth.lerp(smoothing, currentPos.x, cameraPos.x),
+                Mth.lerp(smoothing, currentPos.y, cameraPos.y),
+                Mth.lerp(smoothing, currentPos.z, cameraPos.z)
+            );
+        }
         float yaw = yawToward(cameraPos, focusPos);
         float pitch = pitchToward(cameraPos, focusPos);
         cameraAnchor.moveTo(cameraPos.x, cameraPos.y, cameraPos.z, yaw, pitch);
@@ -304,6 +314,15 @@ public final class MineLinkEndpointBootstrap {
         double height,
         double side
     ) {
+        if (agent.recorderHasStableCameraChoice) {
+            Vec3 cameraPos = agentPos
+                .subtract(forward.scale(agent.recorderStableCameraDistance))
+                .add(right.scale(agent.recorderStableCameraSide))
+                .add(0.0D, agent.recorderStableCameraHeight, 0.0D);
+            if (clearRecorderLineOfSight(agent, cameraPos, focusPos)) {
+                return cameraPos;
+            }
+        }
         double[] distances = new double[] { distance, Math.max(3.0D, distance - 1.0D), distance + 2.0D, distance + 4.0D };
         double[] heights = new double[] { height, height + 1.0D, height + 2.0D, height + 3.0D, height + 5.0D };
         double[] sides = new double[] { side, 0.0D, -side, side * 2.0D, -side * 2.0D };
@@ -316,6 +335,10 @@ public final class MineLinkEndpointBootstrap {
                         .add(right.scale(candidateSide))
                         .add(0.0D, candidateHeight, 0.0D);
                     if (clearRecorderLineOfSight(agent, cameraPos, focusPos)) {
+                        agent.recorderHasStableCameraChoice = true;
+                        agent.recorderStableCameraDistance = candidateDistance;
+                        agent.recorderStableCameraHeight = candidateHeight;
+                        agent.recorderStableCameraSide = candidateSide;
                         return cameraPos;
                     }
                 }
@@ -369,6 +392,13 @@ public final class MineLinkEndpointBootstrap {
 
     private static double recorderCameraLead() {
         return parseDoubleSetting("MINELINK_RECORDER_CAMERA_LEAD", "minelink.recorder.cameraLead", 0.75D);
+    }
+
+    private static double recorderCameraSmoothing() {
+        return Math.max(
+            0.05D,
+            Math.min(1.0D, parseDoubleSetting("MINELINK_RECORDER_CAMERA_SMOOTHING", "minelink.recorder.cameraSmoothing", 0.35D))
+        );
     }
 
     private static int recorderFollowIntervalTicks() {
@@ -4313,6 +4343,10 @@ public final class MineLinkEndpointBootstrap {
         private boolean frozen = false;
         private ArmorStand recorderCameraAnchor;
         private boolean recorderAutoFollowLogged = false;
+        private boolean recorderHasStableCameraChoice = false;
+        private double recorderStableCameraDistance = 4.0D;
+        private double recorderStableCameraHeight = 1.8D;
+        private double recorderStableCameraSide = 1.6D;
 
         private AgentBody(String agentId, String displayName, String ownerId, String seedPrompt, FakePlayer entity, BlockPos fixtureBase, String fixtureName) {
             this.agentId = agentId;

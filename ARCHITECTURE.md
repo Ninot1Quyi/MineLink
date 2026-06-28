@@ -530,6 +530,14 @@ same-session verifier result, runs candidate upload before verifier handoff so
 old task-branch stage runners cannot block video transport, and reports
 extracted files only after the current tarball is decoded successfully and any
 manifest MP4 has been downloaded and hash-verified.
+For Minecraft client-video tasks, the recorder camera uses a stable
+observer-follow offset and smoothing on both the server-side recorder anchor and
+the client-side view. A visual QA failure withholds `acceptance.mp4`, but the
+renderer still writes a diagnostic storyboard from the raw client capture so
+agents can inspect jitter, static tails, or ambiguous action framing without
+publishing the failed video as final evidence. Static-tail analysis is bounded
+by the configured post-scenario evidence hold window; it must not force agents
+to remove the visible completion window that proves the task finished.
 This bridge is accepted only as
 finalizer/artifact transport; Platform Codex API readback and task-bound branch
 commits remain the implementation and verifier evidence.

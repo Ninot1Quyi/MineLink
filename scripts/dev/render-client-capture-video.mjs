@@ -329,9 +329,17 @@ const serverAgentTaskActionVisible = recorderWorkVisible;
 let visualAnalysis = null;
 let visualAnalysisPath = path.join(args.outputDir, "acceptance-video-visual-analysis.json");
 let visualAnalysisMdPath = path.join(args.outputDir, "acceptance-video-visual-analysis.md");
+const diagnosticStoryboardPath = path.join(args.outputDir, "acceptance-client-capture-storyboard.png");
+const diagnosticStoryboardJsonPath = path.join(args.outputDir, "acceptance-client-capture-storyboard.json");
 
 if (clientVideoStat?.isFile()) {
   try {
+    const configuredStaticTailSeconds = Number.parseFloat(process.env.MINELINK_VIDEO_MAX_STATIC_TAIL_SECONDS ?? "14");
+    const evidenceHoldStaticTailSeconds = recorderPostScenarioSeconds > 0 ? recorderPostScenarioSeconds + 3 : 14;
+    const maxStaticTailSeconds = Math.max(
+      Number.isFinite(configuredStaticTailSeconds) ? configuredStaticTailSeconds : 14,
+      evidenceHoldStaticTailSeconds,
+    );
     await execFileAsync(
       process.execPath,
       [
@@ -343,12 +351,38 @@ if (clientVideoStat?.isFile()) {
         "--output-md",
         visualAnalysisMdPath,
       ],
-      { maxBuffer: 1024 * 1024 * 8 },
+      {
+        env: {
+          ...process.env,
+          MINELINK_VIDEO_MAX_STATIC_TAIL_SECONDS: String(maxStaticTailSeconds),
+        },
+        maxBuffer: 1024 * 1024 * 8,
+      },
     );
     visualAnalysis = await readJson(visualAnalysisPath);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     failures.push(`Acceptance video visual analysis failed to run: ${message}`);
+  }
+  try {
+    await execFileAsync(
+      process.execPath,
+      [
+        "scripts/dev/render-video-storyboard.mjs",
+        "--mp4",
+        args.clientVideo,
+        "--output",
+        diagnosticStoryboardPath,
+        "--json-output",
+        diagnosticStoryboardJsonPath,
+        "--frames-dir",
+        path.join(args.outputDir, "client-capture-storyboard-frames"),
+      ],
+      { maxBuffer: 1024 * 1024 * 8 },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Acceptance client capture storyboard failed to render: ${message}`);
   }
 }
 const visualQualityPassed = visualAnalysis?.passed === true;
@@ -630,6 +664,7 @@ const summaryLines = [
   `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
   `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
   `- Visual analysis: \`${visualAnalysisPath}\``,
+  `- Diagnostic client capture storyboard: \`${diagnosticStoryboardPath}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
   `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
@@ -697,6 +732,8 @@ const origin = {
   requiresVisibleMining,
   recorderScenarioActionVisible,
   visualAnalysis: visualAnalysisPath,
+  diagnosticClientCaptureStoryboard: diagnosticStoryboardPath,
+  diagnosticClientCaptureStoryboardJson: diagnosticStoryboardJsonPath,
   visualQualityPassed,
   visualJitterPassed,
   visualActionMotionCoveragePassed,
@@ -760,6 +797,7 @@ await fs.writeFile(
     `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
     `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
     `- Visual analysis: \`${visualAnalysisPath}\``,
+    `- Diagnostic client capture storyboard: \`${diagnosticStoryboardPath}\``,
     `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
     `- Submitted action pending count: \`${submittedActionPendingCount}\``,
     `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
