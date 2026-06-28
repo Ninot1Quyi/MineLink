@@ -415,7 +415,10 @@ Those diagnostics are blocker-localization artifacts only. Implementation and
 verifier prompts use
 the identity line as a readback marker only; they must continue after that line
 until the task report or verifier canary is committed and pushed. Only the
-identity-canary diagnostic prompt stops after the identity reply. If a prompt
+identity-canary diagnostic prompt stops after the identity reply, but it still
+uses the same task id, target branch, issue metadata, and environment branch
+alignment path as implementation launches so launch diagnostics match the real
+factory shape. If a prompt
 was sent, the launcher must observe
 token usage, iteration count, current activity, or current operation before it
 treats the Goal session as a live handoff; real task consumption is accepted

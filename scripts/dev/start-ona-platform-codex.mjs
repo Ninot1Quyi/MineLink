@@ -604,7 +604,8 @@ function isTransientEnvironmentReadbackError(error) {
 function taskBranchNeedsAlignment() {
   return (
     createEnvironment &&
-    (promptMode === "implementation-canary" ||
+    (promptMode === "identity-canary" ||
+      promptMode === "implementation-canary" ||
       promptMode === "task-implementation" ||
       promptMode === "video-verifier-canary") &&
     hasValue(args.branch) &&
