@@ -80,7 +80,7 @@ fi
 
 for scenario in "${scenario_list[@]}"; do
   case "$scenario" in
-    mine_tree|create_smoke|craft_smoke|furnace_smoke|craft_negative|guard_boundaries|sleep_smoke|visibility_stale|body_lifecycle|perception_shapes|portal_coop) ;;
+    mine_tree|create_smoke|craft_smoke|furnace_smoke|craft_negative|guard_boundaries|sleep_smoke|visibility_stale|body_grounding|body_lifecycle|perception_shapes|portal_coop) ;;
     *)
       echo "Unsupported soak scenario: $scenario" >&2
       exit 2
@@ -109,6 +109,7 @@ ports_for_scenario() {
     guard_boundaries) endpoint_port=25580 ;;
     sleep_smoke) endpoint_port=25584 ;;
     visibility_stale) endpoint_port=25585 ;;
+    body_grounding) endpoint_port=25586 ;;
     body_lifecycle) endpoint_port=25583 ;;
     perception_shapes) endpoint_port=25581 ;;
     portal_coop) endpoint_port=25579 ;;

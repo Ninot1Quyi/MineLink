@@ -104,6 +104,14 @@ same in-memory body back to `active`. Remove closes open containers, discards
 the FakePlayer body, deletes the runtime agent record, and releases the owner
 quota slot.
 
+Active FakePlayer bodies are also synchronized on server ticks outside the
+recorder path. The tick path keeps the visible `server_agent` gravity-enabled,
+applies lightweight grounding for airborne bodies, and exposes
+`on_ground`, `no_gravity`, `body_tick_count`, and
+`physics_tick_path=server_tick_grounding` through `observe.self`. This is a
+server-body grounding guarantee, not a claim of full client locomotion,
+pathfinding, jump/fall animation parity, or sensory-client capability.
+
 This is same-process lifecycle evidence only. It does not prove persistent body
 restore after Minecraft server restart, full action replay recovery, or
 human-player coexistence. Those remain separate acceptance gaps until a real
@@ -733,6 +741,7 @@ bash scripts/dev/verify-agent-task.sh --scope runtime
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios sleep_smoke
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios visibility_stale
+bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios body_grounding
 bash scripts/dev/verify-agent-task.sh --scope install
 ```
 

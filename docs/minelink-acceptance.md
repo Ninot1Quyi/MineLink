@@ -64,8 +64,9 @@ Required:
 - `npm run build`, `npm run typecheck`, `npm test`, and `npm run ci` pass.
 - CI runs build, tests, mock `mine_tree`, `create_smoke`, `craft_smoke`,
   `furnace_smoke`, `craft_negative`, `guard_boundaries`, `sleep_smoke`,
-  `visibility_stale`, `body_lifecycle`, `perception_shapes`, and `portal_coop`,
-  plus real NeoForge smoke for those scenarios, and uploads `.minelink-dev/`
+  `visibility_stale`, `body_grounding`, `body_lifecycle`,
+  `perception_shapes`, and `portal_coop`, plus real NeoForge smoke for those
+  scenarios, and uploads `.minelink-dev/`
   evidence. Ordinary
   GitHub CI must not publish final acceptance-video PR comments; final video
   evidence belongs to the Ona task/finalizer plus same-session Codex verifier
@@ -88,7 +89,8 @@ Current status:
 - GitHub Actions now has a dedicated real NeoForge smoke workflow for
   `mine_tree`, `create_smoke`, `craft_smoke`, `furnace_smoke`,
   `craft_negative`, `guard_boundaries`, `sleep_smoke`, `visibility_stale`,
-  `body_lifecycle`, `perception_shapes`, and `portal_coop` on push, pull request, manual
+  `body_grounding`, `body_lifecycle`, `perception_shapes`, and `portal_coop`
+  on push, pull request, manual
   dispatch, and daily schedule; full release acceptance still requires the
   later complete Create, social runtime, install, security, and release-length
   soak gates.
@@ -130,6 +132,8 @@ Required:
   The `visibility_stale` path requires an initially visible target to become
   hidden by normal movement before the old ref is rejected through current-view
   validation.
+  The `body_grounding` path verifies `observe.self` reports a grounded,
+  gravity-enabled server tick path for the visible FakePlayer body.
 - Complete Create semantics, persistence, social runtime, complete server menu
   coverage, and full inventory/menu parity remain later gates; they must not be
   claimed by the smoke implementation.
@@ -148,6 +152,7 @@ Evidence:
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh guard_boundaries`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh sleep_smoke`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh visibility_stale`.
+- `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh body_grounding`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh body_lifecycle`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh perception_shapes`.
 - `MINELINK_RUNTIME=neoforge bash scripts/dev/e2e.sh portal_coop`.
@@ -197,6 +202,14 @@ Current status:
   `action.mine_visible_block`. This reduces the all-knowing-agent risk for
   stale observed refs; it does not yet cover moving entities, fluids, partial
   occluders, or every tool namespace.
+- Mock runtime and real NeoForge runtime now cover `body_grounding`, which
+  verifies `observe.self` reports `on_ground=true`, `no_gravity=false`, and
+  `physics_tick_path=server_tick_grounding` for the server_agent body. The
+  NeoForge runtime also ticks active FakePlayer bodies outside the recorder
+  path so they do not depend on a client video session for gravity/grounding
+  synchronization. This reduces the floating-body video risk; it does not yet
+  prove full client-equivalent locomotion, jump/fall animation parity, or
+  pathfinding.
 - `agent.birth` now publishes the real `MineLink-*` FakePlayer-backed
   `server_agent` as a visible ServerPlayer entity, instead of relying on a
   recorder-only ArmorStand proxy. The client recorder is required to follow a
@@ -1571,10 +1584,11 @@ The repository currently has an executable baseline for Gates 0, 3 partial,
 - `bash scripts/dev/e2e.sh guard_boundaries`
 - `bash scripts/dev/e2e.sh sleep_smoke`
 - `bash scripts/dev/e2e.sh visibility_stale`
+- `bash scripts/dev/e2e.sh body_grounding`
 - `bash scripts/dev/e2e.sh body_lifecycle`
 - `bash scripts/dev/e2e.sh perception_shapes`
 - `bash scripts/dev/e2e.sh portal_coop`
-- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,sleep_smoke,visibility_stale,body_lifecycle,perception_shapes,portal_coop`
+- `bash scripts/dev/soak.sh --runtime mock --iterations 1 --scenarios mine_tree,furnace_smoke,craft_negative,guard_boundaries,sleep_smoke,visibility_stale,body_grounding,body_lifecycle,perception_shapes,portal_coop`
 - `npm_config_registry=https://registry.npmjs.org npm audit --audit-level=moderate`
 - `./gradlew --no-daemon build` in `mod/neoforge`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh mine_tree`
@@ -1586,10 +1600,11 @@ The repository currently has an executable baseline for Gates 0, 3 partial,
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh guard_boundaries`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh sleep_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh visibility_stale`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh body_grounding`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh body_lifecycle`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh perception_shapes`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/e2e.sh portal_coop`
-- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,sleep_smoke,visibility_stale,body_lifecycle,perception_shapes,portal_coop`
+- `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,sleep_smoke,visibility_stale,body_grounding,body_lifecycle,perception_shapes,portal_coop`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-catalog-furnace bash scripts/dev/e2e.sh furnace_smoke`
 - `MINELINK_RUNTIME=neoforge MINELINK_ACCEPT_EULA=1 MINELINK_MCP_TRANSPORT=http MINELINK_SKIP_BUILD=1 MINELINK_WORK_DIR=.minelink-dev/neoforge-catalog-http bash scripts/dev/e2e.sh mine_tree`
 - `MINELINK_ACCEPT_EULA=1 MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --work-dir .minelink-dev/soak/neoforge-catalog --scenarios create_smoke,portal_coop,guard_boundaries`

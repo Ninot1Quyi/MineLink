@@ -59,6 +59,11 @@ case "$scenario" in
     report="$work_dir/reports/visibility_stale-result.json"
     default_port="25585"
     ;;
+  body_grounding)
+    fixture="vanilla_tree"
+    report="$work_dir/reports/body_grounding-result.json"
+    default_port="25586"
+    ;;
   body_lifecycle)
     fixture="vanilla_tree"
     report="$work_dir/reports/body_lifecycle-result.json"

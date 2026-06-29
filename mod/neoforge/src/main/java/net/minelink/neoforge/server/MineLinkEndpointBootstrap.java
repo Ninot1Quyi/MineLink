@@ -175,6 +175,7 @@ public final class MineLinkEndpointBootstrap {
     }
 
     public void onServerTick() {
+        tickAgentBodies();
         if (!recorderEnabled()) {
             return;
         }
@@ -186,6 +187,42 @@ public final class MineLinkEndpointBootstrap {
         AgentBody latestAgent = runtimeState.latestAgent();
         if (latestAgent != null) {
             updateRecorder(latestAgent);
+        }
+    }
+
+    private void tickAgentBodies() {
+        for (AgentBody agent : runtimeState.agents()) {
+            tickAgentBody(agent);
+        }
+    }
+
+    private void tickAgentBody(AgentBody agent) {
+        if (!agent.entity.isAddedToLevel() || agent.entity.isRemoved()) {
+            return;
+        }
+        agent.bodyTickCount++;
+        agent.entity.setNoGravity(false);
+        agent.entity.setInvisible(false);
+        if (agent.frozen()) {
+            agent.entity.setDeltaMovement(Vec3.ZERO);
+            return;
+        }
+        Vec3 velocity = agent.entity.getDeltaMovement();
+        if (!agent.entity.onGround()) {
+            Vec3 nextVelocity = new Vec3(
+                velocity.x * 0.91D,
+                Math.max(velocity.y - 0.08D, -3.0D),
+                velocity.z * 0.91D
+            );
+            agent.entity.setDeltaMovement(nextVelocity);
+            agent.entity.move(MoverType.SELF, nextVelocity);
+            broadcastAgentMotion(agent, nextVelocity);
+            broadcastAgentPosition(agent);
+            return;
+        }
+        if (velocity.lengthSqr() > 0.0001D) {
+            agent.entity.setDeltaMovement(Vec3.ZERO);
+            broadcastAgentMotion(agent, Vec3.ZERO);
         }
     }
 
@@ -951,12 +988,20 @@ public final class MineLinkEndpointBootstrap {
         response.addProperty("body_id", agent.bodyId());
         response.addProperty("body_status", agent.frozen() ? "frozen" : "active");
         response.add("position", vector(agent.position()));
+        response.addProperty("on_ground", agent.entity.onGround());
+        response.addProperty("no_gravity", agent.entity.isNoGravity());
+        response.addProperty("body_tick_count", agent.bodyTickCount);
+        response.addProperty("physics_tick_path", "server_tick_grounding");
         response.addProperty("health", 20);
         response.addProperty("hunger", 20);
         JsonObject self = new JsonObject();
         self.addProperty("body_id", agent.bodyId());
         self.addProperty("body_status", agent.frozen() ? "frozen" : "active");
         self.add("position", vector(agent.position()));
+        self.addProperty("on_ground", agent.entity.onGround());
+        self.addProperty("no_gravity", agent.entity.isNoGravity());
+        self.addProperty("body_tick_count", agent.bodyTickCount);
+        self.addProperty("physics_tick_path", "server_tick_grounding");
         response.add("self", self);
         return response;
     }
@@ -4374,6 +4419,7 @@ public final class MineLinkEndpointBootstrap {
         private int actionSeq = 0;
         private int protocolSeq = 0;
         private int queueDepth = 0;
+        private int bodyTickCount = 0;
         private boolean frozen = false;
         private ArmorStand recorderCameraAnchor;
         private boolean recorderAutoFollowLogged = false;
