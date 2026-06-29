@@ -238,6 +238,12 @@ terrain, foliage, or a proxy marker is not accepted. The runner must wait for
 these recorder markers before task work starts and record
 `recorderReadyBeforeScenario=true`; the post-scenario hold must then record
 `recorderWorkCoverageAdequate=true` for the configured visible work window. The
+published composite starts at that recorder-ready window with only a short
+preroll; `render-client-capture-video.mjs` records
+`recorderWarmupTrimmedForRelease`, `compositeStartSeconds`, and
+`compositeEndSeconds`, and the release gate rejects client-GUI evidence that
+keeps long target-searching warmup footage in the final MP4.
+The
 renderer must then set `recorderWorkVisible=true`, which requires a passing
 scenario, at least one successful work tool such as `action.*`, `container.*`,
 `craft.*`, `furnace.*`, or `create.*`, at least one passing final assertion,

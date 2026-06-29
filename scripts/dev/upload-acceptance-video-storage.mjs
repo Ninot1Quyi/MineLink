@@ -313,6 +313,10 @@ if (report.failures.length === 0) {
   report.recorderReadyBeforeScenario = origin?.recorderReadyBeforeScenario === true;
   report.recorderWorkHoldCompleted = origin?.recorderWorkHoldCompleted === true;
   report.recorderWorkHoldSeconds = Number.isFinite(origin?.recorderWorkHoldSeconds) ? origin.recorderWorkHoldSeconds : 0;
+  report.recorderWarmupTrimmedForRelease = origin?.recorderWarmupTrimmedForRelease === true;
+  report.recorderWarmupSeconds = Number.isFinite(origin?.recorderWarmupSeconds) ? origin.recorderWarmupSeconds : 0;
+  report.compositeStartSeconds = Number.isFinite(origin?.compositeStartSeconds) ? origin.compositeStartSeconds : 0;
+  report.compositeEndSeconds = Number.isFinite(origin?.compositeEndSeconds) ? origin.compositeEndSeconds : 0;
   report.recorderMinWorkVisibleSeconds = Number.isFinite(origin?.recorderMinWorkVisibleSeconds)
     ? origin.recorderMinWorkVisibleSeconds
     : 0;
@@ -394,6 +398,10 @@ const manifest = {
   recorderReadyBeforeScenario: report.recorderReadyBeforeScenario,
   recorderWorkHoldCompleted: report.recorderWorkHoldCompleted,
   recorderWorkHoldSeconds: report.recorderWorkHoldSeconds,
+  recorderWarmupTrimmedForRelease: report.recorderWarmupTrimmedForRelease,
+  recorderWarmupSeconds: report.recorderWarmupSeconds,
+  compositeStartSeconds: report.compositeStartSeconds,
+  compositeEndSeconds: report.compositeEndSeconds,
   recorderMinWorkVisibleSeconds: report.recorderMinWorkVisibleSeconds,
   recorderCaptureDurationSeconds: report.recorderCaptureDurationSeconds,
   recorderWorkCoverageAdequate: report.recorderWorkCoverageAdequate,
@@ -444,6 +452,10 @@ const lines = [
   `- Recorder ready before scenario: \`${report.recorderReadyBeforeScenario ? "yes" : "no"}\``,
   `- Recorder work hold completed: \`${report.recorderWorkHoldCompleted ? "yes" : "no"}\``,
   `- Recorder work hold seconds: \`${report.recorderWorkHoldSeconds}\``,
+  `- Recorder warmup trimmed for release: \`${report.recorderWarmupTrimmedForRelease ? "yes" : "no"}\``,
+  `- Recorder warmup seconds: \`${report.recorderWarmupSeconds}\``,
+  `- Composite start seconds: \`${report.compositeStartSeconds}\``,
+  `- Composite end seconds: \`${report.compositeEndSeconds}\``,
   `- Recorder min work visible seconds: \`${report.recorderMinWorkVisibleSeconds}\``,
   `- Recorder capture duration seconds: \`${report.recorderCaptureDurationSeconds}\``,
   `- Recorder work coverage adequate: \`${report.recorderWorkCoverageAdequate ? "yes" : "no"}\``,

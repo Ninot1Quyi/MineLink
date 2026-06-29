@@ -348,6 +348,14 @@ const visualAnalysisStartSeconds =
   captureStartedAtEpoch > 0 && recorderReadyBeforeScenarioAtEpoch >= captureStartedAtEpoch
     ? Math.max(0, recorderReadyBeforeScenarioAtEpoch - captureStartedAtEpoch)
     : 0;
+const compositePrerollSeconds = Math.max(
+  0,
+  Number.parseFloat(process.env.MINELINK_ACCEPTANCE_VIDEO_PREROLL_SECONDS ?? "1.5") || 0,
+);
+const compositeStartSeconds =
+  visualAnalysisStartSeconds > 0 ? Math.max(0, visualAnalysisStartSeconds - compositePrerollSeconds) : 0;
+const recorderWarmupSeconds = compositeStartSeconds;
+const recorderWarmupTrimmedForRelease = compositeStartSeconds > 0.25;
 const visualAnalysisEndSeconds =
   captureStartedAtEpoch > 0 && scenarioCompletedAtEpoch >= captureStartedAtEpoch
     ? Math.min(
@@ -362,7 +370,8 @@ const diagnosticStoryboardPath = path.join(args.outputDir, "acceptance-client-ca
 const diagnosticStoryboardJsonPath = path.join(args.outputDir, "acceptance-client-capture-storyboard.json");
 let visualStaticTailTrimmedForRelease = false;
 let visualLastMotionSeconds = 0;
-let compositeDurationSeconds = Math.max(4, Math.min(120, captureDurationSeconds || 10));
+let compositeEndSeconds = Math.max(4, Math.min(120, captureDurationSeconds || 10));
+let compositeDurationSeconds = Math.max(4, Math.min(120, compositeEndSeconds - compositeStartSeconds));
 
 if (clientVideoStat?.isFile()) {
   const runVisualAnalysis = async (analysisEndSeconds) => {
@@ -417,8 +426,9 @@ if (clientVideoStat?.isFile()) {
       trimmedEndSeconds < captureDurationSeconds - 0.5;
     if (canTrimStaticTail) {
       visualStaticTailTrimmedForRelease = true;
-      compositeDurationSeconds = Math.max(4, Math.min(120, trimmedEndSeconds));
-      visualAnalysis = await runVisualAnalysis(compositeDurationSeconds);
+      compositeEndSeconds = Math.max(compositeStartSeconds + 4, Math.min(120, trimmedEndSeconds));
+      compositeDurationSeconds = Math.max(4, Math.min(120, compositeEndSeconds - compositeStartSeconds));
+      visualAnalysis = await runVisualAnalysis(compositeEndSeconds);
       visualLastMotionSeconds = Number.parseFloat(visualAnalysis?.lastMotionSeconds ?? String(visualLastMotionSeconds));
     }
   } catch (error) {
@@ -549,6 +559,7 @@ const terminalLines = [
   `agent count: ${recorderObservedServerAgentCount}/${recorderExpectedVisibleServerAgents}`,
   `visual qa: ${visualQualityPassed ? "YES" : "NO"}`,
   `ready before work: ${recorderReadyBeforeScenario ? "YES" : "NO"}`,
+  `warmup trimmed sec: ${recorderWarmupSeconds.toFixed(1)}`,
   `work hold sec: ${recorderWorkHoldSeconds}`,
   `task window sec: ${recorderTaskWindowSeconds}`,
   `action visible sec: ${recorderVisibleActionSeconds.toFixed(1)}`,
@@ -752,6 +763,10 @@ const summaryLines = [
     `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
     `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
     `- Visual static tail trimmed for release: \`${visualStaticTailTrimmedForRelease ? "yes" : "no"}\``,
+    `- Recorder warmup trimmed for release: \`${recorderWarmupTrimmedForRelease ? "yes" : "no"}\``,
+    `- Recorder warmup seconds: \`${recorderWarmupSeconds.toFixed(3)}\``,
+    `- Composite start seconds: \`${compositeStartSeconds.toFixed(3)}\``,
+    `- Composite end seconds: \`${compositeEndSeconds.toFixed(3)}\``,
     `- Visual last motion seconds: \`${Number.isFinite(visualLastMotionSeconds) ? visualLastMotionSeconds.toFixed(3) : "0.000"}\``,
     `- Composite duration seconds: \`${compositeDurationSeconds.toFixed(3)}\``,
   `- Visual analysis: \`${visualAnalysisPath}\``,
@@ -837,6 +852,10 @@ const origin = {
   visualActionMotionCoveragePassed,
   visualStaticTailPassed,
   visualStaticTailTrimmedForRelease,
+  recorderWarmupTrimmedForRelease,
+  recorderWarmupSeconds: Number(recorderWarmupSeconds.toFixed(3)),
+  compositeStartSeconds: Number(compositeStartSeconds.toFixed(3)),
+  compositeEndSeconds: Number(compositeEndSeconds.toFixed(3)),
   visualLastMotionSeconds: Number.isFinite(visualLastMotionSeconds) ? Number(visualLastMotionSeconds.toFixed(3)) : 0,
   compositeDurationSeconds: Number(compositeDurationSeconds.toFixed(3)),
   submittedActionsTerminalConfirmed,
@@ -905,6 +924,10 @@ await fs.writeFile(
     `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
     `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
     `- Visual static tail trimmed for release: \`${visualStaticTailTrimmedForRelease ? "yes" : "no"}\``,
+    `- Recorder warmup trimmed for release: \`${recorderWarmupTrimmedForRelease ? "yes" : "no"}\``,
+    `- Recorder warmup seconds: \`${recorderWarmupSeconds.toFixed(3)}\``,
+    `- Composite start seconds: \`${compositeStartSeconds.toFixed(3)}\``,
+    `- Composite end seconds: \`${compositeEndSeconds.toFixed(3)}\``,
     `- Visual last motion seconds: \`${Number.isFinite(visualLastMotionSeconds) ? visualLastMotionSeconds.toFixed(3) : "0.000"}\``,
     `- Composite duration seconds: \`${compositeDurationSeconds.toFixed(3)}\``,
     `- Visual analysis: \`${visualAnalysisPath}\``,
@@ -938,6 +961,8 @@ if (failures.length === 0) {
         "-hide_banner",
         "-loglevel",
         "warning",
+        "-ss",
+        compositeStartSeconds.toFixed(3),
         "-i",
         args.clientVideo,
         "-loop",

@@ -176,6 +176,11 @@ const visualCameraFollowMotionTolerated = origin?.visualCameraFollowMotionTolera
 const visualActionMotionCoveragePassed = origin?.visualActionMotionCoveragePassed === true;
 const visualStaticTailPassed = origin?.visualStaticTailPassed === true;
 const visualStaticTailTrimmedForRelease = origin?.visualStaticTailTrimmedForRelease === true;
+const hasCompositeStartSeconds = Number.isFinite(origin?.compositeStartSeconds);
+const recorderWarmupTrimmedForRelease = origin?.recorderWarmupTrimmedForRelease === true;
+const recorderWarmupSeconds = Number.isFinite(origin?.recorderWarmupSeconds) ? origin.recorderWarmupSeconds : 0;
+const compositeStartSeconds = Number.isFinite(origin?.compositeStartSeconds) ? origin.compositeStartSeconds : 0;
+const compositeEndSeconds = Number.isFinite(origin?.compositeEndSeconds) ? origin.compositeEndSeconds : 0;
 const visualLastMotionSeconds = Number.isFinite(origin?.visualLastMotionSeconds) ? origin.visualLastMotionSeconds : 0;
 const compositeDurationSeconds = Number.isFinite(origin?.compositeDurationSeconds) ? origin.compositeDurationSeconds : 0;
 const submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
@@ -226,6 +231,14 @@ if (requireClientGuiCapture) {
     }
     if (!captureStartedAfterWorldReady) {
       failures.push("Acceptance video origin does not confirm capture started after the recorder client reached the world");
+    }
+    if (!hasCompositeStartSeconds) {
+      failures.push("Acceptance video origin does not declare the final MP4 composite start offset");
+    }
+    if (recorderWarmupSeconds > 0.25 && !recorderWarmupTrimmedForRelease) {
+      failures.push(
+        `Acceptance video includes recorder warmup before task evidence: warmup=${recorderWarmupSeconds.toFixed(3)}s`,
+      );
     }
     if (!recorderAutoFollow) {
       failures.push("Acceptance video origin does not confirm recorder auto-follow of the active server_agent");
@@ -353,6 +366,19 @@ if (storageManifest) {
   }
   if (requireClientGuiCapture && storageManifest.recorderReadyBeforeScenario !== true) {
     failures.push("Video storage manifest does not confirm recorderReadyBeforeScenario=true");
+  }
+  if (requireClientGuiCapture && !Number.isFinite(storageManifest.compositeStartSeconds)) {
+    failures.push("Video storage manifest does not declare compositeStartSeconds");
+  }
+  if (
+    requireClientGuiCapture &&
+    Number.isFinite(storageManifest.recorderWarmupSeconds) &&
+    storageManifest.recorderWarmupSeconds > 0.25 &&
+    storageManifest.recorderWarmupTrimmedForRelease !== true
+  ) {
+    failures.push(
+      `Video storage manifest indicates untrimmed recorder warmup: ${storageManifest.recorderWarmupSeconds}s`,
+    );
   }
   if (requireClientGuiCapture && storageManifest.recorderWorkCoverageAdequate !== true) {
     failures.push("Video storage manifest does not confirm recorderWorkCoverageAdequate=true");
@@ -620,6 +646,10 @@ const lines = [
   `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
   `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
   `- Visual static tail trimmed for release: \`${visualStaticTailTrimmedForRelease ? "yes" : "no"}\``,
+  `- Recorder warmup trimmed for release: \`${recorderWarmupTrimmedForRelease ? "yes" : "no"}\``,
+  `- Recorder warmup seconds: \`${recorderWarmupSeconds}\``,
+  `- Composite start seconds: \`${compositeStartSeconds}\``,
+  `- Composite end seconds: \`${compositeEndSeconds}\``,
   `- Visual last motion seconds: \`${visualLastMotionSeconds}\``,
   `- Composite duration seconds: \`${compositeDurationSeconds}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,

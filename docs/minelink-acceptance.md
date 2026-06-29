@@ -1218,7 +1218,14 @@ Current status:
   This catches obvious camera jumps, insufficient work motion, and long static
   tails before the same-session verifier can release the video. The analyzer
   evaluates the active task window and excludes recorder warmup before the
-  target is followed, centered, and visible. Large observer-follow frame
+  target is followed, centered, and visible. The final published composite must
+  use the same boundary: it starts at the recorder-ready point with only a short
+  configurable preroll, records `recorderWarmupTrimmedForRelease=true` when any
+  warmup was removed, and writes `compositeStartSeconds`/`compositeEndSeconds`
+  into the origin metadata and storage manifest. A release video that keeps a
+  long target-searching warmup before the active `server_agent` is followed,
+  centered, and visible is not acceptable final PR evidence. Large
+  observer-follow frame
   movement can be tolerated only when target identity is stable, the target is
   centered/visible, task action coverage passes, and the static-tail check
   passes; otherwise jitter still fails closed. If the task has enough visible

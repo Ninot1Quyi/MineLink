@@ -1278,8 +1278,12 @@ to the configured post-scenario evidence hold window, but the finalizer keeps
 that hold short and proves the minimum work coverage from the recorder-ready to
 scenario-complete task window plus scenario-specific visible action duration.
 The visual analyzer excludes recorder warmup before the target is followed,
-centered, and visible, so the gate blocks true camera snaps and static idle
-tails without treating normal Minecraft mining/action motion as jitter. Large
+centered, and visible, and the published composite must use the same evidence
+window. The renderer starts the final MP4 at recorder-ready with only a short
+preroll, records `recorderWarmupTrimmedForRelease`, `compositeStartSeconds`,
+and `compositeEndSeconds`, and carries those fields into the storage manifest.
+The release gate fails closed if a client-GUI video omits the fields or keeps a
+long target-searching warmup in the final PR-visible MP4. Large
 observer-follow frame diffs are accepted only when stable-target, centered,
 visible, action-motion, and static-tail evidence all pass, and the renderer
 records that decision as follow-camera motion tolerance for verifier review.

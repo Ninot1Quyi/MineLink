@@ -1164,7 +1164,13 @@ Release gates also run `scripts/dev/analyze-acceptance-video.mjs` against the
 raw Minecraft client MP4 before final composite rendering. That lightweight
 visual QA checks for obvious camera jumps, action-motion coverage, and long
 static tails over the task window, excluding recorder warmup before the active
-target is followed and centered. Normal mining/action motion must not be
+target is followed and centered. The published composite uses the same evidence
+window: it starts at the recorder-ready point with only a short preroll, records
+`recorderWarmupTrimmedForRelease` when warmup was removed, and writes
+`compositeStartSeconds` plus `compositeEndSeconds` to both origin metadata and
+the storage manifest. `check-video-review.mjs` fails closed when client-GUI
+evidence omits these fields or reports untrimmed target-searching warmup.
+Normal mining/action motion must not be
 misclassified as camera jitter. If the observer-follow camera produces large
 frame diffs while the target is stable, centered, visible, active, and the
 action-motion plus static-tail checks pass, the renderer records
@@ -1177,7 +1183,8 @@ settling, the finalizer may crop the final composite to the last visual action
 plus a short review hold. That crop is accepted only if the cropped analysis
 window still passes jitter, action-motion, and static-tail checks, and the
 origin metadata records `visualStaticTailTrimmedForRelease`,
-`visualLastMotionSeconds`, and `compositeDurationSeconds`. The crop is not a
+`visualLastMotionSeconds`, `compositeStartSeconds`, `compositeEndSeconds`, and
+`compositeDurationSeconds`. The crop is not a
 bypass for no-op or static videos; it only removes post-work waiting from the
 published evidence. Visual QA is only a release guardrail. It does not replace
 the playable MP4, scenario assertions, same-session Codex verifier, or MineLink
