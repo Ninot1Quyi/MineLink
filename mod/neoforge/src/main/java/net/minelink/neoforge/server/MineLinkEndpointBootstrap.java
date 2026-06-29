@@ -1606,6 +1606,7 @@ public final class MineLinkEndpointBootstrap {
             agent.entity.stopSleepInBed(false, true);
             JsonObject result = new JsonObject();
             result.addProperty("slept", true);
+            result.addProperty("native_sleep_path", "ServerPlayer.startSleepInBed");
             result.add("position", blockPosition(target.ref.pos));
             JsonObject response = toolCompleted(request);
             response.add("result", result);
@@ -3919,9 +3920,9 @@ public final class MineLinkEndpointBootstrap {
                     default -> 3.25D;
                 };
                 spawn = new Vec3(base.getX() + laneOffset, base.getY() + 3.0D, base.getZ() - 1.5D);
-            } else if (fixtureName.equals("guard_boundaries")) {
+            } else if (fixtureName.equals("guard_boundaries") || fixtureName.equals("sleep_smoke")) {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
-                seedGuardFixture(level, base);
+                seedGuardFixture(level, base, fixtureName.equals("sleep_smoke"));
                 spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
             } else if (fixtureName.equals("perception_shapes")) {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
@@ -4257,8 +4258,8 @@ public final class MineLinkEndpointBootstrap {
             container.setItem(slot, new ItemStack(item, count));
         }
 
-        private static void seedGuardFixture(ServerLevel level, BlockPos base) {
-            level.setDayTime(1_000L);
+        private static void seedGuardFixture(ServerLevel level, BlockPos base, boolean night) {
+            level.setDayTime(night ? 13_000L : 1_000L);
             for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -2), base.offset(10, 4, 4))) {
                 if (pos.getY() >= base.getY()) {
                     level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
@@ -4571,7 +4572,7 @@ public final class MineLinkEndpointBootstrap {
                 }
                 return positions.toArray(new BlockPos[0]);
             }
-            if (fixtureName.equals("guard_boundaries")) {
+            if (fixtureName.equals("guard_boundaries") || fixtureName.equals("sleep_smoke")) {
                 return new BlockPos[] {
                     fixtureBase.east(2),
                     fixtureBase.east(8),
@@ -4628,7 +4629,7 @@ public final class MineLinkEndpointBootstrap {
             if (state.is(BlockTags.BEDS)) {
                 extra.add("minelink:bed");
             }
-            if (fixtureName.equals("guard_boundaries")) {
+            if (fixtureName.equals("guard_boundaries") || fixtureName.equals("sleep_smoke")) {
                 if (pos.equals(fixtureBase.east(8)) && id.equals("minecraft:oak_log")) {
                     extra.add("minelink:far_fixture");
                 }
@@ -4690,7 +4691,7 @@ public final class MineLinkEndpointBootstrap {
         }
 
         private boolean canSee(BlockPos pos, BlockState state, BlockPos origin) {
-            if (!fixtureName.equals("guard_boundaries") && !fixtureName.equals("perception_shapes")) {
+            if (!fixtureName.equals("guard_boundaries") && !fixtureName.equals("sleep_smoke") && !fixtureName.equals("perception_shapes")) {
                 return true;
             }
             return !blockId(state).equals("minecraft:diamond_ore") || origin.getX() > fixtureBase.east(3).getX();

@@ -104,12 +104,13 @@ jobs:
               ;;
             guards)
               MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh guard_boundaries
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh sleep_smoke
               MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh body_lifecycle
               MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh perception_shapes
               ;;
             portal-soak)
               MINELINK_SKIP_BUILD=1 bash scripts/dev/e2e.sh portal_coop
-              MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,body_lifecycle,perception_shapes,portal_coop
+              MINELINK_SKIP_BUILD=1 bash scripts/dev/soak.sh --runtime neoforge --iterations 1 --scenarios furnace_smoke,craft_negative,guard_boundaries,sleep_smoke,body_lifecycle,perception_shapes,portal_coop
               ;;
             *)
               echo "Unknown NeoForge smoke group: ${{ matrix.group }}" >&2

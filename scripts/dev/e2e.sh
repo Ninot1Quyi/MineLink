@@ -49,6 +49,11 @@ case "$scenario" in
     report="$work_dir/reports/guard_boundaries-result.json"
     default_port="25580"
     ;;
+  sleep_smoke)
+    fixture="sleep_smoke"
+    report="$work_dir/reports/sleep_smoke-result.json"
+    default_port="25584"
+    ;;
   body_lifecycle)
     fixture="vanilla_tree"
     report="$work_dir/reports/body_lifecycle-result.json"

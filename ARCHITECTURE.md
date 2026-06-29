@@ -728,6 +728,7 @@ Use explicit scopes when the task carries product-risk:
 ```bash
 bash scripts/dev/verify-agent-task.sh --scope runtime
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
+bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios sleep_smoke
 bash scripts/dev/verify-agent-task.sh --scope install
 ```
 

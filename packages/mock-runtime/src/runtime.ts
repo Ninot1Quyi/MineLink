@@ -19,6 +19,7 @@ type FixtureName =
   | "furnace_smoke"
   | "portal_coop"
   | "guard_boundaries"
+  | "sleep_smoke"
   | "perception_shapes";
 type RuntimeResponse = Record<string, unknown>;
 type RuntimeRequest = RuntimeResponse & { id?: string; type?: string };
@@ -292,7 +293,7 @@ export class MockRuntimeServer {
             inventory: true,
             container_basic: this.fixture === "craft_smoke",
             crafting_basic: this.fixture === "craft_smoke",
-            sleep_basic: this.fixture === "guard_boundaries",
+            sleep_basic: this.fixture === "guard_boundaries" || this.fixture === "sleep_smoke",
             social_events: true,
             notice_board: true,
             complex_gui: false,
@@ -1150,6 +1151,26 @@ export class MockRuntimeServer {
     if (!refState.ref.tags.includes("minelink:bed")) {
       return runtimeFail("unsupported_capability", "The referenced block is not a bed.");
     }
+    if (this.fixture === "sleep_smoke") {
+      this.trace({
+        event: "agent.action",
+        action: "sleep",
+        agent_id: agent.agentId,
+        target_ref: targetRef,
+        slept: true,
+        sleep_context: "night"
+      });
+      return {
+        ok: true,
+        status: "completed",
+        result: {
+          slept: true,
+          sleep_context: "night",
+          native_sleep_path: "ServerPlayer.startSleepInBed"
+        }
+      };
+    }
+
     this.trace({
       event: "agent.action",
       action: "sleep",
@@ -2157,7 +2178,7 @@ export class MockRuntimeServer {
 }
 
 function createFixtureBlocks(fixture: FixtureName): BlockState[] {
-  if (fixture === "guard_boundaries") {
+  if (fixture === "guard_boundaries" || fixture === "sleep_smoke") {
     return [
       {
         id: "minecraft:oak_log",
@@ -2650,6 +2671,7 @@ function stackPayloadOrNull(stack: ItemStack | null): JsonObject | null {
 
 export function parseFixture(value: string | undefined): FixtureName {
   if (value === "guard_boundaries") return "guard_boundaries";
+  if (value === "sleep_smoke") return "sleep_smoke";
   if (value === "perception_shapes") return "perception_shapes";
   if (value === "portal_coop") return "portal_coop";
   if (value === "furnace_smoke") return "furnace_smoke";

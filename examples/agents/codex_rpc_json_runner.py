@@ -354,6 +354,7 @@ def scenario_objective(scenario: str) -> str:
         "furnace_smoke": "Use MineLink MCP tools to move raw iron and coal from a chest into a reachable furnace, wait for vanilla furnace processing, and take the iron ingot output.",
         "craft_negative": "Use MineLink MCP tools to prove container and crafting failures return structured boundary reasons.",
         "guard_boundaries": "Use MineLink MCP tools to prove server_agent guard checks reject unobserved, expired, too-far, hidden, missing-material, movement-collision, and sleep-limited actions.",
+        "sleep_smoke": "Use MineLink MCP tools to observe a reachable bed at night and prove action.sleep succeeds through the native server player sleep path.",
         "body_lifecycle": "Use MineLink MCP tools to freeze, restore, and remove one same-process server_agent body while proving queued action cancellation, frozen action rejection, and quota release metadata.",
         "perception_shapes": "Use MineLink MCP tools to prove limited perception classifies visible translucent, decorative, fluid, partial-occluder, and opaque fixtures while hiding a blocked ore.",
         "portal_coop": "Use three MineLink server_agent bodies and only public MCP tools to exchange local social and notice-board events, withdraw shared materials, place an obsidian Nether portal frame, ignite it, and prove portal blocks exist.",
