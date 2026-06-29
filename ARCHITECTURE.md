@@ -1077,6 +1077,9 @@ defaults to three visible candidates. `render-client-capture-video.mjs`,
 when that count is missing or mismatched, or when the selected target identity
 is unstable. This blocks clips that frame the recorder player, a different
 MineLink body, or an ambiguous group of agents as evidence for the task agent.
+The `portal_coop` replay must also prove all three builders can move through
+public `action.move` before portal work continues; the video gate must not
+accept a static three-agent group that only appears after the work is done.
 The server-side recorder helper
 must log `MineLink recorder target moved server_agent` after the active
 `server_agent` body visibly moves during the recorded scenario; the renderer

@@ -3913,7 +3913,12 @@ public final class MineLinkEndpointBootstrap {
                     seedPortalFixture(level, portalBase);
                 }
                 base = portalBase;
-                spawn = new Vec3(base.getX() + 1.5D, base.getY() + 3.0D, base.getZ() - 2.0D);
+                double laneOffset = switch (agentSeq) {
+                    case 1 -> 1.25D;
+                    case 2 -> 2.25D;
+                    default -> 3.25D;
+                };
+                spawn = new Vec3(base.getX() + laneOffset, base.getY() + 3.0D, base.getZ() - 1.5D);
             } else if (fixtureName.equals("guard_boundaries")) {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedGuardFixture(level, base);
@@ -4307,6 +4312,9 @@ public final class MineLinkEndpointBootstrap {
                 if (pos.getY() >= anchor.getY()) {
                     level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
                 }
+            }
+            for (BlockPos pos : BlockPos.betweenClosed(anchor.offset(1, 2, -2), anchor.offset(3, 2, -2))) {
+                level.setBlockAndUpdate(pos.immutable(), Blocks.OAK_PLANKS.defaultBlockState());
             }
             level.setBlockAndUpdate(anchor.below(), Blocks.GRASS_BLOCK.defaultBlockState());
             level.setBlockAndUpdate(anchor, Blocks.NETHERRACK.defaultBlockState());

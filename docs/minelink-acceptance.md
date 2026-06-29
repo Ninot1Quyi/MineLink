@@ -578,9 +578,12 @@ Current status:
   `visibility`, `distance_band`, and `board_id`, while forbidding source
   position, board position, radius, observer distance, and recipient internals.
 - The portal cooperation replay also asserts that all three builders contribute
-  successful `block.place` actions and that portal ignition reports
-  `activated: "minecraft:nether_portal"` rather than relying only on a generic
-  successful `action.use` call.
+  successful `block.place` actions, that all three builders perform successful
+  non-colliding `action.move` steps before the portal work continues, and that
+  portal ignition reports `activated: "minecraft:nether_portal"` rather than
+  relying only on a generic successful `action.use` call. The movement evidence
+  is still a bounded fixture slice; it does not yet prove full client-equivalent
+  locomotion, pathfinding, jump/fall handling, or animation parity.
 - This is not full Gate 8 acceptance yet. Human chat interaction, restart-durable
   A2A/social persistence, distance-limited social discovery, orders,
   letters/telegraph placeholders, and broader rate-limited agent-to-agent

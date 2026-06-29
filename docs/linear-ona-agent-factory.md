@@ -1054,6 +1054,10 @@ before and during task work are not releaseable evidence. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 The workflow also uploads `acceptance-storyboard.png` and
 `acceptance-storyboard.json` as a separate small artifact for fast visual QA.
+For `portal_coop`, the task report must additionally prove three visible
+`server_agent` candidates and successful public `action.move` calls distributed
+across `builder_a`, `builder_b`, and `builder_c`; a static clip of three bodies
+standing near a completed portal is not sufficient release evidence.
 That artifact is only an inspection aid; PR release still requires the playable
 MP4, storage manifest, same-session verifier report, and release gate.
 
