@@ -1049,3 +1049,18 @@ jobs:
             --blocker "${MINELINK_FINAL_VIDEO_BLOCKER:-}" \
             --require-platform-codex-implementation \
             --require-platform-codex-verifier
+
+      - name: Upload final chain report evidence
+        if: ${{ always() && ((inputs.mode || 'identity-canary') == 'full-chain-canary' || (inputs.mode || 'identity-canary') == 'full-chain-task') && inputs.create_pr == 'true' && steps.ona-video-release.outputs.video-url != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: minelink-agent-factory-final-chain
+          path: |
+            .minelink-dev/reports/agent-factory-chain.md
+            .minelink-dev/reports/agent-factory-chain.json
+            .minelink-dev/reports/pr-video-evidence-comment.md
+            .minelink-dev/reports/pr-video-evidence-comment.json
+            .minelink-dev/reports/github-status.md
+            .minelink-dev/reports/github-status.json
+            .minelink-dev/reports/linear-sync.md
+          include-hidden-files: true

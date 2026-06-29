@@ -1154,6 +1154,11 @@ requires the explicit raw GitHub Web `user_session` secret
 `GH_SESSION_TOKEN` as the same raw value and synthesizes the matching
 `user_session`, `__Host-user_session_same_site`, and `logged_in` cookie header
 for upload-policy CSRF checks.
+Because the main probe artifact must be uploaded before the PR video comment to
+provide an artifact URL, the workflow uploads a second
+`minelink-agent-factory-final-chain` artifact after final status sync. That
+small artifact is the source of truth for post-video chain status,
+`pr-video-evidence-comment.*`, and final GitHub/Linear writeback reports.
 PATs and `GITHUB_TOKEN` can identify the repository but do not create comment
 attachments by themselves, and they cannot be exchanged for a GitHub web session
 cookie. Per-page upload tokens,
