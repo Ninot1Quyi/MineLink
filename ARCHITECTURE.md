@@ -443,7 +443,7 @@ implementation AgentService readback, review request hashes, and the remote
 verifier canary
 into `.minelink-dev/reports/ona-codex-video-verifier-session.md` and materializes
 the local `.minelink-dev/reports/artifacts/video-review.md` consumed by the
-release gate. Existing verifier canary files are treated the same way as
+release gate without dropping any required verifier markers. Existing verifier canary files are treated the same way as
 implementation canaries: the fetcher waits for current task, branch, reviewed
 commit, implementation session id, Goal-mode marker, summary hash, MP4 hash,
 and video producer before passing. This proves only the bounded

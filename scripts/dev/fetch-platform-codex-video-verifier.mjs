@@ -299,12 +299,17 @@ function reviewRequestEvidence(text) {
   const recorderClientFollow = markerValue(text, "Recorder client follow");
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
+  const recorderVisibleAgentCountMatchesExpectation = markerValue(text, "Recorder visible agent count matches expectation");
+  const recorderSelectedTargetStable = markerValue(text, "Recorder selected target stable");
   const recorderReadyBeforeScenario = markerValue(text, "Recorder ready before scenario");
   const recorderWorkCoverageAdequate = markerValue(text, "Recorder work coverage adequate");
   const recorderVisibleMining = markerValue(text, "Recorder visible mining");
   const recorderVisibleMiningDurationAdequate = markerValue(text, "Recorder visible mining duration adequate");
   const requiresVisibleMining = markerValue(text, "Requires visible mining");
   const recorderScenarioActionVisible = markerValue(text, "Recorder scenario action visible");
+  const visualQaPassed = markerValue(text, "Visual QA passed");
+  const visualJitterPassed = markerValue(text, "Visual jitter passed");
+  const visualActionMotionCoveragePassed = markerValue(text, "Visual action motion coverage passed");
   const submittedActionsTerminalConfirmed = markerValue(text, "Submitted actions terminal confirmed");
   const recorderWorkVisible = markerValue(text, "Recorder work visible");
   const serverAgentTaskActionVisible = markerValue(text, "Server agent task action visible");
@@ -375,6 +380,20 @@ function reviewRequestEvidence(text) {
     } else {
       evidence.push("Review request recorder target-visible marker present");
     }
+    if (!/^yes$/i.test(recorderVisibleAgentCountMatchesExpectation)) {
+      failures.push(
+        `Video review request requires expected visible server_agent count but got ${recorderVisibleAgentCountMatchesExpectation || "missing"}.`,
+      );
+    } else {
+      evidence.push("Review request visible server_agent count marker present");
+    }
+    if (!/^yes$/i.test(recorderSelectedTargetStable)) {
+      failures.push(
+        `Video review request requires stable unambiguous recorder target identity but got ${recorderSelectedTargetStable || "missing"}.`,
+      );
+    } else {
+      evidence.push("Review request recorder target identity marker present");
+    }
     if (!/^yes$/i.test(recorderReadyBeforeScenario)) {
       failures.push(
         `Video review request requires recorder readiness before task work but got ${recorderReadyBeforeScenario || "missing"}.`,
@@ -400,6 +419,23 @@ function reviewRequestEvidence(text) {
       );
     } else {
       evidence.push("Review request scenario-specific visible task action marker present");
+    }
+    if (!/^yes$/i.test(visualQaPassed)) {
+      failures.push(`Video review request requires passing visual QA but got ${visualQaPassed || "missing"}.`);
+    } else {
+      evidence.push("Review request visual QA marker present");
+    }
+    if (!/^yes$/i.test(visualJitterPassed)) {
+      failures.push(`Video review request requires jitter-free enough footage but got ${visualJitterPassed || "missing"}.`);
+    } else {
+      evidence.push("Review request visual jitter marker present");
+    }
+    if (!/^yes$/i.test(visualActionMotionCoveragePassed)) {
+      failures.push(
+        `Video review request requires visual action-motion coverage but got ${visualActionMotionCoveragePassed || "missing"}.`,
+      );
+    } else {
+      evidence.push("Review request visual action-motion marker present");
     }
     if (!/^yes$/i.test(submittedActionsTerminalConfirmed)) {
       failures.push(
@@ -439,12 +475,17 @@ function reviewRequestEvidence(text) {
     recorderClientFollow,
     recorderClientTargetCentered,
     recorderClientTargetVisible,
+    recorderVisibleAgentCountMatchesExpectation,
+    recorderSelectedTargetStable,
     recorderReadyBeforeScenario,
     recorderWorkCoverageAdequate,
     recorderVisibleMining,
     recorderVisibleMiningDurationAdequate,
     requiresVisibleMining,
     recorderScenarioActionVisible,
+    visualQaPassed,
+    visualJitterPassed,
+    visualActionMotionCoveragePassed,
     submittedActionsTerminalConfirmed,
     recorderWorkVisible,
     serverAgentTaskActionVisible,
@@ -477,12 +518,17 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   const recorderClientFollow = markerValue(text, "Recorder client follow");
   const recorderClientTargetCentered = markerValue(text, "Recorder client target centered");
   const recorderClientTargetVisible = markerValue(text, "Recorder client target visible");
+  const recorderVisibleAgentCountMatchesExpectation = markerValue(text, "Recorder visible agent count matches expectation");
+  const recorderSelectedTargetStable = markerValue(text, "Recorder selected target stable");
   const recorderReadyBeforeScenario = markerValue(text, "Recorder ready before scenario");
   const recorderWorkCoverageAdequate = markerValue(text, "Recorder work coverage adequate");
   const recorderVisibleMining = markerValue(text, "Recorder visible mining");
   const recorderVisibleMiningDurationAdequate = markerValue(text, "Recorder visible mining duration adequate");
   const requiresVisibleMining = markerValue(text, "Requires visible mining");
   const recorderScenarioActionVisible = markerValue(text, "Recorder scenario action visible");
+  const visualQaPassed = markerValue(text, "Visual QA passed");
+  const visualJitterPassed = markerValue(text, "Visual jitter passed");
+  const visualActionMotionCoveragePassed = markerValue(text, "Visual action motion coverage passed");
   const submittedActionsTerminalConfirmed = markerValue(text, "Submitted actions terminal confirmed");
   const recorderWorkVisible = markerValue(text, "Recorder work visible");
   const serverAgentTaskActionVisible = markerValue(text, "Server agent task action visible");
@@ -582,6 +628,18 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
   } else if (/^yes$/i.test(recorderClientTargetVisible)) {
     evidence.push("verifier canary recorder target-visible marker accepted");
   }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderVisibleAgentCountMatchesExpectation)) {
+    failures.push(
+      `Verifier canary Recorder visible agent count matches expectation is not yes: ${recorderVisibleAgentCountMatchesExpectation || "missing"}.`,
+    );
+  } else if (/^yes$/i.test(recorderVisibleAgentCountMatchesExpectation)) {
+    evidence.push("verifier canary visible server_agent count marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderSelectedTargetStable)) {
+    failures.push(`Verifier canary Recorder selected target stable is not yes: ${recorderSelectedTargetStable || "missing"}.`);
+  } else if (/^yes$/i.test(recorderSelectedTargetStable)) {
+    evidence.push("verifier canary stable target identity marker accepted");
+  }
   if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(recorderReadyBeforeScenario)) {
     failures.push(`Verifier canary Recorder ready before scenario is not yes: ${recorderReadyBeforeScenario || "missing"}.`);
   } else if (/^yes$/i.test(recorderReadyBeforeScenario)) {
@@ -612,6 +670,23 @@ function validateVerifierCanary(text, agentExecutionId, expected) {
     failures.push(`Verifier canary Recorder scenario action visible is not yes: ${recorderScenarioActionVisible || "missing"}.`);
   } else if (/^yes$/i.test(recorderScenarioActionVisible)) {
     evidence.push("verifier canary scenario-specific visible task action marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(visualQaPassed)) {
+    failures.push(`Verifier canary Visual QA passed is not yes: ${visualQaPassed || "missing"}.`);
+  } else if (/^yes$/i.test(visualQaPassed)) {
+    evidence.push("verifier canary visual QA marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(visualJitterPassed)) {
+    failures.push(`Verifier canary Visual jitter passed is not yes: ${visualJitterPassed || "missing"}.`);
+  } else if (/^yes$/i.test(visualJitterPassed)) {
+    evidence.push("verifier canary visual jitter marker accepted");
+  }
+  if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(visualActionMotionCoveragePassed)) {
+    failures.push(
+      `Verifier canary Visual action motion coverage passed is not yes: ${visualActionMotionCoveragePassed || "missing"}.`,
+    );
+  } else if (/^yes$/i.test(visualActionMotionCoveragePassed)) {
+    evidence.push("verifier canary visual action-motion marker accepted");
   }
   if (/^yes$/i.test(expected.clientGuiCaptureRequired) && !/^yes$/i.test(submittedActionsTerminalConfirmed)) {
     failures.push(
@@ -709,12 +784,17 @@ const reviewLines = [
   `Recorder client follow: ${request.recorderClientFollow || "missing"}`,
   `Recorder client target centered: ${request.recorderClientTargetCentered || "missing"}`,
   `Recorder client target visible: ${request.recorderClientTargetVisible || "missing"}`,
+  `Recorder visible agent count matches expectation: ${request.recorderVisibleAgentCountMatchesExpectation || "missing"}`,
+  `Recorder selected target stable: ${request.recorderSelectedTargetStable || "missing"}`,
   `Recorder ready before scenario: ${request.recorderReadyBeforeScenario || "missing"}`,
   `Recorder work coverage adequate: ${request.recorderWorkCoverageAdequate || "missing"}`,
   `Recorder visible mining: ${request.recorderVisibleMining || "missing"}`,
   `Recorder visible mining duration adequate: ${request.recorderVisibleMiningDurationAdequate || "missing"}`,
   `Requires visible mining: ${request.requiresVisibleMining || "missing"}`,
   `Recorder scenario action visible: ${request.recorderScenarioActionVisible || "missing"}`,
+  `Visual QA passed: ${request.visualQaPassed || "missing"}`,
+  `Visual jitter passed: ${request.visualJitterPassed || "missing"}`,
+  `Visual action motion coverage passed: ${request.visualActionMotionCoveragePassed || "missing"}`,
   `Submitted actions terminal confirmed: ${request.submittedActionsTerminalConfirmed || "missing"}`,
   `Recorder work visible: ${request.recorderWorkVisible || "missing"}`,
   `Server agent task action visible: ${request.serverAgentTaskActionVisible || "missing"}`,
