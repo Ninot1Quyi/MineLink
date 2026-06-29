@@ -210,7 +210,7 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
         point: { type: "array", minItems: 3, maxItems: 3, items: { type: "number" } }
       }
     },
-    failure_reasons: ["unknown_or_unobserved_target", "expired_ref"]
+    failure_reasons: ["unknown_or_unobserved_target", "expired_ref", "target_not_visible", "target_not_visible_from_current_view"]
   },
   {
     name: "action.mine_visible_block",
@@ -226,7 +226,14 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
       }
     },
     preconditions: ["block_ref comes from a recent observe.scene result", "target is visible and reachable"],
-    failure_reasons: ["unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "wrong_tool"]
+    failure_reasons: [
+      "unknown_or_unobserved_target",
+      "expired_ref",
+      "target_too_far",
+      "target_not_visible",
+      "target_not_visible_from_current_view",
+      "wrong_tool"
+    ]
   },
   {
     name: "action.use",
@@ -241,7 +248,14 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
         face: { type: "string", enum: ["up", "down", "north", "south", "east", "west"] }
       }
     },
-    failure_reasons: ["unsupported_capability", "target_too_far", "target_not_visible", "missing_material", "blocked"]
+    failure_reasons: [
+      "unsupported_capability",
+      "target_too_far",
+      "target_not_visible",
+      "target_not_visible_from_current_view",
+      "missing_material",
+      "blocked"
+    ]
   },
   {
     name: "action.sleep",
@@ -261,6 +275,7 @@ export const DYNAMIC_TOOLS: DynamicToolDefinition[] = [
       "expired_ref",
       "target_too_far",
       "target_not_visible",
+      "target_not_visible_from_current_view",
       "unsupported_capability",
       "blocked"
     ]

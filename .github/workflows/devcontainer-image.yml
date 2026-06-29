@@ -13,8 +13,6 @@ on:
       - "package-lock.json"
       - "tsconfig*.json"
       - "vitest.config.ts"
-      - "packages/**"
-      - "examples/**"
       - "scripts/dev/check-devcontainer-image-access.sh"
       - "mod/neoforge/build.gradle"
       - "mod/neoforge/settings.gradle"
@@ -22,7 +20,6 @@ on:
       - "mod/neoforge/gradlew"
       - "mod/neoforge/gradlew.bat"
       - "mod/neoforge/gradle/**"
-      - "mod/neoforge/src/**"
 
 permissions:
   contents: read

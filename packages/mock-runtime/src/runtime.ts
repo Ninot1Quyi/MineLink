@@ -20,6 +20,7 @@ type FixtureName =
   | "portal_coop"
   | "guard_boundaries"
   | "sleep_smoke"
+  | "visibility_stale"
   | "perception_shapes";
 type RuntimeResponse = Record<string, unknown>;
 type RuntimeRequest = RuntimeResponse & { id?: string; type?: string };
@@ -359,7 +360,7 @@ export class MockRuntimeServer {
       bodyId,
       ownerId,
       bodyStatus: "active",
-      position: this.fixture === "portal_coop" ? [1.5, 66, -2] : [0, 64, 0],
+      position: this.fixture === "portal_coop" ? [1.5, 66, -2] : this.fixture === "visibility_stale" ? [5, 64, 3] : [0, 64, 0],
       yaw: 0,
       pitch: 0,
       inventory: Array.from({ length: PLAYER_INVENTORY_SLOT_LIMIT }, () => null),
@@ -839,7 +840,7 @@ export class MockRuntimeServer {
   }
 
   private resolveMove(origin: Vec3, requested: Vec3): { moved: Vec3; collision: boolean } {
-    if (this.fixture !== "guard_boundaries") {
+    if (this.fixture !== "guard_boundaries" && this.fixture !== "visibility_stale") {
       return { moved: requested, collision: false };
     }
     const steps = Math.max(1, Math.ceil(Math.hypot(...requested) / 0.05));
@@ -869,6 +870,10 @@ export class MockRuntimeServer {
     if (ref) {
       const refState = this.validateRef(agent, ref);
       if (!refState.ok) return refState;
+      if (refState.ref.kind === "block") {
+        const visibleState = this.validateCurrentBlockVisibility(agent, refState.ref);
+        if (visibleState) return visibleState;
+      }
       agent.lookedAtRef = ref;
     }
     agent.yaw = 90;
@@ -895,6 +900,9 @@ export class MockRuntimeServer {
     const block = this.blocks.find((candidate) => samePos(candidate.pos, ref.pos) && candidate.id === ref.id);
     if (!block || block.mined) {
       return runtimeFail("target_not_visible", "Block is no longer present.");
+    }
+    if (!this.isVisibleFromAgent(agent, block)) {
+      return runtimeFail("target_not_visible_from_current_view", "The observed block is no longer visible from the current body position.");
     }
     if (PICKAXE_HARVEST_BLOCKS.has(block.id) && !hasPickaxe(agent)) {
       return runtimeFail("wrong_tool", "A pickaxe is required to harvest this block.");
@@ -933,6 +941,11 @@ export class MockRuntimeServer {
       const refState = this.validateRef(agent, targetRef);
       if (!refState.ok) return refState;
       if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside use range.");
+      const currentBlock = this.blocks.find((candidate) => samePos(candidate.pos, refState.ref.pos) && candidate.id === refState.ref.id && !candidate.mined);
+      if (!currentBlock) return runtimeFail("target_not_visible", "Block is no longer present.");
+      if (!this.isVisibleFromAgent(agent, currentBlock)) {
+        return runtimeFail("target_not_visible_from_current_view", "The observed block is no longer visible from the current body position.");
+      }
       if (item && this.inventoryCount(agent, item) <= 0) {
         return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
       }
@@ -1148,6 +1161,8 @@ export class MockRuntimeServer {
     const refState = this.validateRef(agent, targetRef);
     if (!refState.ok) return refState;
     if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Bed is outside sleep interaction range.");
+    const visibleState = this.validateCurrentBlockVisibility(agent, refState.ref);
+    if (visibleState) return visibleState;
     if (!refState.ref.tags.includes("minelink:bed")) {
       return runtimeFail("unsupported_capability", "The referenced block is not a bed.");
     }
@@ -1189,8 +1204,10 @@ export class MockRuntimeServer {
     const refState = this.validateRef(agent, blockRef);
     if (!refState.ok) return refState;
     if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Container is outside interaction range.");
+    const visibleState = this.validateCurrentBlockVisibility(agent, refState.ref);
+    if (visibleState) return visibleState;
 
-    const block = this.blocks.find((candidate) => samePos(candidate.pos, refState.ref.pos) && candidate.id === refState.ref.id);
+    const block = this.currentBlockForRef(refState.ref);
     if (!block?.container) {
       return runtimeFail("unsupported_capability", "The referenced block is not a supported server-side container.");
     }
@@ -1913,10 +1930,12 @@ export class MockRuntimeServer {
     if (distance3(agent.position, ref.pos) > 6) {
       return runtimeFail("target_too_far", "Create component is outside inspect range.");
     }
+    const visibleState = this.validateCurrentBlockVisibility(agent, ref);
+    if (visibleState) return visibleState;
     if (!ref.tags.includes("create:component")) {
       return runtimeFail("unsupported_capability", "The referenced block is not a supported Create component for this adapter slice.");
     }
-    const block = this.blocks.find((candidate) => samePos(candidate.pos, ref.pos) && candidate.id === ref.id && !candidate.mined);
+    const block = this.currentBlockForRef(ref);
     const currentRef = { ...ref, metadata: block?.metadata ?? ref.metadata };
     const create = createComponentSemantics(currentRef);
     return {
@@ -1932,6 +1951,7 @@ export class MockRuntimeServer {
           "expired_ref",
           "target_too_far",
           "target_not_visible",
+          "target_not_visible_from_current_view",
           "unsupported_capability"
         ]
       }
@@ -1944,6 +1964,8 @@ export class MockRuntimeServer {
     const refState = this.validateRef(agent, targetRef);
     if (!refState.ok) return refState;
     if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside placement range.");
+    const visibleState = this.validateCurrentBlockVisibility(agent, refState.ref);
+    if (visibleState) return visibleState;
     if (!isPlaceableBlockItem(item)) {
       return runtimeFail("unsupported_capability", "block.place requires a placeable block item.");
     }
@@ -2015,7 +2037,7 @@ export class MockRuntimeServer {
   }
 
   private isVisibleFromAgent(agent: AgentState, block: BlockState): boolean {
-    if (this.fixture !== "guard_boundaries" && this.fixture !== "perception_shapes") {
+    if (this.fixture !== "guard_boundaries" && this.fixture !== "visibility_stale" && this.fixture !== "perception_shapes") {
       return true;
     }
     if (block.id !== "minecraft:diamond_ore") {
@@ -2038,6 +2060,19 @@ export class MockRuntimeServer {
     const currentDistance = round(distance3(agent.position, existing.pos));
     existing.distance = currentDistance;
     return { ok: true, ref: existing };
+  }
+
+  private currentBlockForRef(ref: VisibleRef): BlockState | undefined {
+    return this.blocks.find((candidate) => samePos(candidate.pos, ref.pos) && candidate.id === ref.id && !candidate.mined);
+  }
+
+  private validateCurrentBlockVisibility(agent: AgentState, ref: VisibleRef): RuntimeResponse | null {
+    const block = this.currentBlockForRef(ref);
+    if (!block) return runtimeFail("target_not_visible", "Block is no longer present.");
+    if (!this.isVisibleFromAgent(agent, block)) {
+      return runtimeFail("target_not_visible_from_current_view", "The observed block is no longer visible from the current body position.");
+    }
+    return null;
   }
 
   private hasCompletePortalFrame(): boolean {
@@ -2208,6 +2243,35 @@ function createFixtureBlocks(fixture: FixtureName): BlockState[] {
         id: "minecraft:diamond_ore",
         pos: [4, 64, 0],
         tags: ["minecraft:diamond_ore", "minelink:hidden_fixture"],
+        visibleFaces: ["west", "north", "up"]
+      }
+    ];
+  }
+
+  if (fixture === "visibility_stale") {
+    return [
+      {
+        id: "minecraft:stone",
+        pos: [2, 64, -1],
+        tags: ["minecraft:stone", "minelink:opaque_fixture"],
+        visibleFaces: ["west", "east", "up"]
+      },
+      {
+        id: "minecraft:stone",
+        pos: [2, 64, 0],
+        tags: ["minecraft:stone", "minelink:opaque_fixture"],
+        visibleFaces: ["west", "east", "up"]
+      },
+      {
+        id: "minecraft:stone",
+        pos: [2, 64, 1],
+        tags: ["minecraft:stone", "minelink:opaque_fixture"],
+        visibleFaces: ["west", "east", "up"]
+      },
+      {
+        id: "minecraft:diamond_ore",
+        pos: [4, 64, 0],
+        tags: ["minecraft:diamond_ore", "minelink:stale_visibility_target"],
         visibleFaces: ["west", "north", "up"]
       }
     ];
@@ -2672,6 +2736,7 @@ function stackPayloadOrNull(stack: ItemStack | null): JsonObject | null {
 export function parseFixture(value: string | undefined): FixtureName {
   if (value === "guard_boundaries") return "guard_boundaries";
   if (value === "sleep_smoke") return "sleep_smoke";
+  if (value === "visibility_stale") return "visibility_stale";
   if (value === "perception_shapes") return "perception_shapes";
   if (value === "portal_coop") return "portal_coop";
   if (value === "furnace_smoke") return "furnace_smoke";

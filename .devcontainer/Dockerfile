@@ -73,7 +73,14 @@ RUN npm ci \
 
 RUN chmod +x mod/neoforge/gradlew \
   && if [ "${MINELINK_PREWARM_GRADLE}" = "1" ]; then \
-    cd mod/neoforge && ./gradlew --no-daemon build; \
+    cd mod/neoforge; \
+    for attempt in 1 2 3; do \
+      ./gradlew --no-daemon build && break; \
+      status="$?"; \
+      if [ "$attempt" = "3" ]; then exit "$status"; fi; \
+      echo "Gradle prewarm failed with exit ${status}; retrying attempt $((attempt + 1))/3 after Maven/Gradle backoff"; \
+      sleep $((attempt * 20)); \
+    done; \
   else \
     echo "MINELINK_PREWARM_GRADLE=${MINELINK_PREWARM_GRADLE}; skipping Gradle cache prewarm"; \
   fi

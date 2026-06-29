@@ -1315,6 +1315,14 @@ public final class MineLinkEndpointBootstrap {
         if (blockRef.expired()) {
             return failure(request, "expired_ref", "Block ref has expired.");
         }
+        ServerLevel level = server.overworld();
+        BlockState state = level.getBlockState(blockRef.pos);
+        if (state.isAir() || !blockId(state).equals(blockRef.blockId)) {
+            return failure(request, "target_not_visible", "The observed block is no longer present.");
+        }
+        if (!agent.canSee(blockRef.pos, state, agent.blockPosition())) {
+            return failure(request, "target_not_visible_from_current_view", "The observed block is no longer visible from the current server_agent view.");
+        }
         agent.entity.moveTo(
             agent.position().x,
             agent.position().y,
@@ -1352,6 +1360,9 @@ public final class MineLinkEndpointBootstrap {
         BlockState state = level.getBlockState(blockRef.pos);
         if (state.isAir() || !blockId(state).equals(blockRef.blockId)) {
             return failure(request, "target_not_visible", "The observed block is no longer present.");
+        }
+        if (!agent.canSee(blockRef.pos, state, agent.blockPosition())) {
+            return failure(request, "target_not_visible_from_current_view", "The observed block is no longer visible from the current server_agent view.");
         }
         if (!level.mayInteract(agent.entity, blockRef.pos)) {
             return failure(request, "blocked", "The server rejected interaction with this block.");
@@ -2310,6 +2321,9 @@ public final class MineLinkEndpointBootstrap {
         BlockState state = level.getBlockState(blockRef.pos);
         if (state.isAir() || !blockId(state).equals(blockRef.blockId)) {
             return new InteractionTarget(null, failure(request, "target_not_visible", "The observed block is no longer present."));
+        }
+        if (!agent.canSee(blockRef.pos, state, agent.blockPosition())) {
+            return new InteractionTarget(null, failure(request, "target_not_visible_from_current_view", "The observed block is no longer visible from the current server_agent view."));
         }
         if (blockRef.pos.getY() >= level.getMaxBuildHeight() || !level.mayInteract(agent.entity, blockRef.pos)) {
             return new InteractionTarget(null, failure(request, "blocked", "The server rejected interaction with the target block."));
@@ -3473,7 +3487,7 @@ public final class MineLinkEndpointBootstrap {
                     prop("point", arraySchema("number"))
                 )),
                 List.of("action", "look"),
-                List.of("unknown_or_unobserved_target", "expired_ref"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_not_visible", "target_not_visible_from_current_view"),
                 List.of()
             ),
             tool(
@@ -3485,7 +3499,7 @@ public final class MineLinkEndpointBootstrap {
                     prop("tool_policy", stringSchema("best_available"))
                 ), "block_ref"),
                 List.of("action", "mine", "survival"),
-                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "wrong_tool"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "target_not_visible_from_current_view", "wrong_tool"),
                 List.of("block_ref comes from a recent observe.scene result", "target is visible and reachable")
             ),
             tool(
@@ -3499,7 +3513,7 @@ public final class MineLinkEndpointBootstrap {
                     prop("face", enumSchema("up", "down", "north", "south", "east", "west"))
                 )),
                 List.of("action", "use"),
-                List.of("unsupported_capability", "target_too_far", "target_not_visible", "missing_material", "blocked"),
+                List.of("unsupported_capability", "target_too_far", "target_not_visible", "target_not_visible_from_current_view", "missing_material", "blocked"),
                 List.of()
             ),
             tool(
@@ -3508,7 +3522,7 @@ public final class MineLinkEndpointBootstrap {
                 "Uses the native server sleep path and returns vanilla sleep rejection as a structured failure.",
                 objectSchema(properties(prop("target_ref", stringSchema())), "target_ref"),
                 List.of("action", "sleep", "survival"),
-                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "unsupported_capability", "blocked"),
+                List.of("unknown_or_unobserved_target", "expired_ref", "target_too_far", "target_not_visible", "target_not_visible_from_current_view", "unsupported_capability", "blocked"),
                 List.of("target_ref comes from a recent observe.scene result", "target is a visible reachable bed")
             ),
             tool(
@@ -3920,10 +3934,12 @@ public final class MineLinkEndpointBootstrap {
                     default -> 3.25D;
                 };
                 spawn = new Vec3(base.getX() + laneOffset, base.getY() + 3.0D, base.getZ() - 1.5D);
-            } else if (fixtureName.equals("guard_boundaries") || fixtureName.equals("sleep_smoke")) {
+            } else if (fixtureName.equals("guard_boundaries") || fixtureName.equals("sleep_smoke") || fixtureName.equals("visibility_stale")) {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
-                seedGuardFixture(level, base, fixtureName.equals("sleep_smoke"));
-                spawn = new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
+                seedGuardFixture(level, base, fixtureName.equals("sleep_smoke"), fixtureName.equals("visibility_stale"));
+                spawn = fixtureName.equals("visibility_stale")
+                    ? new Vec3(base.getX() + 5.5D, base.getY(), base.getZ() + 3.5D)
+                    : new Vec3(base.getX() + 0.5D, base.getY(), base.getZ() + 0.5D);
             } else if (fixtureName.equals("perception_shapes")) {
                 base = level.getSharedSpawnPos().offset(2 + agentSeq, 2, 2).immutable();
                 seedPerceptionFixture(level, base);
@@ -4258,7 +4274,7 @@ public final class MineLinkEndpointBootstrap {
             container.setItem(slot, new ItemStack(item, count));
         }
 
-        private static void seedGuardFixture(ServerLevel level, BlockPos base, boolean night) {
+        private static void seedGuardFixture(ServerLevel level, BlockPos base, boolean night, boolean staleVisibility) {
             level.setDayTime(night ? 13_000L : 1_000L);
             for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -2), base.offset(10, 4, 4))) {
                 if (pos.getY() >= base.getY()) {
@@ -4270,6 +4286,11 @@ public final class MineLinkEndpointBootstrap {
             level.setBlockAndUpdate(base.east(8), Blocks.OAK_LOG.defaultBlockState());
             level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());
             level.setBlockAndUpdate(base.east(4), Blocks.DIAMOND_ORE.defaultBlockState());
+            if (staleVisibility) {
+                level.setBlockAndUpdate(base.east(3).north(), Blocks.STONE.defaultBlockState());
+                level.setBlockAndUpdate(base.east(3).south(), Blocks.STONE.defaultBlockState());
+                level.setBlockAndUpdate(base.east(4), Blocks.DIAMOND_ORE.defaultBlockState());
+            }
 
             BlockPos bedFoot = base.south(2);
             level.setBlockAndUpdate(
@@ -4572,6 +4593,14 @@ public final class MineLinkEndpointBootstrap {
                 }
                 return positions.toArray(new BlockPos[0]);
             }
+            if (fixtureName.equals("visibility_stale")) {
+                return new BlockPos[] {
+                    fixtureBase.east(3),
+                    fixtureBase.east(3).north(),
+                    fixtureBase.east(3).south(),
+                    fixtureBase.east(4)
+                };
+            }
             if (fixtureName.equals("guard_boundaries") || fixtureName.equals("sleep_smoke")) {
                 return new BlockPos[] {
                     fixtureBase.east(2),
@@ -4629,7 +4658,7 @@ public final class MineLinkEndpointBootstrap {
             if (state.is(BlockTags.BEDS)) {
                 extra.add("minelink:bed");
             }
-            if (fixtureName.equals("guard_boundaries") || fixtureName.equals("sleep_smoke")) {
+            if (fixtureName.equals("guard_boundaries") || fixtureName.equals("sleep_smoke") || fixtureName.equals("visibility_stale")) {
                 if (pos.equals(fixtureBase.east(8)) && id.equals("minecraft:oak_log")) {
                     extra.add("minelink:far_fixture");
                 }
@@ -4638,6 +4667,9 @@ public final class MineLinkEndpointBootstrap {
                 }
                 if (pos.equals(fixtureBase.east(4)) && id.equals("minecraft:diamond_ore")) {
                     extra.add("minelink:hidden_fixture");
+                    if (fixtureName.equals("visibility_stale")) {
+                        extra.add("minelink:stale_visibility_target");
+                    }
                 }
             }
             if (fixtureName.equals("perception_shapes")) {
@@ -4691,7 +4723,7 @@ public final class MineLinkEndpointBootstrap {
         }
 
         private boolean canSee(BlockPos pos, BlockState state, BlockPos origin) {
-            if (!fixtureName.equals("guard_boundaries") && !fixtureName.equals("sleep_smoke") && !fixtureName.equals("perception_shapes")) {
+            if (!fixtureName.equals("guard_boundaries") && !fixtureName.equals("sleep_smoke") && !fixtureName.equals("visibility_stale") && !fixtureName.equals("perception_shapes")) {
                 return true;
             }
             return !blockId(state).equals("minecraft:diamond_ore") || origin.getX() > fixtureBase.east(3).getX();

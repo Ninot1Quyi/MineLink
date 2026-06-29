@@ -85,10 +85,13 @@ reaches a terminal state.
 When a submitted action finishes, the NeoForge runtime must call the same
 server-side tool implementation used by `await_completion`: visibility,
 observed-ref TTL, reachability, material, inventory, vanilla/NeoForge hooks,
-and permission checks still decide success or failure. Failed submitted actions
-must preserve the public tool failure reason. Mock runtime behavior may mirror
-this lifecycle contract for fast replay, but real Gate 2 evidence requires a
-NeoForge report.
+and permission checks still decide success or failure. A recently observed ref
+is not enough by itself: world-changing and aiming interactions must re-check
+that the target is still visible from the current body position and fail with
+`target_not_visible_from_current_view` after movement makes a stale ref hidden.
+Failed submitted actions must preserve the public tool failure reason. Mock
+runtime behavior may mirror this lifecycle contract for fast replay, but real
+Gate 2 evidence requires a NeoForge report.
 
 ## Body Lifecycle
 
@@ -729,6 +732,7 @@ Use explicit scopes when the task carries product-risk:
 bash scripts/dev/verify-agent-task.sh --scope runtime
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios guard_boundaries
 bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios sleep_smoke
+bash scripts/dev/verify-agent-task.sh --scope neoforge --scenarios visibility_stale
 bash scripts/dev/verify-agent-task.sh --scope install
 ```
 
@@ -832,6 +836,11 @@ prebuild instead of producing a misleading snapshot. The devcontainer
 `postCreateCommand` calls the same script with `--light` for normal environment
 creation and local devcontainer rebuilds, so a task environment does not rerun
 the full NeoForge warmup when it is not producing a prebuild snapshot.
+The GHCR devcontainer image workflow is intentionally configuration-triggered:
+ordinary source edits update by Git inside an existing environment instead of
+forcing a new Docker/Gradle prewarm on every commit. When the image workflow
+does run, Gradle prewarm remains a hard gate, but it retries transient Maven or
+Gradle dependency-resolution failures before failing the build.
 
 Both modes install required OS tools such as `ffmpeg` when missing, verify Node,
 npm, Python, Java 21, `gh`, and sanitized Linear secret presence, run `npm ci`

@@ -54,6 +54,11 @@ case "$scenario" in
     report="$work_dir/reports/sleep_smoke-result.json"
     default_port="25584"
     ;;
+  visibility_stale)
+    fixture="visibility_stale"
+    report="$work_dir/reports/visibility_stale-result.json"
+    default_port="25585"
+    ;;
   body_lifecycle)
     fixture="vanilla_tree"
     report="$work_dir/reports/body_lifecycle-result.json"
