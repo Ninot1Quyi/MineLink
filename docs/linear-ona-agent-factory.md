@@ -1276,6 +1276,13 @@ tails without treating normal Minecraft mining/action motion as jitter. Large
 observer-follow frame diffs are accepted only when stable-target, centered,
 visible, action-motion, and static-tail evidence all pass, and the renderer
 records that decision as follow-camera motion tolerance for verifier review.
+If a passing task spends extra time waiting after the last visible action, the
+finalizer may trim the published composite to the last motion plus a short
+review hold and rerun visual QA on that cropped window. The release metadata
+must record the trim and final composite duration, and the cropped video must
+still pass static-tail, jitter, action-motion, recorder-work, and same-session
+verifier gates. This trim is only for post-work waiting; it must not hide missing
+work footage or turn a static placeholder into acceptance evidence.
 That report defaults to
 `github_attachment_preflight=deferred`: if neither a cookie nor a manual
 `github_attachment_video_url` is available, the run may still prove

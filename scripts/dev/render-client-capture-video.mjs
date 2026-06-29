@@ -350,9 +350,12 @@ let visualAnalysisPath = path.join(args.outputDir, "acceptance-video-visual-anal
 let visualAnalysisMdPath = path.join(args.outputDir, "acceptance-video-visual-analysis.md");
 const diagnosticStoryboardPath = path.join(args.outputDir, "acceptance-client-capture-storyboard.png");
 const diagnosticStoryboardJsonPath = path.join(args.outputDir, "acceptance-client-capture-storyboard.json");
+let visualStaticTailTrimmedForRelease = false;
+let visualLastMotionSeconds = 0;
+let compositeDurationSeconds = Math.max(4, Math.min(120, captureDurationSeconds || 10));
 
 if (clientVideoStat?.isFile()) {
-  try {
+  const runVisualAnalysis = async (analysisEndSeconds) => {
     const configuredStaticTailSeconds = Number.parseFloat(process.env.MINELINK_VIDEO_MAX_STATIC_TAIL_SECONDS ?? "14");
     const evidenceHoldStaticTailSeconds = recorderPostScenarioSeconds > 0 ? recorderPostScenarioSeconds + 3 : 14;
     const maxStaticTailSeconds = Math.max(
@@ -376,12 +379,38 @@ if (clientVideoStat?.isFile()) {
           MINELINK_VIDEO_MAX_STATIC_TAIL_SECONDS: String(maxStaticTailSeconds),
           MINELINK_VIDEO_ABRUPT_JUMP_DIFF: process.env.MINELINK_VIDEO_ABRUPT_JUMP_DIFF ?? "32",
           MINELINK_VIDEO_ANALYSIS_START_SECONDS: String(visualAnalysisStartSeconds),
-          MINELINK_VIDEO_ANALYSIS_END_SECONDS: String(visualAnalysisEndSeconds),
+          MINELINK_VIDEO_ANALYSIS_END_SECONDS: String(analysisEndSeconds),
         },
         maxBuffer: 1024 * 1024 * 8,
       },
     );
-    visualAnalysis = await readJson(visualAnalysisPath);
+    return readJson(visualAnalysisPath);
+  };
+  try {
+    visualAnalysis = await runVisualAnalysis(visualAnalysisEndSeconds);
+    visualLastMotionSeconds = Number.parseFloat(visualAnalysis?.lastMotionSeconds ?? "0");
+    const releaseHoldSeconds = Math.max(3, Math.min(6, recorderWorkHoldSeconds || recorderPostScenarioSeconds || 4));
+    const trimmedEndSeconds =
+      Number.isFinite(visualLastMotionSeconds) && visualLastMotionSeconds > 0
+        ? Math.min(
+            captureDurationSeconds,
+            Math.max(visualAnalysisStartSeconds + recorderMinWorkVisibleSeconds, visualLastMotionSeconds + releaseHoldSeconds),
+          )
+        : 0;
+    const canTrimStaticTail =
+      visualAnalysis?.staticTailPassed !== true &&
+      visualAnalysis?.jitterPassed === true &&
+      visualAnalysis?.actionMotionCoveragePassed === true &&
+      recorderWorkVisible &&
+      Number.isFinite(trimmedEndSeconds) &&
+      trimmedEndSeconds > visualAnalysisStartSeconds + 1 &&
+      trimmedEndSeconds < captureDurationSeconds - 0.5;
+    if (canTrimStaticTail) {
+      visualStaticTailTrimmedForRelease = true;
+      compositeDurationSeconds = Math.max(4, Math.min(120, trimmedEndSeconds));
+      visualAnalysis = await runVisualAnalysis(compositeDurationSeconds);
+      visualLastMotionSeconds = Number.parseFloat(visualAnalysis?.lastMotionSeconds ?? String(visualLastMotionSeconds));
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     failures.push(`Acceptance video visual analysis failed to run: ${message}`);
@@ -699,7 +728,10 @@ const summaryLines = [
     `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,
     `- Visual follow-camera motion tolerated: \`${visualCameraFollowMotionTolerated ? "yes" : "no"}\``,
     `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
-  `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
+    `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
+    `- Visual static tail trimmed for release: \`${visualStaticTailTrimmedForRelease ? "yes" : "no"}\``,
+    `- Visual last motion seconds: \`${Number.isFinite(visualLastMotionSeconds) ? visualLastMotionSeconds.toFixed(3) : "0.000"}\``,
+    `- Composite duration seconds: \`${compositeDurationSeconds.toFixed(3)}\``,
   `- Visual analysis: \`${visualAnalysisPath}\``,
   `- Diagnostic client capture storyboard: \`${diagnosticStoryboardPath}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
@@ -778,6 +810,9 @@ const origin = {
   visualCameraFollowMotionTolerated,
   visualActionMotionCoveragePassed,
   visualStaticTailPassed,
+  visualStaticTailTrimmedForRelease,
+  visualLastMotionSeconds: Number.isFinite(visualLastMotionSeconds) ? Number(visualLastMotionSeconds.toFixed(3)) : 0,
+  compositeDurationSeconds: Number(compositeDurationSeconds.toFixed(3)),
   submittedActionsTerminalConfirmed,
   submittedActionPendingCount,
   recorderWorkVisible,
@@ -834,11 +869,14 @@ await fs.writeFile(
     `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
     `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
     `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
-  `- Visual QA passed: \`${visualQualityPassed ? "yes" : "no"}\``,
-  `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,
-  `- Visual follow-camera motion tolerated: \`${visualCameraFollowMotionTolerated ? "yes" : "no"}\``,
-  `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
+    `- Visual QA passed: \`${visualQualityPassed ? "yes" : "no"}\``,
+    `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,
+    `- Visual follow-camera motion tolerated: \`${visualCameraFollowMotionTolerated ? "yes" : "no"}\``,
+    `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
     `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
+    `- Visual static tail trimmed for release: \`${visualStaticTailTrimmedForRelease ? "yes" : "no"}\``,
+    `- Visual last motion seconds: \`${Number.isFinite(visualLastMotionSeconds) ? visualLastMotionSeconds.toFixed(3) : "0.000"}\``,
+    `- Composite duration seconds: \`${compositeDurationSeconds.toFixed(3)}\``,
     `- Visual analysis: \`${visualAnalysisPath}\``,
     `- Diagnostic client capture storyboard: \`${diagnosticStoryboardPath}\``,
     `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
@@ -858,7 +896,6 @@ await fs.writeFile(
 
 if (failures.length === 0) {
   try {
-    const duration = Math.max(4, Math.min(120, await ffprobeDuration(args.clientVideo)));
     const filter = [
       "[0:v]fps=15,scale=960:720:force_original_aspect_ratio=decrease,pad=960:720:(ow-iw)/2:(oh-ih)/2:color=black[game]",
       "[1:v]scale=320:720[term]",
@@ -883,7 +920,7 @@ if (failures.length === 0) {
         "[v]",
         "-an",
         "-t",
-        duration.toFixed(3),
+        compositeDurationSeconds.toFixed(3),
         "-r",
         outputFps,
         "-c:v",

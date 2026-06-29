@@ -1124,9 +1124,17 @@ action-motion plus static-tail checks pass, the renderer records
 `visualCameraFollowMotionTolerated=true` and may treat the clip as visually
 acceptable. Genuine camera snaps without stable target/action evidence and
 static idle tails still set `visualQualityPassed=false` and block verifier
-handoff plus PR publication. Visual QA is only a release guardrail. It does not
-replace the playable MP4, scenario assertions, same-session Codex verifier, or
-MineLink product gate evidence.
+handoff plus PR publication. When a scenario has already captured enough
+visible work but then waits on terminal lifecycle cleanup or other non-visual
+settling, the finalizer may crop the final composite to the last visual action
+plus a short review hold. That crop is accepted only if the cropped analysis
+window still passes jitter, action-motion, and static-tail checks, and the
+origin metadata records `visualStaticTailTrimmedForRelease`,
+`visualLastMotionSeconds`, and `compositeDurationSeconds`. The crop is not a
+bypass for no-op or static videos; it only removes post-work waiting from the
+published evidence. Visual QA is only a release guardrail. It does not replace
+the playable MP4, scenario assertions, same-session Codex verifier, or MineLink
+product gate evidence.
 Pull request workflows use
 `scripts/dev/upload-acceptance-video-storage.mjs` inside the implementation
 finalizer to upload candidate `acceptance.mp4` to the configured

@@ -1171,9 +1171,16 @@ Current status:
   target is followed, centered, and visible. Large observer-follow frame
   movement can be tolerated only when target identity is stable, the target is
   centered/visible, task action coverage passes, and the static-tail check
-  passes; otherwise jitter still fails closed. The analyzer is
-  a guardrail only and does not replace the playable MP4, scenario assertions,
-  real NeoForge evidence, or Codex video review. The release gate
+  passes; otherwise jitter still fails closed. If the task has enough visible
+  work but the raw capture contains a long post-work wait for terminal
+  lifecycle cleanup, the finalizer may trim the final composite to the last
+  visible action plus a short review hold. The trimmed evidence must still pass
+  the visual static-tail check and must record
+  `visualStaticTailTrimmedForRelease`, `visualLastMotionSeconds`, and
+  `compositeDurationSeconds` in `acceptance-video-origin.json`. Trimming cannot
+  make a no-op, late-only target appearance, or placeholder card acceptable.
+  The analyzer is a guardrail only and does not replace the playable MP4,
+  scenario assertions, real NeoForge evidence, or Codex video review. The release gate
   must include
   `--require-client-gui-capture`; otherwise a static card, reports digest,
   server-observation-only video, loading screen, Mojang bootstrap capture,

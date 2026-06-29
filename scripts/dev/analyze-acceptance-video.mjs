@@ -134,6 +134,8 @@ for value in reversed(tail_sample):
         break
     static_tail += 1
 static_tail_seconds = static_tail / fps if fps > 0 else 0.0
+last_motion_index = max(analysis_start, analysis_end - static_tail)
+last_motion_seconds = last_motion_index / fps if fps > 0 else 0.0
 
 top = sorted(
     [
@@ -171,6 +173,7 @@ print(json.dumps({
     "staticTailSeconds": static_tail_seconds,
     "maxStaticTailSeconds": max_static_tail_seconds,
     "staticTailPassed": static_tail_passed,
+    "lastMotionSeconds": last_motion_seconds,
     "topFrameDiffs": top,
     "passed": jitter_passed and motion_passed and static_tail_passed,
 }, indent=2))
@@ -262,6 +265,7 @@ async function main() {
         `- Static tail seconds: \`${report.staticTailSeconds.toFixed(3)}\``,
         `- Max static tail seconds: \`${report.maxStaticTailSeconds}\``,
         `- Static tail passed: \`${report.staticTailPassed ? "yes" : "no"}\``,
+        `- Last motion seconds: \`${report.lastMotionSeconds.toFixed(3)}\``,
         `- Result: \`${report.passed ? "passed" : "failed"}\``,
         "",
         "## Top Frame Diffs",

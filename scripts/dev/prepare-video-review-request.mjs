@@ -192,6 +192,9 @@ const visualJitterPassed = origin?.visualJitterPassed === true;
 const visualCameraFollowMotionTolerated = origin?.visualCameraFollowMotionTolerated === true;
 const visualActionMotionCoveragePassed = origin?.visualActionMotionCoveragePassed === true;
 const visualStaticTailPassed = origin?.visualStaticTailPassed === true;
+const visualStaticTailTrimmedForRelease = origin?.visualStaticTailTrimmedForRelease === true;
+const visualLastMotionSeconds = Number.isFinite(origin?.visualLastMotionSeconds) ? origin.visualLastMotionSeconds : 0;
+const compositeDurationSeconds = Number.isFinite(origin?.compositeDurationSeconds) ? origin.compositeDurationSeconds : 0;
 const submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
 const submittedActionPendingCount = Number.isFinite(origin?.submittedActionPendingCount)
   ? origin.submittedActionPendingCount
@@ -411,6 +414,9 @@ const lines = [
   `- Visual follow-camera motion tolerated: \`${visualCameraFollowMotionTolerated ? "yes" : "no"}\``,
   `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
   `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
+  `- Visual static tail trimmed for release: \`${visualStaticTailTrimmedForRelease ? "yes" : "no"}\``,
+  `- Visual last motion seconds: \`${visualLastMotionSeconds}\``,
+  `- Composite duration seconds: \`${compositeDurationSeconds}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
   `- Submitted action pending count: \`${submittedActionPendingCount}\``,
   `- Recorder work visible: \`${recorderWorkVisible ? "yes" : "no"}\``,
