@@ -37,9 +37,11 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
+import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
+import net.minecraft.network.protocol.game.VecDeltaCodec;
 import net.minecraft.recipebook.PlaceRecipe;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -217,7 +219,7 @@ public final class MineLinkEndpointBootstrap {
             agent.entity.setDeltaMovement(nextVelocity);
             agent.entity.move(MoverType.SELF, nextVelocity);
             broadcastAgentMotion(agent, nextVelocity);
-            broadcastAgentPosition(agent);
+            broadcastAgentRelativePosition(agent);
             return;
         }
         if (velocity.lengthSqr() > 0.0001D) {
@@ -1235,7 +1237,7 @@ public final class MineLinkEndpointBootstrap {
         if (durationMs <= PLAYER_MOVEMENT_TICK_MS) {
             agent.entity.move(MoverType.SELF, requested);
             broadcastAgentMotion(agent, requested);
-            broadcastAgentPosition(agent);
+            broadcastAgentRelativePosition(agent);
             return requested.length() > 0.001D ? 1 : 0;
         }
         int steps = Math.max(1, Math.min(120, (int)Math.ceil(durationMs / (double)PLAYER_MOVEMENT_TICK_MS)));
@@ -1244,7 +1246,7 @@ public final class MineLinkEndpointBootstrap {
         for (int index = 0; index < steps; index += 1) {
             agent.entity.move(MoverType.SELF, step);
             broadcastAgentMotion(agent, step);
-            broadcastAgentPosition(agent);
+            broadcastAgentRelativePosition(agent);
             updateRecorder(agent);
             try {
                 TimeUnit.MILLISECONDS.sleep(sleepMs);
@@ -1254,12 +1256,39 @@ public final class MineLinkEndpointBootstrap {
             }
         }
         broadcastAgentMotion(agent, Vec3.ZERO);
-        broadcastAgentPosition(agent);
+        broadcastAgentRelativePosition(agent);
         return steps;
     }
 
     private void broadcastAgentPosition(AgentBody agent) {
         server.getPlayerList().broadcastAll(new ClientboundTeleportEntityPacket(agent.entity));
+        agent.motionCodec.setBase(agent.entity.trackingPosition());
+    }
+
+    private void broadcastAgentRelativePosition(AgentBody agent) {
+        Vec3 trackingPosition = agent.entity.trackingPosition();
+        long encodedX = agent.motionCodec.encodeX(trackingPosition);
+        long encodedY = agent.motionCodec.encodeY(trackingPosition);
+        long encodedZ = agent.motionCodec.encodeZ(trackingPosition);
+        if (encodedX == 0L && encodedY == 0L && encodedZ == 0L) {
+            return;
+        }
+        if (
+            encodedX < Short.MIN_VALUE || encodedX > Short.MAX_VALUE ||
+            encodedY < Short.MIN_VALUE || encodedY > Short.MAX_VALUE ||
+            encodedZ < Short.MIN_VALUE || encodedZ > Short.MAX_VALUE
+        ) {
+            broadcastAgentPosition(agent);
+            return;
+        }
+        server.getPlayerList().broadcastAll(new ClientboundMoveEntityPacket.Pos(
+            agent.entity.getId(),
+            (short)((int)encodedX),
+            (short)((int)encodedY),
+            (short)((int)encodedZ),
+            agent.entity.onGround()
+        ));
+        agent.motionCodec.setBase(trackingPosition);
     }
 
     private void broadcastAgentMotion(AgentBody agent, Vec3 delta) {
@@ -4440,6 +4469,7 @@ public final class MineLinkEndpointBootstrap {
         private final Map<String, BlockRef> refs = new LinkedHashMap<>();
         private final Map<String, ActionLifecycle> actions = new LinkedHashMap<>();
         private final List<Long> chatTimestamps = new ArrayList<>();
+        private final VecDeltaCodec motionCodec = new VecDeltaCodec();
         private OpenContainer openContainer;
         private int refSeq = 0;
         private int slotSeq = 0;
@@ -4464,6 +4494,7 @@ public final class MineLinkEndpointBootstrap {
             this.entity = entity;
             this.fixtureBase = fixtureBase;
             this.fixtureName = fixtureName;
+            this.motionCodec.setBase(entity.trackingPosition());
         }
 
         private Vec3 position() {
@@ -4471,7 +4502,7 @@ public final class MineLinkEndpointBootstrap {
         }
 
         private BlockPos blockPosition() {
-            return entity.blockPosition();
+            return BlockPos.containing(entity.position());
         }
 
         private String bodyId() {

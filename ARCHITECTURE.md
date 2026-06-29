@@ -111,6 +111,12 @@ applies lightweight grounding for airborne bodies, and exposes
 `physics_tick_path=server_tick_grounding` through `observe.self`. This is a
 server-body grounding guarantee, not a claim of full client locomotion,
 pathfinding, jump/fall animation parity, or sensory-client capability.
+Public `action.move` steps use server-side entity movement and publish relative
+entity move packets for the visible `MineLink-*` player body. Full entity
+teleport packets are reserved for births, recorder camera placement, and
+out-of-range corrections. MineLink guard origins are derived from the live
+entity position, not a stale cached `blockPosition`, so current-view,
+visibility, and reach checks stay tied to where the server body actually moved.
 
 This is same-process lifecycle evidence only. It does not prove persistent body
 restore after Minecraft server restart, full action replay recovery, or

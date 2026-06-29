@@ -220,10 +220,16 @@ Current status:
   guard replay asserts movement collision feedback; the latest real guard run
   reported `collision=true` with `moved_distance` lower than
   `requested_distance`. Movement is stepped at an approximate vanilla walking
-  cadence for video-required scenarios and now broadcasts position/motion
-  updates for the visible `MineLink-*` player body, but full client-equivalent
-  locomotion, pathfinding, jump/fall handling, and animation parity remain open
-  product gaps.
+  cadence for video-required scenarios and now broadcasts relative entity move
+  packets plus motion updates for the visible `MineLink-*` player body instead
+  of teleporting on every step. The runtime also derives guard origins from the
+  live entity position so post-move observe/reach checks cannot accidentally use
+  a stale cached block position. Real NeoForge evidence:
+  `.minelink-dev/neoforge-mine-tree-relative-move-runtime-2/reports/mine_tree-result.json`
+  passed after catching and fixing a `target_too_far` regression, and
+  `.minelink-dev/neoforge-portal-coop-relative-move-runtime/reports/portal_coop-result.json`
+  passed with three builders. Full client-equivalent locomotion, pathfinding,
+  jump/fall handling, and animation parity remain open product gaps.
 - `action.mine_visible_block` in the real NeoForge runtime now keeps the
   existing observed-ref, TTL, reach, and block-id guards, then mines through the
   FakePlayer `ServerPlayerGameMode.handleBlockBreakAction` start/stop path while
