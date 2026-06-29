@@ -7,9 +7,10 @@ Session id: 019f10c9-44a4-7dd3-96bd-f60585e9f7f2
 Platform evidence: Ona AgentService StartAgent launched the configured Codex agent id with codexSettings; GitHub runner will verify the API readback separately.
 Task id: gh-video-marker-preserve-77f873a
 Branch: codex/gh-video-marker-preserve-77f873a
-Result: passed
+Result: blocked
 Validation: bash scripts/dev/verify-agent-task.sh --scope docs
-Validation result: passed
+Validation result: failed
+Blocker: docs-scope validation failed because the branch contains architecture-sensitive script changes relative to origin/main without an ARCHITECTURE.md update; the task scope permits editing only this canary file.
 Boundary: implementation-canary only; does not prove MineLink product acceptance.
 
 Remaining gaps: video verifier, PR release, and full product acceptance are still separate gates.
