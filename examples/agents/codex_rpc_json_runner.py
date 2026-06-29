@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -215,6 +216,16 @@ def log_contains_any(paths: Iterable[Path], text: str) -> bool:
     return False
 
 
+def log_matches_any(paths: Iterable[Path], pattern: re.Pattern[str]) -> bool:
+    for path in paths:
+        try:
+            if pattern.search(path.read_text(encoding="utf-8", errors="replace")):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def wait_for_any_log_text(text: str, timeout_seconds: int, paths: Iterable[Path]) -> bool:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
@@ -224,6 +235,15 @@ def wait_for_any_log_text(text: str, timeout_seconds: int, paths: Iterable[Path]
     return log_contains_any(paths, text)
 
 
+def wait_for_any_log_match(pattern: re.Pattern[str], timeout_seconds: int, paths: Iterable[Path]) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if log_matches_any(paths, pattern):
+            return True
+        time.sleep(1)
+    return log_matches_any(paths, pattern)
+
+
 def wait_for_recorder_ready_before_scenario(log_dir: str) -> None:
     if not truthy(os.environ.get("MINELINK_RECORD_CLIENT")):
         return
@@ -231,19 +251,41 @@ def wait_for_recorder_ready_before_scenario(log_dir: str) -> None:
         return
 
     timeout_seconds = int(os.environ.get("MINELINK_RECORDER_PRE_SCENARIO_READY_TIMEOUT", "60"))
+    expected_visible_agents = max(1, int(os.environ.get("MINELINK_RECORDER_EXPECTED_VISIBLE_AGENTS", "1")))
     server_logs = [Path(log_dir) / "server.stdout.log", Path(log_dir) / "server.stderr.log"]
     client_logs = [Path(log_dir) / "client.stdout.log", Path(log_dir) / "client.stderr.log"]
     checks: List[Tuple[str, str, Iterable[Path]]] = [
         ("recorderPreScenarioAutoFollow", "MineLink recorder auto-follow active", server_logs),
-        ("recorderPreScenarioClientFollow", "MineLink recorder client following server_agent", client_logs),
-        ("recorderPreScenarioTargetVisible", "MineLink recorder client target visible server_agent", client_logs),
-        ("recorderPreScenarioTargetCentered", "MineLink recorder client target centered server_agent", client_logs),
+    ]
+    client_checks: List[Tuple[str, str, re.Pattern[str]]] = [
+        (
+            "recorderPreScenarioClientFollow",
+            "MineLink recorder client following server_agent",
+            re.compile(
+                rf"MineLink recorder client following server_agent\s+\S+\s+candidates\s+{expected_visible_agents}/{expected_visible_agents}"
+            ),
+        ),
+        (
+            "recorderPreScenarioTargetVisible",
+            "MineLink recorder client target visible server_agent",
+            re.compile(
+                rf"MineLink recorder client target visible server_agent\s+\S+\s+candidates\s+{expected_visible_agents}/{expected_visible_agents}"
+            ),
+        ),
+        (
+            "recorderPreScenarioTargetCentered",
+            "MineLink recorder client target centered server_agent",
+            re.compile(
+                rf"MineLink recorder client target centered server_agent\s+\S+\s+candidates\s+{expected_visible_agents}/{expected_visible_agents}"
+            ),
+        ),
     ]
 
     append_recorder_metadata(
         log_dir,
         [
             "recorderReadyBeforeScenario=false",
+            f"recorderPreScenarioExpectedVisibleAgents={expected_visible_agents}",
             f"recorderPreScenarioReadyTimeoutSeconds={timeout_seconds}",
             f"recorderPreScenarioWaitStartedAtEpoch={int(time.time())}",
         ],
@@ -255,6 +297,22 @@ def wait_for_recorder_ready_before_scenario(log_dir: str) -> None:
         append_recorder_metadata(log_dir, [f"{key}=false", "recorderReadyBeforeScenario=false"])
         raise RuntimeError(
             f"Recorder did not become ready before scenario work: missing {text!r} within {timeout_seconds}s"
+        )
+    for key, text, pattern in client_checks:
+        if wait_for_any_log_match(pattern, timeout_seconds, client_logs):
+            append_recorder_metadata(
+                log_dir,
+                [
+                    f"{key}=true",
+                    f"{key}Log={text}",
+                    f"{key}ExpectedVisibleAgents={expected_visible_agents}",
+                ],
+            )
+            continue
+        append_recorder_metadata(log_dir, [f"{key}=false", "recorderReadyBeforeScenario=false"])
+        raise RuntimeError(
+            f"Recorder did not become ready before scenario work: missing {text!r} with candidates "
+            f"{expected_visible_agents}/{expected_visible_agents} within {timeout_seconds}s"
         )
 
     append_recorder_metadata(
@@ -364,6 +422,7 @@ def run_portal_coop(
         quota_birth = quota_client.birth(f"{scenario}:quota_probe: should be rejected by owner limit")
         quota_probe = {"connect": quota_connect, "birth": quota_birth}
         state["quota_probe"] = quota_probe
+        wait_for_recorder_ready_before_scenario(log_dir)
 
         log(
             "codex_rpc_team_session_started",
