@@ -1101,6 +1101,11 @@ but `recorderWorkCoverageAdequate=true` is based on the real task window from
 `recorderReadyBeforeScenarioAtEpoch` to `scenarioCompletedAtEpoch` plus
 scenario-specific visible action duration such as `recorderVisibleMiningMs`.
 The post-scenario hold is not allowed to substitute for missing work footage.
+Recorder-backed multi-agent scenarios may apply bounded replay pacing through
+`MINELINK_AGENT_TURN_DELAY_MS` after recorder readiness, so the client video has
+enough real task-window footage for review. This pacing must not add authority,
+skip MCP tools, or count the post-scenario hold as work; it only slows public
+tool replay after the recorder has locked onto the expected visible agents.
 Release gates must check `recorderWorkCoverageAdequate`, not compare the
 post-scenario hold length to the minimum work-coverage seconds.
 The scenario report must also confirm submit-mode actions reached terminal

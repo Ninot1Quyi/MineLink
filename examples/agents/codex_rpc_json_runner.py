@@ -392,6 +392,7 @@ def run_portal_coop(
     }
     rpc_messages: List[JsonDict] = []
     final_assertions: List[JsonDict] = []
+    turn_delay_ms = max(0, int(os.environ.get("MINELINK_AGENT_TURN_DELAY_MS", "0")))
     connect_results: JsonDict = {}
     birth_results: JsonDict = {}
     quota_probe: JsonDict = {}
@@ -492,6 +493,8 @@ def run_portal_coop(
             wait_ms = int(decision.get("wait_ms", 0) or 0)
             if wait_ms > 0:
                 time.sleep(min(wait_ms, 30_000) / 1000)
+            if turn_delay_ms > 0:
+                time.sleep(min(turn_delay_ms, 5_000) / 1000)
 
             if decision.get("done") is True:
                 final_assertions = run_assertions(decision.get("final_assertions", []), agent_state, state)
