@@ -450,13 +450,17 @@ and video producer before passing. This proves only the bounded
 `acceptance_video -> video_verifier` chain handoff for a canary task; it does
 not prove real product implementation or human acceptance.
 For `full-chain-canary`, the workflow re-fetches the implementation canary
-after verifier evidence is fetched and before the release finalizer runs. For
-`full-chain-task`, it re-fetches the task implementation report through
+after verifier evidence is fetched and before the release finalizer runs, but
+that read is pinned to the originally accepted implementation commit rather than
+branch head. The video-verifier follow-up is allowed to add its own canary
+commit, so branch-head revalidation would otherwise conflate verifier evidence
+with implementation evidence. For `full-chain-task`, it re-fetches the task implementation report through
 `fetch-platform-codex-task-report.mjs`. This guards against a long-running
 Goal-mode session later overwriting the same branch with `Result: blocked` or
 otherwise changing implementation evidence after its first accepted readback.
-The release gate must fail closed unless the current branch head still contains
-task/session-bound implementation evidence with `Result: passed`.
+The release gate must fail closed unless the accepted implementation commit and
+the verifier commit each contain their own task/session-bound evidence with
+`Result: passed`.
 An execution that completes with failed actions proves the repository bridge
 reached Ona and the guarded finalizer ran, but it is still only partial chain
 evidence; accepted implementation evidence requires the task-bound Platform

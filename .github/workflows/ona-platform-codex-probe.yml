@@ -581,6 +581,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --branch "$MINELINK_PLATFORM_CODEX_TARGET_BRANCH" \
             --task-id "$MINELINK_PLATFORM_CODEX_TASK_ID" \
+            --branch-commit "$MINELINK_PLATFORM_CODEX_REVIEWED_COMMIT" \
             --wait-seconds 0 \
             --output .minelink-dev/reports/ona-codex-implementation-session-after-verifier.md \
             --json-output .minelink-dev/reports/ona-codex-implementation-session-after-verifier.json

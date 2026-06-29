@@ -917,7 +917,11 @@ Current status:
   `scripts/dev/fetch-platform-codex-video-verifier.mjs` to write
   `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus the local
   hash-checked `video-review.md`; the fetch bridge must preserve every required
-  verifier marker so the release gate can fail closed on omissions. This can upgrade only the
+  verifier marker so the release gate can fail closed on omissions. After the
+  verifier commit, the workflow revalidates the implementation canary from the
+  originally accepted implementation commit rather than the branch head, because
+  the verifier follow-up may legitimately advance the branch with its own
+  canary file. This can upgrade only the
   `acceptance_video -> video_verifier` automation-chain edge for a canary task;
   it does not prove real product implementation, real Minecraft behavior, or
   any `product-accepted` gate. The same workflow can now be run with

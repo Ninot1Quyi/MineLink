@@ -632,11 +632,13 @@ hashes; stale branch content is a timeout failure, not release evidence. This
 is still automation-chain evidence only; it does not prove product acceptance.
 For `full-chain-canary`, the workflow must re-fetch the implementation canary
 after the verifier canary is accepted and before release upload. For
-`full-chain-task`, it re-fetches the task implementation report. The branch
-head must still contain current task/session-bound implementation evidence with
-`Result: passed`; if the Goal-mode session later overwrote the implementation
-evidence with `Result: blocked` or stale markers, the release gate fails
-closed. `neoforge` full-chain tasks use a longer implementation-report wait
+`full-chain-task`, it re-fetches the task implementation report. For
+`full-chain-canary`, that re-fetch is pinned to the originally accepted
+implementation commit, not branch head, because the video-verifier follow-up is
+allowed to advance the branch with its own verifier canary commit. The release
+gate fails closed unless the accepted implementation commit and verifier commit
+each contain current task/session-bound evidence with `Result: passed`.
+`neoforge` full-chain tasks use a longer implementation-report wait
 than docs-only tasks. The Codex session can legitimately spend the early
 minutes reading the required MineLink context and then running real Minecraft
 validation before it pushes the report, so the workflow must not stop the task

@@ -154,10 +154,14 @@ async function githubGet(apiPath) {
 }
 
 async function fetchRemoteCanary() {
-  const branchPath = `/repos/${args.repository}/branches/${encodeURIComponent(args.branch)}`;
-  const branch = await githubGet(branchPath);
-  const commit = branch?.commit?.sha ?? "";
-  const contentsPath = `/repos/${args.repository}/contents/${encodePath(args.canaryPath)}?ref=${encodeURIComponent(args.branch)}`;
+  let commit = String(args.branchCommit ?? "").trim();
+  if (!hasValue(commit)) {
+    const branchPath = `/repos/${args.repository}/branches/${encodeURIComponent(args.branch)}`;
+    const branch = await githubGet(branchPath);
+    commit = branch?.commit?.sha ?? "";
+  }
+  const ref = hasValue(args.branchCommit) ? args.branchCommit : args.branch;
+  const contentsPath = `/repos/${args.repository}/contents/${encodePath(args.canaryPath)}?ref=${encodeURIComponent(ref)}`;
   const content = await githubGet(contentsPath);
   const encoding = content?.encoding ?? "";
   const encoded = String(content?.content ?? "").replace(/\s+/g, "");
