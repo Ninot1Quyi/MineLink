@@ -34,6 +34,7 @@ let allowBlocked = false;
 let comment = false;
 let waitOnaExecution = process.env.MINELINK_WAIT_ONA_EXECUTION === "1";
 let cancelOnaExecutionOnTimeout = process.env.MINELINK_CANCEL_ONA_EXECUTION_ON_TIMEOUT === "1";
+let onaStartTimeoutSeconds = Number(process.env.MINELINK_ONA_START_TIMEOUT_SECONDS ?? 60);
 let onaExecutionTimeoutSeconds = Number(process.env.MINELINK_ONA_EXECUTION_TIMEOUT_SECONDS ?? 600);
 let onaExecutionPollSeconds = Number(process.env.MINELINK_ONA_EXECUTION_POLL_SECONDS ?? 5);
 
@@ -63,6 +64,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-execution-json-output") args.onaExecutionJsonOutput = readValue();
   else if (arg === "--wait-ona-execution") waitOnaExecution = true;
   else if (arg === "--cancel-ona-execution-on-timeout") cancelOnaExecutionOnTimeout = true;
+  else if (arg === "--ona-start-timeout-seconds") onaStartTimeoutSeconds = Number(readValue());
   else if (arg === "--ona-execution-timeout-seconds") onaExecutionTimeoutSeconds = Number(readValue());
   else if (arg === "--ona-execution-poll-seconds") onaExecutionPollSeconds = Number(readValue());
   else if (arg === "--dry-run") dryRun = true;
@@ -86,6 +88,7 @@ function run(command, commandArgs, options = {}) {
   return spawnSync(command, commandArgs, {
     encoding: "utf8",
     stdio: options.stdio ?? "pipe",
+    timeout: options.timeoutMs,
     env: { ...process.env, ...(options.env ?? {}) },
   });
 }
@@ -265,6 +268,9 @@ if (!args.onaAutomation) failures.push("No Ona automation id was supplied.");
 if (!args.onaProject) failures.push("No Ona project id was supplied.");
 if (!Number.isFinite(onaExecutionTimeoutSeconds) || onaExecutionTimeoutSeconds < 0) {
   failures.push("--ona-execution-timeout-seconds must be a non-negative number.");
+}
+if (!Number.isFinite(onaStartTimeoutSeconds) || onaStartTimeoutSeconds < 1) {
+  failures.push("--ona-start-timeout-seconds must be at least 1.");
 }
 if (!Number.isFinite(onaExecutionPollSeconds) || onaExecutionPollSeconds < 1) {
   failures.push("--ona-execution-poll-seconds must be at least 1.");
@@ -514,7 +520,7 @@ if (failures.length === 0) {
     onaStatus = "partial";
     commandOutput = `dry-run: ona ${command.join(" ")}`;
   } else {
-    const result = run("ona", command);
+    const result = run("ona", command, { timeoutMs: onaStartTimeoutSeconds * 1000 });
     commandOutput = sanitizeOutput(result.stdout);
     commandError = sanitizeOutput(result.stderr);
     const combined = `${result.stdout}\n${result.stderr}`;
@@ -549,7 +555,9 @@ if (failures.length === 0) {
       onaStatus = "blocked";
       dispatchStatus = "blocked";
       exitCode = requireOna ? result.status ?? 1 : 0;
-      const onaFailure = commandError.includes("map.max_pairs")
+      const onaFailure = result.error?.code === "ETIMEDOUT"
+        ? `Ona automation start timed out after ${onaStartTimeoutSeconds}s. The checked-in Ona automation is diagnostic only; Platform Codex full-chain dispatch may continue when --require-ona is not set.`
+        : commandError.includes("map.max_pairs")
         ? "Ona automation start failed because the parameter map exceeded Ona's 10-entry limit."
         : "Ona automation start failed. Check ONA_TOKEN/Ona CLI authentication and project permissions.";
       failures.push(onaFailure);
@@ -610,6 +618,7 @@ const lines = [
   `- Scenarios: \`${scenarios}\``,
   `- Ona automation: \`${args.onaAutomation || "none"}\``,
   `- Ona project: \`${args.onaProject || "none"}\``,
+  `- Ona start timeout seconds: \`${onaStartTimeoutSeconds}\``,
   `- Ona execution: \`${onaExecution || "none"}\``,
   `- Ona execution result: \`${onaExecutionReport?.result ?? (onaExecution ? "not-waited" : "none")}\``,
   `- Result: \`${dispatchResult}\``,

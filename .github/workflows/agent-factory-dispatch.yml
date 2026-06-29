@@ -86,7 +86,7 @@ jobs:
             --ona-automation "$MINELINK_ONA_AUTOMATION_ID"
             --ona-project "$MINELINK_ONA_PROJECT_ID"
             --comment
-            --require-ona
+            --ona-start-timeout-seconds 60
           )
           if [ -n "$issue_number" ]; then
             args+=(--github-issue-number "$issue_number")

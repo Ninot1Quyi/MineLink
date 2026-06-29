@@ -595,11 +595,14 @@ environments before creating a fresh Goal-mode task environment. This prune is q
 project-scoped, skips running or starting environments, records dirty-workspace
 deletions in the cleanup report, and does not prove implementation,
 verification, or product acceptance. The source dispatcher starts the checked-in
-Ona automation as an observable bridge node, records its execution id, and then
-continues to the Platform Codex workflow without waiting for generic Ona
-automation actions to finish. This keeps the public Ona automation node visible
-while avoiding the default automation action lifecycle as a bottleneck before
-the Codex-specific implementation and verifier sessions. The GitHub Actions
+Ona automation as an observable bridge node, records its execution id when the
+CLI returns one, and then continues to the Platform Codex workflow without
+waiting for generic Ona automation actions to finish. The GitHub issue path also
+uses a short start timeout and does not require this diagnostic automation edge
+to pass before launching the Platform Codex full-chain workflow. This keeps the
+public Ona automation node visible while avoiding the default automation action
+lifecycle as a bottleneck before the Codex-specific implementation and verifier
+sessions. The GitHub Actions
 `full-chain-canary` and `full-chain-task` modes can also run the
 release-gate-to-PR edge when `create_pr=true`; it calls
 `scripts/dev/create-agent-factory-pr.mjs`, records

@@ -135,14 +135,17 @@ scripts/dev/dispatch-agent-factory.mjs
 
 It triggers on `issues` events and manual dispatch. The dispatcher validates the
 task contract, checks `agent-ready` and `agent:ona`, starts the Ona automation
-through `ona ai automation start`, optionally performs a bounded
-`ona ai automation executions get` readback, writes
+through `ona ai automation start` as a diagnostic bridge node, optionally
+performs a bounded `ona ai automation executions get` readback, writes
 `.minelink-dev/reports/agent-factory-dispatch.md` and
 `.minelink-dev/reports/agent-factory-dispatch.json`, regenerates
 `.minelink-dev/reports/agent-factory-chain.md`, and comments on the GitHub
 issue. It requires `ONA_TOKEN` in GitHub secrets to start Ona from CI; missing
 Ona authentication is recorded as a blocked edge instead of being treated as a
-MineLink validation failure.
+MineLink validation failure. The GitHub issue path uses a short start timeout
+and does not require the generic Ona automation edge to pass before launching
+the Platform Codex full-chain workflow; that edge is observability, not the
+implementation handoff.
 After a successful GitHub dispatch, the workflow calls
 `scripts/dev/trigger-agent-factory-full-chain.mjs`, which starts
 `.github/workflows/ona-platform-codex-probe.yml` with
