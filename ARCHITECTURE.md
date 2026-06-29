@@ -547,7 +547,10 @@ extracted files only after the current tarball is decoded successfully and any
 manifest MP4 has been downloaded and hash-verified.
 For Minecraft client-video tasks, the recorder camera uses a stable
 observer-follow offset and smoothing on both the server-side recorder anchor and
-the client-side view. A visual QA failure withholds `acceptance.mp4`, but the
+the client-side view. The server-side recorder only repositions the spectator
+client on initial attach or when it drifts too far from the camera anchor; the
+client observer-follow loop owns frame-to-frame camera smoothing so final
+evidence is not dominated by server teleport corrections. A visual QA failure withholds `acceptance.mp4`, but the
 renderer still writes a diagnostic storyboard from the raw client capture so
 agents can inspect jitter, static tails, or ambiguous action framing without
 publishing the failed video as final evidence. Static-tail analysis is bounded
@@ -1115,9 +1118,13 @@ raw Minecraft client MP4 before final composite rendering. That lightweight
 visual QA checks for obvious camera jumps, action-motion coverage, and long
 static tails over the task window, excluding recorder warmup before the active
 target is followed and centered. Normal mining/action motion must not be
-misclassified as camera jitter, but genuine camera snaps and static idle tails
-still set `visualQualityPassed=false` and block verifier handoff plus PR
-publication. Visual QA is only a release guardrail. It does not
+misclassified as camera jitter. If the observer-follow camera produces large
+frame diffs while the target is stable, centered, visible, active, and the
+action-motion plus static-tail checks pass, the renderer records
+`visualCameraFollowMotionTolerated=true` and may treat the clip as visually
+acceptable. Genuine camera snaps without stable target/action evidence and
+static idle tails still set `visualQualityPassed=false` and block verifier
+handoff plus PR publication. Visual QA is only a release guardrail. It does not
 replace the playable MP4, scenario assertions, same-session Codex verifier, or
 MineLink product gate evidence.
 Pull request workflows use

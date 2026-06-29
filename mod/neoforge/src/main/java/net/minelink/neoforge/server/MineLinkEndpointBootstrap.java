@@ -263,7 +263,11 @@ public final class MineLinkEndpointBootstrap {
         if (player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
             player.gameMode.changeGameModeForPlayer(GameType.SPECTATOR);
         }
-        player.teleportTo(server.overworld(), cameraPos.x, cameraPos.y, cameraPos.z, Set.of(), yaw, pitch);
+        boolean needsReposition =
+            !agent.recorderAutoFollowLogged || player.position().distanceToSqr(cameraPos) > 256.0D;
+        if (needsReposition) {
+            player.teleportTo(server.overworld(), cameraPos.x, cameraPos.y, cameraPos.z, Set.of(), yaw, pitch);
+        }
         player.setCamera(player);
         if (!agent.recorderAutoFollowLogged) {
             agent.recorderAutoFollowLogged = true;

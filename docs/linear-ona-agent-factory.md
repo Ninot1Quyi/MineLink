@@ -1272,7 +1272,10 @@ that hold short and proves the minimum work coverage from the recorder-ready to
 scenario-complete task window plus scenario-specific visible action duration.
 The visual analyzer excludes recorder warmup before the target is followed,
 centered, and visible, so the gate blocks true camera snaps and static idle
-tails without treating normal Minecraft mining/action motion as jitter.
+tails without treating normal Minecraft mining/action motion as jitter. Large
+observer-follow frame diffs are accepted only when stable-target, centered,
+visible, action-motion, and static-tail evidence all pass, and the renderer
+records that decision as follow-camera motion tolerance for verifier review.
 That report defaults to
 `github_attachment_preflight=deferred`: if neither a cookie nor a manual
 `github_attachment_video_url` is available, the run may still prove

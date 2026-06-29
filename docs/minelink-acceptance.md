@@ -1168,8 +1168,10 @@ Current status:
   This catches obvious camera jumps, insufficient work motion, and long static
   tails before the same-session verifier can release the video. The analyzer
   evaluates the active task window and excludes recorder warmup before the
-  target is followed, centered, and visible, so normal mining/action motion is
-  not treated as camera jitter while true camera snaps still fail closed. The analyzer is
+  target is followed, centered, and visible. Large observer-follow frame
+  movement can be tolerated only when target identity is stable, the target is
+  centered/visible, task action coverage passes, and the static-tail check
+  passes; otherwise jitter still fails closed. The analyzer is
   a guardrail only and does not replace the playable MP4, scenario assertions,
   real NeoForge evidence, or Codex video review. The release gate
   must include

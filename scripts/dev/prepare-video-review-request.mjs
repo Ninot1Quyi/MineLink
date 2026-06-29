@@ -189,6 +189,7 @@ const requiresVisibleMining = origin?.requiresVisibleMining === true;
 const recorderScenarioActionVisible = origin?.recorderScenarioActionVisible === true;
 const visualQualityPassed = origin?.visualQualityPassed === true;
 const visualJitterPassed = origin?.visualJitterPassed === true;
+const visualCameraFollowMotionTolerated = origin?.visualCameraFollowMotionTolerated === true;
 const visualActionMotionCoveragePassed = origin?.visualActionMotionCoveragePassed === true;
 const visualStaticTailPassed = origin?.visualStaticTailPassed === true;
 const submittedActionsTerminalConfirmed = origin?.submittedActionsTerminalConfirmed === true;
@@ -407,6 +408,7 @@ const lines = [
   `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
   `- Visual QA passed: \`${visualQualityPassed ? "yes" : "no"}\``,
   `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,
+  `- Visual follow-camera motion tolerated: \`${visualCameraFollowMotionTolerated ? "yes" : "no"}\``,
   `- Visual action motion coverage passed: \`${visualActionMotionCoveragePassed ? "yes" : "no"}\``,
   `- Visual static tail passed: \`${visualStaticTailPassed ? "yes" : "no"}\``,
   `- Submitted actions terminal confirmed: \`${submittedActionsTerminalConfirmed ? "yes" : "no"}\``,
