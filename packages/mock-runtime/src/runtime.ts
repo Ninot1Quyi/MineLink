@@ -892,6 +892,13 @@ export class MockRuntimeServer {
     if (!refState.ok) return refState;
     const ref = refState.ref;
     if (ref.kind !== "block") return runtimeFail("unknown_or_unobserved_target", "Ref is not a block.");
+    const block = this.blocks.find((candidate) => samePos(candidate.pos, ref.pos) && candidate.id === ref.id);
+    if (!block || block.mined) {
+      return runtimeFail("target_not_visible", "Block is no longer present.");
+    }
+    if (!this.isVisibleFromAgent(agent, block)) {
+      return runtimeFail("target_not_visible_from_current_view", "The observed block is no longer visible from the current body position.");
+    }
     if (ref.distance > 4.5) {
       return runtimeFail("target_too_far", "Target block is visible but outside interaction range.", {
         distance: ref.distance
@@ -899,14 +906,6 @@ export class MockRuntimeServer {
     }
     if (agent.lookedAtRef !== blockRef) {
       return runtimeFail("must_turn_first", "Agent must look at the block before mining it.");
-    }
-
-    const block = this.blocks.find((candidate) => samePos(candidate.pos, ref.pos) && candidate.id === ref.id);
-    if (!block || block.mined) {
-      return runtimeFail("target_not_visible", "Block is no longer present.");
-    }
-    if (!this.isVisibleFromAgent(agent, block)) {
-      return runtimeFail("target_not_visible_from_current_view", "The observed block is no longer visible from the current body position.");
     }
     if (PICKAXE_HARVEST_BLOCKS.has(block.id) && !hasPickaxe(agent)) {
       return runtimeFail("wrong_tool", "A pickaxe is required to harvest this block.");
@@ -944,12 +943,12 @@ export class MockRuntimeServer {
     if (targetRef) {
       const refState = this.validateRef(agent, targetRef);
       if (!refState.ok) return refState;
-      if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside use range.");
       const currentBlock = this.blocks.find((candidate) => samePos(candidate.pos, refState.ref.pos) && candidate.id === refState.ref.id && !candidate.mined);
       if (!currentBlock) return runtimeFail("target_not_visible", "Block is no longer present.");
       if (!this.isVisibleFromAgent(agent, currentBlock)) {
         return runtimeFail("target_not_visible_from_current_view", "The observed block is no longer visible from the current body position.");
       }
+      if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside use range.");
       if (item && this.inventoryCount(agent, item) <= 0) {
         return runtimeFail("missing_material", `Agent inventory does not contain ${item}.`);
       }
@@ -1967,9 +1966,9 @@ export class MockRuntimeServer {
     if (!agent) return runtimeFail("agent_not_born", `Unknown agent ${agentId}`);
     const refState = this.validateRef(agent, targetRef);
     if (!refState.ok) return refState;
-    if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside placement range.");
     const visibleState = this.validateCurrentBlockVisibility(agent, refState.ref);
     if (visibleState) return visibleState;
+    if (refState.ref.distance > 4.5) return runtimeFail("target_too_far", "Target is outside placement range.");
     if (!isPlaceableBlockItem(item)) {
       return runtimeFail("unsupported_capability", "block.place requires a placeable block item.");
     }

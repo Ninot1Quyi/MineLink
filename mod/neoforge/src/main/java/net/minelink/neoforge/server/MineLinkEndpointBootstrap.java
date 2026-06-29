@@ -1397,10 +1397,6 @@ public final class MineLinkEndpointBootstrap {
         if (blockRef.expired()) {
             return failure(request, "expired_ref", "Block ref has expired.");
         }
-        if (Math.sqrt(blockRef.pos.distSqr(agent.blockPosition())) > 6.0) {
-            return failure(request, "target_too_far", "The block is outside the current server_agent reach.");
-        }
-
         ServerLevel level = server.overworld();
         BlockState state = level.getBlockState(blockRef.pos);
         if (state.isAir() || !blockId(state).equals(blockRef.blockId)) {
@@ -1408,6 +1404,9 @@ public final class MineLinkEndpointBootstrap {
         }
         if (!agent.canSee(blockRef.pos, state, agent.blockPosition())) {
             return failure(request, "target_not_visible_from_current_view", "The observed block is no longer visible from the current server_agent view.");
+        }
+        if (Math.sqrt(blockRef.pos.distSqr(agent.blockPosition())) > 6.0) {
+            return failure(request, "target_too_far", "The block is outside the current server_agent reach.");
         }
         if (!level.mayInteract(agent.entity, blockRef.pos)) {
             return failure(request, "blocked", "The server rejected interaction with this block.");
@@ -1538,6 +1537,7 @@ public final class MineLinkEndpointBootstrap {
         if (!interactionResult.consumesAction() || placedState.isAir()) {
             return failure(request, "blocked", "Vanilla placement did not consume the action or place a block.");
         }
+        broadcastAgentSwing(agent);
 
         JsonObject placed = new JsonObject();
         placed.addProperty("item", itemId);
@@ -1553,6 +1553,7 @@ public final class MineLinkEndpointBootstrap {
         JsonObject response = toolCompleted(request);
         response.add("result", result);
         updateRecorder(agent);
+        logRecorderVisibleAction(agent, "block.place", placementPos, itemId);
         return response;
     }
 
@@ -1595,6 +1596,7 @@ public final class MineLinkEndpointBootstrap {
         }
         if (interactionResult.shouldSwing()) {
             agent.entity.swing(InteractionHand.MAIN_HAND, true);
+            broadcastAgentSwing(agent);
         }
         syncInventoryMirrorFromPlayer(agent);
         Map<String, Integer> afterInventory = inventoryCounts(agent);
@@ -1641,7 +1643,31 @@ public final class MineLinkEndpointBootstrap {
         JsonObject response = toolCompleted(request);
         response.add("result", result);
         updateRecorder(agent);
+        logRecorderVisibleAction(agent, "action.use", blockRef == null ? null : blockRef.pos, itemId.isBlank() ? "minecraft:air" : itemId);
         return response;
+    }
+
+    private void logRecorderVisibleAction(AgentBody agent, String toolName, BlockPos pos, String detail) {
+        if (!recorderEnabled()) {
+            return;
+        }
+        updateRecorder(agent);
+        MineLinkMod.LOGGER.info(
+            "MineLink recorder visible action server_agent {} tool={} target={} detail={}",
+            agent.displayName,
+            toolName,
+            pos == null ? "self" : pos,
+            detail == null || detail.isBlank() ? "none" : detail
+        );
+        try {
+            TimeUnit.MILLISECONDS.sleep(Math.max(
+                0,
+                Math.min(800, parseIntSetting("MINELINK_RECORDER_VISIBLE_ACTION_HOLD_MS", "minelink.recorder.visibleActionHoldMs", 300))
+            ));
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+        }
+        updateRecorder(agent);
     }
 
     private JsonObject sleep(JsonObject request, AgentBody agent, JsonObject arguments) {
@@ -2360,15 +2386,15 @@ public final class MineLinkEndpointBootstrap {
             return new InteractionTarget(null, failure(request, "expired_ref", "Block ref has expired."));
         }
         ServerLevel level = server.overworld();
-        if (!agent.entity.canInteractWithBlock(blockRef.pos, 1.0)) {
-            return new InteractionTarget(null, failure(request, "target_too_far", "The block is outside the vanilla interaction range."));
-        }
         BlockState state = level.getBlockState(blockRef.pos);
         if (state.isAir() || !blockId(state).equals(blockRef.blockId)) {
             return new InteractionTarget(null, failure(request, "target_not_visible", "The observed block is no longer present."));
         }
         if (!agent.canSee(blockRef.pos, state, agent.blockPosition())) {
             return new InteractionTarget(null, failure(request, "target_not_visible_from_current_view", "The observed block is no longer visible from the current server_agent view."));
+        }
+        if (!agent.entity.canInteractWithBlock(blockRef.pos, 1.0)) {
+            return new InteractionTarget(null, failure(request, "target_too_far", "The block is outside the vanilla interaction range."));
         }
         if (blockRef.pos.getY() >= level.getMaxBuildHeight() || !level.mayInteract(agent.entity, blockRef.pos)) {
             return new InteractionTarget(null, failure(request, "blocked", "The server rejected interaction with the target block."));
@@ -4326,7 +4352,9 @@ public final class MineLinkEndpointBootstrap {
                     level.setBlockAndUpdate(pos.immutable(), Blocks.AIR.defaultBlockState());
                 }
             }
-            level.setBlockAndUpdate(base.below(), Blocks.GRASS_BLOCK.defaultBlockState());
+            for (BlockPos pos : BlockPos.betweenClosed(base.offset(-1, -1, -2), base.offset(10, -1, 4))) {
+                level.setBlockAndUpdate(pos.immutable(), Blocks.GRASS_BLOCK.defaultBlockState());
+            }
             level.setBlockAndUpdate(base.east(2), Blocks.OAK_LOG.defaultBlockState());
             level.setBlockAndUpdate(base.east(8), Blocks.OAK_LOG.defaultBlockState());
             level.setBlockAndUpdate(base.east(3), Blocks.STONE.defaultBlockState());

@@ -199,9 +199,11 @@ Current status:
   observes a visible diamond-ore ref, moves the body behind an opaque wall, and
   then proves the old ref is rejected with
   `target_not_visible_from_current_view` for both `action.look_at` and
-  `action.mine_visible_block`. This reduces the all-knowing-agent risk for
-  stale observed refs; it does not yet cover moving entities, fluids, partial
-  occluders, or every tool namespace.
+  `action.mine_visible_block`. Current-view validation is intentionally checked
+  before distance/tool failures for world-changing actions so stale or hidden
+  refs cannot be masked as `target_too_far` or `wrong_tool`. This reduces the
+  all-knowing-agent risk for stale observed refs; it does not yet cover moving
+  entities, fluids, partial occluders, or every tool namespace.
 - Mock runtime and real NeoForge runtime now cover `body_grounding`, which
   verifies `observe.self` reports `on_ground=true`, `no_gravity=false`, and
   `physics_tick_path=server_tick_grounding` for the server_agent body. The
@@ -1194,7 +1196,16 @@ Current status:
   `recorderVisibleMiningMs >= recorderMinVisibleMiningMs` before it can set
   `recorderScenarioActionVisible=true`, so a clip that only shows the agent
   beside the final result, or only a sub-second mining flash, cannot pass as
-  mining evidence. The video-oriented `mine_tree` replay still exercises
+  mining evidence. Non-mining world-changing videos must also show the
+  scenario action, not just a moving or idle body: successful `block.place`
+  tools require a server-side `MineLink recorder visible action server_agent
+  ... tool=block.place` marker, and successful `action.use` tools require the
+  matching `tool=action.use` marker. The server writes those markers only after
+  the vanilla/NeoForge action has consumed successfully, broadcasts the visible
+  swing, and briefly holds the recorder follow view. Portal and Create videos
+  therefore cannot pass release if they show only agents standing near the
+  final structure or only terminal assertions. The video-oriented `mine_tree`
+  replay still exercises
   container movement by taking the wooden axe from the shared chest, but submits
   the visible-log mining action with `tool_policy=empty_hand` and then verifies
   `action.status` reports terminal `completed`, `action_result.mined`, and

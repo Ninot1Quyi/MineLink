@@ -287,6 +287,16 @@ const recorderTaskWindowSeconds =
     : 0;
 const recorderVisibleMining = serverLogText.includes("MineLink recorder visible mining server_agent");
 const requiresVisibleMining = successfulWorkToolNames.includes("action.mine_visible_block");
+function hasRecorderVisibleAction(toolName) {
+  const escaped = toolName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`MineLink recorder visible action server_agent .* tool=${escaped}(?:\\s|$)`).test(serverLogText);
+}
+const requiresVisiblePlacement = successfulWorkToolNames.includes("block.place");
+const requiresVisibleUse = successfulWorkToolNames.includes("action.use");
+const recorderVisiblePlacement = hasRecorderVisibleAction("block.place");
+const recorderVisibleUse = hasRecorderVisibleAction("action.use");
+const recorderNonMiningActionVisible =
+  (!requiresVisiblePlacement || recorderVisiblePlacement) && (!requiresVisibleUse || recorderVisibleUse);
 const recorderVisibleMiningMs = Math.max(
   0,
   ...successfulWorkTools
@@ -315,7 +325,7 @@ const recorderMinVisibleMiningMs = Math.max(
 );
 const recorderVisibleMiningDurationAdequate =
   !requiresVisibleMining || (recorderVisibleMining && recorderVisibleMiningMs >= recorderMinVisibleMiningMs);
-const recorderScenarioActionVisible = !requiresVisibleMining || recorderVisibleMiningDurationAdequate;
+const recorderScenarioActionVisible = recorderVisibleMiningDurationAdequate && recorderNonMiningActionVisible;
 const recorderVisibleActionSeconds = Math.max(recorderTaskWindowSeconds, recorderVisibleMiningMs / 1000);
 const recorderWorkCoverageAdequate =
   recorderReadyBeforeScenario &&
@@ -505,6 +515,12 @@ if (requiresVisibleMining && !recorderVisibleMiningDurationAdequate) {
     `Recorder visible mining duration is too short: ${recorderVisibleMiningMs}ms < ${recorderMinVisibleMiningMs}ms`,
   );
 }
+if (requiresVisiblePlacement && !recorderVisiblePlacement) {
+  failures.push("Recorder did not capture a visible block.place action marker for the task");
+}
+if (requiresVisibleUse && !recorderVisibleUse) {
+  failures.push("Recorder did not capture a visible action.use marker for the task");
+}
 if (!recorderWorkVisible) {
   failures.push(
     "Recorder did not confirm active visible server_agent work for this task; final evidence requires successful work tools, passing assertions, and visible centered follow footage",
@@ -537,6 +553,8 @@ const terminalLines = [
   `task window sec: ${recorderTaskWindowSeconds}`,
   `action visible sec: ${recorderVisibleActionSeconds.toFixed(1)}`,
   `visible mining: ${recorderVisibleMining ? "YES" : "NO"}`,
+  `visible place: ${recorderVisiblePlacement ? "YES" : "NO"}`,
+  `visible use: ${recorderVisibleUse ? "YES" : "NO"}`,
   `mining ms: ${recorderVisibleMiningMs}/${recorderMinVisibleMiningMs}`,
   `actions terminal: ${submittedActionsTerminalConfirmed ? "YES" : "NO"}`,
   `work visible: ${recorderWorkVisible ? "YES" : "NO"}`,
@@ -723,6 +741,10 @@ const summaryLines = [
   `- Recorder visible mining ms: \`${recorderVisibleMiningMs}\``,
   `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
   `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
+  `- Recorder visible placement: \`${recorderVisiblePlacement ? "yes" : "no"}\``,
+  `- Recorder visible use: \`${recorderVisibleUse ? "yes" : "no"}\``,
+  `- Requires visible placement: \`${requiresVisiblePlacement ? "yes" : "no"}\``,
+  `- Requires visible use: \`${requiresVisibleUse ? "yes" : "no"}\``,
   `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
     `- Visual QA passed: \`${visualQualityPassed ? "yes" : "no"}\``,
     `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,
@@ -801,6 +823,10 @@ const origin = {
   recorderMinVisibleMiningMs,
   recorderVisibleMiningDurationAdequate,
   requiresVisibleMining,
+  recorderVisiblePlacement,
+  recorderVisibleUse,
+  requiresVisiblePlacement,
+  requiresVisibleUse,
   recorderScenarioActionVisible,
   visualAnalysis: visualAnalysisPath,
   diagnosticClientCaptureStoryboard: diagnosticStoryboardPath,
@@ -868,6 +894,10 @@ await fs.writeFile(
     `- Recorder visible mining ms: \`${recorderVisibleMiningMs}\``,
     `- Recorder min visible mining ms: \`${recorderMinVisibleMiningMs}\``,
     `- Recorder visible mining duration adequate: \`${recorderVisibleMiningDurationAdequate ? "yes" : "no"}\``,
+    `- Recorder visible placement: \`${recorderVisiblePlacement ? "yes" : "no"}\``,
+    `- Recorder visible use: \`${recorderVisibleUse ? "yes" : "no"}\``,
+    `- Requires visible placement: \`${requiresVisiblePlacement ? "yes" : "no"}\``,
+    `- Requires visible use: \`${requiresVisibleUse ? "yes" : "no"}\``,
     `- Recorder scenario action visible: \`${recorderScenarioActionVisible ? "yes" : "no"}\``,
     `- Visual QA passed: \`${visualQualityPassed ? "yes" : "no"}\``,
     `- Visual jitter passed: \`${visualJitterPassed ? "yes" : "no"}\``,

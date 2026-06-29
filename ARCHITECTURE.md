@@ -173,6 +173,18 @@ No gate is full-product complete until it is `product-accepted` with repeatable
 real evidence. Real NeoForge reports outrank mock and replay reports for game
 behavior claims.
 
+For video-required product evidence, the accepted MP4 must be a client/terminal
+composite from the same NeoForge run. The left panel is the Minecraft client
+following the visible `server_agent`; the right panel is MCP/server/agent log
+evidence. The release renderer fails closed unless recorder metadata proves the
+client was in world, capture started after world-ready, the expected
+`server_agent` count was visible, the active target was followed/centered, and
+the task work was visible. Mining tasks require the visible mining marker.
+Non-mining world-changing tasks, such as portal placement or ignition, require
+server-side visible-action markers for the successful `block.place` and
+`action.use` tools. A clip that only shows an idle body, a final result, or a
+terminal-only report is diagnostic, not acceptance evidence.
+
 ## Parallel Development Model
 
 Use one environment per bounded task:
@@ -1127,6 +1139,11 @@ skip MCP tools, or count the post-scenario hold as work; it only slows public
 tool replay after the recorder has locked onto the expected visible agents.
 Release gates must check `recorderWorkCoverageAdequate`, not compare the
 post-scenario hold length to the minimum work-coverage seconds.
+For non-mining world-changing scenarios, the recorder renderer must also see
+server log markers such as `MineLink recorder visible action ... tool=block.place`
+or `tool=action.use` that match successful task tools. A final structure,
+terminal assertion list, or post-scenario camera hold is not enough evidence
+that the client video captured the actual placement/interaction work.
 The scenario report must also confirm submit-mode actions reached terminal
 lifecycle states; `submittedActionsTerminalConfirmed` prevents a video from
 ending at action submission time when work is still queued or running. For
