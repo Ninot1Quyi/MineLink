@@ -1239,8 +1239,16 @@ and release reports, uploads the MP4 through
 `scripts/dev/comment-pr-evidence.mjs` with the returned
 `github.com/user-attachments/assets/...` URL. This keeps long-lived GitHub web
 state on the operator's local machine instead of GitHub Actions. If GitHub has
-expired or rejected the cookie file, the publisher fails closed with a
-sanitized report. Operators may pass `--update-secret`
+expired or rejected the cookie file, the publisher first attempts the local
+macOS Chrome DB export helper
+`scripts/dev/export-github-cookie-from-chrome-db.mjs`, which reads the local
+Chrome cookie database, uses the operator's macOS Keychain Chrome Safe Storage
+entry, strips Chrome's `SHA256(host_key)` cookie-binding prefix, writes only the
+ignored MineLink cookie file, and never prints cookie values. This helper is a
+local trusted-publisher recovery path only; it is not available in GitHub
+Actions or Ona containers and does not make GitHub sessions non-expiring. If
+the refreshed or exported cookie is still rejected, the publisher fails closed
+with a sanitized report. Operators may pass `--update-secret`
 when they also want to refresh the GitHub Actions cookie secret, but that secret
 remains a convenience path, not the durable source of truth for final PR video
 publication. Full-chain PR-producing workflows run an early

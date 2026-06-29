@@ -25,6 +25,11 @@ const args = {
   secretName: "MINELINK_GITHUB_USER_SESSION",
   refreshOutput: ".minelink-dev/reports/github-attachment-cookie-refresh.md",
   refreshJsonOutput: ".minelink-dev/reports/github-attachment-cookie-refresh.json",
+  chromeCookieDbExport:
+    process.env.MINELINK_GITHUB_CHROME_DB_EXPORT_ON_REFRESH_FAIL !== "0" &&
+    process.env.MINELINK_GITHUB_CHROME_DB_EXPORT_ON_REFRESH_FAIL !== "false",
+  chromeDbExportOutput: ".minelink-dev/reports/github-chrome-db-cookie-export.md",
+  chromeDbExportJsonOutput: ".minelink-dev/reports/github-chrome-db-cookie-export.json",
   uploadOutput: ".minelink-dev/reports/github-user-attachment-upload.md",
   uploadJsonOutput: ".minelink-dev/reports/github-user-attachment-upload.json",
   commentOutput: ".minelink-dev/reports/pr-video-evidence-comment.md",
@@ -61,6 +66,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--cookie-file") args.cookieFile = readValue();
   else if (arg === "--refresh-output") args.refreshOutput = readValue();
   else if (arg === "--refresh-json-output") args.refreshJsonOutput = readValue();
+  else if (arg === "--chrome-db-export-output") args.chromeDbExportOutput = readValue();
+  else if (arg === "--chrome-db-export-json-output") args.chromeDbExportJsonOutput = readValue();
   else if (arg === "--upload-output") args.uploadOutput = readValue();
   else if (arg === "--upload-json-output") args.uploadJsonOutput = readValue();
   else if (arg === "--comment-output") args.commentOutput = readValue();
@@ -73,6 +80,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--boundary") args.boundary = readValue();
   else if (arg === "--secret-name") args.secretName = readValue();
   else if (arg === "--no-refresh-cookie") args.refreshCookie = false;
+  else if (arg === "--no-chrome-db-export") args.chromeCookieDbExport = false;
   else if (arg === "--upload-only") uploadOnly = true;
   else if (arg === "--update-secret") updateSecret = true;
   else if (arg === "--dry-run") dryRun = true;
@@ -92,6 +100,7 @@ Options:
   --file FILE              Acceptance MP4 path. Auto-discovered under artifact-dir.
   --cookie-file FILE       Ignored local cookie file. Defaults under .minelink-dev/secrets.
   --no-refresh-cookie      Skip the HTTP cookie refresh/validation step.
+  --no-chrome-db-export    Do not refresh the ignored cookie file from local macOS Chrome DB.
   --upload-only            Upload the attachment but do not comment on the PR.
   --update-secret          Also update MINELINK_GITHUB_USER_SESSION via gh secret set.
   --dry-run                Validate artifact paths and cookie refresh, then stop before upload.`);
@@ -272,10 +281,36 @@ async function refreshCookie(env) {
   if (updateSecret) refreshArgs.push("--update-secret");
   if (dryRun) refreshArgs.push("--dry-run");
 
-  const result = runNodeScript("scripts/dev/refresh-github-attachment-cookie.mjs", refreshArgs, env);
+  let result = runNodeScript("scripts/dev/refresh-github-attachment-cookie.mjs", refreshArgs, env);
   report.refreshStatus = result.status;
   report.refreshStdout = result.stdout;
   report.refreshStderr = result.stderr;
+  if (result.status !== 0 && args.chromeCookieDbExport) {
+    const exportArgs = [
+      "--cookie-file",
+      args.cookieFile,
+      "--output",
+      args.chromeDbExportOutput,
+      "--json-output",
+      args.chromeDbExportJsonOutput,
+    ];
+    if (dryRun) exportArgs.push("--dry-run");
+    const exportResult = runNodeScript("scripts/dev/export-github-cookie-from-chrome-db.mjs", exportArgs, env);
+    report.chromeDbExportStatus = exportResult.status;
+    report.chromeDbExportStdout = exportResult.stdout;
+    report.chromeDbExportStderr = exportResult.stderr;
+    const exportReport = await readJson(args.chromeDbExportJsonOutput).catch(() => null);
+    if (exportReport) {
+      report.chromeDbExportResult = exportReport.result ?? "";
+      report.chromeDbExportCookieCount = exportReport.cookieCount ?? 0;
+    }
+    if (exportResult.status === 0 && !dryRun) {
+      result = runNodeScript("scripts/dev/refresh-github-attachment-cookie.mjs", refreshArgs, env);
+      report.refreshStatus = result.status;
+      report.refreshStdout = result.stdout;
+      report.refreshStderr = result.stderr;
+    }
+  }
   const refreshReport = await readJson(args.refreshJsonOutput).catch(() => null);
   if (refreshReport) {
     report.cookieNames = refreshReport.cookieNames ?? [];
@@ -394,6 +429,9 @@ async function writeReport() {
     `- Release gate: \`${args.releaseGatePath || "none"}\``,
     `- Cookie file: \`${args.cookieFile || "none"}\``,
     `- Cookie refresh: \`${args.refreshCookie ? "yes" : "no"}\``,
+    `- Chrome DB export fallback: \`${args.chromeCookieDbExport ? "yes" : "no"}\``,
+    `- Chrome DB export result: \`${report.chromeDbExportResult || "none"}\``,
+    `- Chrome DB export cookie count: \`${report.chromeDbExportCookieCount ?? 0}\``,
     `- Attachment URL: ${report.attachmentUrl || "none"}`,
     `- Comment URL: ${report.commentUrl || "none"}`,
     `- Upload only: \`${uploadOnly ? "yes" : "no"}\``,
@@ -429,6 +467,11 @@ const report = {
   refreshStdout: "",
   refreshStderr: "",
   refreshResult: "",
+  chromeDbExportStatus: null,
+  chromeDbExportStdout: "",
+  chromeDbExportStderr: "",
+  chromeDbExportResult: "",
+  chromeDbExportCookieCount: 0,
   uploadStatus: null,
   uploadStdout: "",
   uploadStderr: "",
