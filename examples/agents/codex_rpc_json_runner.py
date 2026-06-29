@@ -421,12 +421,13 @@ def run_portal_coop(
                 tools = catalog["default_list"]
                 state["catalog_checks"] = catalog
 
+        wait_for_recorder_ready_before_scenario(log_dir)
+
         quota_client = stack.enter_context(MineLinkMcpClient())
         quota_connect = quota_client.connect_server(endpoint=endpoint, owner_name=team_owner_name)
         quota_birth = quota_client.birth(f"{scenario}:quota_probe: should be rejected by owner limit")
         quota_probe = {"connect": quota_connect, "birth": quota_birth}
         state["quota_probe"] = quota_probe
-        wait_for_recorder_ready_before_scenario(log_dir)
 
         log(
             "codex_rpc_team_session_started",

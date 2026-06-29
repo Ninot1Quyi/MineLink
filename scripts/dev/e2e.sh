@@ -229,7 +229,7 @@ quiesce_repo_background_tasks() {
       continue
     fi
     case "${args:-}" in
-      *"$repo_root"*"npm run build"*|*"$repo_root"*"npm run typecheck"*|*"$repo_root"*"node_modules/.bin/tsc"*|*"$repo_root"*"node_modules/vitest"*|*"$repo_root"*"verify-agent-task.sh"*)
+      *"$repo_root"*"npm run build"*|*"$repo_root"*"npm run typecheck"*|*"$repo_root"*"node_modules/.bin/tsc"*|*"$repo_root"*"node_modules/vitest"*|*"$repo_root"*"verify-agent-task.sh"*|*"$repo_root"*"examples/agents/codex_rpc_json_runner.py"*|*"$repo_root"*"scripts/dev/run-agent.sh"*|*"$repo_root"*"scripts/dev/run-with-timeout.py"*"MineLink agent scenario"*)
         {
           echo "quiesce repo task pid $pid ppid ${ppid:-unknown}"
           ps -p "$pid" -o pid,ppid,etime,cmd 2>/dev/null || true

@@ -1062,8 +1062,11 @@ failure evidence. The recorder also writes `logs/resource-snapshots.log` around
 dependency checks, client startup, ffmpeg startup, and recorder shutdown so
 slow or choppy videos can be attributed to CPU, memory, or process contention
 instead of guesswork. Recorder-backed finalizer runs quiesce same-repository
-build, typecheck, test, and Gradle daemon processes before launching Minecraft,
-then run the client/server Gradle launches with bounded
+build, typecheck, test, Gradle daemon, Codex RPC runner, and local run-agent
+processes before launching Minecraft. This prevents a stale runner from
+connecting to the fresh server, birthing server_agent bodies, consuming the
+owner quota, or completing task work before the recorder client is ready. The
+finalizer then runs the client/server Gradle launches with bounded
 `MINELINK_GRADLE_JVMARGS` and quieter `MINELINK_NEOFORGE_LOG_*` settings so
 the recording path preserves CPU and memory for the actual game evidence.
 Stage
@@ -1111,9 +1114,12 @@ defaults to three visible candidates. `render-client-capture-video.mjs`,
 when that count is missing or mismatched, or when the selected target identity
 is unstable. This blocks clips that frame the recorder player, a different
 MineLink body, or an ambiguous group of agents as evidence for the task agent.
-The `portal_coop` replay must also prove all three builders can move through
-public `action.move` before portal work continues; the video gate must not
-accept a static three-agent group that only appears after the work is done.
+The `portal_coop` replay must also wait until the recorder has locked onto the
+three server_agent builders after their current-session births and before the
+quota probe or first world-changing tool. It must prove all three builders can
+move through public `action.move` before portal work continues; the video gate
+must not accept a static three-agent group that only appears after the work is
+done.
 The server-side recorder helper
 must log `MineLink recorder target moved server_agent` after the active
 `server_agent` body visibly moves during the recorded scenario; the renderer

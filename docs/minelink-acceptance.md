@@ -1151,7 +1151,7 @@ Current status:
   to that same player body in third person, rather than filming a proxy marker
   or a detached first-person recorder hand; the renderer records this as
   `recorderClientFollow=true`. The server-side recorder helper must
-	  log `MineLink recorder target moved server_agent` after the active
+  log `MineLink recorder target moved server_agent` after the active
   `server_agent` visibly moves during the recorded scenario; the renderer
   records this as `recorderTargetMoved=true`. The recorder client must also log
   the visible `server_agent` candidate count and expected scenario count. Single
@@ -1171,8 +1171,11 @@ Current status:
   renderer records this as `recorderClientTargetVisible=true`. The renderer
   must also set `recorderReadyBeforeScenario=true` before the first scenario
   work tool runs, so fast tasks cannot finish before the recorder has visibly
-  locked onto the active `server_agent`. After the scenario passes, the harness
-  must keep recording through task completion plus a short visible confirmation
+  locked onto the active `server_agent`. For `portal_coop`, that readiness wait
+  happens after the three current-session builders are born and before the quota
+  probe or first world-changing MCP tool, so stale or late-only three-agent
+  footage cannot satisfy the gate. After the scenario passes, the harness must
+  keep recording through task completion plus a short visible confirmation
   window. The renderer sets `recorderWorkCoverageAdequate=true` only when the
   task window from recorder-ready to scenario-complete, or a scenario-specific
   visible action duration such as `recorderVisibleMiningMs`, satisfies the
@@ -1289,9 +1292,13 @@ Current status:
   `logs/resource-snapshots.log` around dependency checks, client startup,
   ffmpeg startup, and shutdown so reviewers can diagnose CPU or process
   contention when the Minecraft capture is choppy. Recorder-backed finalizer
-  runs also quiesce same-repository build, typecheck, test, and Gradle daemon
-  processes before launching Minecraft, and pass bounded Gradle JVM plus quieter
-  NeoForge logging environment settings into the client/server runs. The
+  runs also quiesce same-repository build, typecheck, test, Gradle daemon, Codex
+  RPC runner, and local run-agent processes before launching Minecraft. This
+  prevents an old runner from connecting to the fresh server, birthing
+  server_agent bodies, consuming the owner quota, or completing scenario work
+  before the recorder client is ready. The run then passes bounded Gradle JVM
+  plus quieter NeoForge logging environment settings into the client/server
+  runs. The
   finalizer stage group is
   fail-fast: when validation or a guarded prerequisite fails, downstream
   video/storyboard/review stages stop instead of publishing derivative
