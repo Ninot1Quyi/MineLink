@@ -72,7 +72,9 @@ ona/ai-automations/                     Ona validation automation specs
 - `packages/mock-runtime` is a fast contract harness. It is not product evidence
   for real Minecraft behavior.
 - `examples/agents/codex_rpc_json_runner.py` drives public MCP tools from
-  Codex-style JSON-RPC decisions. It must not call runtime internals.
+  Codex-style JSON-RPC decisions. It may keep local replay bookkeeping such as
+  a stable single-agent name for placement labels, but it must not call runtime
+  internals or become a world-state authority.
 
 ## Action Lifecycle
 

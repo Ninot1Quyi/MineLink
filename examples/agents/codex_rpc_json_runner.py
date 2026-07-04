@@ -78,6 +78,7 @@ def main() -> None:
         return
 
     state: JsonDict = {
+        "name": "agent",
         "scenario": scenario,
         "objective": scenario_objective(scenario),
         "turn": 0,
@@ -131,7 +132,7 @@ def main() -> None:
                 record = {"turn": turn, "name": name, "arguments": arguments, "result": result}
                 state["tool_results"].append(record)
                 update_state_from_tool_result(state, name, result)
-                update_shared_state_from_tool_result(state, agent_name, name, result)
+                update_shared_state_from_tool_result(state, str(state["name"]), name, result)
                 log("codex_rpc_tool_result", turn=turn, name=name, result=compact_result(result))
 
             wait_ms = int(decision.get("wait_ms", 0) or 0)
