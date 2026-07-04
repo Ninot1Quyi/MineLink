@@ -1068,8 +1068,12 @@ failure evidence. The recorder also writes `logs/resource-snapshots.log` around
 dependency checks, client startup, ffmpeg startup, and recorder shutdown so
 slow or choppy videos can be attributed to CPU, memory, or process contention
 instead of guesswork. Recorder-backed finalizer runs quiesce same-repository
-build, typecheck, test, Gradle daemon, Codex RPC runner, and local run-agent
-processes before launching Minecraft. This prevents a stale runner from
+build, typecheck, test, Gradle daemon, Codex RPC runner, local e2e wrappers,
+and local run-agent processes before launching Minecraft. The quiesce pass
+treats absolute repo-path commands and relative commands whose process cwd is
+inside the MineLink checkout as same-repository tasks, so Ona validation
+commands such as `bash scripts/dev/e2e.sh portal_coop` cannot survive merely
+because their argv omits the absolute repository path. This prevents a stale runner from
 connecting to the fresh server, birthing server_agent bodies, consuming the
 owner quota, or completing task work before the recorder client is ready. The
 finalizer then runs the client/server Gradle launches with bounded

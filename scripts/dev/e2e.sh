@@ -168,6 +168,23 @@ kill_tree() {
   kill "$pid" >/dev/null 2>&1 || true
 }
 
+process_cwd_under_repo() {
+  pid="$1"
+  if [ ! -r "/proc/$pid/cwd" ]; then
+    return 1
+  fi
+  local pid_cwd
+  pid_cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
+  case "$pid_cwd" in
+    "$repo_root"|"$repo_root"/*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 kill_repo_neoforge_processes() {
   if [ "$runtime" != "neoforge" ]; then
     return 0
@@ -228,10 +245,28 @@ quiesce_repo_background_tasks() {
     if [ "$pid" = "$$" ] || [ "$pid" = "$current_pid" ]; then
       continue
     fi
+    if [ "$pid" = "${PPID:-}" ]; then
+      continue
+    fi
+    local repo_task=0
     case "${args:-}" in
-      *"$repo_root"*"npm run build"*|*"$repo_root"*"npm run typecheck"*|*"$repo_root"*"node_modules/.bin/tsc"*|*"$repo_root"*"node_modules/vitest"*|*"$repo_root"*"verify-agent-task.sh"*|*"$repo_root"*"examples/agents/codex_rpc_json_runner.py"*|*"$repo_root"*"scripts/dev/run-agent.sh"*|*"$repo_root"*"scripts/dev/run-with-timeout.py"*"MineLink agent scenario"*)
+      *"$repo_root"*"npm run build"*|*"$repo_root"*"npm run typecheck"*|*"$repo_root"*"node_modules/.bin/tsc"*|*"$repo_root"*"node_modules/vitest"*|*"$repo_root"*"verify-agent-task.sh"*|*"$repo_root"*"scripts/dev/e2e.sh"*|*"$repo_root"*"examples/agents/codex_rpc_json_runner.py"*|*"$repo_root"*"scripts/dev/run-agent.sh"*|*"$repo_root"*"scripts/dev/run-with-timeout.py"*"MineLink agent scenario"*)
+        repo_task=1
+        ;;
+    esac
+    if [ "$repo_task" = "0" ] && process_cwd_under_repo "$pid"; then
+      case "${args:-}" in
+        *"npm run build"*|*"npm run typecheck"*|*"node_modules/.bin/tsc"*|*"node_modules/vitest"*|*"verify-agent-task.sh"*|*"scripts/dev/e2e.sh"*|*"examples/agents/codex_rpc_json_runner.py"*|*"scripts/dev/run-agent.sh"*|*"scripts/dev/run-with-timeout.py"*"MineLink agent scenario"*)
+          repo_task=1
+          ;;
+      esac
+    fi
+    if [ "$repo_task" = "1" ]; then
         {
           echo "quiesce repo task pid $pid ppid ${ppid:-unknown}"
+          if [ -r "/proc/$pid/cwd" ]; then
+            echo "cwd $(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
+          fi
           ps -p "$pid" -o pid,ppid,etime,cmd 2>/dev/null || true
         } >> "$work_dir/logs/pre-clean.log" 2>/dev/null || true
         kill_tree "$pid"
@@ -239,8 +274,7 @@ quiesce_repo_background_tasks() {
         if kill -0 "$pid" >/dev/null 2>&1; then
           kill -9 "$pid" >/dev/null 2>&1 || true
         fi
-        ;;
-    esac
+    fi
   done
   if [ -x mod/neoforge/gradlew ]; then
     (cd mod/neoforge && ./gradlew --stop) >> "$work_dir/logs/pre-clean.log" 2>&1 || true

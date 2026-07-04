@@ -1299,7 +1299,11 @@ Current status:
   ffmpeg startup, and shutdown so reviewers can diagnose CPU or process
   contention when the Minecraft capture is choppy. Recorder-backed finalizer
   runs also quiesce same-repository build, typecheck, test, Gradle daemon, Codex
-  RPC runner, and local run-agent processes before launching Minecraft. This
+  RPC runner, local e2e wrappers, and local run-agent processes before
+  launching Minecraft. The quiesce pass matches both absolute repo-path
+  commands and relative commands whose cwd is inside the MineLink checkout, so
+  Ona validation commands cannot keep a second `portal_coop` server alive just
+  because their argv omits the absolute repository path. This
   prevents an old runner from connecting to the fresh server, birthing
   server_agent bodies, consuming the owner quota, or completing scenario work
   before the recorder client is ready. The run then passes bounded Gradle JVM
