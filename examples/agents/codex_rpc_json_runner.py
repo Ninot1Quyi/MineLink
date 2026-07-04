@@ -131,7 +131,7 @@ def main() -> None:
                 record = {"turn": turn, "name": name, "arguments": arguments, "result": result}
                 state["tool_results"].append(record)
                 update_state_from_tool_result(state, name, result)
-                update_shared_state_from_tool_result(state, name, result)
+                update_shared_state_from_tool_result(state, agent_name, name, result)
                 log("codex_rpc_tool_result", turn=turn, name=name, result=compact_result(result))
 
             wait_ms = int(decision.get("wait_ms", 0) or 0)
@@ -485,7 +485,7 @@ def run_portal_coop(
                 agent_state["tool_results"].append(record)
                 state["tool_results"].append(record)
                 update_state_from_tool_result(agent_state, name, result)
-                update_shared_state_from_tool_result(state, name, result)
+                update_shared_state_from_tool_result(state, agent_name, name, result)
                 log(
                     "codex_rpc_team_tool_result",
                     turn=turn,
@@ -753,6 +753,9 @@ def find_placed_block_ref(state: JsonDict, global_state: Optional[JsonDict], lab
     for block in visible_blocks(state):
         if normalize_pos(block.get("position")) == expected_pos or normalize_pos(block.get("pos_hint")) == expected_pos:
             return str(block["block_ref"])
+    placed_ref = placement.get("block_ref")
+    if placement.get("agent") == state.get("name") and isinstance(placed_ref, str) and placed_ref:
+        return placed_ref
     raise RuntimeError(f"No visible block ref matches placement label {label} at {expected_pos}")
 
 
@@ -796,6 +799,8 @@ def current_container(state: JsonDict) -> JsonDict:
 
 
 def update_state_from_tool_result(state: JsonDict, name: str, result: JsonDict) -> None:
+    if is_tool_failure(result):
+        return
     if name == "observe.scene":
         state["last_scene"] = result
     elif name in {"container.open", "container.observe"}:
@@ -810,7 +815,7 @@ def update_state_from_tool_result(state: JsonDict, name: str, result: JsonDict) 
         state["last_notices"] = result
 
 
-def update_shared_state_from_tool_result(global_state: JsonDict, name: str, result: JsonDict) -> None:
+def update_shared_state_from_tool_result(global_state: JsonDict, agent_name: str, name: str, result: JsonDict) -> None:
     if name != "block.place" or not isinstance(result, dict):
         return
     placed = result.get("placed")
@@ -823,11 +828,16 @@ def update_shared_state_from_tool_result(global_state: JsonDict, name: str, resu
     if pos is None:
         return
     placements = global_state.setdefault("placements", {})
-    placements[label] = {
+    placement = {
+        "agent": agent_name,
         "item": placed.get("item"),
         "id": placed.get("id"),
         "pos": list(pos),
     }
+    block_ref = placed.get("block_ref")
+    if isinstance(block_ref, str) and block_ref:
+        placement["block_ref"] = block_ref
+    placements[label] = placement
 
 
 def run_assertions(assertions: Any, state: JsonDict, global_state: Optional[JsonDict] = None) -> List[JsonDict]:

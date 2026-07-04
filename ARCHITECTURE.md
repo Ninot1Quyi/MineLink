@@ -93,6 +93,13 @@ Failed submitted actions must preserve the public tool failure reason. Mock
 runtime behavior may mirror this lifecycle contract for fast replay, but real
 Gate 2 evidence requires a NeoForge report.
 
+Successful `block.place` returns a short-lived `block_ref` for the block that
+the same `server_agent` just placed. That ref is convenience evidence from the
+server-validated action, not a global lookup. Other agents may share only the
+label/position evidence in scenario state; before interacting with another
+agent's placed block, they must observe the block themselves and use their own
+recent ref.
+
 ## Body Lifecycle
 
 `server_agent` lifecycle is exposed through public dynamic MCP tools:

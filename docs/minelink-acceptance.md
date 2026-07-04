@@ -628,6 +628,12 @@ Current status:
   relying only on a generic successful `action.use` call. The movement evidence
   is still a bounded fixture slice; it does not yet prove full client-equivalent
   locomotion, pathfinding, jump/fall handling, or animation parity.
+- `block.place` now returns a same-agent short-lived `block_ref` for the newly
+  placed block so a builder can continue building from its own last placement
+  without a synthetic coordinate shortcut. Cross-agent cooperation does not
+  share that ref: another builder must first observe the placed block and use
+  its own recent visible ref. This reduces the all-knowing shared-ref
+  assumption in the portal replay while keeping the gate at `real-partial`.
 - This is not full Gate 8 acceptance yet. Human chat interaction, restart-durable
   A2A/social persistence, distance-limited social discovery, orders,
   letters/telegraph placeholders, and broader rate-limited agent-to-agent

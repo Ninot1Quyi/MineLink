@@ -1990,6 +1990,18 @@ export class MockRuntimeServer {
     const block = placedBlock(item, pos);
     this.blocks.push(block);
     this.removeFromInventory(agent, item, 1);
+    const placedRef = `blk_place_${++this.seq}`;
+    agent.refs.set(placedRef, {
+      ref: placedRef,
+      observationId: "block.place",
+      kind: "block",
+      id: block.id,
+      pos: block.pos,
+      tags: block.tags,
+      distance: round(distance3(agent.position, block.pos)),
+      expiresAt: Date.now() + this.refTtlMs,
+      metadata: block.metadata
+    });
     this.trace({
       event: "block.place",
       agent_id: agent.agentId,
@@ -2002,7 +2014,7 @@ export class MockRuntimeServer {
     return {
       ok: true,
       status: "completed",
-      result: { placed: { item, id: item, pos, placement_label: label ?? null } }
+      result: { placed: { block_ref: placedRef, item, id: item, pos, placement_label: label ?? null } }
     };
   }
 

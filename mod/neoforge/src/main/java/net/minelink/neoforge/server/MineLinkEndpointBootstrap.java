@@ -1569,6 +1569,8 @@ public final class MineLinkEndpointBootstrap {
         broadcastAgentSwing(agent);
 
         JsonObject placed = new JsonObject();
+        String placedRef = agent.addRef(placementPos, blockId(placedState));
+        placed.addProperty("block_ref", placedRef);
         placed.addProperty("item", itemId);
         placed.addProperty("id", blockId(placedState));
         placed.add("position", blockPosition(placementPos));
