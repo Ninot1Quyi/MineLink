@@ -1,0 +1,7 @@
+# MineLink benefits from the largest GPT-5.5 context window currently exposed by
+# the Codex UI for this project. Project-local config loads only in trusted
+# Codex environments; automation still verifies Ona API readback separately.
+model = "gpt-5.5"
+model_context_window = 258400
+model_auto_compact_token_limit = 240000
+model_reasoning_effort = "high"

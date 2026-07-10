@@ -109,6 +109,9 @@ Use automation to reduce agent memory load:
 - `dispatch-agent-factory.mjs`, `watch-linear-agent-tasks.mjs`, and
   `report-agent-factory-chain.mjs` keep the full issue-to-PR automation chain
   visible as nodes, edges, blockers, and remaining percentage.
+- `sync-github-status.mjs` and `sync-linear-status.mjs` are the final
+  status-writeback surfaces after PR CI. GitHub-only tasks require GitHub
+  comment evidence; linked Linear tasks also require Linear sync evidence.
 - `check-agent-factory-secrets.mjs` records secret-safe credential and Ona
   context preflight evidence before dispatcher and Linear watcher runs. It
   reports presence and active-context status only, never credential values.
@@ -130,8 +133,9 @@ Use automation to reduce agent memory load:
   tasks so the video verifier can inspect the actual MP4 before publication.
 - `prepare-video-review-request.mjs` writes the current artifact hashes and
   verifier assignment into `.minelink-dev/reports/artifacts/video-review-request.md`.
-- `check-video-review.mjs` fails release unless a separate Ona Platform Codex
-  verifier has compared the task requirements against the summary and MP4.
+- `check-video-review.mjs` fails release unless the implementation session's
+  native Codex verifier subagent has compared the task requirements against the
+  summary and MP4.
 - The install smoke workflow uploads `minelink-install-smoke-evidence` for
   install/workbench/bootstrap changes.
 - The heavy NeoForge workflow is skipped for docs-only and workbench-only
