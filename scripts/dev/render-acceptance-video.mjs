@@ -12,6 +12,13 @@ let taskId = process.env.MINELINK_TASK_ID ?? "local";
 let branch = process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "";
 let prUrl = process.env.MINELINK_PR_URL ?? "";
 let taskRequirements = process.env.MINELINK_TASK_REQUIREMENTS ?? "";
+let producer =
+  process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ??
+  (process.env.ONA_ENVIRONMENT_ID || process.env.GITPOD_WORKSPACE_ID
+    ? "ona-environment"
+    : process.env.GITHUB_ACTIONS
+      ? "github-actions"
+      : "local");
 let requireMp4 = false;
 
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -28,6 +35,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
     prUrl = process.argv[++index] ?? "";
   } else if (arg === "--task-requirements") {
     taskRequirements = process.argv[++index] ?? "";
+  } else if (arg === "--producer") {
+    producer = process.argv[++index] ?? "";
   } else if (arg === "--require-mp4") {
     requireMp4 = true;
   } else if (arg === "-h" || arg === "--help") {
@@ -45,6 +54,10 @@ make missing video support fail the command.`);
 
 if (!root || !outputDir || !taskId) {
   console.error("--root, --output-dir, and --task-id cannot be empty");
+  process.exit(2);
+}
+if (!producer) {
+  console.error("--producer cannot be empty");
   process.exit(2);
 }
 
@@ -277,6 +290,8 @@ const summaryPath = path.join(outputDir, "acceptance-summary.md");
 const mp4Path = path.join(outputDir, "acceptance.mp4");
 const unavailablePath = path.join(outputDir, "acceptance.mp4.unavailable.txt");
 const framePath = path.join(outputDir, "acceptance-frame.ppm");
+const originJsonPath = path.join(outputDir, "acceptance-video-origin.json");
+const originMdPath = path.join(outputDir, "acceptance-video-origin.md");
 
 const lines = [];
 lines.push("# MineLink Acceptance Artifact Summary");
@@ -288,6 +303,7 @@ lines.push(`- PR: ${prUrl ? `[${prUrl}](${prUrl})` : "`unknown`"}`);
 lines.push(`- Evidence root: \`${root}\``);
 lines.push(`- Scenario reports: \`${scenarioReports.length}\``);
 lines.push(`- Task requirements: \`${taskRequirements || "unspecified"}\``);
+lines.push(`- Video producer: \`${producer}\``);
 lines.push("");
 lines.push("## Acceptance Boundary");
 lines.push("");
@@ -332,10 +348,47 @@ lines.push("");
 
 await fs.writeFile(summaryPath, `${lines.join("\n")}\n`);
 
+const generatedAt = new Date().toISOString();
+const origin = {
+  generatedAt,
+  taskId,
+  branch: resolvedBranch,
+  producer,
+  runtime: {
+    githubActions: process.env.GITHUB_ACTIONS === "true",
+    githubRunId: process.env.GITHUB_RUN_ID ?? "",
+    onaEnvironmentId: process.env.ONA_ENVIRONMENT_ID ?? "",
+    gitpodWorkspaceId: process.env.GITPOD_WORKSPACE_ID ?? "",
+  },
+  boundary:
+    producer.startsWith("github-actions")
+      ? "GitHub Actions generated this trace-driven canary video; it is not an Ona-produced final acceptance recording."
+      : "Acceptance video origin metadata; product acceptance still depends on the requested gate evidence.",
+};
+await fs.writeFile(originJsonPath, `${JSON.stringify(origin, null, 2)}\n`, "utf8");
+await fs.writeFile(
+  originMdPath,
+  [
+    "# MineLink Acceptance Video Origin",
+    "",
+    `- Generated: \`${generatedAt}\``,
+    `- Task id: \`${taskId}\``,
+    `- Branch: \`${resolvedBranch}\``,
+    `- Producer: \`${producer}\``,
+    `- GitHub Actions: \`${origin.runtime.githubActions ? "yes" : "no"}\``,
+    `- GitHub run id: \`${origin.runtime.githubRunId || "none"}\``,
+    `- Ona environment id: \`${origin.runtime.onaEnvironmentId || "none"}\``,
+    `- Boundary: \`${origin.boundary}\``,
+    "",
+  ].join("\n"),
+  "utf8",
+);
+
 const videoLines = [
   "MineLink Acceptance Evidence",
   `Task: ${taskId}`,
   `Branch: ${resolvedBranch}`,
+  `Producer: ${producer}`,
   `PR: ${prUrl || "unknown"}`,
   `Task: ${taskRequirements || "requirements unspecified"}`,
   `Reports: ${scenarioReports.length}`,

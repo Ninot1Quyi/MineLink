@@ -24,6 +24,11 @@ on:
   schedule:
     - cron: "17 3 * * *"
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   neoforge-smoke:
     runs-on: ubuntu-latest
@@ -114,7 +119,26 @@ jobs:
           node scripts/dev/prepare-video-review-request.mjs --task-id "$GITHUB_RUN_ID" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" --task-requirements docs/minelink-acceptance.md --require-mp4
         env:
           MINELINK_PR_URL: ${{ github.event.pull_request.html_url || github.server_url }}
+      - name: Publish playable PR video evidence
+        id: publish-video
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}
+          MINELINK_ARTIFACT_NAME: minelink-neoforge-smoke-evidence
+          MINELINK_WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: github-actions
+        run: |
+          node scripts/dev/publish-pr-video-evidence.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --pr "$MINELINK_PR_NUMBER" \
+            --artifact-name "$MINELINK_ARTIFACT_NAME" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-url "$MINELINK_WORKFLOW_RUN_URL" \
+            --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
+            --require-video
       - uses: actions/upload-artifact@v4
+        id: upload-evidence
         if: always()
         with:
           name: minelink-neoforge-smoke-evidence
@@ -122,3 +146,26 @@ jobs:
             .minelink-dev/
             mod/neoforge/run/logs/
           include-hidden-files: true
+      - name: Comment PR video evidence
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.upload-evidence.outputs.artifact-url != '' && steps.publish-video.outputs.video-url != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINELINK_PR_NUMBER: ${{ github.event.pull_request.number }}
+          MINELINK_ARTIFACT_NAME: minelink-neoforge-smoke-evidence
+          MINELINK_ARTIFACT_ID: ${{ steps.upload-evidence.outputs.artifact-id }}
+          MINELINK_ARTIFACT_URL: ${{ steps.upload-evidence.outputs.artifact-url }}
+          MINELINK_WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MINELINK_ACCEPTANCE_VIDEO_PRODUCER: github-actions
+          MINELINK_ACCEPTANCE_VIDEO_BOUNDARY: GitHub NeoForge smoke canary video for PR review. Final task acceptance still requires an Ona task/finalizer video with producer ona-task-finalizer and same-session Codex verifier approval.
+        run: |
+          node scripts/dev/comment-pr-evidence.mjs \
+            --repository "$GITHUB_REPOSITORY" \
+            --pr "$MINELINK_PR_NUMBER" \
+            --artifact-name "$MINELINK_ARTIFACT_NAME" \
+            --artifact-id "$MINELINK_ARTIFACT_ID" \
+            --artifact-url "$MINELINK_ARTIFACT_URL" \
+            --video-url "${{ steps.publish-video.outputs.video-url }}" \
+            --raw-video-url "${{ steps.publish-video.outputs.raw-video-url }}" \
+            --run-url "$MINELINK_WORKFLOW_RUN_URL" \
+            --producer "$MINELINK_ACCEPTANCE_VIDEO_PRODUCER" \
+            --boundary "$MINELINK_ACCEPTANCE_VIDEO_BOUNDARY"

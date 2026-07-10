@@ -10,7 +10,8 @@ PRs, CI evidence, and acceptance artifacts.
 ```text
 Linear issue or GitHub issue
   -> agent task contract
-  -> Ona Platform Codex agent session
+  -> Ona Platform Codex API launch/readback
+  -> Ona Platform Codex implementation session
   -> one Ona environment / one branch
   -> validation and evidence automation
   -> acceptance MP4
@@ -31,6 +32,15 @@ the dedicated video-review report, and opens or updates the review PR. It does
 not replace the Ona Platform Codex agent session, and it does not re-render the
 MP4 after the verifier has reviewed it.
 
+For GitHub-driven full-chain canaries, GitHub Actions uses
+`scripts/dev/run-ona-finalizer-artifacts.mjs` after the Platform Codex
+implementation readback exists. The script executes the validation, summary,
+`render-video`, and `prepare-video` finalizer stages inside the same Ona task
+environment with `ona environment exec`, copies `.minelink-dev/reports` back to
+the runner, and requires the MP4 origin producer to be `ona-task-finalizer`.
+This is artifact transport only; the accepted implementation and verifier
+evidence remains the Platform Codex API readback plus task-bound branch commits.
+
 The repository has two source dispatchers into that same downstream flow:
 
 ```text
@@ -45,6 +55,13 @@ Linear polling fallback
   -> scripts/dev/dispatch-agent-factory.mjs
   -> ona ai automation start
 ```
+
+Both dispatchers start the checked-in Ona automation and record its execution
+id, but they do not wait for that generic automation to finish before
+triggering the Platform Codex full-chain workflow. The automation execution is
+node/edge evidence for the bridge only; implementation, video generation,
+verification, PR publication, and status writeback are owned by the downstream
+Platform Codex workflow and finalizer gates.
 
 Both paths generate `.minelink-dev/reports/agent-factory-chain.md`, which lists
 the end-to-end nodes, edges, evidence, first blocking edge, and remaining chain
@@ -64,7 +81,7 @@ Use these statuses for the Linear board and GitHub issue/PR comments:
 | `PR Open` | Draft PR exists and links the source task. |
 | `CI Running` | GitHub Actions is running required checks. |
 | `Video Rendering` | Acceptance summary/MP4 artifact generation is running. |
-| `Video Review` | A separate Ona Platform Codex verifier is comparing the task requirements against the MP4 and summary. |
+| `Video Review` | The implementation Ona Platform Codex session has launched a bounded native Codex verifier subagent to compare the task requirements against the MP4 and summary. |
 | `Human Review` | Automation is done; reviewer must inspect evidence and gaps. |
 | `Accepted` | Reviewer accepted the PR and updated gate evidence if applicable. |
 | `Blocked` | Agent cannot continue without a real dependency or human decision. |
@@ -120,11 +137,19 @@ It triggers on `issues` events and manual dispatch. The dispatcher validates the
 task contract, checks `agent-ready` and `agent:ona`, starts the Ona automation
 through `ona ai automation start`, optionally performs a bounded
 `ona ai automation executions get` readback, writes
-`.minelink-dev/reports/agent-factory-dispatch.md`, regenerates
+`.minelink-dev/reports/agent-factory-dispatch.md` and
+`.minelink-dev/reports/agent-factory-dispatch.json`, regenerates
 `.minelink-dev/reports/agent-factory-chain.md`, and comments on the GitHub
 issue. It requires `ONA_TOKEN` in GitHub secrets to start Ona from CI; missing
 Ona authentication is recorded as a blocked edge instead of being treated as a
 MineLink validation failure.
+After a successful GitHub dispatch, the workflow calls
+`scripts/dev/trigger-agent-factory-full-chain.mjs`, which starts
+`.github/workflows/ona-platform-codex-probe.yml` with
+`mode=full-chain-canary`, `create_pr=true`, the accepted task id, target
+branch, GitHub issue URL, and optional Linear issue. This is the current bridge
+from `GitHub issue -> dispatcher` into the Platform Codex implementation,
+video verifier, PR, CI, and status-writeback chain.
 
 When readback is enabled, the dispatcher also writes
 `.minelink-dev/reports/ona-automation-execution.md` and JSON with the Ona
@@ -149,8 +174,9 @@ Before debugging a failed dispatcher run, run the secret-safe preflight:
 npm run agent-factory:secrets -- --require-github-secrets --require-ona-context
 ```
 
-The preflight checks only credential presence and Ona CLI context. It never
-prints `ONA_TOKEN`, `LINEAR_API_KEY`, GitHub tokens, or any other secret value.
+The preflight checks only credential presence and Ona CLI context. For full PR
+canaries it expects `ONA_TOKEN`, `LINEAR_API_KEY`, and
+`AGENT_FACTORY_GITHUB_TOKEN`; it never prints those values or any other secret.
 
 Manual pilot command:
 
@@ -297,12 +323,13 @@ After native Ona repository/Linear webhooks are available in the organization,
 add those triggers without changing the downstream evidence requirements.
 
 The factory is intentionally sequential (`maxParallel: 1`). The desired product
-shape is four ordered Ona steps:
+shape keeps implementation and video review inside one Ona Platform Codex
+implementation execution:
 
 ```text
 implementation agent
   -> node scripts/dev/run-agent-factory-stage.mjs --stage implementation-finalize
-  -> video verifier agent
+  -> implementation agent launches native Codex verifier subagent
   -> node scripts/dev/run-agent-factory-stage.mjs --stage release-finalize
 ```
 
@@ -323,6 +350,74 @@ with `agent_id:"00000000-0000-0000-0000-000000007100"` and
 `failed_precondition: agent is disabled by organization policy`. That proves the
 policy disables the default automation agent; it does not make automation
 fallback to Codex.
+Separate from the public automation YAML behavior, Ona's public AgentService API
+now documents a lower-level candidate path for programmatic Codex launch:
+`StartAgent` accepts an explicit `agentId`, `codeContext`, `codexSettings`,
+`mode`, and `sessionId`; `SendToAgentExecution` sends the user prompt to that
+execution; `GetAgentExecution` returns `spec.agentId`,
+`spec.codexSettings`, `status.codexSettings`, conversation URLs, phase, and
+failure details. MineLink captures this candidate path in:
+
+```bash
+npm run agent-factory:start-codex -- --start --identity-canary
+```
+
+Required environment:
+
+```text
+GITPOD_API_KEY or ONA_TOKEN          Ona personal access token
+MINELINK_ONA_CODEX_AGENT_ID          Codex app agent id, never the default agent id
+MINELINK_ONA_PROJECT_ID              Ona project id, defaults to the MineLink project
+MINELINK_ONA_ENVIRONMENT_ID          Optional explicit running environment id
+MINELINK_ONA_CREATE_ENVIRONMENT      Optional 1 to create a task environment
+MINELINK_ONA_CODEX_REASONING_EFFORT  Optional override; default is EXTRA_HIGH
+MINELINK_ONA_CODEX_AGENT_MODE        Optional override; default is AGENT_MODE_RALPH
+```
+
+The script refuses to omit `agentId` and refuses the known default automation
+agent id `00000000-0000-0000-0000-000000007100`. It writes
+`.minelink-dev/reports/ona-platform-codex-api-session.{md,json}` and accepts a
+launch probe only when `GetAgentExecution` reads back the requested Codex
+`spec.agentId` plus `spec.codexSettings` or `status.codexSettings`. MineLink
+requests `AGENT_MODE_RALPH`, the public SDK enum that maps to the persistent
+Goal selector, and task readbacks must include
+`Agent execution mode: AGENT_MODE_RALPH`. If `GetAgentExecution` also exposes a
+mode field, it must match the requested mode. This proves only the programmatic
+Platform Codex launch/readback edge. It does not satisfy the implementation
+readback, video verifier, PR, CI, or product acceptance gates until the
+task-bound Codex session performs the work and writes the normal
+`.minelink-dev/reports/ona-codex-implementation-session.md`.
+When no explicit `MINELINK_ONA_ENVIRONMENT_ID` is supplied, the launcher must
+ignore stopped historical task environments. It may pass an auto-discovered
+environment only when that environment is currently running; otherwise it passes
+the project id only for environment creation. Since `StartAgent` rejects
+project-only context for in-environment agents, GitHub canary modes pass
+`--create-environment`: the launcher creates a task environment from the
+project/prebuild baseline, polls until the environment and machine are running,
+and then calls `StartAgent` with that environment id. This avoids binding new
+Codex executions to stale stopped environments whose old branch can leave the
+agent execution pending.
+The launcher uses the model's available context window and defaults the
+configurable reasoning effort to `CODEX_REASONING_EFFORT_EXTRA_HIGH`; no
+separate launcher-side context-window-size field is currently part of the
+accepted `codexSettings` contract. `.codex/config.toml` pins trusted Codex
+clients to the GPT-5.5 project default, the 258400-token context window visible
+in the UI, and a high auto-compaction threshold. Treat that as a Codex client
+preference only; the Ona API launch remains accepted only by `agentId` and
+`codexSettings` readback.
+GitHub Actions can run the same probe through
+`.github/workflows/ona-platform-codex-probe.yml`. Use `mode=discover` to prove
+the repository `ONA_TOKEN` can read Ona policy/API state. Use
+`mode=identity-canary` only after supplying the real Codex app agent id through
+workflow input or the `MINELINK_ONA_CODEX_AGENT_ID` repository secret. Remote
+run `27928149039` proved the identity-canary launch/readback edge from GitHub
+Actions: policy readback allowed the Codex app agent id, `StartAgent` and
+`SendToAgentExecution` succeeded, and
+`GetAgentExecution` returned the requested `spec.agentId`, `codexSettings`,
+`PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`, conversation URLs, and
+token-usage counters. The readback did not expose structured `status.outputs`,
+so this still does not satisfy implementation, validation, video review, PR,
+or product acceptance.
 After the fail-closed spec was uploaded, remote canary execution
 `019eed14-ed44-7df4-9212-8e1122a7858c` completed with
 `WORKFLOW_EXECUTION_PHASE_COMPLETED`, `doneActionCount=1`, and a spec containing
@@ -360,6 +455,67 @@ finalizer checks the existing artifacts and finalizes status/PR output without
 re-rendering the MP4. If
 `.minelink-dev/reports/artifacts/video-review.md` is missing or does not
 declare `Verifier: Ona Platform Codex`, the automation must fail before release.
+
+For the current implementation-edge pilot, the supported bounded task is
+`implementation-canary` in `.github/workflows/ona-platform-codex-probe.yml`.
+It launches the configured Codex app agent through AgentService, sends a
+docs-only prompt that may change only
+`docs/agent-factory-canaries/<task>.md`, waits for the task branch to appear on
+GitHub, and then runs `scripts/dev/fetch-platform-codex-canary.mjs`. The fetch
+script is the canonical bridge: it requires the AgentService API readback to
+show the configured Codex agent id plus `codexSettings`, requires the canary
+file markers to match task, branch, session id, and docs validation, and writes
+`.minelink-dev/reports/ona-codex-implementation-session.md` with the fetched
+branch head as `Commit:`. The canary markdown file by itself is not accepted
+implementation readback and this mode does not count as product acceptance.
+`full-chain-canary` extends that pilot to the next edge. The workflow runs
+`scripts/dev/run-ona-finalizer-artifacts.mjs` inside the implementation task's
+Ona environment to render the trace-driven acceptance summary/MP4 and write the
+video-review request. The finalizer checks out the task branch for task content
+but injects the workflow/source-commit finalizer scripts after checkout, so an
+old task branch cannot regenerate `video-review-request.md` with stale local
+defaults. The workflow then sends `--video-verifier-canary` back to the same
+implementation AgentService execution, waits for
+`docs/agent-factory-canaries/<task>-video-verifier.md`, then runs
+`scripts/dev/fetch-platform-codex-video-verifier.mjs`. The fetch script is the
+canonical bridge for canary video review: it requires the verifier AgentService
+API readback to show the configured Codex agent id, `AGENT_MODE_RALPH`, and
+`codexSettings`, checks the verifier canary against the current task, branch,
+reviewed commit, summary hash, MP4 hash, and video producer, writes
+`.minelink-dev/reports/ona-codex-video-verifier-session.md`, materializes
+`.minelink-dev/reports/artifacts/video-review.md`, and lets
+`check-video-review.mjs --require-mp4` create the release gate. If the canary
+path already exists from an earlier run, the fetch script polls until the file
+contains the current Goal-mode execution id, reviewed commit, and artifact
+hashes; stale branch content is a timeout failure, not release evidence. This is still
+automation-chain evidence only; it does not prove product acceptance. When a
+canary run renders the MP4 on the GitHub runner, the artifact origin must say
+`github-actions-canary`; that video is acceptable for chain testing only. Final
+task acceptance requires an Ona-produced video artifact, with
+`acceptance-video-origin.json` showing producer `ona-task-finalizer`, the
+release gate requiring that producer, and the verifier reviewing that exact MP4
+hash. When a manual rehearsal needs to prove
+`release_gate -> pr`, run the same workflow with
+`mode=full-chain-canary` and `create_pr=true`. That optional step calls
+`scripts/dev/create-agent-factory-pr.mjs`, creates or updates a draft PR from
+the canary branch, writes `.minelink-dev/reports/agent-factory-pr.{md,json}`,
+refreshes `agent-factory-chain.json` with the PR URL, then runs
+`scripts/dev/cleanup-ona-resources.mjs` before artifact upload so any task
+environment created by the Platform Codex probe is stopped after the terminal
+result is recorded. This PR edge requires the `AGENT_FACTORY_GITHUB_TOKEN`
+repository secret; the default Actions `GITHUB_TOKEN` can be blocked by
+repository policy from creating pull requests.
+After the draft PR is open, `scripts/dev/wait-agent-factory-pr-ci.mjs` waits
+for the PR check rollup, writes
+`.minelink-dev/reports/agent-factory-pr-ci.{md,json}`, and the final chain
+refresh records the PR checks URL for the `pr -> ci` edge. The next downstream
+edge is Linear/GitHub status writeback, not product acceptance. The
+`full-chain-canary` workflow now runs `scripts/dev/sync-github-status.mjs`
+after PR CI, comments the linked GitHub issue or PR with the final evidence
+paths, then runs `scripts/dev/sync-linear-status.mjs` for a linked Linear issue
+when `linear_issue` was supplied. The chain report treats absent sources as
+not-required: GitHub-only tasks need GitHub writeback, Linear-only tasks need
+Linear sync evidence, and linked GitHub+Linear tasks need both.
 Before validation or PR finalization, the CLI automation also requires an
 implementation-session readback at:
 
@@ -391,7 +547,7 @@ commit, and be followed by validation evidence. The chain reporter enforces this
 stage from producing green validation/PR evidence until the accepted Platform
 Codex implementation session has written its task-bound readback.
 
-The dedicated video verifier has the same explicit readback requirement:
+The same-session video verifier subagent has the same explicit readback requirement:
 
 ```text
 .minelink-dev/reports/ona-codex-video-verifier-session.md
@@ -399,8 +555,8 @@ The dedicated video verifier has the same explicit readback requirement:
 
 It must identify `Agent mode: Ona Platform Codex`,
 `Identity: I am Codex running in Ona Platform Codex`, `Platform evidence`, the
-verifier `Session id`, `Result: passed`, `Task id`, `Branch`, and `Commit`, in
-addition to the hash-checked
+implementation/verifier `Session id`, `Result: passed`, `Task id`, `Branch`,
+and `Commit`, in addition to the hash-checked
 `.minelink-dev/reports/artifacts/video-review.md` markers.
 
 The finalizer creates or updates the draft PR through
@@ -613,8 +769,9 @@ node scripts/dev/prepare-video-review-request.mjs --require-mp4
 
 This writes `.minelink-dev/reports/artifacts/video-review-request.md` with the
 current artifact hashes and verifier assignment. Before publishing or merging
-video evidence, a separate Ona Platform Codex session must inspect that request,
-the task requirements, `acceptance-summary.md`, and `acceptance.mp4`. It writes
+video evidence, the current Ona Platform Codex implementation session must
+launch a bounded native Codex verifier subagent to inspect that request, the
+task requirements, `acceptance-summary.md`, and `acceptance.mp4`. It writes
 `.minelink-dev/reports/artifacts/video-review.md` with these exact markers:
 
 ```text
@@ -625,6 +782,14 @@ Video matched: yes
 Summary sha256: <current acceptance-summary.md sha256>
 MP4 sha256: <current acceptance.mp4 sha256>
 ```
+
+The full-chain canary may embed the review-request hashes directly so it can
+prove the same-session subagent handoff without moving large media through the
+repository. Real video-required tasks still need the verifier subagent to have
+access to the actual MP4, either because the implementation session rendered it
+in the same workspace or because the workflow published a downloadable artifact
+URL before the verifier runs. Hash-only canary evidence must not be called real
+video inspection.
 
 Then run:
 

@@ -33,7 +33,7 @@ tasks:
     command: |
       node scripts/dev/report-agent-factory-chain.mjs
       node scripts/dev/summarize-evidence.mjs
-      node scripts/dev/render-acceptance-video.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --require-mp4
+      node scripts/dev/render-acceptance-video.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --producer "${MINELINK_ACCEPTANCE_VIDEO_PRODUCER:-ona-task-finalizer}" --require-mp4
       node scripts/dev/prepare-video-review-request.mjs --task-id "${MINELINK_TASK_ID:-manual}" --branch "$(git rev-parse --abbrev-ref HEAD)" --task-requirements "${MINELINK_TASK_REQUIREMENTS:-manual evidence render}" --require-mp4
     triggeredBy:
       - manual
@@ -55,7 +55,14 @@ tasks:
   check-video-release:
     name: Check MineLink acceptance video release gate
     command: |
-      node scripts/dev/check-video-review.mjs --require-mp4
+      node scripts/dev/check-video-review.mjs --require-mp4 --require-producer "${MINELINK_ACCEPTANCE_VIDEO_REQUIRED_PRODUCER:-${MINELINK_ACCEPTANCE_VIDEO_PRODUCER:-ona-task-finalizer}}"
+    triggeredBy:
+      - manual
+
+  cleanup-ona-resources:
+    name: Stop completed MineLink Ona task environment
+    command: |
+      node scripts/dev/cleanup-ona-resources.mjs --project-id "${MINELINK_ONA_PROJECT_ID:-}" --stop --dont-wait
     triggeredBy:
       - manual
 
