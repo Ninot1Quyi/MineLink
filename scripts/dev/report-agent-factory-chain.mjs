@@ -20,6 +20,8 @@ const defaults = {
   onaAutomationExecutionReport: ".minelink-dev/reports/ona-automation-execution.json",
   onaPrebuild: process.env.MINELINK_ONA_PREBUILD ?? "",
   onaPrebuildStatus: process.env.MINELINK_ONA_PREBUILD_STATUS ?? "",
+  onaPlatformCodexApiSession: ".minelink-dev/reports/ona-platform-codex-api-session.json",
+  onaPlatformCodexApiReport: ".minelink-dev/reports/ona-platform-codex-api-session.md",
   onaImplementationAgent: process.env.MINELINK_ONA_IMPLEMENTATION_AGENT ?? "",
   onaImplementationSession: process.env.MINELINK_ONA_IMPLEMENTATION_SESSION ?? "",
   onaImplementationStatus: process.env.MINELINK_ONA_IMPLEMENTATION_STATUS ?? "",
@@ -78,6 +80,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--ona-automation-execution-report") args.onaAutomationExecutionReport = readValue();
   else if (arg === "--ona-prebuild") args.onaPrebuild = readValue();
   else if (arg === "--ona-prebuild-status") args.onaPrebuildStatus = readValue();
+  else if (arg === "--ona-platform-codex-api-session") args.onaPlatformCodexApiSession = readValue();
+  else if (arg === "--ona-platform-codex-api-report") args.onaPlatformCodexApiReport = readValue();
   else if (arg === "--ona-implementation-agent") args.onaImplementationAgent = readValue();
   else if (arg === "--ona-implementation-session") args.onaImplementationSession = readValue();
   else if (arg === "--ona-implementation-status") args.onaImplementationStatus = readValue();
@@ -279,6 +283,62 @@ function readbackMatchesExpected(text, expected) {
   return { passed: failures.length === 0, failures, evidence };
 }
 
+function codexApiSessionEvidence(report) {
+  const failures = [];
+  const evidence = [];
+  if (!report) {
+    return {
+      status: "missing",
+      failures: ["No Ona Platform Codex API session report is available."],
+      evidence,
+      agentExecutionId: "",
+    };
+  }
+  const result = normalizeStatus(report.result);
+  const requestedAgentId = report.codexAgentId ?? "";
+  const execution = report.readback?.agentExecution ?? {};
+  const spec = execution.spec ?? {};
+  const status = execution.status ?? {};
+  const actualAgentId = spec.agentId ?? "";
+  const agentExecutionId = report.agentExecutionId || execution.id || "";
+
+  if (result === "blocked") {
+    failures.push(...(report.blockers ?? ["Ona Platform Codex API probe is blocked."]));
+  }
+  if (!hasValue(agentExecutionId)) {
+    failures.push("Ona Platform Codex API probe did not expose an agent execution id.");
+  } else {
+    evidence.push(`API execution: ${agentExecutionId}`);
+  }
+  if (!hasValue(requestedAgentId)) {
+    failures.push("Ona Platform Codex API probe did not record a requested Codex agent id.");
+  }
+  if (hasValue(requestedAgentId) && actualAgentId !== requestedAgentId) {
+    failures.push(`Ona Platform Codex API probe spec.agentId mismatch: expected ${requestedAgentId}, got ${actualAgentId || "missing"}.`);
+  }
+  if (actualAgentId === "00000000-0000-0000-0000-000000007100") {
+    failures.push("Ona Platform Codex API probe read back the default Ona automation agent id.");
+  }
+  if (actualAgentId === requestedAgentId && hasValue(actualAgentId)) {
+    evidence.push("API spec.agentId matches requested Codex agent id");
+  }
+  if (!spec.codexSettings && !status.codexSettings) {
+    failures.push("Ona Platform Codex API probe did not expose spec.codexSettings or status.codexSettings.");
+  } else {
+    evidence.push("API readback includes codexSettings");
+  }
+  if (hasValue(status.supportedModel)) evidence.push(`API supportedModel: ${status.supportedModel}`);
+  if (hasValue(status.conversationUrl)) evidence.push("API conversationUrl present");
+
+  const passed = failures.length === 0 && result === "passed";
+  return {
+    status: passed ? "passed" : failures.length > 0 ? "blocked" : result === "dry-run" ? "partial" : result,
+    failures,
+    evidence,
+    agentExecutionId,
+  };
+}
+
 function escapeMd(value) {
   return String(value ?? "")
     .replaceAll("|", "\\|")
@@ -431,6 +491,8 @@ const prReportInfo = await fileInfo(args.prReport);
 const linearSyncInfo = await fileInfo(args.linearSyncReport);
 const secretPreflightInfo = await fileInfo(args.secretPreflight);
 const automationExecutionReportInfo = await fileInfo(args.onaAutomationExecutionReport);
+const platformCodexApiReportInfo = await fileInfo(args.onaPlatformCodexApiReport);
+const platformCodexApiSessionInfo = await fileInfo(args.onaPlatformCodexApiSession);
 const implementationReadbackInfo = await fileInfo(args.onaImplementationReadback);
 const verifierReadbackInfo = await fileInfo(args.onaVerifierReadback);
 const releaseText = await readText(args.videoReleaseGate);
@@ -441,6 +503,7 @@ const implementationReadbackText = await readText(args.onaImplementationReadback
 const verifierReadbackText = await readText(args.onaVerifierReadback);
 const secretPreflight = await readJson(args.secretPreflight);
 const automationExecutionReport = await readJson(args.onaAutomationExecutionReport);
+const platformCodexApiSession = await readJson(args.onaPlatformCodexApiSession);
 const secretPreflightActions = Array.isArray(secretPreflight?.nextActions)
   ? secretPreflight.nextActions.filter(Boolean)
   : [];
@@ -520,6 +583,8 @@ const prebuildStatus = normalizeStatus(args.onaPrebuildStatus) !== "missing"
   : hasValue(args.onaPrebuild)
     ? "partial"
     : "missing";
+const platformCodexApi = codexApiSessionEvidence(platformCodexApiSession);
+const platformCodexLaunchStatus = codexAuthFailed ? "blocked" : platformCodexApi.status;
 const implementationSessionId = readbackSessionId(args.onaImplementationSession, implementationReadbackText);
 const implementationAgentAccepted = readbackAgentAccepted(args.onaImplementationAgent, implementationReadbackText);
 const implementationReadbackBound = readbackMatchesExpected(implementationReadbackText, {
@@ -589,6 +654,13 @@ const codexBlocker = codexAuthFailed
     : implementationStatus === "missing"
       ? `No accepted automated Ona Platform Codex implementation session id or readback evidence was supplied. Expected ${args.onaImplementationReadback} with Agent mode: Ona Platform Codex, Identity: I am Codex running in Ona Platform Codex, Platform evidence from the Ona UI/API selector, Session id, Result: passed, Task id, Branch, and Commit.`
       : "";
+const platformCodexLaunchBlocker = codexAuthFailed
+  ? "Ona Platform Codex rejected the LLM request as unauthenticated before repository commands could run."
+  : platformCodexLaunchStatus === "blocked"
+    ? `Programmatic Ona Platform Codex launch/readback is blocked. Run npm run agent-factory:start-codex -- --start --identity-canary with GITPOD_API_KEY or ONA_TOKEN and MINELINK_ONA_CODEX_AGENT_ID. ${platformCodexApi.failures.join(" ")}`
+    : platformCodexLaunchStatus === "missing"
+      ? `No programmatic Ona Platform Codex API launch/readback evidence was supplied. Expected ${args.onaPlatformCodexApiSession} from npm run agent-factory:start-codex -- --start --identity-canary.`
+      : "";
 const globalBlocker = args.blocker || codexBlocker;
 const prebuildBlocker =
   prebuildStatus === "blocked"
@@ -617,6 +689,11 @@ const nodes = [
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
     ...autoPrebuildEvidence,
   ], prebuildBlocker),
+  mkNode("platform_codex_launch", "Ona Platform Codex API launch", platformCodexLaunchStatus, [
+    platformCodexApiSessionInfo && args.onaPlatformCodexApiSession,
+    platformCodexApiReportInfo && args.onaPlatformCodexApiReport,
+    ...platformCodexApi.evidence,
+  ], platformCodexLaunchBlocker),
   mkNode("implementation_codex", "Ona Platform Codex implementation session", implementationStatus, [
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
@@ -678,6 +755,10 @@ const prebuildHandoffBlocker =
       : prebuildBlocker || "No completed Ona prebuild baseline is available; Codex handoff must wait for a prepared environment.";
 const automationHandoffStatus =
   nodeStatus.ona_automation === "passed" || nodeStatus.ona_automation === "partial"
+    ? nodeStatus.platform_codex_launch
+    : "blocked";
+const codexImplementationHandoffStatus =
+  nodeStatus.platform_codex_launch === "passed"
     ? nodeStatus.implementation_codex
     : "blocked";
 const rawEdges = [
@@ -694,21 +775,28 @@ const rawEdges = [
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
     ...automationExecutionEvidence,
   ]),
-  mkEdge("ona_prebuild", "implementation_codex", prebuildHandoffStatus, [
+  mkEdge("ona_prebuild", "platform_codex_launch", prebuildHandoffStatus, [
     hasValue(args.onaProject) && `Ona project: ${args.onaProject}`,
     hasValue(args.onaPrebuild) && `Ona prebuild: ${args.onaPrebuild}`,
     ...autoPrebuildEvidence,
   ], prebuildHandoffBlocker),
-  mkEdge("ona_automation", "implementation_codex", automationHandoffStatus, [
+  mkEdge("ona_automation", "platform_codex_launch", automationHandoffStatus, [
     hasValue(args.onaAutomation) && `Automation: ${args.onaAutomation}`,
     hasValue(args.onaAutomationExecution) && `Execution: ${args.onaAutomationExecution}`,
     ...automationExecutionEvidence,
+    platformCodexApiSessionInfo && args.onaPlatformCodexApiSession,
+    ...platformCodexApi.evidence,
+  ], nodeStatus.ona_automation === "blocked" ? globalBlocker : platformCodexLaunchBlocker),
+  mkEdge("platform_codex_launch", "implementation_codex", codexImplementationHandoffStatus, [
+    platformCodexApiSessionInfo && args.onaPlatformCodexApiSession,
+    platformCodexApiReportInfo && args.onaPlatformCodexApiReport,
+    ...platformCodexApi.evidence,
     implementationSessionId && `Implementation session: ${implementationSessionId}`,
     implementationAgentAccepted && "Agent mode: Ona Platform Codex",
     implementationReadbackInfo && readbackPlatformEvidenceAccepted(implementationReadbackText) && "Platform evidence: Codex selector/API",
     ...implementationReadbackBound.evidence,
     implementationReadbackInfo && args.onaImplementationReadback,
-  ], nodeStatus.ona_automation === "blocked" ? globalBlocker : codexBlocker),
+  ], nodeStatus.platform_codex_launch === "passed" ? codexBlocker : platformCodexLaunchBlocker),
   mkEdge("implementation_codex", "branch_commit", implementationStatus === "passed" ? nodeStatus.branch_commit : "blocked", [
     `Branch: ${args.branch}`,
     `Commit: ${args.commit}`,
@@ -771,14 +859,19 @@ if (firstBlockedEdge?.to === "issue_contract") {
   nextActions.push("Provide ONA_TOKEN/Ona CLI authentication, start the Ona automation, and capture the automation execution id.");
 } else if (
   firstBlockedEdge?.from === "ona_prebuild" &&
-  firstBlockedEdge?.to === "implementation_codex" &&
+  firstBlockedEdge?.to === "platform_codex_launch" &&
   nodeStatus.ona_prebuild !== "passed"
 ) {
   nextActions.push("Trigger the Ona prebuild refresh only when the environment baseline is missing or environment-sensitive files changed, then wait for a completed baseline before Codex handoff.");
   if (prebuildBlocker) nextActions.push(prebuildBlocker);
+} else if (firstBlockedEdge?.to === "platform_codex_launch") {
+  nextActions.push("Run `npm run agent-factory:start-codex -- --start --identity-canary` with GITPOD_API_KEY or ONA_TOKEN and MINELINK_ONA_CODEX_AGENT_ID, then attach `.minelink-dev/reports/ona-platform-codex-api-session.json`.");
+  if (platformCodexLaunchBlocker) nextActions.push(platformCodexLaunchBlocker);
 } else if (firstBlockedEdge?.to === "implementation_codex") {
   if (automationExecutionReport?.result === "completed_with_failed_actions") {
     nextActions.push("The dispatcher reached Ona and the guarded finalizer failed closed. Start or repair the Ona Platform Codex implementation session and write the accepted implementation readback.");
+  } else if (nodeStatus.platform_codex_launch === "passed") {
+    nextActions.push("Start the task-bound Ona Platform Codex implementation session from the accepted launch path, then write the implementation readback with task id, branch, commit, session id, and platform evidence.");
   } else {
     nextActions.push("Repair or expose programmatic Ona Platform Codex launch/authentication, start a fresh Codex implementation session, and capture the session id plus logs.");
   }
@@ -835,6 +928,15 @@ const report = {
         sessionId: automationExecutionReport?.sessionId ?? "",
         cancelOnTimeout: automationExecutionReport?.cancelOnTimeout ?? false,
         cancellation: automationExecutionReport?.cancellation ?? null,
+      }
+    : null,
+  platformCodexApiSession: platformCodexApiSessionInfo
+    ? {
+        path: args.onaPlatformCodexApiSession,
+        reportPath: platformCodexApiReportInfo ? args.onaPlatformCodexApiReport : "",
+        result: platformCodexApiSession?.result ?? "unknown",
+        agentExecutionId: platformCodexApi.agentExecutionId,
+        status: platformCodexLaunchStatus,
       }
     : null,
   nextActions,

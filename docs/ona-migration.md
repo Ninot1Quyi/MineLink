@@ -146,6 +146,36 @@ MineLink uses automation to reduce agent memory load:
 - `scripts/dev/sync-linear-status.mjs` uses `LINEAR_API_KEY` from the Ona
   environment to update Linear issue status, comments, and evidence links
   without printing the secret.
+- `scripts/dev/start-ona-platform-codex.mjs` probes the documented Ona
+  AgentService API path for programmatic Platform Codex launch. It requires an
+  Ona PAT through `GITPOD_API_KEY` or `ONA_TOKEN`, refuses the known default Ona
+  automation agent id, sends a read-only identity canary when requested, and
+  writes `.minelink-dev/reports/ona-platform-codex-api-session.{md,json}` with
+  `GetAgentExecution` readback. This is launch/readback evidence only; it does
+  not replace the implementation-session or video-verifier readbacks.
+- `.github/workflows/ona-platform-codex-probe.yml` runs that probe from GitHub
+  Actions with repository secrets. `discover` mode proves only the repository
+  token/API policy edge. `identity-canary` mode is the launch proof and requires
+  the real Codex app agent id through workflow input or
+  `MINELINK_ONA_CODEX_AGENT_ID`. Remote run `27928149039` is the current
+  accepted launch-edge evidence: it completed policy readback, `StartAgent`,
+  `SendToAgentExecution`, and `GetAgentExecution` with matching Codex agent id,
+  Codex settings, `PHASE_STOPPED`, `SUPPORTED_MODEL_OPENAI_AUTO`, conversation
+  URLs, and token-usage counters. It is not implementation or video-verifier
+  evidence because the readback did not expose structured `status.outputs`.
+  `implementation-canary` mode is the bounded next edge: the workflow sends a
+  docs-only task to the same AgentService Codex path, waits for a task-bound
+  GitHub branch containing `docs/agent-factory-canaries/<task>.md`, and uses
+  `scripts/dev/fetch-platform-codex-canary.mjs` to write the canonical
+  implementation readback with the fetched branch head commit. This only proves
+  `platform_codex_launch -> implementation_codex` for the canary task.
+  `full-chain-canary` continues with a second Platform Codex
+  `video-verifier-canary` session and
+  `scripts/dev/fetch-platform-codex-video-verifier.mjs`, which checks the
+  review request hashes and writes
+  `.minelink-dev/reports/ona-codex-video-verifier-session.md` plus
+  `.minelink-dev/reports/artifacts/video-review.md`. This only proves the
+  canary `acceptance_video -> video_verifier` edge.
 - `.ona/automations.yaml` defines Ona-native environment tasks.
 - `ona/ai-automations/minelink-agent-factory.yaml` defines the Ona CLI
   finalizer that should be started by manual pilot, GitHub dispatch, or Linear
