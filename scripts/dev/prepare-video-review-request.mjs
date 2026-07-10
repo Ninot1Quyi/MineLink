@@ -9,6 +9,7 @@ const execFileAsync = promisify(execFile);
 
 let summaryPath = ".minelink-dev/reports/artifacts/acceptance-summary.md";
 let mp4Path = ".minelink-dev/reports/artifacts/acceptance.mp4";
+let originPath = ".minelink-dev/reports/artifacts/acceptance-video-origin.json";
 let outputPath = ".minelink-dev/reports/artifacts/video-review-request.md";
 let taskId = process.env.MINELINK_TASK_ID ?? "local";
 let branch = process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "";
@@ -21,6 +22,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
     summaryPath = process.argv[++index] ?? "";
   } else if (arg === "--mp4") {
     mp4Path = process.argv[++index] ?? "";
+  } else if (arg === "--origin") {
+    originPath = process.argv[++index] ?? "";
   } else if (arg === "--output") {
     outputPath = process.argv[++index] ?? "";
   } else if (arg === "--task-id") {
@@ -60,6 +63,14 @@ async function stat(filePath) {
 async function sha256(filePath) {
   const buffer = await fs.readFile(filePath);
   return createHash("sha256").update(buffer).digest("hex");
+}
+
+async function readJson(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 async function gitBranch() {
@@ -113,6 +124,8 @@ if (requireMp4 && (!mp4Stat?.isFile() || mp4Stat.size === 0)) {
 const summaryHash = summaryStat?.isFile() ? await sha256(summaryPath) : "missing";
 const mp4Hash = mp4Stat?.isFile() ? await sha256(mp4Path) : "missing";
 const mp4Metadata = mp4Stat?.isFile() ? await ffprobe(mp4Path) : "missing";
+const origin = await readJson(originPath);
+const producer = origin?.producer ?? "unknown";
 const resolvedBranch = await gitBranch();
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -126,6 +139,8 @@ const lines = [
   `- Task requirements: \`${md(taskRequirements || "unspecified")}\``,
   `- Acceptance summary: \`${summaryPath}\``,
   `- Acceptance MP4: \`${mp4Path}\``,
+  `- Acceptance video origin: \`${originPath}\``,
+  `- Video producer: \`${md(producer)}\``,
   `- Summary sha256: \`${summaryHash}\``,
   `- MP4 sha256: \`${mp4Hash}\``,
   `- MP4 metadata: \`${md(mp4Metadata).replaceAll("\n", "; ")}\``,
@@ -133,7 +148,7 @@ const lines = [
   "",
   "## Verifier Assignment",
   "",
-  "Use Ona Platform Codex, not the default Ona Agent, to review the acceptance summary and MP4 against the task requirements. The verifier must not edit product code and must not re-render the video. It must inspect the artifacts above and write `.minelink-dev/reports/artifacts/video-review.md`.",
+  "Use the current Ona Platform Codex implementation session, not the default Ona Agent, to launch a bounded native Codex verifier subagent that reviews the acceptance summary and MP4 against the task requirements. The verifier must not edit product code and must not re-render the video. It must inspect the artifacts above and write `.minelink-dev/reports/artifacts/video-review.md`.",
   "",
   "The review file must include these exact markers with the current hashes:",
   "",
@@ -142,6 +157,7 @@ const lines = [
   "Release decision: pass|fail",
   "Task matched: yes|no",
   "Video matched: yes|no",
+  `Video producer: ${producer}`,
   `Summary sha256: ${summaryHash}`,
   `MP4 sha256: ${mp4Hash}`,
   "```",
@@ -156,7 +172,7 @@ const lines = [
   "",
   "- A ready request does not release the task.",
   "- A decodable MP4 does not prove full MineLink product completion.",
-  "- The release gate passes only after the separate Ona Platform Codex verifier writes a matching review and `check-video-review.mjs` succeeds.",
+  "- The release gate passes only after the same-session Ona Platform Codex verifier subagent writes a matching review and `check-video-review.mjs` succeeds.",
   "",
   "## Request Failures",
   "",

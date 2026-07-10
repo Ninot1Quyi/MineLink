@@ -210,6 +210,16 @@ Reports must distinguish:
   Ona Agent mode, `ona environment ssh`, and the checked-in Ona CLI automation
   are debugging, synchronization, validation, or artifact surfaces only and
   must not be described as final MineLink agent execution evidence.
+- Programmatic Ona Codex launch probes must use
+  `scripts/dev/start-ona-platform-codex.mjs` with an explicit
+  `MINELINK_ONA_CODEX_AGENT_ID`. Do not omit `agentId`, do not use the known
+  default Ona automation agent id, and do not treat a launch probe as task
+  implementation evidence.
+- Ona Platform Codex task execution must request Goal mode through
+  `AGENT_MODE_RALPH` unless the task is an explicitly documented diagnostic.
+  Accepted task and verifier readbacks must include
+  `Agent execution mode: AGENT_MODE_RALPH`; one-shot `AGENT_MODE_EXECUTION`
+  evidence is not accepted for long-running factory delivery.
 - Self-reported `Identity: I am Codex running in Ona Platform Codex` is a
   diagnostic only. The default Ona Agent can echo it. Ona work is accepted only
   with platform-side Codex selector/API evidence plus task/branch/commit-bound
@@ -222,6 +232,11 @@ Reports must distinguish:
   Platform Codex verifier must compare the task requirements against the
   summary/video and write `video-review.md`. `check-video-review.mjs` must pass
   before publishing or merging the video evidence.
+- PR-visible acceptance videos should be uploaded to the configured external
+  video store through `scripts/dev/upload-acceptance-video-storage.mjs` and
+  linked from `scripts/dev/comment-pr-evidence.mjs`. Do not make the GitHub
+  evidence branch the default storage path for video binaries when external
+  storage is configured.
 - Do not leak GitHub tokens, admission tokens, Microsoft credentials,
   OpenAI/API keys, EULA files, or server secrets.
 

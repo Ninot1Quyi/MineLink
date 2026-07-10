@@ -15,6 +15,11 @@ const defaults = {
   acceptanceGate: process.env.MINELINK_ACCEPTANCE_GATE ?? "unspecified",
   validationScope: process.env.MINELINK_VALIDATION_SCOPE ?? "docs",
   scenarios: process.env.MINELINK_SCENARIOS ?? "none",
+  videoProducer: process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ?? "ona-task-finalizer",
+  requiredVideoProducer:
+    process.env.MINELINK_ACCEPTANCE_VIDEO_REQUIRED_PRODUCER ??
+    process.env.MINELINK_ACCEPTANCE_VIDEO_PRODUCER ??
+    "ona-task-finalizer",
   outputDir: ".minelink-dev/reports",
 };
 const videoReviewRequestArtifact = ".minelink-dev/reports/artifacts/video-review-request.md";
@@ -59,6 +64,8 @@ for (let index = 2; index < process.argv.length; index += 1) {
   else if (arg === "--acceptance-gate") args.acceptanceGate = readValue();
   else if (arg === "--validation-scope") args.validationScope = readValue();
   else if (arg === "--scenarios") args.scenarios = readValue();
+  else if (arg === "--video-producer") args.videoProducer = readValue();
+  else if (arg === "--required-video-producer") args.requiredVideoProducer = readValue();
   else if (arg === "--output-dir") args.outputDir = readValue();
   else if (arg === "-h" || arg === "--help") {
     console.log(`Usage: node scripts/dev/run-agent-factory-stage.mjs --stage <stage> [context]
@@ -118,6 +125,10 @@ function selfInvocationArgs(stage) {
     args.validationScope || "docs",
     "--scenarios",
     args.scenarios || "none",
+    "--video-producer",
+    args.videoProducer || "ona-task-finalizer",
+    "--required-video-producer",
+    args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
     "--output-dir",
     args.outputDir,
   ];
@@ -200,6 +211,8 @@ function chainArgs(status, requireVerifier = false) {
     args.branch || "unknown",
     "--acceptance-gate",
     args.acceptanceGate || "unspecified",
+    "--require-video-producer",
+    args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
     "--require-platform-codex-implementation",
   ];
   if (requireVerifier) result.push("--require-platform-codex-verifier");
@@ -356,6 +369,8 @@ switch (args.stage) {
         args.branch || "unknown",
         "--task-requirements",
         "docs/minelink-acceptance.md",
+        "--producer",
+        args.videoProducer || "ona-task-finalizer",
         "--require-mp4",
       ],
       { requireImplementation: true },
@@ -365,7 +380,16 @@ switch (args.stage) {
     await runCommandStage(
       args.stage,
       process.execPath,
-      ["scripts/dev/prepare-video-review-request.mjs", "--require-mp4"],
+      [
+        "scripts/dev/prepare-video-review-request.mjs",
+        "--task-id",
+        args.taskId,
+        "--branch",
+        args.branch || "unknown",
+        "--task-requirements",
+        "docs/minelink-acceptance.md",
+        "--require-mp4",
+      ],
       { requireImplementation: true },
     );
     break;
@@ -373,7 +397,12 @@ switch (args.stage) {
     await runCommandStage(
       args.stage,
       process.execPath,
-      ["scripts/dev/check-video-review.mjs", "--require-mp4"],
+      [
+        "scripts/dev/check-video-review.mjs",
+        "--require-mp4",
+        "--require-producer",
+        args.requiredVideoProducer || args.videoProducer || "ona-task-finalizer",
+      ],
       { requireImplementation: true, requireVerifier: true },
     );
     break;

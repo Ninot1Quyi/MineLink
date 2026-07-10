@@ -46,7 +46,7 @@ Forbidden changes respected:
 
 Acceptance video artifact:
 
-Dedicated video verifier:
+Same-session video verifier subagent:
 
 Video review request:
 

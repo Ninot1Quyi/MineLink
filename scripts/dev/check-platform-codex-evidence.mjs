@@ -32,6 +32,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
 Fails unless the requested Ona Platform Codex readback files identify:
 
 Agent mode: Ona Platform Codex
+Agent execution mode: AGENT_MODE_RALPH
 Identity: I am Codex running in Ona Platform Codex
 Platform evidence: <Ona UI/API evidence that this session was created with Codex selected>
 Session id: <Ona session id>
@@ -91,6 +92,11 @@ function agentModeAccepted(text) {
   return /Ona Platform Codex/i.test(mode);
 }
 
+function goalModeAccepted(text) {
+  const mode = markerValue(text, "Agent execution mode");
+  return mode === "AGENT_MODE_RALPH";
+}
+
 function identityAccepted(text) {
   const identity = markerValue(text, "Identity");
   return /\bCodex\b/i.test(identity) && /Ona Platform Codex/i.test(identity);
@@ -135,6 +141,12 @@ async function checkReadback(label, filePath) {
     failures.push(`${label} readback must contain Agent mode: Ona Platform Codex`);
   } else {
     evidence.push(`${label} agent mode accepted`);
+  }
+
+  if (!goalModeAccepted(text)) {
+    failures.push(`${label} readback must contain Agent execution mode: AGENT_MODE_RALPH`);
+  } else {
+    evidence.push(`${label} Goal/Ralph execution mode accepted`);
   }
 
   if (!identityAccepted(text)) {

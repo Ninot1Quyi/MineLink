@@ -13,12 +13,13 @@ one environment = one task = one branch = one PR
 
 The local Codex thread remains the integration and acceptance owner. Cloud
 agents should take narrow tasks with explicit write scopes and validation.
-When the task runs in Ona, select the platform **Codex** agent mode. The
-default Ona Agent mode is not accepted as MineLink implementation or verifier
-evidence. Self-reported identity is not enough: the default Ona Agent can echo
-`Identity: I am Codex running in Ona Platform Codex`. Accepted Ona evidence must
-include platform-side Codex selector/API evidence and task/branch/commit-bound
-readback.
+When the task runs in Ona, select the platform **Codex** agent in Goal mode.
+The programmatic path requests that mode as `AGENT_MODE_RALPH`. The default Ona
+Agent mode and one-shot `AGENT_MODE_EXECUTION` are not accepted as MineLink
+implementation or verifier evidence. Self-reported identity is not enough: the
+default Ona Agent can echo `Identity: I am Codex running in Ona Platform Codex`.
+Accepted Ona evidence must include platform-side Codex selector/API evidence,
+`Agent execution mode: AGENT_MODE_RALPH`, and task/branch/commit-bound readback.
 Use `docs/ona-migration.md` for the migration runbook and
 `docs/linear-ona-agent-factory.md` for the Linear/GitHub -> Ona agent factory.
 Use `docs/agent-task-queue.md` for ready tasks.
@@ -43,7 +44,7 @@ sets are disjoint and a human or lead agent is integrating.
 Every agent-ready issue or PR must state:
 
 - Task: the one-sentence outcome.
-- Required agent mode: Ona Platform Codex for Ona tasks.
+- Required agent mode: Ona Platform Codex Goal mode (`AGENT_MODE_RALPH`) for Ona tasks.
 - Scope: exact modules or files the agent may change.
 - Forbidden: assertions, boundaries, or files the agent must not weaken.
 - Acceptance gate: which gate in `docs/minelink-acceptance.md` is affected.
@@ -105,10 +106,16 @@ Use automation to reduce agent memory load:
 - `.github/workflows/agent-factory-dispatch.yml` is the GitHub/Linear source
   dispatcher. It validates agent-ready GitHub issues, polls Linear as a
   fallback source, starts the shared Ona automation, and uploads dispatch plus
-  chain reports.
+  chain reports. For GitHub issues it also triggers the Platform Codex
+  full-chain workflow after dispatch acceptance.
 - `dispatch-agent-factory.mjs`, `watch-linear-agent-tasks.mjs`, and
   `report-agent-factory-chain.mjs` keep the full issue-to-PR automation chain
   visible as nodes, edges, blockers, and remaining percentage.
+- `trigger-agent-factory-full-chain.mjs` connects an accepted source dispatch
+  to `ona-platform-codex-probe.yml` in `full-chain-canary` mode.
+- `sync-github-status.mjs` and `sync-linear-status.mjs` are the final
+  status-writeback surfaces after PR CI. GitHub-only tasks require GitHub
+  comment evidence; linked Linear tasks also require Linear sync evidence.
 - `check-agent-factory-secrets.mjs` records secret-safe credential and Ona
   context preflight evidence before dispatcher and Linear watcher runs. It
   reports presence and active-context status only, never credential values.
@@ -130,8 +137,9 @@ Use automation to reduce agent memory load:
   tasks so the video verifier can inspect the actual MP4 before publication.
 - `prepare-video-review-request.mjs` writes the current artifact hashes and
   verifier assignment into `.minelink-dev/reports/artifacts/video-review-request.md`.
-- `check-video-review.mjs` fails release unless a separate Ona Platform Codex
-  verifier has compared the task requirements against the summary and MP4.
+- `check-video-review.mjs` fails release unless the implementation session's
+  native Codex verifier subagent has compared the task requirements against the
+  summary and MP4.
 - The install smoke workflow uploads `minelink-install-smoke-evidence` for
   install/workbench/bootstrap changes.
 - The heavy NeoForge workflow is skipped for docs-only and workbench-only
